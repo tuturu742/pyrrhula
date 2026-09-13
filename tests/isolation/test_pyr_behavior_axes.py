@@ -93,3 +93,53 @@ async def test_pinning_the_workflow_materializes_its_axes(db_available: None) ->
             r.pack_id for r in (await session.execute(select(AxisDefinitionRow))).scalars().all()
         }
     assert "rpg_v1" in packs, f"rpg axes were not materialized; got {packs}"
+
+
+async def test_reimporting_into_the_same_workspace_does_not_duplicate(
+    db_available: None,
+) -> None:
+    """Re-importing a bundle must not leave two personas sharing a key.
+
+    It does not: a resident key is skipped, not rewritten. Pinned because the failure
+    mode is invisible -- two indistinguishable personas where only one holds the secrets
+    and behaviour profile, so a session picking the other gets a character who knows
+    nothing. (Importing into a *different* workspace is a separate copy by design, and is
+    what two sets of personas in one tenant actually means.)
+    """
+    import pathlib
+
+    from sqlalchemy import select
+
+    from adapters.encryptor.identity import IdentityEncryptor
+    from core.agents.models import Persona
+    from core.plugins.service import ensure_default_synced
+    from core.portability.import_ import import_bundle
+    from core.tenancy.scope import tenant_scope
+
+    bundle = pathlib.Path(
+        "/home/okurok/code/pyrrhula-samples/hagnaryd-mystery/hagnaryd-mystery.pyr"
+    )
+    if not bundle.is_file():
+        pytest.skip("sample bundle not present on this machine")
+
+    await ensure_default_synced()
+    tenant_id, _o, workspace_id = await seed_dev_tenant(slug=f"pyrdup-{uuid.uuid4().hex[:8]}")
+    data = bundle.read_bytes()
+    reports = [
+        await import_bundle(
+            data, tenant_id, workspace_id, bundle_ref="dup", encryptor=IdentityEncryptor()
+        )
+        for _ in range(2)
+    ]
+
+    async with tenant_scope(tenant_id) as session:
+        keys = [
+            k
+            for (k,) in await session.execute(
+                select(Persona.key).where(Persona.workspace_id == workspace_id)
+            )
+        ]
+    assert len(keys) == len(set(keys)), f"duplicate persona keys after re-import: {sorted(keys)}"
+    assert any("(key exists)" in s for s in reports[1].skipped), (
+        "the second import should report the personas it left alone"
+    )
