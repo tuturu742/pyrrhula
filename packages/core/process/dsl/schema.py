@@ -346,6 +346,12 @@ class PhaseSpec(BaseModel):
     await_field: AwaitSpec | None = Field(default=None, alias="await")
     flags: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
+    # Which registered remote MCP tools the ACTING persona may use in this phase, by
+    # tool name. None (the default) keeps the legacy behaviour -- every workspace
+    # remote tool is offered; [] offers none; a list is an allowlist. This is what lets
+    # a flow hand an oracle to its facilitator alone: put the tool on the phases only
+    # the facilitator acts in, and [] on everyone else's.
+    remote_tools: list[str] | None = None
     on_complete: str | None = None
 
     def history_slice_tokens(self) -> int:

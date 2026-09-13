@@ -296,3 +296,26 @@ async def test_the_scheduler_path_threads_on_event_into_the_turn(
     assert seen.get("on_event") is sentinel_on_event, (
         "the factory has to hand on_event through to the turn"
     )
+
+
+def test_phase_remote_allowlist_gates_by_phase() -> None:
+    """Remote MCP tools used to reach every persona in every phase; the phase now
+    declares who gets what. None keeps legacy allow-all, [] shuts the phase off, a
+    list is an allowlist -- which is how a mystery's forensic oracle reaches the
+    investigator's phases and never a suspect's."""
+    from core.process.dsl.schema import ActorSpec, PhaseSpec, VisibilitySpec
+    from core.process.live_session import _phase_remote_allowlist
+
+    def phase(remote_tools):  # noqa: ANN001, ANN202
+        return PhaseSpec(
+            label_key="x",
+            actors=[ActorSpec(persona_type="supervisor", mode="generate")],
+            visibility=VisibilitySpec(
+                knowledge_classes=[], scopes=[], entity_fields=[], secrets="none"
+            ),
+            remote_tools=remote_tools,
+        )
+
+    assert _phase_remote_allowlist(phase(None)) is None, "legacy allow-all"
+    assert _phase_remote_allowlist(phase([])) == []
+    assert _phase_remote_allowlist(phase(["evidence_check"])) == ["evidence_check"]

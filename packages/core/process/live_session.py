@@ -137,6 +137,21 @@ def _tail_trim(conversation: list[dict[str, str]]) -> list[dict[str, str]]:
     return kept
 
 
+def _phase_remote_allowlist(phase: Any) -> list[str] | None:
+    """The acting phase's remote-tool allowlist, or None for the legacy allow-all.
+
+    Remote MCP tools used to reach every persona in every phase -- workspace
+    registration was the only gate. For a cast with asymmetric knowledge that is wrong
+    by construction: a murder-mystery suspect could call the investigator's forensic
+    oracle and read the referee's answers. The phase declares who gets what, exactly as
+    it already does for visibility.
+    """
+    allowed = getattr(phase, "remote_tools", None)
+    if allowed is None:
+        return None
+    return [str(t) for t in allowed]
+
+
 async def run_one_persona_turn(
     *,
     tenant_id: uuid.UUID,
@@ -510,6 +525,9 @@ async def run_one_persona_turn(
         remote_specs = await remote_tools_for_workspace(
             tenant_id, workspace_id, transport=mcp_transport
         )
+        allowed_remote = _phase_remote_allowlist(phase)
+        if allowed_remote is not None:
+            remote_specs = [(k, s) for k, s in remote_specs if s.name in allowed_remote]
         remote_names = [spec.name for _key, spec in remote_specs]
         for server_key, spec in remote_specs:
             tool_registry.register(
