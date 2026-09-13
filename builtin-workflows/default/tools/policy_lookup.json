@@ -1,0 +1,27 @@
+{
+  "key": "policy_lookup",
+  "kind": "deterministic",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "expression": {"type": "string"},
+      "check_type": {"type": "string"},
+      "actor_entity_id": {"type": "string"},
+      "target": {"type": "integer"},
+      "reason": {"type": "string"}
+    },
+    "required": ["expression", "check_type"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "resolution_id": {"type": "string"},
+      "total": {"type": "integer"},
+      "outcome": {"type": "string"}
+    },
+    "required": ["resolution_id", "total", "outcome"]
+  },
+  "impl_ref": "builtin:dice_roller",
+  "validation_ref": "policy_lookup_v1",
+  "determinism": "pure"
+}

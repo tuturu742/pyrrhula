@@ -1,0 +1,14 @@
+{
+  "key": "default",
+  "name": "Default",
+  "overlay_key": "default_v1",
+  "persona_type_labels": {
+    "supervisor": "Facilitator",
+    "participant": "Contributor"
+  },
+  "label_overrides": {},
+  "featured_process_keys": [],
+  "capabilities": {
+    "mcp_servers": []
+  }
+}

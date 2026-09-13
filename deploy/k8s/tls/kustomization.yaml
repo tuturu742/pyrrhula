@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Apply AFTER cert-manager is installed and AFTER you have edited issuers.yaml's email
+# and ingress-tls-patch.yaml's host:
+#   kubectl apply -k deploy/k8s/tls
+resources:
+  - issuers.yaml
+  - ingress-tls-patch.yaml

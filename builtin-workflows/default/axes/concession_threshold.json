@@ -1,0 +1,18 @@
+{
+  "pack_id": "default_v1",
+  "key": "concession_threshold",
+  "label_key": "axis.concession_threshold",
+  "range_min": 0,
+  "range_max": 100,
+  "stakes": "low",
+  "semantics_md": "How readily the agent concedes a position during negotiation/critique.",
+  "bindings": [
+    {
+      "kind": "prompt_directive",
+      "bands": [
+        {"min": 0, "max": 50, "text": "You hold your position unless given strong evidence to change."},
+        {"min": 51, "max": 100, "text": "You concede readily when the other side pushes back."}
+      ]
+    }
+  ]
+}

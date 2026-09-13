@@ -1,0 +1,61 @@
+# TLS variant of web-nginx.conf.template, used by docker/compose.tls.yml. Certificates
+# are MOUNTED, never baked: bring your own (Let's Encrypt via certbot/lego on the host,
+# a corporate CA, or a self-signed pair for a lab) at /etc/nginx/certs/{fullchain.pem,
+# privkey.pem}.
+#
+# Plain http exists only to redirect -- a login form served over http is a login form
+# whose password is on the wire.
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${PYRRHULA_TLS_SERVER_NAME};
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # HSTS: once a browser has seen this deployment over https it must never fall back.
+    # Start with a short max-age while validating the certificate chain, then raise it.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Identical proxy contract to the plain-http template: buffering OFF so the session
+    # SSE stream and the assistant's NDJSON reach the browser as they are produced.
+    location /api/ {
+        proxy_pass http://${PYRRHULA_API_UPSTREAM}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        client_max_body_size 50m;
+    }
+
+    # Hashed asset filenames change on every build, so they can be cached hard...
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # ...but index.html names those files, so a cached copy of it pins the browser to a
+    # bundle that no longer exists on the server. Revalidate it every time.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

@@ -1,0 +1,97 @@
+# The blobs PVC holds the git store + uploads and is written by BOTH api (git
+# smart-HTTP receive-pack) and worker (GitStore). ReadWriteOnce is fine on a
+# single-node cluster (RWO is node-scoped and both pods land on the one node);
+# multi-node needs an RWX storage class (NFS/Longhorn) -- see README.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: pyrrhula
+  name: blobs
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+# bge-m3 embedding model cache -- downloaded once on first boot, shared by api+worker.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: pyrrhula
+  name: hf-cache
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-api
+spec:
+  selector:
+    app: pyrrhula-api
+  ports:
+    - port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-api
+spec:
+  replicas: 1
+  # Recreate: the RWO volumes must not be held by two pods mid-rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pyrrhula-api
+  template:
+    metadata:
+      labels:
+        app: pyrrhula-api
+    spec:
+      # Service env-var injection (PYRRHULA_ADMIN_PORT=tcp://...) collides with
+      # pydantic-settings' PYRRHULA_ prefix -- observed live as a worker crashloop.
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: api
+          image: localhost/pyrrhula:dev
+          imagePullPolicy: IfNotPresent
+          args: ["api"]
+          envFrom:
+            - configMapRef:
+                name: pyrrhula-config
+            - prefix: PYRRHULA_
+              secretRef:
+                name: pyrrhula-secrets
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: blobs
+              mountPath: /app/data/blobs
+            - name: hf-cache
+              mountPath: /app/.cache/huggingface
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 2Gi
+            limits:
+              memory: 8Gi
+      volumes:
+        - name: blobs
+          persistentVolumeClaim:
+            claimName: blobs
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache

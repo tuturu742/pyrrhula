@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pyrrhula Admin</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --panel:#191c22; --border:#2a2f3a;
+    --fg:#e6e8ee; --muted:#9aa3b2; --accent:#4f8cff; --danger:#ff6b6b; --ok:#37d67a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex;
+    align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; }
+  main { padding:24px; max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:24px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  h2 { font-size:15px; margin:0 0 12px; }
+  input, select, button { font:inherit; }
+  input, select { background:transparent; color:var(--fg); border:1px solid var(--border);
+    border-radius:6px; padding:6px 8px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--border); color:var(--fg); }
+  button.danger { background:transparent; border:1px solid var(--danger); color:var(--danger); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; }
+  .tenant { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; }
+  .muted { color:var(--muted); }
+  .tag { font-size:11px; border:1px solid var(--border); border-radius:999px; padding:1px 8px; color:var(--muted); }
+  .tag.off { color:var(--danger); border-color:var(--danger); }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  td, th { text-align:left; padding:4px 6px; border-bottom:1px solid var(--border); font-size:13px; }
+  #err { color:var(--danger); }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pyrrhula Admin</h1>
+  <div class="row">
+    <input id="token" type="password" placeholder="admin token" style="width:220px" />
+    <button id="save-token" class="ghost">Connect</button>
+    <span id="err"></span>
+  </div>
+</header>
+<main>
+  <section class="panel">
+    <h2>Create tenant</h2>
+    <div class="grid">
+      <input id="t-slug" placeholder="slug (e.g. acme)" />
+      <input id="t-name" placeholder="name" />
+      <input id="t-owner-email" placeholder="owner email (optional)" />
+      <input id="t-owner-pass" type="password" placeholder="owner password (min 8)" />
+    </div>
+    <div class="row" style="margin-top:10px"><button id="create-tenant">Create tenant</button></div>
+  </section>
+
+  <section class="panel">
+    <h2>Tenants</h2>
+    <div id="tenants"><p class="muted">Enter the admin token above and Connect.</p></div>
+  </section>
+
+  <section class="panel">
+    <h2>Plugin repositories</h2>
+    <p class="muted">Git repositories providing workflows as declarative content. The
+    <code>default</code> repository ships with the platform.</p>
+    <div id="plugins"><p class="muted">Connect to load.</p></div>
+    <div class="row" style="margin-top:10px">
+      <input id="p-name" placeholder="name (e.g. my-workflows)" />
+      <input id="p-url" placeholder="git url (https)" style="width:280px" />
+      <input id="p-ref" placeholder="commit sha / tag" />
+      <button id="add-plugin">Add &amp; sync</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const err = (m) => { $("err").textContent = m || ""; };
+let TOKEN = localStorage.getItem("pyrrhula_admin_token") || "";
+$("token").value = TOKEN;
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: { "Authorization": "Bearer " + TOKEN, ...(body ? {"Content-Type":"application/json"} : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadTenants() {
+  err("");
+  try {
+    const tenants = await api("GET", "/admin/tenants");
+    const box = $("tenants");
+    box.innerHTML = tenants.length ? "" : '<p class="muted">No tenants yet.</p>';
+    for (const t of tenants) box.appendChild(renderTenant(t));
+  } catch (e) { err(e.message); }
+  loadPlugins();
+}
+
+async function loadPlugins() {
+  try {
+    const repos = await api("GET", "/admin/plugin-repositories");
+    const box = $("plugins");
+    box.innerHTML = repos.length ? "" : '<p class="muted">None registered.</p>';
+    for (const r of repos) {
+      const div = document.createElement("div");
+      div.className = "row";
+      div.style.marginBottom = "6px";
+      const badge = r.status === "synced" ? "✅" : r.status === "error" ? "❌" : "⏳";
+      div.innerHTML = `
+        <span>${badge} <b>${esc(r.name)}</b>
+          <span class="muted">${esc(r.workflow_keys.join(", ") || "no workflows")}
+          · ${esc(r.ref.slice(0, 12))}${r.source !== "git" ? " · built-in" : ""}</span>
+          ${r.declared_servers.length ? `<span class="muted">servers: ${esc(r.declared_servers.map(s => `${s.key} (${s.enabled_tools.join("/")})`).join(", "))}</span>` : ""}
+          ${r.status === "error" ? `<span class="muted" style="color:#c66">${esc(r.last_error)}</span>` : ""}
+        </span>
+        <button class="ghost" data-sync="${r.id}">Re-sync</button>
+        ${r.source !== "git" ? "" : `<button class="ghost" data-rm="${r.id}">Remove</button>`}`;
+      div.querySelector("[data-sync]").onclick = async () => {
+        await guard(() => api("POST", `/admin/plugin-repositories/${r.id}/sync`)); loadPlugins();
+      };
+      const rm = div.querySelector("[data-rm]");
+      if (rm) rm.onclick = async () => {
+        if (confirm(`Remove plugin repository "${r.name}" and its workflows?`)) {
+          await guard(() => api("DELETE", `/admin/plugin-repositories/${r.id}`)); loadPlugins();
+        }
+      };
+      box.appendChild(div);
+    }
+  } catch (e) { err(e.message); }
+}
+
+$("add-plugin").onclick = async () => {
+  await guard(() => api("POST", "/admin/plugin-repositories", {
+    name: $("p-name").value.trim(), url: $("p-url").value.trim(), ref: $("p-ref").value.trim(),
+  }));
+  $("p-name").value = $("p-url").value = $("p-ref").value = "";
+  loadPlugins();
+};
+
+function renderTenant(t) {
+  const el = document.createElement("div");
+  el.className = "tenant";
+  el.innerHTML = `
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <strong>${esc(t.name)}</strong> <span class="muted">${esc(t.slug)}</span>
+        ${t.deactivated ? '<span class="tag off">deactivated</span>' : ''}
+        <span class="tag">${t.member_count} members · ${t.agent_count} agents</span>
+      </div>
+      <div class="row">
+        <label class="muted" style="font-size:12px">workflow
+          <select data-workflow style="margin-left:4px">
+            <option value="${esc(t.workflow_key || '')}">${esc(t.workflow_key || '(none)')}</option>
+          </select>
+        </label>
+        <label class="muted" style="font-size:12px">overlay
+          <select data-overlay style="margin-left:4px">
+            <option value="${esc(t.overlay_key || '')}">${esc(t.overlay_key || '(system default)')}</option>
+          </select>
+        </label>
+        <button class="ghost" data-act="users">Users</button>
+        ${t.deactivated
+          ? `<button class="ghost" data-act="reactivate">Reactivate</button>`
+          : `<button class="danger" data-act="deactivate">Deactivate</button>`}
+      </div>
+    </div>
+    <div class="users hidden"></div>`;
+  wireWorkflow(t, el.querySelector('[data-workflow]'));
+  wireOverlay(t, el.querySelector('[data-overlay]'));
+  el.querySelector('[data-act="users"]').onclick = () => toggleUsers(t, el);
+  const de = el.querySelector('[data-act="deactivate"]');
+  if (de) de.onclick = async () => { if (confirm(`Deactivate tenant "${t.name}"? Its users can no longer log in.`)) { await guard(() => api("POST", `/admin/tenants/${t.id}/deactivate`)); loadTenants(); } };
+  const re = el.querySelector('[data-act="reactivate"]');
+  if (re) re.onclick = async () => { await guard(() => api("POST", `/admin/tenants/${t.id}/reactivate`)); loadTenants(); };
+  return el;
+}
+
+async function toggleUsers(t, el) {
+  const box = el.querySelector(".users");
+  if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  box.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const users = await api("GET", `/admin/tenants/${t.id}/users`);
+    box.innerHTML = `
+      <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+      <tbody>${users.map((u) => `
+        <tr>
+          <td>${esc(u.display_name)}${u.disabled ? ' <span class="tag off">disabled</span>' : ''}</td>
+          <td class="muted">${esc(u.email || "—")}</td>
+          <td>${esc(u.role)}</td>
+          <td><button class="ghost" data-pid="${u.principal_id}" data-dis="${u.disabled}">
+            ${u.disabled ? "Reactivate" : "Deactivate"}</button></td>
+        </tr>`).join("")}</tbody></table>
+      <div class="grid" style="margin-top:10px">
+        <input placeholder="email" class="nu-email" />
+        <input placeholder="password (min 8)" type="password" class="nu-pass" />
+        <input placeholder="display name" class="nu-name" />
+        <select class="nu-role">
+          <option>participant</option><option>viewer</option><option>editor</option>
+          <option>admin</option><option>owner</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="nu-add">Add user</button></div>`;
+    box.querySelectorAll("[data-pid]").forEach((b) => {
+      b.onclick = async () => {
+        const dis = b.dataset.dis === "true";
+        await guard(() => api("POST", `/admin/tenants/${t.id}/users/${b.dataset.pid}/${dis ? "reactivate" : "deactivate"}`));
+        toggleUsers(t, el); toggleUsers(t, el);
+      };
+    });
+    box.querySelector(".nu-add").onclick = async () => {
+      const email = box.querySelector(".nu-email").value.trim();
+      const password = box.querySelector(".nu-pass").value;
+      const display_name = box.querySelector(".nu-name").value.trim() || email;
+      const role = box.querySelector(".nu-role").value;
+      if (!email || password.length < 8) { err("email + password (min 8) required"); return; }
+      await guard(() => api("POST", `/admin/tenants/${t.id}/users`, { email, password, display_name, role }));
+      toggleUsers(t, el); toggleUsers(t, el);
+      loadTenants();
+    };
+  } catch (e) { box.innerHTML = `<p id="err2" class="muted">${esc(e.message)}</p>`; }
+}
+
+function wireWorkflow(t, sel) {
+  let loaded = false;
+  const current = t.workflow_key || "";
+  sel.addEventListener("focus", async () => {
+    if (loaded) return;
+    try {
+      const workflows = await api("GET", "/admin/workflows");
+      sel.innerHTML =
+        `<option value="">(none)</option>` +
+        workflows.map((w) => {
+          const caps = (w.capabilities.mcp_servers || []).map((s) => s.key).join(",");
+          const label = caps ? `${w.name} [${caps}]` : w.name;
+          return `<option value="${esc(w.key)}"${w.key === current ? " selected" : ""}>${esc(label)}</option>`;
+        }).join("");
+      loaded = true;
+    } catch (e) { err(e.message); }
+  });
+  sel.addEventListener("change", async () => {
+    const res = await guard(() => api("POST", `/admin/tenants/${t.id}/workflow`, { workflow_key: sel.value || null }));
+    if (res && res.capabilities_applied && res.capabilities_applied.length)
+      err(`applied capabilities: ${res.capabilities_applied.join(", ")}`);
+    loadTenants();
+  });
+}
+
+function wireOverlay(t, sel) {
+  let loaded = false;
+  const current = t.overlay_key || "";
+  sel.addEventListener("focus", async () => {
+    if (loaded) return;
+    try {
+      const overlays = await api("GET", `/admin/tenants/${t.id}/overlays`);
+      sel.innerHTML =
+        `<option value="">(system default)</option>` +
+        overlays.map((o) => `<option value="${esc(o.key)}"${o.key === current ? " selected" : ""}>${esc(o.name)} (${esc(o.key)})</option>`).join("");
+      loaded = true;
+    } catch (e) { err(e.message); }
+  });
+  sel.addEventListener("change", async () => {
+    await guard(() => api("POST", `/admin/tenants/${t.id}/overlay`, { overlay_key: sel.value || null }));
+    loadTenants();
+  });
+}
+
+async function guard(fn) { try { err(""); return await fn(); } catch (e) { err(e.message); throw e; } }
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+$("save-token").onclick = () => { TOKEN = $("token").value.trim(); localStorage.setItem("pyrrhula_admin_token", TOKEN); loadTenants(); };
+$("create-tenant").onclick = async () => {
+  const slug = $("t-slug").value.trim(), name = $("t-name").value.trim();
+  const owner_email = $("t-owner-email").value.trim() || undefined;
+  const owner_password = $("t-owner-pass").value || undefined;
+  if (!slug || !name) { err("slug and name required"); return; }
+  try {
+    await guard(() => api("POST", "/admin/tenants", { slug, name, owner_email, owner_password }));
+    $("t-slug").value = $("t-name").value = $("t-owner-email").value = $("t-owner-pass").value = "";
+    loadTenants();
+  } catch {}
+};
+if (TOKEN) loadTenants();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Images come from the host's local registry (rootless podman on 127.0.0.1:5000);
+# containerd trusts it via /etc/rancher/k3s/registries.yaml (one-time sudo setup --
+# see README). After that, updating an image is `podman push` + rollout restart,
+# no `k3s ctr images import`, no sudo.
+images:
+  - name: localhost/pyrrhula
+    newName: localhost:5000/pyrrhula
+    newTag: dev
+  - name: localhost/pyrrhula-web
+    newName: localhost:5000/pyrrhula-web
+    newTag: dev
+
+# Mutable `dev` tags demand Always, or containerd keeps yesterday's image.
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: Job
+      name: pyrrhula-migrate
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+
+# secrets.env is git-ignored; create it next to this file:
+#   POSTGRES_PASSWORD=$(openssl rand -hex 24)
+#   APP_DB_PASSWORD=$(openssl rand -hex 24)
+#   JWT_SECRET=$(openssl rand -base64 48)
+#   ADMIN_TOKEN=$(openssl rand -hex 24)
+#   ENCRYPTION_KEY=$(openssl rand -base64 32)
+#   DATABASE_URL=postgresql+asyncpg://pyrrhula:<POSTGRES_PASSWORD>@postgres:5432/pyrrhula
+#   APP_DATABASE_URL=postgresql+asyncpg://pyrrhula_app:<APP_DB_PASSWORD>@postgres:5432/pyrrhula
+# (dev-up.sh generates it for you on first run.)
+secretGenerator:
+  - name: pyrrhula-secrets
+    namespace: pyrrhula
+    envs:
+      - secrets.env
+
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,23 @@
+{
+  "schema_key": "ticket",
+  "entity_data": {
+    "title": "Smoke ticket",
+    "description": "A ticket created by the pack smoke harness.",
+    "priority": "medium"
+  },
+  "mutation_changes": {"priority": "high"},
+  "resolution": {
+    "rule_system_key": "policy_lookup_v1",
+    "tool_key": "policy_lookup",
+    "expression": "1d1+1",
+    "check_type": "expense_approval",
+    "actor_fields": {"amount": 100, "approval_limit": 1000},
+    "target": null
+  },
+  "transition": {
+    "machine_key": "lifecycle",
+    "pre_transition_changes": {},
+    "trigger": "submit",
+    "expected_new_state": "submitted"
+  }
+}

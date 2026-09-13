@@ -1,0 +1,64 @@
+{
+  "key": "brainstorm_critique_revise_decide",
+  "name": "Brainstorm, Critique, Revise, Decide",
+  "definition": {
+    "name": "Brainstorm, Critique, Revise, Decide",
+    "vocabulary_overlay": "default_v1",
+    "state": {
+      "round": {"type": "integer", "default": 0}
+    },
+    "initial_phase": "brainstorm",
+    "phases": {
+      "brainstorm": {
+        "label_key": "phase.brainstorm",
+        "actors": [
+          {"any_of": ["participant_agent", "human_participant"], "mode": "free", "max_turns": 8}
+        ],
+        "visibility": {
+          "knowledge_classes": ["rules", "lore"],
+          "scopes": ["workspace_public"],
+          "entity_fields": "all",
+          "secrets": "none"
+        },
+        "budget": {"ratio": {"rules": 0.4, "lore": 0.6}, "max_tokens": 4000},
+        "on_complete": "critique"
+      },
+      "critique": {
+        "label_key": "phase.critique",
+        "actors": [{"any_of": ["participant_agent"], "mode": "free", "max_turns": 8}],
+        "visibility": {
+          "knowledge_classes": ["rules"],
+          "scopes": ["workspace_public"],
+          "entity_fields": ["title", "description"],
+          "secrets": "none"
+        },
+        "budget": {"ratio": {"rules": 1.0}, "max_tokens": 2000},
+        "on_complete": "revise"
+      },
+      "revise": {
+        "label_key": "phase.revise",
+        "actors": [{"persona_type": "supervisor", "mode": "generate"}],
+        "visibility": {
+          "knowledge_classes": ["rules", "lore"],
+          "scopes": ["workspace_public"],
+          "entity_fields": "all",
+          "secrets": "none"
+        },
+        "budget": {"ratio": {"rules": 0.5, "lore": 0.5}, "max_tokens": 3000},
+        "on_complete": "decide"
+      },
+      "decide": {
+        "label_key": "phase.decide",
+        "actors": [{"human_participant": "all", "mode": "free"}],
+        "visibility": {
+          "knowledge_classes": [],
+          "scopes": ["workspace_public"],
+          "entity_fields": "all",
+          "secrets": "none"
+        },
+        "await": {"type": "human_input", "timeout": "24h", "on_timeout": "brainstorm"},
+        "on_complete": "brainstorm"
+      }
+    }
+  }
+}

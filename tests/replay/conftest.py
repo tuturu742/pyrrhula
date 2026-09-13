@@ -1,0 +1,26 @@
+"""Fixtures for the replay suite (INV-10, C1.3). Mirrors ``tests/isolation/conftest.py``'s
+skip-if-unreachable pattern -- this suite needs a live Postgres with the C1.3 migration
+applied.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from core.tenancy.scope import dispose_engine, unscoped_session
+
+
+@pytest_asyncio.fixture
+async def db_available() -> AsyncIterator[None]:
+    try:
+        async with unscoped_session() as session:
+            await session.execute(text("SELECT 1"))
+    except (SQLAlchemyError, OSError) as exc:
+        pytest.skip(f"no reachable Postgres for replay tests: {exc}")
+    yield
+    await dispose_engine()

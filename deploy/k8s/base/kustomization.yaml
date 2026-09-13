@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# No global namespace transformer: it would rename the Namespace objects themselves
+# and relocate the cross-namespace Role/RoleBinding. Every resource declares its
+# namespace explicitly.
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - redis.yaml
+  - api.yaml
+  - worker.yaml
+  - web.yaml
+  - admin.yaml
+  - migrate-job.yaml
+  - ollama-host.yaml
+  - mcp-sidecars-host.yaml
+  - backup-cronjob.yaml
+  - envs-networkpolicy.yaml
+
+# Non-secret app config -- mirrors docker/compose.selfhost.yml's &app_env (one
+# contract, third deployment; see also deploy/aws/ecs.tf app_environment).
+configMapGenerator:
+  - name: pyrrhula-config
+    namespace: pyrrhula
+    literals:
+      - PYRRHULA_REDIS_URL=redis://redis:6379/0
+      - PYRRHULA_AUTH_PROVIDER=local
+      - PYRRHULA_ISOLATION_MODE=shared
+      - PYRRHULA_SINGLE_TENANT_UI=true
+      - PYRRHULA_REQUIRE_ENCRYPTION=1
+      - PYRRHULA_BLOB_STORE_ROOT=/app/data/blobs
+      - PYRRHULA_GIT_HTTP_BASE=http://pyrrhula-api:8000
+      # Where a browser reaches this deployment -- the base of a preview share link.
+      # Distinct from GIT_HTTP_BASE, which is in-network and meaningless to a tester.
+      - PYRRHULA_PUBLIC_BASE_URL=https://pyrrhula.localhost
+      - PYRRHULA_ASSISTANT_MODEL=ollama/qwen3.8:27b
+      - PYRRHULA_ASSISTANT_API_BASE=http://ollama:11434
+      - HF_HUB_OFFLINE=0
+      - TRANSFORMERS_OFFLINE=0

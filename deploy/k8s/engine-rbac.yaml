@@ -1,0 +1,50 @@
+# The kubernetes exec engine's runner identity: exactly what
+# adapters/exec_env/kubernetes.py needs in the envs namespace -- create/watch/delete
+# Jobs, read their pods and logs. Nothing else (no secrets, no other namespaces).
+#
+#   kubectl apply -f deploy/k8s/engine-rbac.yaml
+#   kubectl -n pyrrhula-envs create token pyrrhula-runner --duration=8760h
+#
+# The token goes into the engine declaration ("token": "...") for out-of-cluster
+# workers; an in-cluster worker instead runs AS this ServiceAccount and declares
+# neither api_base nor token (auto-detected).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pyrrhula-envs
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pyrrhula-runner
+  namespace: pyrrhula-envs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pyrrhula-runner
+  namespace: pyrrhula-envs
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pyrrhula-runner
+  namespace: pyrrhula-envs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pyrrhula-runner
+subjects:
+  - kind: ServiceAccount
+    name: pyrrhula-runner
+    namespace: pyrrhula-envs

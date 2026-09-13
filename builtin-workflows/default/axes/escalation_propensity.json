@@ -1,0 +1,19 @@
+{
+  "pack_id": "default_v1",
+  "key": "escalation_propensity",
+  "label_key": "axis.escalation_propensity",
+  "range_min": 0,
+  "range_max": 100,
+  "stakes": "high",
+  "semantics_md": "How readily the agent escalates a decision to a human overseer rather than deciding unilaterally -- enforced by a gate, not by the model's own restraint, since mishandling escalation is consequential.",
+  "bindings": [
+    {"kind": "gate"},
+    {
+      "kind": "prompt_directive",
+      "bands": [
+        {"min": 0, "max": 50, "text": "You make the call yourself unless explicitly blocked."},
+        {"min": 51, "max": 100, "text": "You escalate readily whenever a decision has real stakes."}
+      ]
+    }
+  ]
+}

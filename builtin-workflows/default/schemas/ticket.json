@@ -1,0 +1,48 @@
+{
+  "key": "ticket",
+  "definition": {
+    "fields": [
+      {"key": "title", "type": "string", "tags": ["identity"]},
+      {"key": "description", "type": "string", "tags": ["descriptor"]},
+      {
+        "key": "priority",
+        "type": "string",
+        "tags": ["descriptor"],
+        "enum": ["low", "medium", "high", "critical"]
+      }
+    ],
+    "state_machines": [
+      {
+        "key": "lifecycle",
+        "states": [
+          {"key": "draft", "label_key": "ticket_status.draft"},
+          {"key": "submitted", "label_key": "ticket_status.submitted"},
+          {"key": "in_review", "label_key": "ticket_status.in_review"},
+          {"key": "approved", "label_key": "ticket_status.approved"},
+          {"key": "archived", "label_key": "ticket_status.archived"}
+        ],
+        "initial": "draft",
+        "transitions": [
+          {"from": "draft", "to": "submitted", "trigger": "submit"},
+          {"from": "submitted", "to": "in_review", "trigger": "start_review"},
+          {"from": "in_review", "to": "approved", "trigger": "approve"},
+          {"from": "in_review", "to": "submitted", "trigger": "request_changes"},
+          {"from": "approved", "to": "archived", "trigger": "archive"}
+        ]
+      }
+    ],
+    "views": [
+      {
+        "key": "ticket_view",
+        "groups": [
+          {
+            "key": "summary",
+            "label_key": "group.ticket_summary",
+            "field_keys": ["title", "description", "priority"]
+          }
+        ],
+        "tabs": [{"key": "main", "label_key": "tab.main", "group_keys": ["summary"]}]
+      }
+    ]
+  }
+}

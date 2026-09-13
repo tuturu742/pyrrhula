@@ -1,0 +1,48 @@
+# cert-manager issuers (opt-in: apply this directory only after installing cert-manager,
+# `kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml`).
+#
+# Three issuers for three honest situations:
+#  * selfsigned   -- local/dev and air-gapped clusters. Real TLS, untrusted CA: the
+#                    browser warns once. Enough to exercise Secure cookies and HSTS.
+#  * letsencrypt-staging -- rehearse a public issuance without burning rate limits.
+#  * letsencrypt-prod    -- the real certificate, HTTP-01 solved through the ingress.
+#
+# HTTP-01 (not DNS-01) on purpose: it needs no cloud credentials in the cluster, which
+# suits a self-hosted deployment whose whole promise is "your data stays yours".
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: pyrrhula-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: pyrrhula-letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    # REPLACE: expiry notices go here.
+    email: admin@example.com
+    privateKeySecretRef:
+      name: pyrrhula-letsencrypt-staging-account
+    solvers:
+      - http01:
+          ingress:
+            class: traefik # k3s default; nginx/other -> change this
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: pyrrhula-letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: pyrrhula-letsencrypt-prod-account
+    solvers:
+      - http01:
+          ingress:
+            class: traefik

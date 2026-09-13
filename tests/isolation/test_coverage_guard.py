@@ -1,0 +1,115 @@
+"""Coverage guard (T0.4): every tenant_id-bearing table must have an explicit
+filter-omission test, not just an RLS policy. ``test_rls_catalog.py`` proves the policy
+exists; this proves *someone actually exercised it* — the two failure modes are
+different (a policy can exist and still be wrong, e.g. the NULLIF gotcha found in T0.2).
+
+When this fails after adding a table, the fix is almost always: add a row-seeding helper
+and a filter-omission test for the new table in ``test_filter_omission_matrix.py``, then
+add its name here.
+"""
+
+from __future__ import annotations
+
+from sqlalchemy import text
+
+from core.tenancy.scope import unscoped_session
+from tests.isolation.test_rls_catalog import _DOCUMENTED_NO_RLS_EXCEPTION
+
+# Tables with an explicit filter-omission test: test_filter_omission_matrix.py, or
+# test_tenant_scope_smoke.py (`principal`/`workspace`, T0.2), or
+# test_walking_skeleton_filter_omission.py (T0.8), or
+# test_knowledge_filter_omission.py (A1.1), or test_secret_tables.py (E2.1), or
+# test_behavior_profile.py (E2.3), or test_entity_schema.py (F3.1), or
+# packages/core/agents/tests/test_editing.py (F3.12), or
+# test_between_session_state.py (G4.2), or test_async_pacing.py (G4.3), or
+# test_report_pipeline.py (G4.10), or test_mcp_client.py (G4.12).
+_COVERED_TABLES = {
+    "entry_activation_state",
+    "principal",
+    "tenant_mcp_capability",
+    "exec_environment",
+    "preview_environment",
+    "identity",
+    "membership",
+    "workspace",
+    "workspace_membership",
+    "vector_store_item",
+    "audit_log",
+    "completed_operation",
+    "agent",
+    "persona",
+    "session_persona",
+    "session",
+    "session_event",
+    "message",
+    "usage_record",
+    "knowledge_source",
+    "knowledge_source_version",
+    "knowledge_entry",
+    "knowledge_chunk",
+    "workspace_knowledge_attachment",
+    "process_definition",
+    "checkpoint",
+    "await_state",
+    "scope",
+    "context_manifest",
+    "rule_system",
+    "resolution_record",
+    "tool_definition",
+    "provider_credential",
+    "vocabulary_overlay",
+    "secret",
+    "secret_holder",
+    "secret_disclosure_event",
+    "disclosure_decision",
+    "axis_definition",
+    "behavior_profile",
+    "entity_schema",
+    "entity_state_change",
+    "entity",
+    "persona_version",
+    "entity_schedule",
+    "notification",
+    "report",
+    "mcp_server",
+    "action_record",
+    # test_workflow_authoring.py (moddable workflows)
+    "workflow",
+    # test_repo_registry.py (repo registry + per-session selection)
+    "repo",
+    "session_repo",
+}
+
+
+async def test_every_rls_table_has_explicit_filter_omission_coverage(
+    db_available: None,
+) -> None:
+    async with unscoped_session() as session:
+        rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT c.relname
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind = 'r'
+                      AND c.relrowsecurity
+                      AND c.relforcerowsecurity
+                    """
+                )
+            )
+        ).all()
+
+    tenant_scoped_tables = {row[0] for row in rows}
+    assert _DOCUMENTED_NO_RLS_EXCEPTION not in tenant_scoped_tables  # sanity: it has no RLS
+
+    uncovered = tenant_scoped_tables - _COVERED_TABLES
+    assert not uncovered, (
+        f"RLS-covered tables with no filter-omission test: {sorted(uncovered)}. Add one "
+        f"in tests/isolation/test_filter_omission_matrix.py and register it in "
+        f"_COVERED_TABLES (tests/isolation/test_coverage_guard.py)."
+    )
+
+    stale = _COVERED_TABLES - tenant_scoped_tables
+    assert not stale, f"_COVERED_TABLES references tables that no longer exist: {sorted(stale)}"

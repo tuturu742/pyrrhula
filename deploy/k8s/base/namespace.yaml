@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pyrrhula
+---
+# Exec environments (delegated coding agents) live here, isolated by the
+# NetworkPolicy in envs-networkpolicy.yaml. Also created by engine-rbac.yaml for
+# the engine-only (out-of-cluster worker) setup.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pyrrhula-envs

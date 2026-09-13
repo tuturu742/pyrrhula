@@ -1,0 +1,43 @@
+# Local TLS for the dev stack: a self-signed certificate for pyrrhula.localhost, issued
+# by the `pyrrhula-selfsigned` ClusterIssuer. Real TLS with an untrusted CA -- the
+# browser warns once, and everything that only works over https (Secure cookies, HSTS,
+# SharedArrayBuffer under COOP/COEP) can finally be exercised before production.
+#
+#   kubectl apply -f deploy/k8s/tls/issuers.yaml -f deploy/k8s/tls/dev-localhost-tls.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-web-tls
+spec:
+  secretName: pyrrhula-web-tls
+  duration: 8760h # a dev cert nobody has to think about for a year
+  dnsNames:
+    - pyrrhula.localhost
+  issuerRef:
+    name: pyrrhula-selfsigned
+    kind: ClusterIssuer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-web
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  tls:
+    - hosts:
+        - pyrrhula.localhost
+      secretName: pyrrhula-web-tls
+  rules:
+    - host: pyrrhula.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pyrrhula-web
+                port:
+                  number: 80

@@ -1,0 +1,48 @@
+{
+  "key": "project_status",
+  "definition": {
+    "fields": [
+      {"key": "project_name", "type": "string", "tags": ["identity"]},
+      {"key": "total_budget", "type": "number", "minimum": 0, "tags": ["identity"]},
+      {
+        "key": "budget_remaining",
+        "type": "number",
+        "minimum": 0,
+        "tags": ["resource"],
+        "tag_metadata": {"max_ref": "total_budget", "low_threshold": 1000}
+      },
+      {
+        "key": "blockers",
+        "type": "array",
+        "items": "string",
+        "tags": ["status_set"],
+        "enum": ["legal_review", "vendor_delay", "staffing_gap", "technical_debt", "dependency_block"]
+      },
+      {"key": "owner", "type": "string", "tags": ["relationship"]}
+    ],
+    "constraints": [
+      {
+        "expression": "fields.budget_remaining <= fields.total_budget",
+        "message": "budget_remaining cannot exceed total_budget"
+      }
+    ],
+    "views": [
+      {
+        "key": "project_status_view",
+        "groups": [
+          {
+            "key": "budget",
+            "label_key": "group.project_budget",
+            "field_keys": ["total_budget", "budget_remaining"]
+          },
+          {
+            "key": "status",
+            "label_key": "group.project_status",
+            "field_keys": ["blockers", "owner"]
+          }
+        ],
+        "tabs": [{"key": "main", "label_key": "tab.main", "group_keys": ["budget", "status"]}]
+      }
+    ]
+  }
+}

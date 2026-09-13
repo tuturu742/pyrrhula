@@ -1,0 +1,52 @@
+# Host-side MCP sidecars (deploy/mcp-sidecars) reachable from pods as
+# http://godot-mcp:8090 and http://comfy-mcp:8091 -- the same manual-EndpointSlice
+# pattern as ollama-host.yaml (the overlay patches the address). Remove if the
+# deployment runs no sidecars, or replace with real Deployments when the images are
+# pushed to a registry the cluster can pull from.
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: godot-mcp
+spec:
+  ports:
+    - port: 8090
+      targetPort: 8090
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  namespace: pyrrhula
+  name: godot-mcp-1
+  labels:
+    kubernetes.io/service-name: godot-mcp
+addressType: IPv4
+ports:
+  - port: 8090
+endpoints:
+  - addresses:
+      - 192.168.8.241 # patched per-machine in the overlay
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: comfy-mcp
+spec:
+  ports:
+    - port: 8091
+      targetPort: 8091
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  namespace: pyrrhula
+  name: comfy-mcp-1
+  labels:
+    kubernetes.io/service-name: comfy-mcp
+addressType: IPv4
+ports:
+  - port: 8091
+endpoints:
+  - addresses:
+      - 192.168.8.241 # patched per-machine in the overlay

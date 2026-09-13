@@ -1,0 +1,18 @@
+{
+  "key": "policy_lookup_v1",
+  "name": "Policy Lookup",
+  "dice_grammar": {
+    "allowed_sides": [1],
+    "max_dice_count": 1,
+    "allow_keep_drop": false
+  },
+  "check_types": ["expense_approval"],
+  "outcome_bands": [
+    {"min": null, "max": 0, "outcome": "denied"},
+    {"min": 1, "max": null, "outcome": "approved"}
+  ],
+  "modifier_resolver": {
+    "expense_approval": "fields.amount <= fields.approval_limit ? 1 : -1"
+  },
+  "validators": []
+}

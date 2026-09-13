@@ -1,0 +1,254 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.11.29"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - run: uv run mypy
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pyrrhula
+          POSTGRES_PASSWORD: pyrrhula
+          POSTGRES_DB: pyrrhula
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyrrhula"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      # A live Postgres and Redis here (not just in the isolation job) matter: most
+      # port/adapter contract tests (T0.3) and the auth/rate-limit tests (T0.6) skip
+      # cleanly without them for local dev convenience, but that means CI must actually
+      # provide both or those tests quietly never run for real.
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+        env:
+          PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
+          PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
+      - run: uv run pytest --cov --cov-report=term-missing
+        env:
+          # The pinned plugin repo may be private; without this the pack-dependent
+          # suites cannot fetch it. Unset is fine for a public pin.
+          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
+          PYRRHULA_APP_DATABASE_URL: >-
+            postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
+          PYRRHULA_REDIS_URL: redis://localhost:6379/0
+
+  # ── CI-blocking suites ────────────────────────────────────────────────────────────
+  # Each of these gates merges once its owning task lands (T0.4, T0.5, C1.3, Phase 2,
+  # Phase 3). Until then they still run — proving the directory exists and collecting
+  # zero tests is a deliberate, visible no-op, not a silently skipped job.
+
+  isolation:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pyrrhula
+          POSTGRES_PASSWORD: pyrrhula
+          POSTGRES_DB: pyrrhula
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyrrhula"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - name: Apply migrations (creates pyrrhula_app + RLS policies)
+        run: uv run alembic upgrade head
+        env:
+          PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
+          PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
+      - name: Cross-tenant isolation negative tests (T0.2 smoke now; full matrix in T0.4)
+        run: ./scripts/ci/run-blocking-suite.sh tests/isolation
+        env:
+          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
+          PYRRHULA_APP_DATABASE_URL: >-
+            postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
+
+  architecture:
+    runs-on: ubuntu-latest
+    needs: lint
+    # test_api_prefix drives the real ASGI app, and the app talks to Redis.
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - name: Import-graph lint — INV-1 (T0.5)
+        run: ./scripts/ci/run-blocking-suite.sh tests/architecture
+        env:
+          PYRRHULA_REDIS_URL: redis://localhost:6379/0
+
+  replay:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - name: Context manifest replay — INV-10 (C1.3)
+        run: ./scripts/ci/run-blocking-suite.sh tests/replay
+
+  leak:
+    runs-on: ubuntu-latest
+    needs: lint
+    # This suite skips itself without a database, so a job without one is a job that
+    # proves nothing about INV-8 while reporting green. Give it the Postgres it needs.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pyrrhula
+          POSTGRES_PASSWORD: pyrrhula
+          POSTGRES_DB: pyrrhula
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyrrhula"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - name: Apply migrations (creates pyrrhula_app + RLS policies)
+        run: uv run alembic upgrade head
+        env:
+          PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
+          PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
+      - name: Export/secret leak tests (Phase 2/4)
+        run: ./scripts/ci/run-blocking-suite.sh tests/leak
+        env:
+          PYRRHULA_APP_DATABASE_URL: >-
+            postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
+
+  packs:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pyrrhula
+          POSTGRES_PASSWORD: pyrrhula
+          POSTGRES_DB: pyrrhula
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyrrhula"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+      - run: uv sync --extra dev
+      - name: Apply migrations (creates pyrrhula_app + RLS policies)
+        run: uv run alembic upgrade head
+        env:
+          PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
+          PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
+      - name: All-shipped-packs genericity smoke test — INV-9 (Phase 3)
+        run: ./scripts/ci/run-blocking-suite.sh tests/packs
+        env:
+          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
+          PYRRHULA_APP_DATABASE_URL: >-
+            postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - run: pnpm run build
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [typecheck, test, isolation, architecture, replay, leak, packs, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Fetch workflow packs (COPY'd into the image)
+        run: python3 scripts/fetch_plugins.py
+        env:
+          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
+      - name: Build image (api/worker/migrate entrypoint)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          tags: pyrrhula:ci

@@ -1,0 +1,7 @@
+{
+  "name": "Built-in workflows",
+  "description": "Ships with the platform: a general structured-discussion workflow so a fresh install works before any plugin repository is added.",
+  "workflows": [
+    "default"
+  ]
+}

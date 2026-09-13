@@ -1,0 +1,78 @@
+# Changelog
+
+Notable changes to Pyrrhula. Format follows [Keep a Changelog](https://keepachangelog.com/);
+versioning is [SemVer](https://semver.org/) with a `0.x` promise level: minor versions may
+break APIs, the database always migrates forward.
+
+## [0.1.0-rc1] — 2026-09-11
+
+First public release candidate. Everything below is new, because everything is.
+
+### The claim
+
+Multi-agent conversations where **who-knows-what is enforced by the system, not requested
+of the model**. A concealed secret's text is excluded from the model's context — a leak is
+impossible by construction, not unlikely by prompting. See
+[an annotated transcript](https://github.com/tuturu742/pyrrhula-samples/blob/master/hagnaryd-mystery/TRANSCRIPT.md)
+of the engine holding a murderer's secret through a police interview.
+
+### Engine
+
+- **Multi-tenancy** — Postgres row-level security (`FORCE`) on every tenant-scoped table,
+  enforced by a CI-blocking negative test suite that omits application filters and asserts
+  zero rows.
+- **Process engine** — declarative, versioned JSON flow DSL: phases, actors, per-phase
+  visibility and token budgets, gates, awaits/timeouts; authored in a visual editor.
+  Autonomous, directed (human-conducted), and managed modes.
+- **Knowledge & retrieval** — versioned sources with per-class token budgets, weighted RRF
+  fusion, cross-encoder rerank; every turn records a context manifest naming what was
+  retrieved, from which version, at what rank.
+- **Secrets** — first-class records with holders, gists, and behavioral directives. Three
+  per-workspace trust modes: `excluded` (never in context), `trust` (the holder's own
+  brief in its context, model judgement governs speech), `gate` (a per-turn structured
+  classifier rules conceal / hint / reveal, enforced by exclusion, with a post-generation
+  leak check). Gate model is tenant-configurable; failure fails closed.
+- **Deterministic resolution** — dice and checks are seeded, code-executed, validated
+  against the actor's own sheet via CEL modifier resolvers, hash-chained, and rendered
+  from the record, never from prose. Ships a faithful Basic Fantasy RPG (CC-BY-SA)
+  rule system alongside d20-SRD-style, PbtA-style, and coin-flip systems.
+- **Entities** — JSON Schema fields + CEL constraints + declarative state machines;
+  semantic tags drive automatic sheet rendering. Characters and work items are the same
+  object; domain content lives in packs, never in core.
+- **Behavioral axes** — pack-defined dials (malice, cooperativeness, disclosure
+  propensity, …) with prompt-directive and gate bindings; high-stakes axes feed the gate;
+  sensible pack-declared defaults; append-only versioned profiles pinned per turn.
+- **Overseer surfaces** — Director's View with live per-turn disclosure decisions; every
+  overseer read of secret plaintext writes an audit row in the same transaction.
+- **Portability** — `.pyr` workspace bundles (cast, briefs, knowledge, flows, secrets),
+  export/import round-trip, optional encryption; API keys are never written to a bundle.
+- **Workflows as plugins** — vocabulary overlays (RPG / enterprise / software-dev), packs
+  as pure JSON from pinned plugin repositories; user-authored logic is schema + FSM + CEL
+  only, never code.
+- **Software-dev workflow** — delegation of work items to coding agents over MCP against
+  real repositories, with server-side git, CI execution in isolated environments, and
+  facilitator review loops.
+- **Deployment** — one image (api / worker / migrate), verified installers for
+  docker/podman compose and k8s; AWS ECS Terraform included. Fully-local operation with
+  Ollama (no API keys), fully-cloud, or hybrid with per-purpose egress policy.
+- **Auditability** — hash-chained append-only tables (audit log, session events,
+  resolutions, disclosures), idempotency keys on every side-effecting operation,
+  deterministic replay verified by CI.
+
+### Samples
+
+Four importable workspaces with step-by-step READMEs in
+[pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples): a closed-house murder
+mystery (six agents, five private briefs), a product-launch working session with
+commercially confidential facts at the table, a two-agent game-dev loop, and Pyrrhula
+working on its own codebase.
+
+### Known limits, stated plainly
+
+- The AWS ECS path ships as Terraform with a verified plan but has not had a recent
+  live run; treat it as beta.
+- Cheap models act imperfectly (a turn may slip voice); the engine's guarantees are
+  about what a model *couldn't know*, and those hold regardless of model quality.
+- Single-maintainer project; response times are honest, not instant.
+
+[0.1.0-rc1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.0-rc1

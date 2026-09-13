@@ -1,0 +1,39 @@
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Same contract as the Vite dev proxy: /api/<path> -> api container /<path>
+    # (trailing slash on proxy_pass strips the matched prefix). Buffering must stay off:
+    # the session SSE stream and the assistant chat's NDJSON both rely on chunks
+    # reaching the browser as they are produced. The upstream host:port comes from
+    # PYRRHULA_API_UPSTREAM (nginx image envsubst on templates/) so remote deployments
+    # (ECS service discovery, k8s Services) can point it anywhere.
+    location /api/ {
+        proxy_pass http://${PYRRHULA_API_UPSTREAM}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        client_max_body_size 50m;
+    }
+
+    # Hashed asset filenames change on every build, so they can be cached hard...
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # ...but index.html names those files, so a cached copy of it pins the browser to a
+    # bundle that no longer exists on the server. Revalidate it every time: without this
+    # a UI change can ship and simply not appear until someone hard-reloads.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    # SPA: every non-file route renders index.html (client-side router).
+    location / {
+        try_files $uri /index.html;
+    }
+}

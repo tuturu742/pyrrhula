@@ -1,0 +1,179 @@
+[project]
+name = "pyrrhula"
+version = "0.1.0"
+description = "Multi-tenant, multi-agent orchestration platform (tabletop-RPG-first, enterprise-second)"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "sqlalchemy[asyncio]>=2.0",
+  "asyncpg>=0.30",
+  "alembic>=1.14",
+  "pydantic[email]>=2.9",
+  "pydantic-settings>=2.6",
+  "httpx>=0.27",
+  "structlog>=24.4",
+  "opentelemetry-api>=1.28",
+  "opentelemetry-sdk>=1.28",
+  "opentelemetry-instrumentation-fastapi>=0.49b0",
+  "opentelemetry-exporter-otlp-proto-http>=1.28",
+  "redis>=5.2",
+  "argon2-cffi>=23.1",
+  "pyjwt>=2.10",
+  "python-multipart>=0.0.12",
+  "litellm>=1.52",
+  # litellm's ollama tool-calling path imports orjson (optional dep it does not declare);
+  # without it any Ollama turn that offers tools dies with APIConnectionError.
+  "orjson>=3.9",
+  "tiktoken>=0.8",
+  "pypdf>=5.0",
+  # A1.3: self-hosted embeddings (bge-m3). torch is pinned to the CPU-only build via
+  # [tool.uv.sources]/[[tool.uv.index]] below -- "CPU workable, GPU optional" (plan
+  # §13.9) means the default self-host image must not carry CUDA wheels it doesn't need.
+  # Listed directly (not just pulled in transitively by sentence-transformers) so uv
+  # actually applies that source override to it.
+  "torch>=2.0",
+  "sentence-transformers>=3.0",
+  # A1.5: keyword-activation regex keys need a real per-match timeout to guard against
+  # catastrophic backtracking. Stdlib `re` can't be interrupted mid-match (no GIL release,
+  # no periodic check) even from a worker thread with a concurrent.futures timeout --
+  # `regex` performs its own internal timeout checks and can actually abort a runaway
+  # match. Already present transitively via `transformers`; declared directly so a future
+  # transformers version dropping it doesn't silently remove this safety guard.
+  "regex>=2024.0.0",
+  "cel-python>=0.5.0",
+  # G4.11: Markdown -> HTML for report rendering (HTML feeds WeasyPrint's PDF path and the
+  # EPUB content document). Already present transitively via litellm/rich; declared
+  # directly for the same reason `regex` is -- a future transitive change must not
+  # silently remove a renderer the report pipeline depends on. `commonmark` mode makes the
+  # conversion deterministic, which is what lets an artifact be hashed and compared.
+  "markdown-it-py>=3.0",
+  "cryptography>=50.0.1",
+  # aws-ecs exec engine (adapters/exec_env/aws_ecs). Imported lazily -- only a worker
+  # whose PYRRHULA_EXEC_ENGINES declares kind "aws-ecs" ever loads it -- but shipped in
+  # the default image so the stock container works on ECS without a custom build.
+  "boto3>=1.35",
+]
+
+[project.optional-dependencies]
+dev = [
+  # Pinned exactly: these two ARE the CI gates, and a floating linter means a
+  # green tree can go red on the next `uv sync` with no commit at fault. Bumps
+  # are deliberate, in their own commit, with the fallout fixed alongside.
+  "ruff==0.15.22",
+  "mypy==2.3.0",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  # Test-fixture generation only (A1.2): real, valid PDF bytes for parse_pdf tests, so
+  # the parser is proven against pypdf's actual extraction rather than hand-rolled bytes.
+  "fpdf2>=2.8",
+  "types-regex",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/core", "packages/adapters", "packages/api", "packages/worker", "packages/eval"]
+
+[tool.uv]
+package = true
+# The only real deployment target is the Linux container (docker/Dockerfile); locking
+# for every OS is what was letting the resolver fall back to a macOS torch wheel from
+# PyPI instead of honouring the CPU-only Linux index below.
+environments = ["sys_platform == 'linux'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "N"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "adapters", "api", "worker", "eval"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom is `param: T = Depends(...)` / `Header(...)` /
+# `Cookie(...)` / etc. -- these calls in argument defaults are the framework's sentinel
+# mechanism, not the mutable-default footgun B008 exists to catch.
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.Header",
+  "fastapi.Cookie",
+  "fastapi.Body",
+  "fastapi.Query",
+  "fastapi.Path",
+  "fastapi.File",
+  "fastapi.Form",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Mirrors the runtime PYTHONPATH (docker/Dockerfile): "packages" is the one search root,
+# and core/adapters/api/worker/eval are the top-level packages under it — never
+# "packages.core". Using `packages=` (not `files=`) avoids mypy treating the same file
+# as two different modules depending on which root found it first.
+mypy_path = ["packages"]
+packages = ["core", "adapters", "api", "worker", "eval"]
+explicit_package_bases = true
+# Tests and benchmark drivers are excluded for the same reason: they are harnesses,
+# not shipped behaviour, and they trade type discipline for the freedom to poke at
+# internals. `eval/scenarios` (case data) stays checked -- it is content the product
+# reads.
+exclude = ["packages/.*/tests", "packages/eval/runner"]
+plugins = []
+
+[[tool.mypy.overrides]]
+module = "eval.*"
+strict = false
+
+# boto3 ships no type information and publishes stubs as a separate, very large package
+# (boto3-stubs). The AWS adapters are optional deployment targets, so pulling that in for
+# every developer to type three call sites is the wrong trade.
+[[tool.mypy.overrides]]
+module = "boto3.*"
+ignore_missing_imports = true
+
+# G4.11: WeasyPrint is an *optional* runtime dependency -- PDF rendering needs it plus
+# system libraries (pango, cairo, gobject), and a deployment without them renders
+# Markdown/HTML/EPUB perfectly well (see core.reporting.render). It is imported inside a
+# guarded branch and is not installed here, so mypy has no stubs to find. Declaring that
+# rather than adding weasyprint to the dependency list keeps the base install slim, which
+# is the point of it being optional.
+[[tool.mypy.overrides]]
+module = "weasyprint.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages", "tests"]
+addopts = "-ra"
+
+# INV-1 (only core/assembler and core/overseer may import the knowledge/secrets repos) and
+# the packs-import-nothing-from-core contract are configured in tests/architecture/ (T0.5),
+# not here — they need a custom allowlist contract type that this file doesn't own.
+
+[tool.coverage.run]
+source = ["packages"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.156.6",
+]

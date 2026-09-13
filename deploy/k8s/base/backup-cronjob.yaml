@@ -1,0 +1,64 @@
+# Nightly logical backup of the whole database (trust-ops): a product whose value is an
+# authoritative audited record must be able to prove it can restore that record.
+# pg_dump runs in the postgres image against the in-cluster service, writes a timestamped
+# custom-format dump to a PVC, and prunes anything older than KEEP_DAYS.
+#
+# Restore drill (run it, don't assume it -- docs/self-host.md):
+#   kubectl -n pyrrhula exec -i statefulset/postgres -- \
+#     pg_restore -U pyrrhula -d pyrrhula_restore_test --clean --if-exists < dump.pgc
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-backups
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-backup
+spec:
+  schedule: "17 3 * * *" # nightly, off the hour to dodge the thundering herd
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-dump
+              image: docker.io/pgvector/pgvector:pg16
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: pyrrhula-secrets
+                      key: POSTGRES_PASSWORD
+                - name: KEEP_DAYS
+                  value: "14"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+                  OUT=/backups/pyrrhula-$STAMP.pgc
+                  echo "dumping to $OUT"
+                  pg_dump -h postgres -U pyrrhula -d pyrrhula -F c -f "$OUT"
+                  ls -la "$OUT"
+                  find /backups -name 'pyrrhula-*.pgc' -mtime +$KEEP_DAYS -print -delete
+                  echo "backup complete"
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: pyrrhula-backups

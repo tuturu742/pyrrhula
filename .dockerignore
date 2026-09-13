@@ -1,0 +1,10 @@
+# Keeps both image builds (docker/Dockerfile, docker/web.Dockerfile) lean: none of
+# these belong in a build context. web/node_modules matters most -- the web image
+# installs its own dependencies from the lockfile.
+.git
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+web/node_modules
+web/dist

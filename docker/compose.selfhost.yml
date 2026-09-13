@@ -1,0 +1,199 @@
+# The self-host stack -- everything the product needs, one command:
+#
+#   cp docker/env.example .env      # then fill in the required secrets
+#   podman compose -f docker/compose.selfhost.yml up -d --build
+#
+# (docker compose works identically.) Required secrets fail fast if unset -- there are
+# NO insecure defaults in this file. See docs/self-host.md for the full walkthrough,
+# TLS termination, and the exec-engine socket notes.
+
+services:
+  postgres:
+    container_name: pyrrhula_postgres_1
+    image: docker.io/pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: pyrrhula
+      POSTGRES_PASSWORD: ${PYRRHULA_POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: pyrrhula
+    volumes:
+      - pyrrhula-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pyrrhula"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    container_name: pyrrhula_redis_1
+    image: docker.io/redis:7
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: pyrrhula:latest
+    command: ["migrate"]
+    environment: &app_env
+      # Admin/migration DSN -- superuser, used ONLY by the migrate entrypoint (T0.2).
+      PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:${PYRRHULA_POSTGRES_PASSWORD}@postgres:5432/pyrrhula
+      # App-role DSN -- non-superuser, non-BYPASSRLS `pyrrhula_app`, the only role RLS
+      # actually applies to; migrate creates the role from PYRRHULA_APP_DB_PASSWORD.
+      PYRRHULA_APP_DATABASE_URL: postgresql+asyncpg://pyrrhula_app:${PYRRHULA_APP_DB_PASSWORD}@postgres:5432/pyrrhula
+      PYRRHULA_APP_DB_PASSWORD: ${PYRRHULA_APP_DB_PASSWORD:?set in .env}
+      PYRRHULA_REDIS_URL: redis://redis:6379/0
+      PYRRHULA_JWT_SECRET: ${PYRRHULA_JWT_SECRET:?set in .env (openssl rand -base64 48)}
+      PYRRHULA_ADMIN_TOKEN: ${PYRRHULA_ADMIN_TOKEN:?set in .env}
+      # Optional: bootstrap a platform-admin login (organization "admin" on the normal
+      # sign-in form). Idempotent; the admin console can add more admins afterwards.
+      PYRRHULA_ADMIN_EMAIL: ${PYRRHULA_ADMIN_EMAIL:-}
+      PYRRHULA_ADMIN_PASSWORD: ${PYRRHULA_ADMIN_PASSWORD:-}
+      # Credentials at rest (provider API keys, repo tokens, registry passwords) are
+      # sealed with AES-256-GCM; startup refuses to run unencrypted.
+      PYRRHULA_ENCRYPTION_KEY: ${PYRRHULA_ENCRYPTION_KEY:?set in .env (openssl rand -base64 32)}
+      PYRRHULA_REQUIRE_ENCRYPTION: "1"
+      PYRRHULA_AUTH_PROVIDER: local
+      PYRRHULA_ISOLATION_MODE: shared
+      PYRRHULA_SINGLE_TENANT_UI: ${PYRRHULA_SINGLE_TENANT_UI:-true}
+      PYRRHULA_BLOB_STORE_ROOT: /app/data/blobs
+      # Exec environments clone/push hosted repos over git smart-HTTP at this base --
+      # in-network default; set a routable URL for remote engines (k8s/cloud).
+      PYRRHULA_GIT_HTTP_BASE: ${PYRRHULA_GIT_HTTP_BASE:-http://pyrrhula_api_1:8000}
+      # Base of a preview share link, as a browser sees it. Unlike GIT_HTTP_BASE this
+      # must be reachable from outside the container network, or the link is useless.
+      PYRRHULA_PUBLIC_BASE_URL: ${PYRRHULA_PUBLIC_BASE_URL:-}
+      # First run downloads the embedding model into the hf-cache volume; flip both to
+      # "1" afterwards for fully-offline startups.
+      HF_HUB_OFFLINE: ${PYRRHULA_HF_OFFLINE:-0}
+      TRANSFORMERS_OFFLINE: ${PYRRHULA_HF_OFFLINE:-0}
+      # Agent web search: the bundled SearXNG below by default; point elsewhere or
+      # set empty to disable the feature.
+      PYRRHULA_WEB_SEARCH_URL: ${PYRRHULA_WEB_SEARCH_URL:-http://searxng:8080}
+      PYRRHULA_ASSISTANT_MODEL: ${PYRRHULA_ASSISTANT_MODEL:-ollama/qwen3.8:27b}
+      PYRRHULA_ASSISTANT_API_BASE: ${PYRRHULA_ASSISTANT_API_BASE:-http://ollama:11434}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    container_name: pyrrhula_api_1
+    image: pyrrhula:latest
+    restart: always
+    command: ["api"]
+    environment: *app_env
+    volumes:
+      - pyrrhula-blobs:/app/data/blobs
+      - pyrrhula-hf:/app/.cache/huggingface
+    ports:
+      - "${PYRRHULA_API_PORT:-8000}:8000"
+    networks:
+      - default
+      # Exec environments live on this network and reach ONLY the api (git smart-HTTP),
+      # never the database/redis.
+      - envs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    container_name: pyrrhula_worker_1
+    image: pyrrhula:latest
+    restart: always
+    command: ["worker"]
+    # The engine socket lands root-owned in-container; with rootless podman "0" is just
+    # the host user.
+    user: "0"
+    environment:
+      <<: *app_env
+      PYRRHULA_EXEC_SOCKET: /var/run/podman.sock
+      PYRRHULA_EXEC_ENGINES: >-
+        [{"key":"local","kind":"socket","socket":"/var/run/podman.sock",
+          "network":"pyrrhula-envs","label":"Local containers"}]
+    volumes:
+      - pyrrhula-blobs:/app/data/blobs
+      - pyrrhula-hf:/app/.cache/huggingface
+      # The host container engine's socket -- delegated coding agents build and test in
+      # isolated sibling containers. Rootless podman:
+      #   systemctl --user enable --now podman.socket
+      # Docker hosts: change the source to /var/run/docker.sock.
+      - ${PYRRHULA_ENGINE_SOCKET:-/run/user/1000/podman/podman.sock}:/var/run/podman.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    container_name: pyrrhula_web
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+    image: pyrrhula-web:latest
+    restart: always
+    ports:
+      - "${PYRRHULA_WEB_PORT:-5173}:80"
+    depends_on:
+      - api
+
+  # Platform-admin console (list/create tenants + users). Gated by PYRRHULA_ADMIN_TOKEN.
+  admin:
+    container_name: pyrrhula_admin
+    image: pyrrhula:latest
+    restart: always
+    command: ["admin"]
+    environment: *app_env
+    ports:
+      - "${PYRRHULA_ADMIN_PORT:-8100}:8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Agent web search (persona "web search" toggle). Not exposed on the host; agents
+  # reach it in-network. The settings file enables the JSON API the platform queries;
+  # engines default to bing in the app (big engines CAPTCHA-block fresh IPs).
+  searxng:
+    container_name: pyrrhula_searxng
+    image: docker.io/searxng/searxng:latest
+    restart: always
+    environment:
+      SEARXNG_SECRET: ${PYRRHULA_JWT_SECRET}
+      SEARXNG_BASE_URL: http://searxng:8080/
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+
+  # Optional local model provider. Uncomment for a fully-local deployment (AMD iGPU
+  # users: see docs/self-host.md for the ROCm image + device flags).
+  # ollama:
+  #   container_name: ollama
+  #   image: docker.io/ollama/ollama:latest
+  #   restart: always
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - pyrrhula-ollama:/root/.ollama
+
+networks:
+  default: {}
+  envs:
+    # Fixed name: the worker's engine declaration and the runbook reference it.
+    name: pyrrhula-envs
+
+volumes:
+  pyrrhula-postgres:
+  pyrrhula-blobs:
+  pyrrhula-hf:
+  # pyrrhula-ollama:

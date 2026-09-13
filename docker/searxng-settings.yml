@@ -1,0 +1,9 @@
+# Minimal SearXNG settings for the bundled agent-web-search service.
+# The one deviation from defaults that matters: the JSON output format -- the
+# platform's search transport queries /search?format=json, which stock SearXNG
+# refuses (403) unless enabled here. secret_key comes from SEARXNG_SECRET (compose).
+use_default_settings: true
+search:
+  formats:
+    - html
+    - json

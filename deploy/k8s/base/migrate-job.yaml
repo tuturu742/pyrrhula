@@ -1,0 +1,30 @@
+# One-off schema migration (Alembic; idempotent). Jobs are immutable, so dev-up.sh
+# deletes any previous run before applying. Required on first install and after
+# schema-changing image updates.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-migrate
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: pyrrhula-migrate
+    spec:
+      # Service env-var injection (PYRRHULA_ADMIN_PORT=tcp://...) collides with
+      # pydantic-settings' PYRRHULA_ prefix -- observed live as a worker crashloop.
+      enableServiceLinks: false
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: localhost/pyrrhula:dev
+          imagePullPolicy: IfNotPresent
+          args: ["migrate"]
+          envFrom:
+            - configMapRef:
+                name: pyrrhula-config
+            - prefix: PYRRHULA_
+              secretRef:
+                name: pyrrhula-secrets

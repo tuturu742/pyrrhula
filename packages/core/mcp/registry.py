@@ -1,0 +1,358 @@
+"""Per-workspace MCP registry (G4.12, plan §13.7, req 12).
+
+**Allowlist, not blocklist.** `enabled_tools` is the complete set of tools that exist as
+far as this workspace is concerned. A tool the server offers and the workspace has not
+listed is never discovered, never described to a model, and never callable. §16.6 and
+`docs/agent-guide.md` §8 say plainly that user-authored lore reaches tool-calling agents;
+a blocklist's failure mode under that threat model is a tool nobody thought to block, which
+is precisely the tool an attacker looks for.
+
+**Effectfulness is a floor, not a fact.** A server declares which of its tools are
+effectful; a workspace may add to that set and can never subtract from it. A server that
+under-declares is a server whose "read-only" tool books a flight, and the asymmetry of
+being wrong in each direction is not close.
+
+`credential_ref` points into a secret manager and never holds a key -- the same rule
+`agent.credential_ref` follows, for the same reason: a credential in a row is a
+credential in every backup, every export, and every support ticket.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+    select,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from core.ports.mcp import McpServerRef, McpToolSpec
+from core.tenancy.models import Base
+from core.tenancy.scope import tenant_scope
+
+
+class McpServerRow(Base):
+    __tablename__ = "mcp_server"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False
+    )
+    key: Mapped[str] = mapped_column(String(63), nullable=False)
+    url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    credential_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    enabled_tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    effectful_tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    require_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "key", name="uq_mcp_server_workspace_key"),
+        Index("ix_mcp_server_workspace", "workspace_id"),
+    )
+
+    def to_ref(self) -> McpServerRef:
+        return McpServerRef(key=self.key, url=self.url, credential_ref=self.credential_ref)
+
+
+class TenantMcpCapabilityRow(Base):
+    """An admin-managed MCP capability granted at TENANT level (plan M-B): provisioned
+    onto every workspace of the tenant, merged AFTER the workflow pack's declared
+    servers -- extra tools against a customer's internal systems without authoring a
+    custom workflow pack. Same shape and rules as ``McpServerRow``; this is the durable
+    grant, ``mcp_server`` rows are its per-workspace materialization."""
+
+    __tablename__ = "tenant_mcp_capability"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False
+    )
+    key: Mapped[str] = mapped_column(String(63), nullable=False)
+    url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    credential_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    enabled_tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    effectful_tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    require_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("tenant_id", "key", name="uq_tenant_mcp_capability_key"),)
+
+
+class CredentialInRegistryError(ValueError):
+    """Someone tried to store what looks like a secret in `credential_ref`. Refused at the
+    door: `credential_ref` is a *pointer*, and a registry that accepted keys would make
+    "never commit provider API keys" a thing people remember rather than a thing that holds."""
+
+
+# Deliberately crude. This is a guardrail against the obvious mistake (pasting a key into
+# the field marked "credential"), not a secret detector -- G4.15's declarative
+# secret-pattern scan is the real one, and pretending this is that would be worse than
+# having neither.
+_KEY_PREFIXES = ("sk-", "sk_live", "ghp_", "github_pat_", "xoxb-", "AKIA", "AIza")
+
+
+# Sentinel distinguishing "caller didn't say" from an explicit None/False: a workflow
+# re-apply that never mentions credential_ref must not wipe a credential an operator
+# attached to the row, nor flip require_confirmation back to its default.
+_UNSET: object = object()
+
+
+async def register_server(
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    key: str,
+    url: str,
+    *,
+    enabled_tools: list[str],
+    effectful_tools: list[str] | None = None,
+    credential_ref: str | None | object = _UNSET,
+    require_confirmation: bool | object = _UNSET,
+) -> McpServerRow:
+    """Upsert by `(workspace, key)`, so re-running a deployment's registry setup is
+    idempotent rather than a source of duplicates. Omitted ``credential_ref`` /
+    ``require_confirmation`` preserve an existing row's values (defaults apply only on
+    first creation)."""
+    if (
+        credential_ref is not _UNSET
+        and isinstance(credential_ref, str)
+        and credential_ref.startswith(_KEY_PREFIXES)
+    ):
+        raise CredentialInRegistryError(
+            "credential_ref must point into a secret manager, not hold a credential; the "
+            f"value supplied looks like a live key ({credential_ref[:6]}…)"
+        )
+
+    async with tenant_scope(tenant_id) as session:
+        existing = await session.scalar(
+            select(McpServerRow).where(
+                McpServerRow.workspace_id == workspace_id, McpServerRow.key == key
+            )
+        )
+        row = existing or McpServerRow(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            key=key,
+            url=url,
+            credential_ref=None,
+            require_confirmation=True,
+        )
+        row.url = url
+        if credential_ref is not _UNSET:
+            row.credential_ref = credential_ref  # type: ignore[assignment]
+        row.enabled_tools = list(enabled_tools)
+        row.effectful_tools = list(effectful_tools or [])
+        if require_confirmation is not _UNSET:
+            row.require_confirmation = bool(require_confirmation)
+        if existing is None:
+            session.add(row)
+        await session.flush()
+        session.expunge(row)
+        return row
+
+
+async def list_servers(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> list[McpServerRow]:
+    async with tenant_scope(tenant_id) as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(McpServerRow)
+                    .where(
+                        McpServerRow.workspace_id == workspace_id,
+                        McpServerRow.enabled.is_(True),
+                    )
+                    .order_by(McpServerRow.key)
+                )
+            ).scalars()
+        )
+        for row in rows:
+            session.expunge(row)
+        return rows
+
+
+async def get_server(
+    tenant_id: uuid.UUID, workspace_id: uuid.UUID, key: str
+) -> McpServerRow | None:
+    async with tenant_scope(tenant_id) as session:
+        row = await session.scalar(
+            select(McpServerRow).where(
+                McpServerRow.workspace_id == workspace_id, McpServerRow.key == key
+            )
+        )
+        if row is not None:
+            session.expunge(row)
+        return row
+
+
+# ── tenant-level capability grants (admin-managed) ───────────────────────────────────
+async def list_tenant_capabilities(tenant_id: uuid.UUID) -> list[TenantMcpCapabilityRow]:
+    async with tenant_scope(tenant_id) as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(TenantMcpCapabilityRow)
+                    .where(TenantMcpCapabilityRow.tenant_id == tenant_id)
+                    .order_by(TenantMcpCapabilityRow.key)
+                )
+            ).scalars()
+        )
+        for row in rows:
+            session.expunge(row)
+        return rows
+
+
+async def upsert_tenant_capability(
+    tenant_id: uuid.UUID,
+    key: str,
+    url: str,
+    *,
+    enabled_tools: list[str],
+    effectful_tools: list[str] | None = None,
+    credential_ref: str | None = None,
+    require_confirmation: bool = True,
+) -> TenantMcpCapabilityRow:
+    if credential_ref and credential_ref.startswith(_KEY_PREFIXES):
+        raise CredentialInRegistryError(
+            "credential_ref must point into a secret manager, not hold a credential; the "
+            f"value supplied looks like a live key ({credential_ref[:6]}…)"
+        )
+    async with tenant_scope(tenant_id) as session:
+        existing = await session.scalar(
+            select(TenantMcpCapabilityRow).where(
+                TenantMcpCapabilityRow.tenant_id == tenant_id,
+                TenantMcpCapabilityRow.key == key,
+            )
+        )
+        row = existing or TenantMcpCapabilityRow(tenant_id=tenant_id, key=key, url=url)
+        row.url = url
+        row.credential_ref = credential_ref
+        row.enabled_tools = list(enabled_tools)
+        row.effectful_tools = list(effectful_tools or [])
+        row.require_confirmation = require_confirmation
+        row.enabled = True
+        if existing is None:
+            session.add(row)
+        await session.flush()
+        session.expunge(row)
+        return row
+
+
+async def delete_tenant_capability(tenant_id: uuid.UUID, key: str) -> bool:
+    """Remove the grant AND its per-workspace materializations."""
+    async with tenant_scope(tenant_id) as session:
+        row = await session.scalar(
+            select(TenantMcpCapabilityRow).where(
+                TenantMcpCapabilityRow.tenant_id == tenant_id,
+                TenantMcpCapabilityRow.key == key,
+            )
+        )
+        if row is None:
+            return False
+        await session.delete(row)
+        servers = (
+            await session.execute(
+                select(McpServerRow).where(
+                    McpServerRow.tenant_id == tenant_id, McpServerRow.key == key
+                )
+            )
+        ).scalars()
+        for server in servers:
+            await session.delete(server)
+        return True
+
+
+async def apply_tenant_capabilities(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> list[str]:
+    """Materialize every enabled tenant grant onto one workspace's allowlist. Called
+    after the workflow pack's own servers wherever those are applied -- grants win a
+    key collision with pack servers (the operator's explicit word beats pack defaults)."""
+    applied: list[str] = []
+    for grant in await list_tenant_capabilities(tenant_id):
+        if not grant.enabled:
+            continue
+        await register_server(
+            tenant_id,
+            workspace_id,
+            grant.key,
+            grant.url.replace("{tenant_id}", str(tenant_id)),
+            enabled_tools=list(grant.enabled_tools),
+            effectful_tools=list(grant.effectful_tools),
+            credential_ref=grant.credential_ref,
+            require_confirmation=grant.require_confirmation,
+        )
+        applied.append(grant.key)
+    return applied
+
+
+@dataclass(frozen=True)
+class AllowedTool:
+    """A tool that survived the allowlist, with effectfulness already resolved. Carrying
+    the resolution here rather than re-deriving it at the call site means the dispatcher
+    cannot forget to widen a server's under-declaration."""
+
+    server_key: str
+    spec: McpToolSpec
+    effectful: bool
+
+
+def apply_allowlist(row: McpServerRow, discovered: list[McpToolSpec]) -> list[AllowedTool]:
+    """Intersects what the server offers with what the workspace listed, and takes the
+    union of the two effectfulness claims. A tool absent from `enabled_tools` produces no
+    entry at all -- not a disabled one, because a disabled entry is still an entry a future
+    code path could re-enable by reading past the flag."""
+    allowed = set(row.enabled_tools)
+    marked = set(row.effectful_tools)
+    return [
+        AllowedTool(
+            server_key=row.key,
+            spec=spec,
+            effectful=spec.effectful or spec.name in marked,
+        )
+        for spec in discovered
+        if spec.name in allowed
+    ]
+
+
+# The web-search preset §13.7 asks for: a registry entry a deployment can enable, not a
+# special code path. "Web search is just an MCP server behind a workspace policy flag" is
+# only true if it is registered the same way everything else is.
+# The resolution preset: the tenant's registered deterministic tools (whatever the
+# selected workflow's pack defines -- a die roller, a card draw) served through the
+# same MCP surface. In-process transport; the url carries the tenant address via the
+# {tenant_id} placeholder workflow manifests use (substituted at registration).
+RESOLUTION_PRESET = {
+    "key": "resolution",
+    "url": "pyrrhula://resolution/{tenant_id}",
+    # The allowlist intersects with what the transport lists; workflows declare the
+    # concrete tool keys their pack registers (empty here = nothing enabled).
+    "enabled_tools": [],
+    "effectful_tools": [],
+    "require_confirmation": False,
+}
+
+WEB_SEARCH_PRESET = {
+    "key": "web_search",
+    "url": "https://mcp.example.invalid/web-search",
+    "enabled_tools": ["search"],
+    "effectful_tools": [],
+    "require_confirmation": False,
+}

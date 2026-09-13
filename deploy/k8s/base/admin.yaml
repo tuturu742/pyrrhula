@@ -1,0 +1,44 @@
+# Platform-admin console; token-gated, no ingress on purpose. Reach it with:
+#   kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-admin
+spec:
+  selector:
+    app: pyrrhula-admin
+  ports:
+    - port: 8100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pyrrhula-admin
+  template:
+    metadata:
+      labels:
+        app: pyrrhula-admin
+    spec:
+      # Service env-var injection (PYRRHULA_ADMIN_PORT=tcp://...) collides with
+      # pydantic-settings' PYRRHULA_ prefix -- observed live as a worker crashloop.
+      enableServiceLinks: false
+      containers:
+        - name: admin
+          image: localhost/pyrrhula:dev
+          imagePullPolicy: IfNotPresent
+          args: ["admin"]
+          envFrom:
+            - configMapRef:
+                name: pyrrhula-config
+            - prefix: PYRRHULA_
+              secretRef:
+                name: pyrrhula-secrets
+          ports:
+            - containerPort: 8100

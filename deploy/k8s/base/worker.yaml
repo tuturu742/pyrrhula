@@ -1,0 +1,130 @@
+# The worker runs AS this ServiceAccount; the kubernetes exec engine's in-cluster
+# auto-detection uses the pod's own token, so this SA carries the runner Role in the
+# envs namespace (same rule set as deploy/k8s/engine-rbac.yaml).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-worker
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pyrrhula-runner
+  namespace: pyrrhula-envs
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pyrrhula-worker-runner
+  namespace: pyrrhula-envs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pyrrhula-runner
+subjects:
+  - kind: ServiceAccount
+    name: pyrrhula-worker
+    namespace: pyrrhula
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: pyrrhula
+  name: pyrrhula-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pyrrhula-worker
+  template:
+    metadata:
+      labels:
+        app: pyrrhula-worker
+    spec:
+      # Service env-var injection (PYRRHULA_ADMIN_PORT=tcp://...) collides with
+      # pydantic-settings' PYRRHULA_ prefix -- observed live as a worker crashloop.
+      enableServiceLinks: false
+      serviceAccountName: pyrrhula-worker
+      securityContext:
+        fsGroup: 10001
+      # Wait for the app role the migration creates. Without this the worker starts
+      # before `pyrrhula-migrate` has run, dies on `password authentication failed for
+      # user "pyrrhula_app"`, and a first-time operator watching a clean install sees
+      # CrashLoopBackOff and reasonably concludes the install failed. It recovers on its
+      # own either way; this makes the wait visible and quiet instead of alarming.
+      initContainers:
+        - name: wait-for-app-role
+          image: localhost/pyrrhula:dev
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for the application database role (created by the migration job)"
+              for i in $(seq 1 120); do
+                if python -c "
+              import asyncio, os, sys, asyncpg
+              url = os.environ['PYRRHULA_APP_DATABASE_URL'].replace('postgresql+asyncpg://','postgresql://')
+              async def main():
+                  conn = await asyncpg.connect(url)
+                  await conn.close()
+              asyncio.run(main())
+              " 2>/dev/null; then echo "database ready after ${i} attempt(s)"; exit 0; fi
+                sleep 2
+              done
+              echo "app role never appeared; starting anyway so the crash is visible" >&2
+          envFrom:
+            - configMapRef:
+                name: pyrrhula-config
+            - prefix: PYRRHULA_
+              secretRef:
+                name: pyrrhula-secrets
+      containers:
+        - name: worker
+          image: localhost/pyrrhula:dev
+          imagePullPolicy: IfNotPresent
+          args: ["worker"]
+          envFrom:
+            - configMapRef:
+                name: pyrrhula-config
+            - prefix: PYRRHULA_
+              secretRef:
+                name: pyrrhula-secrets
+          env:
+            # In-cluster engine: no api_base/token (the pod's SA token is auto-detected).
+            # Env pods sit in another namespace, so the git route uses the FQDN.
+            - name: PYRRHULA_EXEC_ENGINES
+              value: >-
+                [{"key":"k8s","kind":"kubernetes","namespace":"pyrrhula-envs",
+                  "label":"Kubernetes",
+                  "git_http_base":"http://pyrrhula-api.pyrrhula.svc.cluster.local:8000"}]
+          volumeMounts:
+            - name: blobs
+              mountPath: /app/data/blobs
+            - name: hf-cache
+              mountPath: /app/.cache/huggingface
+          resources:
+            requests:
+              memory: 2Gi
+            limits:
+              memory: 8Gi
+      volumes:
+        - name: blobs
+          persistentVolumeClaim:
+            claimName: blobs
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache

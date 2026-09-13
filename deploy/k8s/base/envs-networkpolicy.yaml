@@ -1,0 +1,39 @@
+# The k8s twin of the podman "pyrrhula-envs" network: agent-run code in env pods may
+# reach the api's git smart-HTTP endpoint, DNS, and the internet -- and NOTHING else
+# in the cluster (no database, no redis, no other namespaces). k3s enforces
+# NetworkPolicy via its embedded controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: envs-egress
+  namespace: pyrrhula-envs
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The api's git smart-HTTP, and only that pod, on only that port.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pyrrhula
+          podSelector:
+            matchLabels:
+              app: pyrrhula-api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # The internet (package registries, image layers) -- but not other pods/services.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16 # k3s default pod CIDR
+              - 10.43.0.0/16 # k3s default service CIDR

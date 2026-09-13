@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+uv.lock.bak
+
+# Node / web
+web/node_modules/
+web/dist/
+web/.vite/
+web/coverage/
+web/*.tsbuildinfo
+web/**/*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+*.swp
+
+# Container
+*.tar
+
+# Local data volumes if bind-mounted
+docker/.data/
+
+# Redis dump if run locally with the repo as cwd
+dump.rdb
+.plugins/
+.kube/
+eval-results/
