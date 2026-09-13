@@ -41,6 +41,16 @@ from core.ports.mcp import McpServerRef, McpToolSpec
 from core.tenancy.models import Base
 from core.tenancy.scope import tenant_scope
 
+# The platform's own in-process tooling is addressed with this scheme: dice resolution,
+# git delegation. Nothing leaves the process, no third party is involved, and no operator
+# approval is meaningful. Anything else -- http(s), ws, stdio -- is an external endpoint.
+INTERNAL_MCP_SCHEME = "pyrrhula://"
+
+
+def is_external_mcp_url(url: str) -> bool:
+    """True when this url names a third party rather than the platform's own tooling."""
+    return not url.startswith(INTERNAL_MCP_SCHEME)
+
 
 class McpServerRow(Base):
     __tablename__ = "mcp_server"

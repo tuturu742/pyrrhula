@@ -62,8 +62,9 @@
 
   <section class="panel">
     <h2>Plugin repositories</h2>
-    <p class="muted">Git repositories providing workflows as declarative content. The
-    <code>default</code> repository ships with the platform.</p>
+    <p class="muted">Workflows as declarative content. The <code>default</code> repository
+    ships with the platform. Packs can also come from a git repository, from an uploaded
+    archive, or from this deployment's plugin drop directory -- no git access required.</p>
     <div id="plugins"><p class="muted">Connect to load.</p></div>
     <div class="row" style="margin-top:10px">
       <input id="p-name" placeholder="name (e.g. my-workflows)" />
@@ -71,6 +72,14 @@
       <input id="p-ref" placeholder="commit sha / tag" />
       <button id="add-plugin">Add &amp; sync</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <input id="u-name" placeholder="name (e.g. my-workflows)" />
+      <input id="u-file" type="file" accept=".zip,.tar.gz,.tgz,application/zip,application/gzip" />
+      <button id="upload-plugin">Upload pack</button>
+    </div>
+    <p class="muted">Upload a <code>.zip</code> or <code>.tar.gz</code> containing
+    <code>plugin.json</code> at its root (a single wrapping directory is unwrapped for you).
+    Use this when the pinned repository is private or unreachable.</p>
   </section>
 </main>
 
@@ -105,6 +114,12 @@ async function loadTenants() {
   loadPlugins();
 }
 
+// A drop-folder pack is owned by the filesystem: removing the row would not stick, so the
+// console does not offer it (the server refuses too).
+const SOURCE_LABEL = { baked: " \u00b7 built-in", builtin: " \u00b7 built-in",
+                       upload: " \u00b7 uploaded", local: " \u00b7 drop folder" };
+const REMOVABLE = ["git", "upload"];
+
 async function loadPlugins() {
   try {
     const repos = await api("GET", "/admin/plugin-repositories");
@@ -118,12 +133,12 @@ async function loadPlugins() {
       div.innerHTML = `
         <span>${badge} <b>${esc(r.name)}</b>
           <span class="muted">${esc(r.workflow_keys.join(", ") || "no workflows")}
-          · ${esc(r.ref.slice(0, 12))}${r.source !== "git" ? " · built-in" : ""}</span>
+          · ${esc(r.ref.slice(0, 12))}${esc(SOURCE_LABEL[r.source] || "")}</span>
           ${r.declared_servers.length ? `<span class="muted">servers: ${esc(r.declared_servers.map(s => `${s.key} (${s.enabled_tools.join("/")})`).join(", "))}</span>` : ""}
           ${r.status === "error" ? `<span class="muted" style="color:#c66">${esc(r.last_error)}</span>` : ""}
         </span>
         <button class="ghost" data-sync="${r.id}">Re-sync</button>
-        ${r.source !== "git" ? "" : `<button class="ghost" data-rm="${r.id}">Remove</button>`}`;
+        ${REMOVABLE.includes(r.source) ? `<button class="ghost" data-rm="${r.id}">Remove</button>` : ""}`;
       div.querySelector("[data-sync]").onclick = async () => {
         await guard(() => api("POST", `/admin/plugin-repositories/${r.id}/sync`)); loadPlugins();
       };
@@ -143,6 +158,26 @@ $("add-plugin").onclick = async () => {
     name: $("p-name").value.trim(), url: $("p-url").value.trim(), ref: $("p-ref").value.trim(),
   }));
   $("p-name").value = $("p-url").value = $("p-ref").value = "";
+  loadPlugins();
+};
+
+$("upload-plugin").onclick = async () => {
+  const file = $("u-file").files[0];
+  if (!file) { err("choose a .zip or .tar.gz first"); return; }
+  const form = new FormData();
+  form.append("name", $("u-name").value.trim());
+  form.append("file", file);
+  await guard(async () => {
+    const res = await fetch("/admin/plugin-repositories/upload", {
+      method: "POST", headers: { "Authorization": "Bearer " + TOKEN }, body: form,
+    });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch {}
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+  });
+  $("u-name").value = ""; $("u-file").value = "";
   loadPlugins();
 };
 

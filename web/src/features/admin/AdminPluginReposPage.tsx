@@ -161,19 +161,34 @@ export function AdminPluginReposPage() {
             <div className="mt-2 text-sm text-muted-foreground">
               Workflows: {r.workflow_keys.join(", ") || "—"}
             </div>
-            {r.declared_servers.length > 0 && (
+            {/* Only a real third party is an approval decision. The platform's own
+                pyrrhula:// tooling is listed plainly below it -- showing both under
+                "adding this repo approves these endpoints" made a clean install look
+                like it had attached external MCP servers when it had not. */}
+            {r.declared_servers.some((s) => s.external) && (
               <div className="mt-3 rounded-md bg-secondary/30 p-3 text-sm">
                 <div className="mb-1 font-medium">
-                  Declared MCP servers (adding this repo approves these endpoints)
+                  External MCP servers (adding this repo approves these endpoints)
                 </div>
                 <ul className="flex flex-col gap-1">
-                  {r.declared_servers.map((s, i) => (
-                    <li key={i} className="text-muted-foreground">
-                      <span className="text-foreground">{s.workflow_key}</span> · {s.key} →{" "}
-                      {s.url} · tools: {s.enabled_tools.join(", ") || "none"}
-                    </li>
-                  ))}
+                  {r.declared_servers
+                    .filter((s) => s.external)
+                    .map((s, i) => (
+                      <li key={i} className="text-muted-foreground">
+                        <span className="text-foreground">{s.workflow_key}</span> · {s.key} →{" "}
+                        {s.url} · tools: {s.enabled_tools.join(", ") || "none"}
+                      </li>
+                    ))}
                 </ul>
+              </div>
+            )}
+            {r.declared_servers.some((s) => !s.external) && (
+              <div className="mt-2 text-sm text-muted-foreground">
+                Built-in tools:{" "}
+                {r.declared_servers
+                  .filter((s) => !s.external)
+                  .map((s) => `${s.key} (${s.enabled_tools.join(", ") || "none"})`)
+                  .join(" · ")}
               </div>
             )}
           </div>

@@ -3266,6 +3266,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/plugin-repositories/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Plugin Endpoint
+         * @description Install a workflow pack from an uploaded .zip/.tar.gz.
+         *
+         *     The no-git path: a deployment that cannot reach the pinned plugin repositories (air
+         *     gapped, or the repo is private) gets its packs this way, with no credentials and no
+         *     restart. The drop directory (PYRRHULA_PLUGIN_DROP_DIR) is the same capability for
+         *     operators who would rather mount a folder.
+         */
+        post: operations["upload_plugin_endpoint_admin_plugin_repositories_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/plugin-repositories/{repository_id}/sync": {
         parameters: {
             query?: never;
@@ -3793,6 +3818,13 @@ export interface components {
             /** Scope Key */
             scope_key: string;
         };
+        /** Body_upload_plugin_endpoint_admin_plugin_repositories_upload_post */
+        Body_upload_plugin_endpoint_admin_plugin_repositories_upload_post: {
+            /** Name */
+            name: string;
+            /** File */
+            file: string;
+        };
         /** CapabilitiesResponse */
         CapabilitiesResponse: {
             /** Supports Tools */
@@ -4232,6 +4264,11 @@ export interface components {
             url: string;
             /** Enabled Tools */
             enabled_tools: string[];
+            /**
+             * External
+             * @default false
+             */
+            external: boolean;
         };
         /** DefinitionResponse */
         DefinitionResponse: {
@@ -13808,6 +13845,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AddPluginRepoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginRepoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_plugin_endpoint_admin_plugin_repositories_upload_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_plugin_endpoint_admin_plugin_repositories_upload_post"];
             };
         };
         responses: {

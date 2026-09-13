@@ -18,13 +18,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException
+from fastapi import APIRouter, Cookie, Depends, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 
 from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider
 from api.middleware.auth import get_request_context
 from core.config import get_settings
+from core.mcp.registry import is_external_mcp_url
 from core.tenancy.admin import ADMIN_TENANT_ID
 from core.tenancy.models import Membership
 from core.tenancy.provisioning import (
@@ -222,6 +223,11 @@ class DeclaredServerOut(BaseModel):
     key: str
     url: str
     enabled_tools: list[str]
+    # A `pyrrhula://` url is the platform's own in-process tooling (dice, git delegation),
+    # reached over no network and exposed to nobody. Only a real transport -- http(s), ws,
+    # stdio -- is a third party the operator is actually approving. Conflating the two made
+    # a clean install look like it had attached external MCP servers when it had not.
+    external: bool = False
 
 
 class PluginRepoOut(BaseModel):
@@ -236,6 +242,8 @@ class PluginRepoOut(BaseModel):
     last_synced_at: datetime | None
     # The MCP servers this repository's workflows would enable on workspaces -- the
     # operator's review surface: adding a repo is also approving these endpoints.
+    # Built-in `pyrrhula://` entries are included but flagged `external: false`; only the
+    # external ones are an approval decision.
     declared_servers: list[DeclaredServerOut] = []
 
 
@@ -254,12 +262,14 @@ async def _plugin_out(row: object) -> PluginRepoOut:
             continue
         declared = (workflow.capabilities or {}).get("mcp_servers")
         for spec in declared if isinstance(declared, list) else []:
+            url = str(spec.get("url", ""))
             out.declared_servers.append(
                 DeclaredServerOut(
                     workflow_key=key,
                     key=str(spec.get("key", "")),
-                    url=str(spec.get("url", "")),
+                    url=url,
                     enabled_tools=[str(t) for t in spec.get("enabled_tools", [])],
+                    external=is_external_mcp_url(url),
                 )
             )
     return out
@@ -328,6 +338,25 @@ async def add_plugin_repo_endpoint(body: AddPluginRepoRequest) -> PluginRepoOut:
 
     try:
         return await _plugin_out(await add_repository(body.name, body.url, body.ref))
+    except PluginSyncError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/plugin-repositories/upload", status_code=201)
+async def upload_plugin_endpoint(
+    name: str = Form(...), file: UploadFile = File(...)
+) -> PluginRepoOut:
+    """Install a workflow pack from an uploaded .zip/.tar.gz.
+
+    The no-git path: a deployment that cannot reach the pinned plugin repositories (air
+    gapped, or the repo is private) gets its packs this way, with no credentials and no
+    restart. The drop directory (PYRRHULA_PLUGIN_DROP_DIR) is the same capability for
+    operators who would rather mount a folder.
+    """
+    from core.plugins.service import PluginSyncError, install_uploaded_plugin
+
+    try:
+        return await _plugin_out(await install_uploaded_plugin(name.strip(), await file.read()))
     except PluginSyncError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
