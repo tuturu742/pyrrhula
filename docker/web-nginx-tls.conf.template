@@ -32,8 +32,13 @@ server {
 
     # Identical proxy contract to the plain-http template: buffering OFF so the session
     # SSE stream and the assistant's NDJSON reach the browser as they are produced.
-    location /api/ {
-        proxy_pass http://${PYRRHULA_API_UPSTREAM}/;
+    location ~ ^/api/(.*)$ {
+        # Variable upstream, same reason as the plain-http template: nginx resolves a
+        # literal proxy_pass hostname once at startup and never again, so a redeployed
+        # api leaves this proxying at a dead address. $1 reproduces the old trailing
+        # slash's prefix stripping. Needs the resolver from web-resolver.sh.
+        set $api_upstream "${PYRRHULA_API_UPSTREAM}";
+        proxy_pass http://$api_upstream/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
