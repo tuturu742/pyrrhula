@@ -471,6 +471,14 @@ async def _chat_inner(
         profile = await session.get(Agent, persona.agent_id)
         if profile is None:
             raise ValueError("the assistant's model profile is missing")
+        if not profile.model:
+            # Fresh install, no provider configured yet -- name the fix rather than
+            # letting the stream die on a connection error to a host nobody set up.
+            raise ValueError(
+                "no model is configured for the assistant yet -- set one on the "
+                "'Assistant model' profile, or start the deployment with "
+                "PYRRHULA_ASSISTANT_MODEL"
+            )
         session.expunge(profile)
     from core.usage_limits import ensure_within_limits
 
@@ -554,7 +562,26 @@ async def _chat_inner(
             yield {"type": "done", "context_entry_keys": entry_keys}
             return
 
-        conversation.append({"role": "assistant", "content": content})
+        # The assistant turn that REQUESTED the tools must carry tool_calls back in the
+        # transcript, in the OpenAI shape -- the same requirement core/agents/runtime.py
+        # already honours for session turns. Without it every provider that validates the
+        # pairing rejects the NEXT request outright ("Messages with role 'tool' must be a
+        # response to a preceding message with 'tool_calls'"), so the assistant could call
+        # one tool and then die instead of answering.
+        conversation.append(
+            {
+                "role": "assistant",
+                "content": content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
+                    }
+                    for tc in tool_calls
+                ],
+            }
+        )
         for tool_call in tool_calls:
             yield {"type": "tool", "name": tool_call.name}
             before = len(state.proposals)

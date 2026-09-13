@@ -99,6 +99,18 @@ async def assist_endpoint(
     profile = await get_agent(ctx.tenant_id, persona.agent_id)
     if profile is None:
         raise HTTPException(status_code=409, detail="the assistant's model profile is missing")
+    if not profile.model:
+        # A fresh install ships no model. Say that plainly here rather than letting the
+        # call fail deep in the provider with a connection error nobody can act on.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "no model is configured for the assistant yet -- set one on the "
+                "'Assistant model' profile, or start the deployment with "
+                "PYRRHULA_ASSISTANT_MODEL (and PYRRHULA_ASSISTANT_API_BASE for a local "
+                "provider)"
+            ),
+        )
 
     async with tenant_scope(ctx.tenant_id) as session:
         viewer = await session.get(Principal, ctx.principal_id)

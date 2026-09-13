@@ -121,11 +121,15 @@ async def ensure_workspace_assistant(tenant_id: uuid.UUID, workspace_id: uuid.UU
             )
         )
         if profile is None:
+            # No provider guess when nothing is configured: inventing "ollama" here is
+            # what made a fresh install look like it had a working local model. An empty
+            # profile is honest -- the assistant still exists (it is required), and the
+            # first call that needs a model says so instead of failing at the transport.
             profile = Agent(
                 tenant_id=tenant_id,
                 name="Assistant model",
-                provider=provider_kind or "ollama",
-                model=model or settings.assistant_model,
+                provider=provider_kind if settings.assistant_model else "",
+                model=(model or settings.assistant_model) if settings.assistant_model else "",
                 api_base=settings.assistant_api_base or None,
             )
             session.add(profile)

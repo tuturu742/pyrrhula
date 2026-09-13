@@ -4,6 +4,7 @@ out of the stream. Live Postgres + scripted providers (the ``test_editing`` patt
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -29,9 +30,11 @@ class _ScriptedChatProvider:
     turns: list[tuple[str, tuple[ToolCall, ...]]]
     calls: int = 0
     seen_tools: list[tuple[str, ...]] = field(default_factory=list)
+    seen_messages: list[list[dict]] = field(default_factory=list)
 
     async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
         self.seen_tools.append(tuple(t.name for t in req.tools))
+        self.seen_messages.append([dict(m) for m in req.messages])
         text, tool_calls = self.turns[min(self.calls, len(self.turns) - 1)]
         self.calls += 1
         if text:
@@ -54,10 +57,19 @@ async def _setup(prefix: str):  # noqa: ANN202
     tenant_id, owner_id, workspace_id = await seed_dev_tenant(
         slug=f"{prefix}-{uuid.uuid4().hex[:8]}"
     )
-    await ensure_workspace_assistant(tenant_id, workspace_id)
+    persona = await ensure_workspace_assistant(tenant_id, workspace_id)
+    from core.agents.models import Agent
     from core.tenancy.models import Principal
     from core.tenancy.scope import tenant_scope
 
+    # A fresh deployment configures no model (Settings.assistant_model is empty), so the
+    # assistant is created without one and chat refuses until an operator picks one.
+    # These tests are about chat behaviour with a configured assistant, so configure it --
+    # the unconfigured path has its own test below.
+    async with tenant_scope(tenant_id) as session:
+        profile = await session.get(Agent, persona.agent_id)
+        assert profile is not None
+        profile.provider, profile.model = "openai", "gpt-4o-mini"
     async with tenant_scope(tenant_id) as session:
         viewer = await session.get(Principal, owner_id)
         assert viewer is not None
@@ -188,3 +200,86 @@ async def test_provider_failure_becomes_error_event(db_available: None) -> None:
 
     assert events[-1]["type"] == "error"
     assert "provider exploded" in events[-1]["detail"]
+
+
+async def test_chat_refuses_when_no_model_is_configured(db_available: None) -> None:
+    """A clean install ships no assistant model. The stream must say so in words an
+    operator can act on, rather than dying later inside the provider on a connection to
+    a host nobody configured."""
+    tenant_id, owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"chat-nomodel-{uuid.uuid4().hex[:8]}"
+    )
+    await ensure_workspace_assistant(tenant_id, workspace_id)
+    from core.tenancy.models import Principal
+    from core.tenancy.scope import tenant_scope
+
+    async with tenant_scope(tenant_id) as session:
+        viewer = await session.get(Principal, owner_id)
+        assert viewer is not None
+        session.expunge(viewer)
+
+    events = await _collect(
+        chat(
+            tenant_id,
+            workspace_id,
+            viewer,
+            [{"role": "user", "content": "hi"}],
+            embedder=StubEmbeddingProvider(dimension=1024),
+            provider_factory=lambda _p: _ScriptedChatProvider(turns=[("unused", ())]),
+            encryptor=IdentityEncryptor(),
+        )
+    )
+    assert events[-1]["type"] == "error"
+    assert "no model is configured" in events[-1]["detail"]
+
+
+async def test_tool_results_are_paired_with_the_assistant_turn_that_asked(
+    db_available: None,
+) -> None:
+    """Every role:"tool" message must follow an assistant message carrying the matching
+    tool_calls. Providers that validate the pairing reject the whole request otherwise --
+    seen live as "Messages with role 'tool' must be a response to a preceding message
+    with 'tool_calls'", which killed the assistant the moment it used any tool.
+    """
+    tenant_id, workspace_id, viewer = await _setup("chat-pairing")
+    provider = _ScriptedChatProvider(
+        turns=[
+            ("", (ToolCall(id="c1", name="list_personas", arguments={}),)),
+            ("You have an assistant persona.", ()),
+        ]
+    )
+
+    await _collect(
+        chat(
+            tenant_id,
+            workspace_id,
+            viewer,
+            [{"role": "user", "content": "what personas exist?"}],
+            embedder=StubEmbeddingProvider(dimension=1024),
+            provider_factory=lambda _p: provider,
+            encryptor=IdentityEncryptor(),
+        )
+    )
+
+    # The SECOND request is the one that carries the tool result back.
+    assert provider.calls == 2
+    messages = provider.seen_messages[1]
+    tool_msgs = [m for m in messages if m.get("role") == "tool"]
+    assert tool_msgs, "the tool result never reached the model"
+
+    for tool_msg in tool_msgs:
+        idx = messages.index(tool_msg)
+        # Walk back to the nearest non-tool message: it must be the assistant turn that
+        # requested this call, and it must name the call id.
+        preceding = next(m for m in reversed(messages[:idx]) if m.get("role") != "tool")
+        assert preceding["role"] == "assistant", preceding["role"]
+        ids = {c["id"] for c in preceding.get("tool_calls") or []}
+        assert tool_msg["tool_call_id"] in ids, (
+            f"tool_call_id {tool_msg['tool_call_id']!r} not in preceding assistant "
+            f"tool_calls {ids!r}"
+        )
+        # OpenAI shape, as the providers expect it.
+        call = next(c for c in preceding["tool_calls"] if c["id"] == tool_msg["tool_call_id"])
+        assert call["type"] == "function"
+        assert call["function"]["name"] == "list_personas"
+        json.loads(call["function"]["arguments"])  # arguments travel as a JSON string
