@@ -24,6 +24,9 @@ from tests.isolation.test_rls_catalog import _DOCUMENTED_NO_RLS_EXCEPTION
 # test_between_session_state.py (G4.2), or test_async_pacing.py (G4.3), or
 # test_report_pipeline.py (G4.10), or test_mcp_client.py (G4.12).
 _COVERED_TABLES = {
+    # Has test_persona_git_credential_filter_omission in the matrix but was never
+    # registered here, so the guard has been failing for it.
+    "persona_git_credential",
     "entry_activation_state",
     "principal",
     "tenant_mcp_capability",
