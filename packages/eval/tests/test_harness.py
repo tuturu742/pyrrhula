@@ -119,7 +119,7 @@ def test_fidelity_judge_inputs_are_blind() -> None:
     payload_text = " ".join(m["content"] for m in request.messages)
 
     # No axis key/value and no arm name ever appear in the judge's payload.
-    for axis_key in ("secret_disclosure_propensity", "deception_propensity", "talkativeness"):
+    for axis_key in ("secret_disclosure_propensity", "deception_propensity", "chattiness"):
         assert axis_key not in payload_text
     for arm_name in ARM_NAMES:
         assert arm_name not in payload_text

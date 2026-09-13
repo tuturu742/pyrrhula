@@ -1,4 +1,4 @@
-"""RPG axis-pack fixtures (E2.3's own subtask): the §8.2 examples (talkativeness,
+"""RPG axis-pack fixtures (E2.3's own subtask): the §8.2 examples (chattiness,
 cooperativeness, secret_disclosure_propensity, deception_propensity), used by this task's
 validation fixtures and by E2.5's disclosure gate tests. The enterprise axis pack lands
 in F3.8 and the swdev axis pack (`review_strictness`, `escalation_propensity`,
@@ -15,10 +15,10 @@ from __future__ import annotations
 
 RPG_AXIS_PACK_ID = "rpg_v1"
 
-TALKATIVENESS: dict[str, object] = {
+CHATTINESS: dict[str, object] = {
     "pack_id": RPG_AXIS_PACK_ID,
-    "key": "talkativeness",
-    "label_key": "axis.talkativeness",
+    "key": "chattiness",
+    "label_key": "axis.chattiness",
     "range_min": 0,
     "range_max": 100,
     "stakes": "low",
@@ -114,7 +114,7 @@ DECEPTION_PROPENSITY: dict[str, object] = {
 }
 
 RPG_AXIS_PACK: tuple[dict[str, object], ...] = (
-    TALKATIVENESS,
+    CHATTINESS,
     COOPERATIVENESS,
     SECRET_DISCLOSURE_PROPENSITY,
     DECEPTION_PROPENSITY,

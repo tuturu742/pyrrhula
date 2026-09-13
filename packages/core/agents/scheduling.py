@@ -41,7 +41,7 @@ async def _personas_with_type(
     persona_type: str,
     *,
     session_id: uuid.UUID | None = None,
-    with_talkativeness: bool = False,
+    with_chattiness: bool = False,
 ) -> list[Candidate]:
     """Personas of ``persona_type`` eligible to act. When ``session_id`` names a session with
     an explicit roster (#4), candidates come from that roster; otherwise (skeleton/legacy
@@ -61,11 +61,11 @@ async def _personas_with_type(
             stmt = stmt.where(Persona.workspace_id == workspace_id)
         rows = (await session.execute(stmt.order_by(Persona.principal_id))).all()
 
-    if not with_talkativeness:
+    if not with_chattiness:
         return [Candidate(principal_id=pid, name=name) for _persona_id, pid, name in rows]
 
-    # Each candidate's talkativeness axis value, when its behaviour profile sets one --
-    # "natural" ordering weights unprompted turns by it, and is the only mode that does,
+    # Each candidate's chattiness axis value, when its behaviour profile sets one --
+    # "reactive" ordering weights unprompted turns by it, and is the only mode that does,
     # so the per-persona profile reads happen only when a phase actually asked for them.
     # Personas with no profile (or one that never set the axis) ride the neutral default.
     from core.behavior.repo import get_current_behavior_profile
@@ -73,9 +73,9 @@ async def _personas_with_type(
     candidates: list[Candidate] = []
     for persona_id, pid, name in rows:
         profile = await get_current_behavior_profile(tenant_id, persona_id)
-        raw = (profile.axis_values or {}).get("talkativeness") if profile is not None else None
-        talkativeness = float(raw) if isinstance(raw, (int, float)) else None
-        candidates.append(Candidate(principal_id=pid, name=name, talkativeness=talkativeness))
+        raw = (profile.axis_values or {}).get("chattiness") if profile is not None else None
+        chattiness = float(raw) if isinstance(raw, (int, float)) else None
+        candidates.append(Candidate(principal_id=pid, name=name, chattiness=chattiness))
     return candidates
 
 
@@ -93,7 +93,7 @@ def make_persona_candidate_resolver(
                 workspace_id,
                 spec.persona_type,
                 session_id=session_id,
-                with_talkativeness=spec.order == "natural",
+                with_chattiness=spec.order == "reactive",
             )
 
         if spec.any_of is not None:
@@ -117,7 +117,7 @@ def make_persona_candidate_resolver(
                         workspace_id,
                         role,
                         session_id=session_id,
-                        with_talkativeness=spec.order == "natural",
+                        with_chattiness=spec.order == "reactive",
                     )
                 )
             return candidates

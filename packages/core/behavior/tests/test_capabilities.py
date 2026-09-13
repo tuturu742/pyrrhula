@@ -16,7 +16,7 @@ from core.behavior.capability_validation import (
     CapabilityRejectedError,
     validate_profile_capability,
 )
-from core.behavior.fixtures import RPG_AXIS_PACK_ID, SECRET_DISCLOSURE_PROPENSITY, TALKATIVENESS
+from core.behavior.fixtures import CHATTINESS, RPG_AXIS_PACK_ID, SECRET_DISCLOSURE_PROPENSITY
 from core.behavior.repo import create_axis_definition
 from core.behavior.validation import AxisDefinitionSchema
 from core.tenancy.seed import seed_dev_tenant
@@ -88,9 +88,7 @@ async def test_low_stakes_axis_is_never_rejected(db_available: None) -> None:
     incapable model is a quality signal (E2.8's behavioral_fidelity), not a blocker."""
     provider, model = "echo", "echo-lowstakes-1"
     tenant_id, persona_id = await _setup("cap-lowstakes", provider=provider, model=model)
-    await create_axis_definition(tenant_id, AxisDefinitionSchema.model_validate(TALKATIVENESS))
-    await upsert_capability(provider, model, "talkativeness", capable=False, reason="whatever")
+    await create_axis_definition(tenant_id, AxisDefinitionSchema.model_validate(CHATTINESS))
+    await upsert_capability(provider, model, "chattiness", capable=False, reason="whatever")
 
-    await validate_profile_capability(
-        tenant_id, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 50}
-    )
+    await validate_profile_capability(tenant_id, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 50})

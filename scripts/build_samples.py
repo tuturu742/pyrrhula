@@ -165,9 +165,9 @@ def _facilitator_led_flow(name: str, overlay: str, answer_turns: int, rounds: in
                         "mode": "generate",
                         # Reactive: whoever the last speaker named answers next -- the
                         # inspector's addressee first, then the person an answer pushes
-                        # toward, and so on; nobody named, a talkativeness-weighted pick.
+                        # toward, and so on; nobody named, a chattiness-weighted pick.
                         # The floor follows the accusations instead of a roster.
-                        "order": "natural",
+                        "order": "reactive",
                         "max_turns": answer_turns,
                     }
                 ],
@@ -843,10 +843,7 @@ _DOGFOOD = SampleSpec(
 SAMPLES: tuple[SampleSpec, ...] = (_mystery_sample(), _GAMEDEV, _COFFEE, _DOGFOOD)
 
 
-
-async def _build_source(
-    tenant_id: uuid.UUID, workspace_id: uuid.UUID, source_spec: SourceSpec
-):
+async def _build_source(tenant_id: uuid.UUID, workspace_id: uuid.UUID, source_spec: SourceSpec):
     """Create one knowledge source, fill it, publish, attach, and pre-chunk it.
 
     Chunks are written directly with a NULL embedding and `constant = true`: a sample must

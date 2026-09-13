@@ -506,16 +506,16 @@ async def test_addressed_entry_walks_addressee_first_then_the_rest(
     assert exhausted is None
 
 
-# ── order: "natural" (SillyTavern-style reactive discussion) ─────────────────────────
-def _chatty(name: str, talkativeness: float | None = None) -> Candidate:
-    return Candidate(principal_id=uuid.uuid4(), name=name, talkativeness=talkativeness)
+# ── order: "reactive" (mention-driven discussion) ────────────────────────────────────
+def _chatty(name: str, chattiness: float | None = None) -> Candidate:
+    return Candidate(principal_id=uuid.uuid4(), name=name, chattiness=chattiness)
 
 
-def test_natural_hands_the_floor_to_whoever_was_pushed_toward() -> None:
+def test_reactive_hands_the_floor_to_whoever_was_pushed_toward() -> None:
     """The user's mystery scenario: Elin points at Viktor -> Viktor answers; Viktor
     pushes toward Sofia -> Sofia answers; Sofia names Viktor -> Viktor again. No fixed
     order -- the floor follows the accusations."""
-    from core.process.scheduler import _natural_pick
+    from core.process.scheduler import _reactive_pick
 
     elin, sofia, viktor = (
         _chatty("Elin Wallmark"),
@@ -524,58 +524,60 @@ def test_natural_hands_the_floor_to_whoever_was_pushed_toward() -> None:
     )
     cast = [elin, sofia, viktor]
 
-    assert _natural_pick(cast, "It was Viktor on the stairs.", elin.principal_id, "s") is viktor
-    assert _natural_pick(cast, "Ask Sofia about the timings.", viktor.principal_id, "s") is sofia
-    assert _natural_pick(cast, "Viktor is lying about the door.", sofia.principal_id, "s") is viktor
+    assert _reactive_pick(cast, "It was Viktor on the stairs.", elin.principal_id, "s") is viktor
+    assert _reactive_pick(cast, "Ask Sofia about the timings.", viktor.principal_id, "s") is sofia
+    assert (
+        _reactive_pick(cast, "Viktor is lying about the door.", sofia.principal_id, "s") is viktor
+    )
 
 
-def test_natural_never_lets_a_speaker_follow_themselves() -> None:
+def test_reactive_never_lets_a_speaker_follow_themselves() -> None:
     """Even when the last message names its own author (a stripped self-attribution, a
-    boast), the floor moves -- exactly SillyTavern's no-self-response rule."""
-    from core.process.scheduler import _natural_pick
+    boast), the floor moves -- a speaker never follows themselves."""
+    from core.process.scheduler import _reactive_pick
 
     elin, viktor = _chatty("Elin Wallmark"), _chatty("Viktor Wallmark")
 
-    picked = _natural_pick(
+    picked = _reactive_pick(
         [elin, viktor], "Viktor Wallmark has nothing to hide.", viktor.principal_id, "s"
     )
 
     assert picked is elin
 
 
-def test_natural_weights_unprompted_turns_by_talkativeness() -> None:
+def test_reactive_weights_unprompted_turns_by_chattiness() -> None:
     """Nobody named: the pick is deterministic per seed, and across many seeds a
-    talkative persona takes the floor far more often -- the seniority lever the SWE
-    discussion wants. Zero-talkativeness personas never speak unprompted."""
+    chatty persona takes the floor far more often -- the seniority lever the SWE
+    discussion wants. Zero-chattiness personas never speak unprompted."""
     from collections import Counter
 
-    from core.process.scheduler import _natural_pick
+    from core.process.scheduler import _reactive_pick
 
-    senior = _chatty("Senior", talkativeness=90.0)
-    junior = _chatty("Junior", talkativeness=10.0)
-    silent = _chatty("Silent", talkativeness=0.0)
+    senior = _chatty("Senior", chattiness=90.0)
+    junior = _chatty("Junior", chattiness=10.0)
+    silent = _chatty("Silent", chattiness=0.0)
     counts = Counter()
     for i in range(300):
-        picked = _natural_pick([senior, junior, silent], "No names here.", None, f"seed-{i}")
+        picked = _reactive_pick([senior, junior, silent], "No names here.", None, f"seed-{i}")
         counts[picked.name] += 1
 
     assert counts["Silent"] == 0, "weight 0 must never speak unprompted"
     assert counts["Senior"] > counts["Junior"] * 3, counts
     # Determinism (INV-10): the same seed always picks the same persona.
-    again = _natural_pick([senior, junior, silent], "No names here.", None, "seed-7")
-    assert again is _natural_pick([senior, junior, silent], "No names here.", None, "seed-7")
+    again = _reactive_pick([senior, junior, silent], "No names here.", None, "seed-7")
+    assert again is _reactive_pick([senior, junior, silent], "No names here.", None, "seed-7")
 
 
-def test_natural_zero_weight_still_answers_when_named() -> None:
-    from core.process.scheduler import _natural_pick
+def test_reactive_zero_weight_still_answers_when_named() -> None:
+    from core.process.scheduler import _reactive_pick
 
-    silent = _chatty("Marta Sjöberg", talkativeness=0.0)
-    other = _chatty("Elin Wallmark", talkativeness=80.0)
+    silent = _chatty("Marta Sjöberg", chattiness=0.0)
+    other = _chatty("Elin Wallmark", chattiness=80.0)
 
-    assert _natural_pick([silent, other], "Marta, answer me.", None, "s") is silent
+    assert _reactive_pick([silent, other], "Marta, answer me.", None, "s") is silent
 
 
-async def test_natural_entry_is_reactive_per_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_reactive_entry_is_reactive_per_turn(monkeypatch: pytest.MonkeyPatch) -> None:
     """Through the real cursor machinery: each turn re-reads the last message, so the
     order tracks the conversation instead of being fixed at phase entry."""
     from core.process import scheduler as sched
@@ -591,7 +593,7 @@ async def test_natural_entry_is_reactive_per_turn(monkeypatch: pytest.MonkeyPatc
     async def resolve(spec, ctx):  # noqa: ANN001, ANN202
         return [elin, viktor]
 
-    spec = ActorSpec(any_of=["participant_agent"], mode="generate", order="natural", max_turns=2)
+    spec = ActorSpec(any_of=["participant_agent"], mode="generate", order="reactive", max_turns=2)
     phase = PhaseSpec(
         label_key="x",
         actors=[spec],

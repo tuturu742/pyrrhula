@@ -1,7 +1,7 @@
 """PNG `tEXt` chunk read/write for Character Card V2/V3 files (G4.8, plan §11.3).
 
 A card is a PNG whose metadata carries a base64-encoded JSON document in a `tEXt` chunk --
-`chara` for V2, `ccv3` for V3, and SillyTavern writes both for backward compatibility.
+`chara` for V2, `ccv3` for V3, and card-writing frontends emit both for backward compatibility.
 This module is the narrow parsing slice §11.3 recommends porting from `character-foundry`
 rather than running a Node sidecar for one import path.
 

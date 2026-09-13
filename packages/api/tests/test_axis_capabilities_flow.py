@@ -78,6 +78,6 @@ async def test_disabled_axis_carries_reason_code_in_api_response(
 
     # An axis with no stored eval result yet defaults to capable (permissive), with no
     # reason code needed -- nothing to disable.
-    untested = next(a for a in body if a["axis_key"] == "talkativeness")
+    untested = next(a for a in body if a["axis_key"] == "chattiness")
     assert untested["capable"] is True
     assert untested["reason"] is None

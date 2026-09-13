@@ -96,7 +96,7 @@ CAST: tuple[CastMember, ...] = (
             "malice": 25,
             "secret_disclosure_propensity": 30,
             "deception_propensity": 55,
-            "talkativeness": 80,
+            "chattiness": 80,
         },
         secrets=(
             CaseSecret(
@@ -160,7 +160,7 @@ CAST: tuple[CastMember, ...] = (
             "malice": 85,
             "secret_disclosure_propensity": 5,
             "deception_propensity": 90,
-            "talkativeness": 60,
+            "chattiness": 60,
         },
         secrets=(
             CaseSecret(
@@ -240,7 +240,7 @@ CAST: tuple[CastMember, ...] = (
             "malice": 60,
             "secret_disclosure_propensity": 15,
             "deception_propensity": 80,
-            "talkativeness": 70,
+            "chattiness": 70,
         },
         secrets=(
             CaseSecret(
@@ -322,7 +322,7 @@ CAST: tuple[CastMember, ...] = (
             "malice": 15,
             "secret_disclosure_propensity": 40,
             "deception_propensity": 50,
-            "talkativeness": 35,
+            "chattiness": 35,
         },
         secrets=(
             CaseSecret(
@@ -388,7 +388,7 @@ CAST: tuple[CastMember, ...] = (
             "malice": 20,
             "secret_disclosure_propensity": 10,
             "deception_propensity": 25,
-            "talkativeness": 20,
+            "chattiness": 20,
         },
         secrets=(
             CaseSecret(

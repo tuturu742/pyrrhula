@@ -18,7 +18,7 @@ that a `.pyr` bundle goes to someone the exporter chose deliberately with a mode
 to pick; a card goes into an ecosystem of sharing sites, and the least surprising thing a
 card can do is carry no secrets at all.
 
-Both `chara` and `ccv3` chunks are written: SillyTavern does the same for backward
+Both `chara` and `ccv3` chunks are written: card-writing frontends do the same for backward
 compatibility, and a card that only older tools can read is a card half the ecosystem
 can't.
 """
@@ -94,7 +94,7 @@ class CardExportResult:
 
     def to_png(self, image: bytes) -> bytes:
         """Both chunks, same payload. `ccv3` is what a modern reader takes; `chara` keeps
-        older tooling working, which is what SillyTavern does and what makes a card
+        older tooling working, which is the ecosystem convention and what makes a card
         actually portable rather than nominally so."""
         encoded = encode_card_payload(self.payload)
         return write_text_chunks(image, {"ccv3": encoded, "chara": encoded})

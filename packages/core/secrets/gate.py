@@ -167,7 +167,7 @@ def _build_gate_request(
             disposition.append({"axis": key, "value": value})
             continue
         if not any(b.get("kind") == "gate" for b in getattr(axis, "bindings", [])):
-            continue  # low-stakes axes (talkativeness, ...) are not the gate's business
+            continue  # low-stakes axes (chattiness, ...) are not the gate's business
         disposition.append(
             {
                 "axis": key,

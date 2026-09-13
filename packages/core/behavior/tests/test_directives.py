@@ -17,7 +17,7 @@ from core.behavior.directives import (
     render_directives_for_profile,
     validate_bands,
 )
-from core.behavior.fixtures import RPG_AXIS_PACK_ID, TALKATIVENESS
+from core.behavior.fixtures import CHATTINESS, RPG_AXIS_PACK_ID
 from core.behavior.models import AxisDefinitionRow
 from core.behavior.repo import create_axis_definition, create_behavior_profile
 from core.behavior.validation import AxisDefinitionSchema
@@ -29,10 +29,10 @@ from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
 
 
-def _talkativeness_row() -> AxisDefinitionRow:
+def _chattiness_row() -> AxisDefinitionRow:
     """A plain, unsaved ORM instance -- band-rendering logic needs no DB round-trip;
     only the pack-load path (`create_axis_definition`) does."""
-    definition = AxisDefinitionSchema.model_validate(TALKATIVENESS)
+    definition = AxisDefinitionSchema.model_validate(CHATTINESS)
     return AxisDefinitionRow(
         pack_id=definition.pack_id,
         key=definition.key,
@@ -46,7 +46,7 @@ def _talkativeness_row() -> AxisDefinitionRow:
 
 
 def test_band_rendering_is_total_and_boundary_exact() -> None:
-    axis = _talkativeness_row()
+    axis = _chattiness_row()
     # Boundary-exact: 33 is the top of the first band, 34 the bottom of the second --
     # no value in [0, 100] maps to nothing (total), and edges land in the band that
     # actually declares them, not its neighbour.
@@ -73,19 +73,19 @@ def test_band_rendering_is_total_and_boundary_exact() -> None:
 def test_band_validation_rejects_gaps_and_overlaps() -> None:
     gap = [BandSchema(min=0, max=20, text="a"), BandSchema(min=22, max=100, text="b")]
     with pytest.raises(DirectiveBindingError, match="gap"):
-        validate_bands("talkativeness", 0, 100, gap)
+        validate_bands("chattiness", 0, 100, gap)
 
     overlap = [BandSchema(min=0, max=50, text="a"), BandSchema(min=40, max=100, text="b")]
     with pytest.raises(DirectiveBindingError, match="overlap"):
-        validate_bands("talkativeness", 0, 100, overlap)
+        validate_bands("chattiness", 0, 100, overlap)
 
     short_of_range_max = [BandSchema(min=0, max=90, text="a")]
     with pytest.raises(DirectiveBindingError, match="range_max"):
-        validate_bands("talkativeness", 0, 100, short_of_range_max)
+        validate_bands("chattiness", 0, 100, short_of_range_max)
 
 
 def test_rendered_directive_contains_no_raw_axis_number() -> None:
-    axis = _talkativeness_row()
+    axis = _chattiness_row()
     for value in (0, 20, 33, 50, 73, 100):
         rendered = render_directive(axis, value)
         assert rendered is not None
@@ -99,11 +99,11 @@ async def test_directive_bytes_stable_across_turns_for_same_profile_version(
         slug=f"directive-stable-{uuid.uuid4().hex[:8]}"
     )
     axis_row = await create_axis_definition(
-        tenant_id, AxisDefinitionSchema.model_validate(TALKATIVENESS)
+        tenant_id, AxisDefinitionSchema.model_validate(CHATTINESS)
     )
     persona_id = await seed_dev_agent(tenant_id, workspace_id)
     profile = await create_behavior_profile(
-        tenant_id, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 10}
+        tenant_id, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 10}
     )
 
     async with tenant_scope(tenant_id) as session:

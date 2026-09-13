@@ -1,7 +1,7 @@
 {
   "pack_id": "default_v1",
-  "key": "talkativeness",
-  "label_key": "axis.talkativeness",
+  "key": "chattiness",
+  "label_key": "axis.chattiness",
   "range_min": 0,
   "range_max": 100,
   "default": 50,

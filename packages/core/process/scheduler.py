@@ -44,13 +44,13 @@ _HUMAN_TOKENS = frozenset({"human_participant", "human_overseer"})
 class Candidate:
     principal_id: uuid.UUID
     initiative: float | None = None
-    # Display name, filled by the persona resolver. "addressed" and "natural" ordering
+    # Display name, filled by the persona resolver. "addressed" and "reactive" ordering
     # read it: matching who the previous speaker named requires knowing what the
     # candidates are called.
     name: str | None = None
-    # The persona's talkativeness axis value (0-100), when its behaviour profile sets
-    # one. "natural" ordering weights unprompted turns by it; everything else ignores it.
-    talkativeness: float | None = None
+    # The persona's chattiness axis value (0-100), when its behaviour profile sets
+    # one. "reactive" ordering weights unprompted turns by it; everything else ignores it.
+    chattiness: float | None = None
 
 
 # Resolves ONE actor spec entry into its currently eligible concrete candidates -- called
@@ -152,7 +152,7 @@ async def _last_assistant_text(tenant_id: uuid.UUID, session_id: uuid.UUID) -> s
 async def _last_assistant_turn(
     tenant_id: uuid.UUID, session_id: uuid.UUID
 ) -> tuple[str, uuid.UUID | None]:
-    """The most recent generated turn's text and its author -- "natural" ordering needs
+    """The most recent generated turn's text and its author -- "reactive" ordering needs
     both: the text may name the next speaker, and the author must not follow themselves."""
     from core.sessions.models import MessageRow
 
@@ -191,21 +191,20 @@ def _mention_score(name: str | None, lowered_text: str) -> int:
     return score
 
 
-def _natural_pick(
+def _reactive_pick(
     candidates: list[Candidate],
     text: str,
     previous_author: uuid.UUID | None,
     seed: str,
 ) -> Candidate | None:
     """One reactive turn: the person the last message names goes next; nobody named, a
-    deterministic talkativeness-weighted pick. The previous speaker never follows
+    deterministic chattiness-weighted pick. The previous speaker never follows
     themselves while anyone else is eligible -- being pushed toward IS how they get the
     floor back, one turn later.
 
     Determinism matters (INV-10): the "random" pick is sha256(seed) over cumulative
-    talkativeness weights, so a replay makes the identical choice. Weight 0 personas
-    never speak unprompted but still answer when named -- exactly SillyTavern's
-    talkativeness semantics, which this deliberately mirrors.
+    chattiness weights, so a replay makes the identical choice. Weight 0 personas never
+    speak unprompted but still answer when named.
     """
     if not candidates:
         return None
@@ -221,7 +220,7 @@ def _natural_pick(
     if best is not None and best_score >= 0:
         return best
 
-    weights = [max(0.0, c.talkativeness if c.talkativeness is not None else 50.0) for c in pool]
+    weights = [max(0.0, c.chattiness if c.chattiness is not None else 50.0) for c in pool]
     total = sum(weights)
     if total <= 0:
         return pool[0]
@@ -267,10 +266,10 @@ async def _next_from_entry(
     fresh = await resolve_candidates(spec, ctx)
     eligible_ids = {str(c.principal_id) for c in fresh}
 
-    if spec.order == "natural":
+    if spec.order == "reactive":
         text, previous_author = await _last_assistant_turn(ctx.tenant_id, ctx.session_id)
         seed = f"{ctx.session_id}:{ctx.event_seq}:{cursor.turns_taken}"
-        chosen = _natural_pick(fresh, text, previous_author, seed)
+        chosen = _reactive_pick(fresh, text, previous_author, seed)
         if chosen is None:
             return None, cursor
         new_cursor = _EntryCursor(None, 0, cursor.turns_taken + 1)

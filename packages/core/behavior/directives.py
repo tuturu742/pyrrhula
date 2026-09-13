@@ -1,6 +1,6 @@
 """`prompt_directive` binding: banded rendering (E2.4, plan §8.2). Models follow "you speak
 rarely, and only when you have something substantive to add" far more reliably than
-"talkativeness: 20/100" -- band the value, never inject the raw number. Band boundaries
+"chattiness: 20/100" -- band the value, never inject the raw number. Band boundaries
 and template text are pack data (an axis definition's `bindings` JSONB), never code:
 "you wave things through" (swdev `review_strictness`) and "you speak in riddles" (RPG
 oracle) are content decisions, and packs may not require core changes to express them

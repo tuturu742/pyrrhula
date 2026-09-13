@@ -185,7 +185,7 @@ async def test_exported_card_has_valid_chara_and_ccv3_chunks(
 
     chunks = read_text_chunks(png)
     assert set(chunks) == {"ccv3", "chara"}, (
-        "SillyTavern-compatible tooling reads `chara`; a card without it is portable in name only"
+        "V2-only tooling reads `chara`; a card without it is portable in name only"
     )
     assert chunks["ccv3"] == chunks["chara"], "both chunks must carry the same card"
 

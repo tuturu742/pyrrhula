@@ -1,4 +1,4 @@
-"""Keyword activation (plan §3.3, §6.4, A1.5) — the SillyTavern World Info model,
+"""Keyword activation (plan §3.3, §6.4, A1.5) — the keyed-lore convention of chat frontends,
 deliberately borrowed (not reinvented): keyword matching with AND/OR/NOT secondary-key
 logic, `constant` entries, and temporal activation state (`sticky`/`cooldown`/`delay`)
 that solves "the tavern lore shouldn't re-inject every turn while we're in the tavern, but
@@ -13,7 +13,7 @@ JSON-able dicts specifically so whatever B1.4 builds can store them without this
 needing to know how.
 
 Secondary-key logic, condensed to fit the 3-value ``logic`` CHECK constraint (A1.1) rather
-than SillyTavern's 4-mode ``AND_ANY``/``AND_ALL``/``NOT_ANY``/``NOT_ALL``: primary
+than the classic 4-mode ``AND_ANY``/``AND_ALL``/``NOT_ANY``/``NOT_ALL``: primary
 ``keys[]`` always match on OR (any key present triggers); ``logic`` then governs how
 ``secondary_keys[]`` modifies that verdict --
 

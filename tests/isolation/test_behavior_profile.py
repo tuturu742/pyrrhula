@@ -122,10 +122,10 @@ async def test_behavior_profile_versions_are_append_only(
     await _seed_rpg_axes(tenant_a)
 
     v1 = await create_behavior_profile(
-        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 40}
+        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 40}
     )
     v2 = await create_behavior_profile(
-        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 70}
+        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 70}
     )
     assert v1.version == 1
     assert v2.version == 2
@@ -133,12 +133,12 @@ async def test_behavior_profile_versions_are_append_only(
     current = await get_current_behavior_profile(tenant_a, persona_id)
     assert current is not None
     assert current.version == 2
-    assert current.axis_values == {"talkativeness": 70}
+    assert current.axis_values == {"chattiness": 70}
 
     # The old version is still readable, unaffected by the new one -- immutable history.
     pinned_v1 = await get_behavior_profile_version(tenant_a, persona_id, 1)
     assert pinned_v1 is not None
-    assert pinned_v1.axis_values == {"talkativeness": 40}
+    assert pinned_v1.axis_values == {"chattiness": 40}
 
     with pytest.raises(DBAPIError, match="permission denied"):
         async with tenant_scope(tenant_a) as session:
@@ -164,7 +164,7 @@ async def test_behavior_profile_filter_omission(two_tenants: tuple[uuid.UUID, uu
         persona_id = await seed_dev_agent(tenant_id, workspace_id)
         await _seed_rpg_axes(tenant_id)
         await create_behavior_profile(
-            tenant_id, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 50}
+            tenant_id, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 50}
         )
 
     async with tenant_scope(tenant_a) as session:
@@ -186,7 +186,7 @@ async def test_manifest_records_behavior_profile_version_and_replays_identically
     sess = await create_session(tenant_a, workspace_id, persona_id)
 
     profile_v1 = await create_behavior_profile(
-        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 40}
+        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 40}
     )
 
     def _manifest(content_hash: str) -> ContextManifest:
@@ -218,7 +218,7 @@ async def test_manifest_records_behavior_profile_version_and_replays_identically
     assert row_1.behavior_profile_version == profile_v1.version == 1
 
     # The agent is re-tuned to a new version *after* the manifest above was written.
-    await create_behavior_profile(tenant_a, persona_id, RPG_AXIS_PACK_ID, {"talkativeness": 90})
+    await create_behavior_profile(tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 90})
 
     # Replaying with the version *pinned on the already-written manifest* -- not
     # whatever get_current_behavior_profile would return now -- reproduces the same
@@ -229,7 +229,7 @@ async def test_manifest_records_behavior_profile_version_and_replays_identically
     )
     assert pinned is not None
     assert pinned.version == 1
-    assert pinned.axis_values == {"talkativeness": 40}
+    assert pinned.axis_values == {"chattiness": 40}
 
     row_2 = await write_context_manifest(
         tenant_a,

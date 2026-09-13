@@ -69,7 +69,7 @@ async def test_get_put_roundtrip_and_validation(
         f"/agents/{persona_id}/behavior",
         json={
             "pack_id": RPG_AXIS_PACK_ID,
-            "axis_values": {"secret_disclosure_propensity": 10, "talkativeness": 70},
+            "axis_values": {"secret_disclosure_propensity": 10, "chattiness": 70},
         },
         headers=headers,
     )
@@ -94,7 +94,7 @@ async def test_get_put_roundtrip_and_validation(
     assert bad_key.status_code == 422 and "charisma" in bad_key.text
     bad_range = client.put(
         f"/agents/{persona_id}/behavior",
-        json={"pack_id": RPG_AXIS_PACK_ID, "axis_values": {"talkativeness": 400}},
+        json={"pack_id": RPG_AXIS_PACK_ID, "axis_values": {"chattiness": 400}},
         headers=headers,
     )
     assert bad_range.status_code == 422
