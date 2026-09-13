@@ -25,10 +25,12 @@ systemctl --user enable --now podman.socket        # podman hosts
 podman compose -f docker/compose.selfhost.yml up -d --build
 ```
 
-Then open http://localhost:5173 (UI). Platform admin lives in the same UI: sign in
-with organization `admin` (bootstrap the account via `PYRRHULA_ADMIN_EMAIL` /
-`PYRRHULA_ADMIN_PASSWORD` in `.env`) to create tenants and users. The legacy token
-console on http://localhost:8100 (gated by `PYRRHULA_ADMIN_TOKEN`) is deprecated.
+Then open http://localhost:5173 (UI). Platform admin lives in the same UI: sign in with
+organization `admin`, using the email and password the installer generated into `.env`
+as `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD` (it prints them when it finishes).
+Change the password in the app after first login; the account is bootstrapped once and
+editing `.env` later does not rotate it. The legacy token console on
+http://localhost:8100 (gated by `PYRRHULA_ADMIN_TOKEN`) is deprecated.
 
 First start downloads the embedding model (~2 GB) into the `pyrrhula-hf` volume; set
 `PYRRHULA_HF_OFFLINE=1` afterwards for offline restarts.

@@ -35,11 +35,13 @@ What it does: detects your engine, writes `.env` with five generated secrets
 (backed up to `~/.config/pyrrhula/compose.env.bak`), wires the engine socket for
 delegated coding agents, `compose up -d --build`, waits for health, prints the URL.
 
-- **UI** http://localhost:5173 · **platform admin** lives in the same UI: sign in
-  with organization `admin` (set `PYRRHULA_ADMIN_EMAIL`/`PYRRHULA_ADMIN_PASSWORD` in
-  `.env` before first boot to bootstrap the account; more admins can be added from
-  the console). The legacy token console on http://localhost:8100 still works
-  (token: `grep ADMIN_TOKEN .env`) but is deprecated.
+- **UI** http://localhost:5173 · **platform admin** lives in the same UI: sign in with
+  organization `admin`. The installer generates the account and **prints the email and
+  password when it finishes**; they are also in `.env`
+  (`PYRRHULA_ADMIN_EMAIL`/`PYRRHULA_ADMIN_PASSWORD`). Change the password in the app
+  after first login — the account is created once, so editing `.env` afterwards does not
+  rotate it. More admins can be added from the console. The legacy token console on
+  http://localhost:8100 still works (token: `grep ADMIN_TOKEN .env`) but is deprecated.
 - **Rootless podman**: enable the socket first —
   `systemctl --user enable --now podman.socket` (the installer warns if missing;
   without it delegation falls back to no-environment mode).
@@ -137,13 +139,49 @@ the result in.
 
 If that repository is not reachable from where you are installing — it is private, or you
 are offline — the install still completes and the deployment falls back to the built-in
-`Default` workflow. You will see a warning saying so. To fetch a private pin, set a token
-first:
+`Default` workflow. You will see a note saying so.
+
+**The install never prompts for git credentials.** An unreachable pin fails fast rather
+than asking for a GitHub username, so an unattended or scripted install cannot hang on a
+prompt. If you do have access to a private pin, hand it over non-interactively:
 
 ```bash
 export PYRRHULA_PLUGINS_TOKEN=<a token that can read the pinned repository>
 ./install.sh compose
 ```
+
+### Adding packs without git
+
+Neither of these needs git access, and both survive restarts.
+
+**Upload.** Admin console → *Plugin repositories* → *Upload pack*: a `.zip` or `.tar.gz`
+whose root holds `plugin.json`. An archive with a single wrapping directory (GitHub's
+"Download ZIP", or `tar czf` of a checkout) is unwrapped for you. Works on every target
+with no redeploy:
+
+```bash
+curl -sS -X POST http://localhost:8000/admin/plugin-repositories/upload \
+  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN" \
+  -F name=my-workflows -F file=@my-workflows.zip
+```
+
+**Drop directory.** Put each pack — the directory containing `plugin.json` — into
+`docker/plugins-local/` and restart; everything there is validated and registered at boot. The path inside the container is `PYRRHULA_PLUGIN_DROP_DIR`
+(default `/app/plugins-local`), mounted read-only, so packs stay yours: remove one by
+deleting the directory and restarting, not from the console. On Kubernetes nothing is
+mounted there by default — see `deploy/k8s/README.md` for the ConfigMap/PVC variant, or
+just use the upload.
+
+Uploaded packs can be removed again from the console; the built-in and pinned-default
+repositories cannot.
+
+## MCP servers and the assistant model
+
+A clean install attaches **no external MCP servers** and configures **no assistant
+model** — both are yours to choose. `docs/mcp.md` covers attaching a server (the two
+halves: making it reachable, then granting specific tools to a workspace), the built-in
+`pyrrhula://` tooling that is not an external server, and setting a model for the
+workspace assistant.
 
 ## Choosing the retrieval models
 

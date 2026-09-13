@@ -86,20 +86,63 @@ Details worth knowing:
 - **Env isolation**: `base/envs-networkpolicy.yaml` limits env pods to DNS, the api's
   port 8000, and the internet (k3s enforces NetworkPolicy). Adjust the `except` CIDRs
   if your cluster uses non-default pod/service ranges.
-- **Host ollama**: the `ollama` Service points at the host's IP (patched by
-  `dev-up.sh`), so local models keep working from inside the cluster. Cloud-key-only
-  deployments can delete `base/ollama-host.yaml`.
-- **Platform admin**: in the main UI — sign in with organization `admin` (bootstrap
-  the account with `PYRRHULA_ADMIN_EMAIL`/`PYRRHULA_ADMIN_PASSWORD` in `secrets.env`).
-  The legacy token console remains reachable via
+- **Nothing host-specific in `base/`**: a clean install brings up postgres, redis, api,
+  worker, web and admin — and nothing else. A host-local model provider and host-local
+  MCP servers used to ship in the base with one developer's LAN address baked in; both
+  are opt-in now.
+
+- **Host ollama** (opt-in): add the component to `overlays/dev/kustomization.yaml`:
+
+  ```yaml
+  components:
+    - ../../components/host-ollama
+  ```
+
+  then name a model in `overlays/dev/secrets.env` (keys there reach the app prefixed
+  with `PYRRHULA_`): `ASSISTANT_MODEL=ollama/<tag>` and
+  `ASSISTANT_API_BASE=http://ollama:11434`. Cloud-key deployments skip the component and
+  set `ASSISTANT_MODEL` alone.
+
+- **Agent web search**: a SearXNG instance ships in `base/searxng.yaml` and
+  `PYRRHULA_WEB_SEARCH_URL` points at it, matching compose and the AWS stack — k8s
+  previously had neither, so the feature silently did not exist. Not exposed outside the
+  cluster; only personas with the web-search toggle reach it. Drop the file and clear the
+  setting to disable, or point the setting at your own instance.
+
+- **Host MCP servers** (opt-in): copy `host-mcp.example.yaml`, edit the name and port,
+  `kubectl apply -f` it. An MCP server that already has a reachable URL needs no
+  manifest at all — just grant it on a workspace. Full walkthrough: `docs/mcp.md`.
+
+  Both of the above use a Service plus a hand-written EndpointSlice labelled
+  `pyrrhula.io/host-endpoint: "true"`; `dev-up.sh` rewrites every such slice to the
+  address of the machine it runs on, so no manifest carries a fixed IP.
+- **Platform admin**: in the main UI — sign in with organization `admin`. `dev-up.sh`
+  generates the account on first run and prints the email and password when it finishes;
+  they live in `overlays/dev/secrets.env` as `ADMIN_EMAIL`/`ADMIN_PASSWORD`. Change the
+  password in the app after first login — the bootstrap creates the account once and
+  never updates it, so editing the file afterwards does not rotate anything. Existing
+  deployments without these keys get them appended on the next run. The legacy token
+  console remains reachable via
   `kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100` (deprecated).
-- **Images via local registry** (no `k3s ctr images import`, no per-update sudo):
-  a rootless registry container serves `127.0.0.1:5000`
-  (`podman run -d --name pyr-registry --restart=always -p 127.0.0.1:5000:5000 -v pyr-registry:/var/lib/registry docker.io/library/registry:2`);
-  the dev overlay rewrites images to `localhost:5000/...` with pull policy Always.
-  ONE-TIME setup — containerd must trust the plain-HTTP registry:
+- **Images, by default**: `dev-up.sh` builds them and imports them straight into k3s's
+  containerd (`k3s ctr images import`), and `overlays/dev` uses those names
+  (`localhost/pyrrhula:dev`) with pull policy `IfNotPresent`. A fresh machine needs
+  nothing beyond k3s and podman/docker — no registry, no `registries.yaml`. The import
+  needs sudo; `dev-up.sh` asks for it up front rather than dying mid-install.
+
+  Do **not** set pull policy `Always` on these names: the image lives only inside
+  containerd, so the kubelet would go looking for a registry host literally called
+  `localhost` and land in `ImagePullBackOff`.
+
+- **Images via a local registry** (opt-in: no per-update sudo, faster inner loop).
+  Use `overlays/dev-registry`, which rewrites images to `localhost:5000/...` with pull
+  policy `Always`. It needs host setup a fresh machine does not have:
 
   ```bash
+  podman run -d --name pyr-registry --restart=always \
+    -p 127.0.0.1:5000:5000 -v pyr-registry:/var/lib/registry docker.io/library/registry:2
+
+  # containerd must trust the plain-HTTP registry (one-time)
   sudo mkdir -p /etc/rancher/k3s
   sudo tee /etc/rancher/k3s/registries.yaml >/dev/null <<'YAML'
   mirrors:
@@ -108,6 +151,13 @@ Details worth knowing:
         - "http://127.0.0.1:5000"
   YAML
   sudo systemctl restart k3s
+  ```
+
+  Then bring the stack up in registry mode — `dev-up.sh` pushes instead of importing
+  and applies the registry overlay:
+
+  ```bash
+  PYRRHULA_K8S_REGISTRY=127.0.0.1:5000 deploy/k8s/dev-up.sh
   ```
 
   After that, an image update is just:
@@ -121,6 +171,40 @@ Details worth knowing:
   PYRRHULA_VERIFY_API_EXEC="kubectl -n pyrrhula exec deploy/pyrrhula-api --" \
   python scripts/verify_deploy.py exec rpg swe
   ```
+
+## Workflow packs when the plugin repository is unreachable
+
+The install never asks for git credentials. If the pinned repository in
+`deploy/plugins.json` is private or unreachable, the build says so and continues with the
+built-in workflows -- the platform runs, it just has fewer workflows. Add the rest either
+way below; neither needs git.
+
+**Upload (no manifest change).** Admin console -> *Plugin repositories* -> *Upload pack*,
+with a `.zip` or `.tar.gz` whose root holds `plugin.json` (a single wrapping directory,
+as produced by GitHub's "Download ZIP", is unwrapped for you). The content lands in the
+blobs PVC, so it survives restarts and is shared by the api and worker. Or from a shell:
+
+```bash
+curl -sS -X POST http://<host>/admin/plugin-repositories/upload \
+  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN" \
+  -F name=my-workflows -F file=@my-workflows.zip
+```
+
+**Drop directory (mounted).** Every subdirectory holding a `plugin.json` under
+`PYRRHULA_PLUGIN_DROP_DIR` (default `/app/plugins-local`) is registered at boot. Nothing
+is mounted there by default in k8s; supply one and patch it into **both** the api and the
+worker -- the api syncs it at boot, the worker reads pack content for running sessions:
+
+```bash
+kubectl -n pyrrhula create configmap my-workflows \
+  --from-file=plugin.json=./my-workflows/plugin.json \
+  --from-file=./my-workflows/wf-key/
+```
+
+then mount it at `/app/plugins-local/my-workflows`. A ConfigMap is capped at 1 MiB and
+flattens directories -- for anything larger or deeper, use a small RWX PVC, or just
+upload. Packs here are read-only to the platform: remove one by deleting it from the
+directory and restarting, not from the console.
 
 ## Backups and the restore drill
 
