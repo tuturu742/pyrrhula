@@ -5,6 +5,10 @@ ensures an owner account with that email exists in the reserved admin tenant, so
 fresh install can log in with organization ``admin`` without first using the legacy
 ops token. Never updates an existing account (rotating the env password does not
 rotate the stored hash -- that's the admin console's job).
+
+The existence check is scoped to the admin tenant (RLS), which is the only sense in
+which it could be claimed: identities are unique per tenant, so the same address may
+also own an account in someone else's organization without affecting this one.
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ async def ensure_admin_account() -> None:
         await LocalArgon2IdentityProvider().register_local(
             ADMIN_TENANT_ID, principal_id, settings.admin_email, settings.admin_password
         )
-    except Exception as exc:  # noqa: BLE001 -- e.g. the email already used by another tenant
+    except Exception as exc:  # noqa: BLE001 -- e.g. this email already exists in THIS tenant
         await delete_principal(ADMIN_TENANT_ID, principal_id)
         log.warning("admin_bootstrap.identity_conflict", error=str(exc)[:200])
         return

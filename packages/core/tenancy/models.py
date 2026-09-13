@@ -111,7 +111,17 @@ class Identity(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (UniqueConstraint("provider", "external_id", name="uq_identity_provider_ext"),)
+    # Scoped by tenant, not global. An email identifies a person *within* one tenant;
+    # making it unique across the whole deployment coupled tenants that are otherwise
+    # independent -- the same human could not own accounts in two organizations, and
+    # provisioning one tenant could fail because of a row in another one they cannot see.
+    # Every lookup is already tenant-scoped (verify_local takes a tenant_id, and RLS
+    # constrains the rest), so nothing relied on the global form.
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "provider", "external_id", name="uq_identity_tenant_provider_ext"
+        ),
+    )
 
 
 class Membership(Base):

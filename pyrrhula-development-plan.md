@@ -1555,8 +1555,12 @@ principal                            -- unifies humans, service accounts, and ag
   --   SSO in Phase 5 adds an identity row, not a new FK everywhere.  (D11)
 
 identity                             -- how a human principal authenticates
-  id PK, principal_id FK, provider   -- 'local' | 'oidc' | 'saml'
-  external_id, email, UNIQUE(provider, external_id)
+  id PK, tenant_id † FK, principal_id FK
+  provider                           -- 'local' | 'oidc' | 'saml'
+  -- ★ tenant_id is denormalised from principal so the RLS predicate needs no join.
+  --   Uniqueness is per TENANT: an email identifies a person within one organization,
+  --   and tenants are independent -- the same address may own accounts in several.
+  external_id, email, UNIQUE(tenant_id, provider, external_id)
 
 membership
   id PK, tenant_id † FK, principal_id FK

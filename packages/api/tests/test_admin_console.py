@@ -86,6 +86,83 @@ def test_create_tenant_and_user_then_login(
     assert api.get("/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
 
 
+def test_two_tenants_can_share_an_owner_email(
+    admin: TestClient, api: TestClient, db_available: None, redis_available: None
+) -> None:
+    """Tenants are independent, so provisioning one must not be blocked by a row in
+    another. This used to 409 with "email already registered" because identity
+    uniqueness was global -- an operator could not create a tenant for a person who
+    already owned one, and the blocking row lived in a tenant they cannot see."""
+    email = f"{uuid.uuid4().hex}@example.com"
+    slugs = [f"share-{uuid.uuid4().hex[:8]}", f"share-{uuid.uuid4().hex[:8]}"]
+
+    for slug in slugs:
+        resp = admin.post(
+            "/admin/tenants",
+            json={
+                "slug": slug,
+                "name": slug,
+                "owner_email": email,
+                "owner_password": "hunter2hunter",
+            },
+            headers=_auth(),
+        )
+        assert resp.status_code == 201, resp.text
+
+    # Both accounts are real and separate: each logs into its own tenant, and the
+    # sessions are for different principals.
+    principals = set()
+    for slug in slugs:
+        login = api.post(
+            "/auth/login",
+            json={"email": email, "password": "hunter2hunter"},
+            headers={"X-Pyrrhula-Tenant": slug},
+        )
+        assert login.status_code == 200, login.text
+        token = login.json()["access_token"]
+        me = api.get("/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 200, me.text
+        principals.add(me.json()["principal_id"])
+    assert len(principals) == 2
+
+
+def test_duplicate_owner_email_in_one_tenant_is_refused(
+    admin: TestClient, db_available: None, redis_available: None
+) -> None:
+    """Per-tenant, not absent -- a second login with the same email inside one tenant
+    would be ambiguous at verify time."""
+    slug = f"dup-{uuid.uuid4().hex[:8]}"
+    email = f"{uuid.uuid4().hex}@example.com"
+    assert (
+        admin.post(
+            "/admin/tenants",
+            json={
+                "slug": slug,
+                "name": "T",
+                "owner_email": email,
+                "owner_password": "hunter2hunter",
+            },
+            headers=_auth(),
+        ).status_code
+        == 201
+    )
+
+    tenant_id = next(
+        t["id"] for t in admin.get("/admin/tenants", headers=_auth()).json() if t["slug"] == slug
+    )
+    dup = admin.post(
+        f"/admin/tenants/{tenant_id}/users",
+        json={
+            "email": email,
+            "password": "hunter2hunter",
+            "display_name": "Impostor",
+            "role": "viewer",
+        },
+        headers=_auth(),
+    )
+    assert dup.status_code == 409, dup.text
+
+
 def test_deactivate_tenant_blocks_login(
     admin: TestClient, api: TestClient, db_available: None, redis_available: None
 ) -> None:
