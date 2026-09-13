@@ -21,6 +21,14 @@ from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, fun
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+# PersonaGitCredentialRow's FK targets `persona`, which is mapped in core.agents.models.
+# SQLAlchemy resolves a FK target through the shared metadata when it orders an INSERT, so
+# a process that had imported only this module raised NoReferencedTableError on the first
+# write -- the target table was simply never registered. It worked in the api because some
+# other import happened to pull the mapper in first, which is luck, not a dependency.
+# Importing it here states the dependency outright. (No cycle: core.agents.models does not
+# import core.repos, and both package __init__ files are empty.)
+from core.agents.models import Persona as _Persona  # noqa: F401
 from core.tenancy.models import Base
 
 

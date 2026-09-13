@@ -8,6 +8,8 @@ These cover the branch now that it can be written.
 
 from __future__ import annotations
 
+import os
+import pathlib
 import uuid
 
 import pytest
@@ -103,3 +105,29 @@ async def test_bindings_are_invisible_across_tenants(db_available: None) -> None
 
     assert len(await list_persona_credentials(tenant_a, repo_a)) == 1
     assert await list_persona_credentials(tenant_b, repo_a) == []
+
+
+def test_persona_fk_resolves_without_another_module_registering_it() -> None:
+    """A subprocess, because this can only fail in a *fresh* interpreter.
+
+    `persona_git_credential.persona_id` points at a table mapped in core.agents.models.
+    Inside the test suite something always imports that first, so the FK resolves and the
+    gap is invisible; a process that imported only the repos module raised
+    NoReferencedTableError on the first insert. Found on a live deployment, not here.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "from core.repos.models import PersonaGitCredentialRow as R\n"
+        "fk = next(iter(R.__table__.c.persona_id.foreign_keys))\n"
+        "assert fk.column is not None, 'FK target did not resolve'\n"
+    )
+    packages = pathlib.Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env={"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(packages)},
+    )
+    assert result.returncode == 0, result.stderr
