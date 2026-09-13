@@ -72,8 +72,14 @@ class Settings(BaseSettings):
     # used only when a workspace has no assistant yet and one is lazily created --
     # afterwards the assistant's own model profile (editable in the personas UI) is the
     # source of truth. Defaults match the dev stack's local Ollama.
-    assistant_model: str = "ollama/qwen3.8:27b"
-    assistant_api_base: str = "http://ollama:11434"
+    # Cold-start default for the workspace assistant's model profile. Deliberately
+    # empty: a fresh install has no model provider yet, and baking in a specific local
+    # model pointed every clean deployment at an ollama host and a model tag that were
+    # not there. Set these (or edit the "Assistant model" profile in the UI) once a
+    # provider exists -- e.g. "anthropic/claude-sonnet-5", or "ollama/<tag>" with
+    # assistant_api_base pointing at the ollama host.
+    assistant_model: str = ""
+    assistant_api_base: str = ""
 
     # Where exec environments reach the hosted git store over smart-HTTP (routes/git_http).
     # Local sibling containers use the api's in-network name; k8s/cloud runners need a
@@ -109,6 +115,11 @@ class Settings(BaseSettings):
     # v1 BlobStore is local filesystem (A1.2); the S3-compatible adapter for the SaaS
     # deployment mode is a swap behind the same port, not a config branch here.
     blob_store_root: str = "/app/data/blobs"
+    # Workflow packs an operator supplies by hand, for deployments that cannot reach the
+    # pinned plugin repositories (private, air-gapped, or simply offline). Every
+    # subdirectory holding a plugin.json is registered and synced at boot. Mount a host
+    # directory or a ConfigMap here; the platform only ever reads it.
+    plugin_drop_dir: str = "/app/plugins-local"
     # S3-compatible blob storage (§13.8): a bucket selects the S3 adapter over the
     # local filesystem store. Credentials come from the ambient AWS chain, never here.
     blob_s3_bucket: str = ""

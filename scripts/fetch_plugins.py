@@ -26,8 +26,32 @@ PLUGINS_FILE = REPO_ROOT / "deploy" / "plugins.json"
 PLUGINS_DIR = REPO_ROOT / ".plugins"
 
 
+# An install must never ask for credentials. A pinned plugin repo may be private or simply
+# unreachable, and git's default is to *prompt* -- which turns an unattended install into a
+# hung "Username for 'https://github.com':" and a CI job into one that never finishes. Fail
+# fast instead, so the documented fallback below (built-in workflows, plus a manual pack drop
+# or admin upload) is what a user actually gets.
+_GIT_NONINTERACTIVE = {
+    "GIT_TERMINAL_PROMPT": "0",
+    # A configured credential helper still works; these only stop the *interactive* paths --
+    # an askpass helper that would pop a GUI or read the tty yields an empty credential, and
+    # with terminal prompts off git then gives up immediately instead of blocking.
+    "GIT_ASKPASS": "/bin/true",
+    "SSH_ASKPASS": "/bin/true",
+    "GIT_SSH_COMMAND": "ssh -oBatchMode=yes",
+}
+
+
 def _run(*args: str, cwd: pathlib.Path | None = None) -> None:
-    subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
+    subprocess.run(
+        args,
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **_GIT_NONINTERACTIVE},
+        timeout=300,
+    )
 
 
 def _authenticated(url: str) -> str:
@@ -94,7 +118,7 @@ def fetch(force: bool = False) -> list[str]:
                 shutil.copytree(local, dest, ignore=shutil.ignore_patterns(".git"))
             else:
                 _clone_into(entry["url"], entry["ref"], dest)
-        except (subprocess.CalledProcessError, OSError) as exc:
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
             # Not fatal. The platform ships `builtin-workflows/` precisely so a fresh
             # install has a working "Default" workflow before any plugin repository
             # exists, and the image copies it. An unreachable plugin repo should cost
@@ -112,9 +136,16 @@ if __name__ == "__main__":
     print(f"plugins ready under {PLUGINS_DIR} (fetched: {', '.join(names) or 'cached'})")
     for name, reason in failures:
         print(
-            f"WARNING: could not fetch the {name!r} workflow plugin -- {reason}\n"
-            f"         Install continues with the built-in workflows only. If that repo "
-            f"is private or unreachable from here, either make it reachable or point\n"
-            f"         deploy/plugins.json at a copy you can read.",
+            f"NOTE: could not fetch the {name!r} workflow plugin -- {reason}\n"
+            f"      This is not a failure: the install continues with the built-in\n"
+            f"      workflows, which are enough to run the platform. That repo is\n"
+            f"      private or unreachable from here, and no credentials were asked\n"
+            f"      for by design. To add the extra packs later, pick either:\n"
+            f"        - drop them in a folder: copy each pack directory (the one with\n"
+            f"          plugin.json) into {PLUGINS_DIR.name}/ before building, or into the\n"
+            f"          deployment's plugin drop directory (PYRRHULA_PLUGIN_DROP_DIR,\n"
+            f"          default /app/plugins-local) and restart -- it is picked up on boot;\n"
+            f"        - upload them: admin console -> Plugin repositories -> Upload pack\n"
+            f"          (.zip or .tar.gz), no git and no restart needed.",
             file=sys.stderr,
         )

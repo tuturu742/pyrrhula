@@ -72,7 +72,11 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 # out-of-band: `HF_HOME=<volume> huggingface-cli download BAAI/bge-m3` (or an equivalent
 # snapshot_download run inside this image on a network-connected run). Pre-create the dir so
 # a fresh named-volume mount initializes writable by the non-root user, same as blobs above.
-RUN mkdir -p /app/data/blobs /app/.tiktoken_cache /app/.cache/huggingface \
+# /app/plugins-local is the plugin drop directory (PYRRHULA_PLUGIN_DROP_DIR): packs an
+# operator hand-places when this deployment cannot reach the pinned plugin repos. It
+# exists in the image so a volume/ConfigMap can mount over it -- and so `kubectl cp` or
+# `podman cp` has somewhere to land without the container running as root.
+RUN mkdir -p /app/data/blobs /app/.tiktoken_cache /app/.cache/huggingface /app/plugins-local \
     && python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')" \
     && chmod +x /entrypoint.sh && chown -R pyrrhula:pyrrhula /app
 USER pyrrhula

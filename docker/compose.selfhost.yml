@@ -75,8 +75,15 @@ services:
       # Agent web search: the bundled SearXNG below by default; point elsewhere or
       # set empty to disable the feature.
       PYRRHULA_WEB_SEARCH_URL: ${PYRRHULA_WEB_SEARCH_URL:-http://searxng:8080}
-      PYRRHULA_ASSISTANT_MODEL: ${PYRRHULA_ASSISTANT_MODEL:-ollama/qwen3.8:27b}
-      PYRRHULA_ASSISTANT_API_BASE: ${PYRRHULA_ASSISTANT_API_BASE:-http://ollama:11434}
+      # The workspace assistant's model. Empty by default on purpose: a fresh install
+      # has no provider, and the old defaults named an ollama host that ships commented
+      # out below plus a model tag nobody else has -- so every clean install pointed at
+      # something that was not there. Set them in .env once you have a provider, e.g.
+      #   PYRRHULA_ASSISTANT_MODEL=anthropic/claude-sonnet-5
+      #   PYRRHULA_ASSISTANT_MODEL=ollama/<tag>   PYRRHULA_ASSISTANT_API_BASE=http://ollama:11434
+      # or just pick a model on the "Assistant model" profile in the UI.
+      PYRRHULA_ASSISTANT_MODEL: ${PYRRHULA_ASSISTANT_MODEL:-}
+      PYRRHULA_ASSISTANT_API_BASE: ${PYRRHULA_ASSISTANT_API_BASE:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,6 +97,10 @@ services:
     volumes:
       - pyrrhula-blobs:/app/data/blobs
       - pyrrhula-hf:/app/.cache/huggingface
+      # Workflow packs supplied by hand, for installs that cannot reach the pinned
+      # plugin repositories (private or offline). Anything with a plugin.json in
+      # here is registered at boot. Read-only: the files stay yours.
+      - ./plugins-local:/app/plugins-local:ro
     ports:
       - "${PYRRHULA_API_PORT:-8000}:8000"
     networks:
@@ -122,6 +133,9 @@ services:
     volumes:
       - pyrrhula-blobs:/app/data/blobs
       - pyrrhula-hf:/app/.cache/huggingface
+      # Hand-supplied workflow packs (see the api service) -- the worker resolves pack
+      # content for running sessions, so it needs the same view of them.
+      - ./plugins-local:/app/plugins-local:ro
       # The host container engine's socket -- delegated coding agents build and test in
       # isolated sibling containers. Rootless podman:
       #   systemctl --user enable --now podman.socket
@@ -154,6 +168,11 @@ services:
     restart: always
     command: ["admin"]
     environment: *app_env
+    volumes:
+      - pyrrhula-blobs:/app/data/blobs
+      # Uploads land in the blobs volume; hand-placed packs are read from here. The admin
+      # app runs the same boot-time plugin sync the api does.
+      - ./plugins-local:/app/plugins-local:ro
     ports:
       - "${PYRRHULA_ADMIN_PORT:-8100}:8100"
     depends_on:

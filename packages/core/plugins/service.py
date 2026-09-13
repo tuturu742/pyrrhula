@@ -16,11 +16,16 @@ into ``<blob_root>/plugins/<name>``.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
+import os
 import pathlib
+import re
 import shutil
 import subprocess
+import tarfile
 import uuid
+import zipfile
 from datetime import UTC, datetime
 from typing import Any
 
@@ -67,6 +72,23 @@ def builtin_plugin_dir() -> pathlib.Path | None:
     return None
 
 
+def plugin_drop_dir() -> pathlib.Path:
+    """Where an operator hand-places packs when this deployment cannot reach git.
+
+    Mount a host directory (or a ConfigMap) at ``PYRRHULA_PLUGIN_DROP_DIR`` and every
+    subdirectory containing a ``plugin.json`` is registered and synced at boot. The files
+    stay the operator's -- the platform only reads them, so a drop-in is removed by
+    deleting it from this directory, not through the console.
+    """
+    return pathlib.Path(get_settings().plugin_drop_dir)
+
+
+# Reserved for the two rows ensure_default_synced owns; a hand-placed or uploaded pack
+# must not shadow them.
+_SYSTEM_NAMES = ("builtin", "default")
+_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
+
+
 def content_fingerprint(content: pathlib.Path) -> str:
     """Stable hash of a plugin directory's JSON content -- the 'ref' for in-image
     sources, so an image upgrade with changed content triggers a re-sync."""
@@ -85,7 +107,23 @@ def _content_dir(row: PluginRepositoryRow) -> pathlib.Path:
         if content is None:
             raise PluginSyncError(f"{row.source} plugin content missing from this deployment")
         return content
+    if row.source == "local":
+        content = plugin_drop_dir() / row.name
+        if not (content / "plugin.json").is_file():
+            raise PluginSyncError(f"dropped plugin {row.name!r} is no longer present at {content}")
+        return content
     return plugins_root() / row.name
+
+
+# An operator syncing a repository from the admin console gets the same guarantee the
+# installer does: git never prompts. Without this a private URL would park a worker thread
+# on a credential prompt until the timeout, and report a timeout instead of "auth failed".
+_GIT_NONINTERACTIVE = {
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_ASKPASS": "/bin/true",
+    "SSH_ASKPASS": "/bin/true",
+    "GIT_SSH_COMMAND": "ssh -oBatchMode=yes",
+}
 
 
 def _clone(row: PluginRepositoryRow) -> pathlib.Path:
@@ -93,6 +131,7 @@ def _clone(row: PluginRepositoryRow) -> pathlib.Path:
     if dest.exists():
         shutil.rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, **_GIT_NONINTERACTIVE}
     try:
         subprocess.run(
             ["git", "clone", "--quiet", row.url, str(dest)],
@@ -100,6 +139,7 @@ def _clone(row: PluginRepositoryRow) -> pathlib.Path:
             capture_output=True,
             text=True,
             timeout=300,
+            env=env,
         )
         subprocess.run(
             ["git", "checkout", "--quiet", row.ref],
@@ -108,6 +148,7 @@ def _clone(row: PluginRepositoryRow) -> pathlib.Path:
             capture_output=True,
             text=True,
             timeout=60,
+            env=env,
         )
     except subprocess.CalledProcessError as exc:
         raise PluginSyncError(f"git failed: {(exc.stderr or str(exc))[:300]}") from exc
@@ -263,11 +304,9 @@ async def sync_repository(repository_id: uuid.UUID) -> PluginRepositoryRow:
         session.expunge(row)
 
     try:
-        content = (
-            _content_dir(row)
-            if row.source in ("baked", "builtin")
-            else await asyncio.to_thread(_clone, row)
-        )
+        # Only a git repository is fetched; every other source ('baked', 'builtin',
+        # 'local', 'upload') already has its content on disk.
+        content = await asyncio.to_thread(_clone, row) if row.source == "git" else _content_dir(row)
         _, workflows = validate_plugin(content)
         await _upsert_globals(row.id, content, workflows)
         status, error, keys = "synced", "", [w.key for w in workflows]
@@ -318,6 +357,12 @@ async def remove_repository(repository_id: uuid.UUID) -> None:
             return
         if row.source in ("baked", "builtin"):
             raise PluginSyncError("system plugin repositories cannot be removed")
+        if row.source == "local":
+            # Deleting the row would achieve nothing: boot rediscovers the directory.
+            raise PluginSyncError(
+                f"{row.name!r} comes from the plugin drop directory -- delete it from "
+                f"{plugin_drop_dir()} and restart; removing it here would not stick"
+            )
         selected = {
             (t.settings or {}).get("workflow_key")
             for t in (await session.execute(select(Tenant))).scalars()
@@ -342,6 +387,148 @@ def pack_dir_for_workflow(key: str, repositories: list[PluginRepositoryRow]) -> 
         if key in row.workflow_keys:
             return _content_dir(row) / key
     return None
+
+
+# A pack is JSON content, not a payload to be clever about; 64 MiB is far above any real
+# pack and well below anything that would strain the API process.
+_UPLOAD_MAX_BYTES = 64 * 1024 * 1024
+
+
+def _unpack_into(archive: bytes, staging: pathlib.Path) -> pathlib.Path:
+    """Extract an uploaded .zip/.tar.gz into ``staging`` and return the pack root.
+
+    Every member is checked to land inside ``staging``: an archive is operator-supplied
+    but arrives over the network, and ``..`` members or absolute paths would otherwise
+    write anywhere the process can reach. Symlinks are dropped for the same reason --
+    a pack is plain JSON and has no use for them.
+    """
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+
+    def _safe(name: str) -> pathlib.Path | None:
+        target = (staging / name).resolve()
+        if target == staging.resolve() or staging.resolve() not in target.parents:
+            return None
+        return target
+
+    if archive[:4] == b"PK\x03\x04":
+        with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                target = _safe(info.filename)
+                if target is None:
+                    raise PluginSyncError(f"archive entry escapes the pack: {info.filename!r}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(zf.read(info))
+    else:
+        try:
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:*") as tf:
+                for member in tf.getmembers():
+                    if not member.isfile():
+                        continue  # directories are implied; symlinks/devices are dropped
+                    target = _safe(member.name)
+                    if target is None:
+                        raise PluginSyncError(f"archive entry escapes the pack: {member.name!r}")
+                    extracted = tf.extractfile(member)
+                    if extracted is None:
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(extracted.read())
+        except tarfile.TarError as exc:
+            raise PluginSyncError(f"not a readable .zip or .tar.gz archive: {exc}") from exc
+
+    if (staging / "plugin.json").is_file():
+        return staging
+    # Archives made from a repo (GitHub's "Download ZIP", `tar czf` of a checkout) carry a
+    # single wrapping directory. Unwrap it rather than making the user repack.
+    children = [c for c in staging.iterdir() if c.is_dir()]
+    if len(children) == 1 and (children[0] / "plugin.json").is_file():
+        return children[0]
+    raise PluginSyncError(
+        "plugin.json not found at the archive root (or in a single top-level directory)"
+    )
+
+
+async def install_uploaded_plugin(name: str, archive: bytes) -> PluginRepositoryRow:
+    """Install a workflow pack from an uploaded archive -- the manual counterpart to a
+    git sync, for deployments that cannot reach the pinned plugin repositories.
+
+    The content is validated exactly as a cloned repository is, and only swapped in once
+    it validates, so a bad upload leaves the previous version serving. Registered with
+    source='upload' so it survives restarts and can be removed again from the console.
+    """
+    if not _NAME_RE.match(name):
+        raise PluginSyncError("name must be 2-63 chars of lowercase letters, digits, '-' or '_'")
+    if name in _SYSTEM_NAMES:
+        raise PluginSyncError(f"{name!r} is reserved for the system plugin repositories")
+    if not archive:
+        raise PluginSyncError("empty upload")
+    if len(archive) > _UPLOAD_MAX_BYTES:
+        raise PluginSyncError(f"archive exceeds {_UPLOAD_MAX_BYTES // (1024 * 1024)} MiB")
+
+    dest = plugins_root() / name
+    staging = plugins_root() / f".{name}.incoming"
+
+    def _land() -> None:
+        content = _unpack_into(archive, staging)
+        validate_plugin(content)  # fail before the live directory is touched
+        if dest.exists():
+            shutil.rmtree(dest)
+        content.rename(dest)
+
+    try:
+        await asyncio.to_thread(_land)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+
+    async with admin_registry_session() as session:
+        row = await session.scalar(
+            select(PluginRepositoryRow).where(PluginRepositoryRow.name == name)
+        )
+        if row is None:
+            row = PluginRepositoryRow(name=name, url=f"upload:{name}", ref="", source="upload")
+            session.add(row)
+        elif row.source not in ("upload", "git"):
+            raise PluginSyncError(
+                f"{name!r} is already provided by a {row.source} plugin repository"
+            )
+        row.url, row.source = f"upload:{name}", "upload"
+        row.ref = content_fingerprint(dest)
+        # Flush before reading the id: a freshly added row gets its uuid from the column
+        # server_default, so row.id is None until the INSERT actually goes out.
+        await session.flush()
+        repo_id = row.id
+    return await sync_repository(repo_id)
+
+
+async def _sync_dropped_plugins() -> None:
+    """Register every pack sitting in the plugin drop directory.
+
+    Per-plugin failures are recorded on the row and logged, never raised: one malformed
+    hand-placed pack must not stop the rest -- or the boot that calls this.
+    """
+    import structlog
+
+    root = plugin_drop_dir()
+    try:
+        found = sorted(c for c in root.iterdir() if (c / "plugin.json").is_file())
+    except OSError:
+        return  # no drop directory mounted -- the ordinary case
+    for path in found:
+        if path.name in _SYSTEM_NAMES or not _NAME_RE.match(path.name):
+            structlog.get_logger().warning("plugins.drop_skipped", directory=path.name)
+            continue
+        try:
+            await _ensure_system_row(
+                path.name, "local", f"file://{path}", content_fingerprint(path)
+            )
+        except PluginSyncError as exc:
+            structlog.get_logger().warning(
+                "plugins.drop_sync_failed", directory=path.name, error=str(exc)[:300]
+            )
 
 
 async def _ensure_system_row(name: str, source: str, url: str, ref: str) -> None:
@@ -377,3 +564,6 @@ async def ensure_default_synced() -> None:
         entry = json.loads(spec_path.read_text()).get("default") or {}
         url, ref = str(entry.get("url", url)), str(entry.get("ref", ref))
     await _ensure_system_row("default", "baked", url, ref)
+
+    # Hand-placed packs: the offline/private-repo path, picked up without operator action.
+    await _sync_dropped_plugins()
