@@ -58,6 +58,9 @@ class BundleWriter:
 
     tenant_ref: str
     app_version: str
+    # The source tenant's pinned workflow, so an importer can load the pack the content
+    # depends on. Defaulted so every existing construction site stays valid.
+    workflow_key: str = ""
     exported_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     files: dict[str, bytes] = field(default_factory=dict)
     redactions: list[Redaction] = field(default_factory=list)
@@ -89,6 +92,13 @@ class BundleWriter:
             "app_version": self.app_version,
             "exported_at": self.exported_at.isoformat(),
             "tenant_ref": self.tenant_ref,
+            # The workflow this content was authored under. Behaviour profiles reference
+            # axes by pack ("rpg_v1"), and those axes only exist in a tenant once its
+            # workflow's pack has been loaded -- so a bundle that does not say which
+            # workflow it needs imports its personas with their sliders silently dropped.
+            # Empty when the source tenant had no workflow pinned. Additive: older
+            # bundles simply lack the key.
+            "workflow_key": self.workflow_key,
             "contents": paths,
             "integrity": {p: hashlib.sha256(self.files[p]).hexdigest() for p in paths},
             "redactions": [r.to_json() for r in self.redactions],

@@ -32,6 +32,7 @@ provenance for a row nobody in this tenant ever caused.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -169,6 +170,49 @@ def _fork_key(key: str, taken: set[str]) -> str:
     return candidate
 
 
+async def ensure_workflow_for_bundle(
+    tenant_id: uuid.UUID, manifest: dict[str, Any], agent_records: list[dict[str, Any]]
+) -> str:
+    """Pin the workflow this bundle's content depends on, so its pack's axes exist.
+
+    Behaviour profiles reference axes by pack id ("rpg_v1"), and a tenant only has those
+    rows once the owning workflow has been selected -- selecting one is what materializes
+    its pack. Import into a tenant sitting on a different workflow therefore dropped every
+    slider on every imported persona, quietly, because the profile write failed and was
+    swallowed.
+
+    Newer bundles name the workflow outright. Older ones do not, so it is recovered from
+    the pack ids the profiles reference ("rpg_v1" -> "rpg"), and only applied when a
+    workflow by that name actually exists for this tenant -- a guess that cannot be
+    verified is not acted on. Returns the key applied, or "" when none was.
+    """
+    from core.workflows.service import (
+        get_tenant_workflow_key,
+        get_workflow_for_tenant,
+        set_tenant_workflow,
+    )
+
+    wanted = str(manifest.get("workflow_key") or "").strip()
+    if not wanted:
+        packs = {
+            str(v.get("pack_id") or "")
+            for record in agent_records
+            for v in record.get("behavior_profile_versions") or []
+        }
+        candidates = {re.sub(r"_v\d+$", "", p) for p in packs if p}
+        candidates.discard("")
+        # Only unambiguous recovery: two different packs mean no single right answer.
+        wanted = next(iter(candidates)) if len(candidates) == 1 else ""
+    if not wanted:
+        return ""
+    if await get_tenant_workflow_key(tenant_id) == wanted:
+        return wanted
+    if await get_workflow_for_tenant(tenant_id, wanted) is None:
+        return ""
+    await set_tenant_workflow(tenant_id, wanted)
+    return wanted
+
+
 async def import_bundle(
     data: bytes,
     tenant_id: uuid.UUID,
@@ -221,7 +265,9 @@ async def import_bundle(
         files, tenant_id, workspace_id, report, bundle_ref=bundle_ref
     )
     await _import_sessions(files, tenant_id, workspace_id, report)
-    await _import_personas(files, tenant_id, workspace_id, report, encryptor=encryptor)
+    await _import_personas(
+        files, tenant_id, workspace_id, report, encryptor=encryptor, manifest=manifest
+    )
     await _import_process(files, tenant_id, workspace_id, report)
     await _import_vocabulary(files, tenant_id, workspace_id, report)
     # Last, and deliberately: a secret is attached to a persona or an entity and held by
@@ -285,6 +331,7 @@ async def _import_personas(
     report: ImportReport,
     *,
     encryptor: Encryptor | None,
+    manifest: dict[str, Any] | None = None,
 ) -> None:
     """agents/ + (optionally) connections/: the half of the bundle the importer used
     to silently drop. Connections that travelled (encrypted export) are recreated with
@@ -293,6 +340,14 @@ async def _import_personas(
     persona_paths = sorted(p for p in files if p.startswith("agents/") and p.endswith(".json"))
     if not persona_paths or encryptor is None:
         return
+
+    # Pin the workflow these personas were authored under BEFORE writing any profile:
+    # selecting it is what materializes the pack's axes, and a profile referencing axes
+    # that do not exist yet is discarded.
+    agent_records = [_json(files[path].decode()) for path in persona_paths]
+    applied = await ensure_workflow_for_bundle(tenant_id, manifest or {}, agent_records)
+    if applied:
+        report.imported.append(f"workflow:{applied} (pinned for imported behaviour axes)")
 
     from sqlalchemy import select as sa_select
 
@@ -375,9 +430,14 @@ async def _import_personas(
                     version["pack_id"],
                     {k: int(v) for k, v in (version.get("axis_values") or {}).items()},
                 )
-            except Exception:  # noqa: BLE001 -- axis pack absent here: profile is advisory
+            except Exception:  # noqa: BLE001 -- advisory content must not fail an import
+                # Name the pack. "(axes not loaded)" sent people looking at the persona,
+                # when the cause is that this deployment has no workflow providing that
+                # pack -- usually its plugin repository was unreachable at install.
                 report.skipped.append(
-                    f"behavior:{record['key']} v{version.get('version')} (axes not loaded)"
+                    f"behavior:{record['key']} v{version.get('version')} "
+                    f"(no axes for pack {version.get('pack_id')!r} in this tenant -- "
+                    f"select the workflow that provides them, then re-import)"
                 )
                 break
 

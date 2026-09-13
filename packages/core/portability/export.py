@@ -211,7 +211,15 @@ async def export_workspace(
             "clock_value": workspace.clock_value,
         }
 
-    writer = BundleWriter(tenant_ref=str(tenant_id), app_version=APP_VERSION)
+    # Record the workflow this content was authored under: behaviour profiles reference
+    # pack axes, and those only exist for a tenant once that pack is loaded.
+    from core.workflows.service import get_tenant_workflow_key
+
+    writer = BundleWriter(
+        tenant_ref=str(tenant_id),
+        app_version=APP_VERSION,
+        workflow_key=await get_tenant_workflow_key(tenant_id) or "",
+    )
     writer.add_json("workspace.json", workspace_json)
 
     if "knowledge" in opts.sections:
