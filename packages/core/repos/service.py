@@ -69,6 +69,77 @@ async def resolve_git_identity(
         return repo.credential_ref if repo is not None else None
 
 
+async def list_persona_credentials(
+    tenant_id: uuid.UUID, repo_id: uuid.UUID
+) -> list[tuple[uuid.UUID, uuid.UUID]]:
+    """(persona_id, credential_ref) for every persona bound to its own identity on this
+    repo. The ref stays opaque -- callers report *that* a binding exists, never the token.
+    """
+    async with tenant_scope(tenant_id) as session:
+        rows = (
+            await session.execute(
+                select(
+                    PersonaGitCredentialRow.persona_id,
+                    PersonaGitCredentialRow.credential_ref,
+                ).where(PersonaGitCredentialRow.repo_id == repo_id)
+            )
+        ).all()
+    return [(r[0], r[1]) for r in rows]
+
+
+async def bind_persona_credential(
+    tenant_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    persona_id: uuid.UUID,
+    credential_ref: uuid.UUID,
+) -> None:
+    """Bind a persona to its own hosted-git identity on this repo, or rebind an existing
+    one. Upsert on (repo_id, persona_id) -- re-running a setup script must rotate the
+    binding rather than collide with the unique constraint.
+
+    ``credential_ref`` points at a sealed ``provider_credential``; a raw token must never
+    reach this table (see PersonaGitCredentialRow).
+    """
+    async with tenant_scope(tenant_id) as session:
+        if await session.get(RepoRow, repo_id) is None:
+            raise InvalidRepoError(f"no repo {repo_id}")
+        existing = await session.scalar(
+            select(PersonaGitCredentialRow).where(
+                PersonaGitCredentialRow.repo_id == repo_id,
+                PersonaGitCredentialRow.persona_id == persona_id,
+            )
+        )
+        if existing is None:
+            session.add(
+                PersonaGitCredentialRow(
+                    tenant_id=tenant_id,
+                    repo_id=repo_id,
+                    persona_id=persona_id,
+                    credential_ref=credential_ref,
+                )
+            )
+        else:
+            existing.credential_ref = credential_ref
+
+
+async def unbind_persona_credential(
+    tenant_id: uuid.UUID, repo_id: uuid.UUID, persona_id: uuid.UUID
+) -> bool:
+    """Drop a persona's own identity so it falls back to the repo's default credential.
+    Returns whether a binding was actually removed."""
+    async with tenant_scope(tenant_id) as session:
+        existing = await session.scalar(
+            select(PersonaGitCredentialRow).where(
+                PersonaGitCredentialRow.repo_id == repo_id,
+                PersonaGitCredentialRow.persona_id == persona_id,
+            )
+        )
+        if existing is None:
+            return False
+        await session.delete(existing)
+        return True
+
+
 def mint_git_job_token(store_key_value: str, *, ttl_seconds: int = 7200) -> str:
     """A short-lived credential for one hosted store repo over git smart-HTTP -- what a
     delegated exec environment (local container, k8s Job, cloud runner) puts in its

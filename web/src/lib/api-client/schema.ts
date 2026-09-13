@@ -2098,6 +2098,56 @@ export interface paths {
         patch: operations["update_repo_endpoint_repos__repo_id__patch"];
         trace?: never;
     };
+    "/repos/{repo_id}/persona-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Persona Credentials Endpoint
+         * @description Which personas act under their own hosted-git identity on this repo.
+         *
+         *     Anything not listed falls back to the repo's own credential -- which is why a
+         *     reviewer persona could not approve a pull request its own identity had opened.
+         */
+        get: operations["list_persona_credentials_endpoint_repos__repo_id__persona_credentials_get"];
+        /**
+         * Bind Persona Credential Endpoint
+         * @description Give one persona its own identity on this repo.
+         *
+         *     PUT rather than POST: binding the same persona twice is the same binding, so a setup
+         *     script re-run rotates the token instead of colliding on (repo_id, persona_id).
+         */
+        put: operations["bind_persona_credential_endpoint_repos__repo_id__persona_credentials_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{repo_id}/persona-credentials/{persona_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unbind Persona Credential Endpoint
+         * @description Drop a persona's own identity; it falls back to the repo's default credential.
+         */
+        delete: operations["unbind_persona_credential_endpoint_repos__repo_id__persona_credentials__persona_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo_id}/artifacts/latest": {
         parameters: {
             query?: never;
@@ -3792,6 +3842,16 @@ export interface components {
             /** Axes */
             axes: components["schemas"]["AxisOut"][];
         };
+        /** BindPersonaCredentialRequest */
+        BindPersonaCredentialRequest: {
+            /**
+             * Persona Id
+             * Format: uuid
+             */
+            persona_id: string;
+            /** Access Token */
+            access_token: string;
+        };
         /** Body_export_card_export_cards__persona_id__post */
         Body_export_card_export_cards__persona_id__post: {
             /** Image */
@@ -5100,6 +5160,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** PersonaCredentialOut */
+        PersonaCredentialOut: {
+            /**
+             * Persona Id
+             * Format: uuid
+             */
+            persona_id: string;
+            /**
+             * Bound
+             * @default true
+             */
+            bound: boolean;
         };
         /** PersonaEditProposalResponse */
         PersonaEditProposalResponse: {
@@ -11324,6 +11397,117 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RepoResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_persona_credentials_endpoint_repos__repo_id__persona_credentials_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                repo_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaCredentialOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bind_persona_credential_endpoint_repos__repo_id__persona_credentials_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                repo_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindPersonaCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaCredentialOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unbind_persona_credential_endpoint_repos__repo_id__persona_credentials__persona_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                repo_id: string;
+                persona_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

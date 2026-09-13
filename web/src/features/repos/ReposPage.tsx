@@ -303,8 +303,132 @@ function ExecEnvironmentsCard() {
   );
 }
 
+/** Which hosted-git identity each persona acts under on one repo (G4.17).
+ *
+ * Anything unbound falls back to the repo's own token, which is why a reviewer persona
+ * could not file an approval on a pull request its own identity had opened -- both
+ * actions came from the same account. Binding a persona here gives it an account the
+ * host's review gate can tell apart.
+ */
+function PersonaIdentities({ repoId }: { repoId: string }) {
+  const queryClient = useQueryClient();
+  const [tokens, setTokens] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  // Repos are tenant-scoped but personas live in workspaces, so gather them across every
+  // workspace rather than guessing which one the repo "belongs" to.
+  const { data: personas } = useQuery({
+    queryKey: ["personas-for-identities"],
+    queryFn: async () => {
+      const { data: workspaces, error: wsError } = await apiClient.GET("/workspaces");
+      if (wsError) throw wsError;
+      const out: { id: string; name: string; workspace: string }[] = [];
+      for (const ws of workspaces ?? []) {
+        const { data: ps } = await apiClient.GET("/agents", {
+          params: { query: { workspace_id: ws.id } },
+        });
+        for (const p of ps ?? []) out.push({ id: p.id, name: p.name, workspace: ws.name });
+      }
+      return out;
+    },
+  });
+
+  const { data: bound } = useQuery({
+    queryKey: ["persona-credentials", repoId],
+    queryFn: async () => {
+      const { data, error: e } = await apiClient.GET("/repos/{repo_id}/persona-credentials", {
+        params: { path: { repo_id: repoId } },
+      });
+      if (e) throw e;
+      return data;
+    },
+  });
+  const boundIds = new Set((bound ?? []).map((b) => b.persona_id));
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["persona-credentials", repoId] });
+
+  const bind = useMutation({
+    mutationFn: async ({ personaId, token }: { personaId: string; token: string }) => {
+      const { error: e } = await apiClient.PUT("/repos/{repo_id}/persona-credentials", {
+        params: { path: { repo_id: repoId } },
+        body: { persona_id: personaId, access_token: token },
+      });
+      if (e) throw e;
+    },
+    onSuccess: (_d, { personaId }) => {
+      setTokens((t) => ({ ...t, [personaId]: "" }));
+      setError(null);
+      invalidate();
+    },
+    onError: () => setError("Could not save that token — check it and try again."),
+  });
+
+  const unbind = useMutation({
+    mutationFn: async (personaId: string) => {
+      const { error: e } = await apiClient.DELETE(
+        "/repos/{repo_id}/persona-credentials/{persona_id}",
+        { params: { path: { repo_id: repoId, persona_id: personaId } } },
+      );
+      if (e) throw e;
+    },
+    onSuccess: invalidate,
+  });
+
+  return (
+    <div className="mt-3 rounded-md border border-border bg-secondary/20 p-3">
+      <p className="mb-2 text-xs text-muted-foreground">
+        Personas act under the repo&apos;s token unless given their own. Give a reviewer its
+        own account so it can approve work another persona opened.
+      </p>
+      {personas?.length === 0 && (
+        <p className="text-xs text-muted-foreground">No personas yet.</p>
+      )}
+      <div className="flex flex-col gap-2">
+        {personas?.map((p) => (
+          <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="min-w-32 font-medium">{p.name}</span>
+            <span className="text-xs text-muted-foreground">{p.workspace}</span>
+            {boundIds.has(p.id) ? (
+              <>
+                <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">own identity</span>
+                <button
+                  type="button"
+                  onClick={() => unbind.mutate(p.id)}
+                  className="rounded-md border border-border px-2 py-0.5 text-xs"
+                >
+                  Use repo token
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">repo default</span>
+            )}
+            <input
+              type="password"
+              placeholder={boundIds.has(p.id) ? "replace token" : "access token"}
+              value={tokens[p.id] ?? ""}
+              onChange={(e) => setTokens((t) => ({ ...t, [p.id]: e.target.value }))}
+              className="w-44 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
+            />
+            <button
+              type="button"
+              disabled={!(tokens[p.id] ?? "").trim() || bind.isPending}
+              onClick={() => bind.mutate({ personaId: p.id, token: tokens[p.id] ?? "" })}
+              className="rounded-md bg-primary px-2 py-0.5 text-xs text-primary-foreground disabled:opacity-50"
+            >
+              Save
+            </button>
+          </div>
+        ))}
+      </div>
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 export function ReposPage() {
   const queryClient = useQueryClient();
+  const [identitiesFor, setIdentitiesFor] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RepoRowData | null>(null);
 
@@ -376,8 +500,9 @@ export function ReposPage() {
         {repos?.map((r) => (
           <div
             key={r.id}
-            className="flex items-center justify-between rounded-md border border-border px-4 py-3"
+            className="flex flex-col rounded-md border border-border px-4 py-3"
           >
+            <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{r.name}</span>
@@ -414,6 +539,14 @@ export function ReposPage() {
             )}
             <button
               type="button"
+              onClick={() => setIdentitiesFor((cur) => (cur === r.id ? null : r.id))}
+              className="rounded-md border border-border px-2.5 py-1 text-xs"
+              title="Which hosted-git identity each persona acts under on this repo"
+            >
+              Identities
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setShowForm(false);
                 setEditing(r);
@@ -438,6 +571,8 @@ export function ReposPage() {
             </button>
               </ConfirmButton>
             </div>
+            </div>
+            {identitiesFor === r.id && <PersonaIdentities repoId={r.id} />}
           </div>
         ))}
       </section>

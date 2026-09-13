@@ -427,6 +427,78 @@ async def archive_repo_endpoint(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+# ── per-persona hosted-git identity (G4.17) ──────────────────────────────────────────
+class PersonaCredentialOut(BaseModel):
+    persona_id: uuid.UUID
+    # Deliberately not the credential_ref, let alone the token: the only thing a caller
+    # needs to know is that this persona acts as itself rather than as the repo.
+    bound: bool = True
+
+
+class BindPersonaCredentialRequest(BaseModel):
+    persona_id: uuid.UUID
+    # Write-only, sealed into a provider_credential on arrival. Never echoed back.
+    access_token: str
+
+
+@router.get("/{repo_id}/persona-credentials")
+async def list_persona_credentials_endpoint(
+    repo_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
+) -> list[PersonaCredentialOut]:
+    """Which personas act under their own hosted-git identity on this repo.
+
+    Anything not listed falls back to the repo's own credential -- which is why a
+    reviewer persona could not approve a pull request its own identity had opened.
+    """
+    await require_tenant_permission(ctx, "repo:manage")
+    from core.repos.service import list_persona_credentials
+
+    return [
+        PersonaCredentialOut(persona_id=pid)
+        for pid, _ref in await list_persona_credentials(ctx.tenant_id, repo_id)
+    ]
+
+
+@router.put("/{repo_id}/persona-credentials", status_code=200)
+async def bind_persona_credential_endpoint(
+    repo_id: uuid.UUID,
+    body: BindPersonaCredentialRequest,
+    ctx: RequestContext = Depends(get_request_context),
+) -> PersonaCredentialOut:
+    """Give one persona its own identity on this repo.
+
+    PUT rather than POST: binding the same persona twice is the same binding, so a setup
+    script re-run rotates the token instead of colliding on (repo_id, persona_id).
+    """
+    await require_tenant_permission(ctx, "repo:manage")
+    from core.repos.service import bind_persona_credential
+
+    if not body.access_token.strip():
+        raise HTTPException(status_code=422, detail="access_token must not be empty")
+    credential_ref = await store_provider_credential(
+        ctx.tenant_id, body.access_token, encryptor=get_encryptor()
+    )
+    try:
+        await bind_persona_credential(ctx.tenant_id, repo_id, body.persona_id, credential_ref)
+    except InvalidRepoError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return PersonaCredentialOut(persona_id=body.persona_id)
+
+
+@router.delete("/{repo_id}/persona-credentials/{persona_id}", status_code=204)
+async def unbind_persona_credential_endpoint(
+    repo_id: uuid.UUID,
+    persona_id: uuid.UUID,
+    ctx: RequestContext = Depends(get_request_context),
+) -> None:
+    """Drop a persona's own identity; it falls back to the repo's default credential."""
+    await require_tenant_permission(ctx, "repo:manage")
+    from core.repos.service import unbind_persona_credential
+
+    if not await unbind_persona_credential(ctx.tenant_id, repo_id, persona_id):
+        raise HTTPException(status_code=404, detail="no binding for that persona")
+
+
 # ── QA build artifact (M-E) ──────────────────────────────────────────────────────────
 @router.get("/{repo_id}/artifacts/latest")
 async def download_latest_artifact(
