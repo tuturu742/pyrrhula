@@ -13,6 +13,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -40,7 +41,7 @@ from core.agents.override import (
     post_override,
 )
 from core.entities.mutation import transition as entity_transition
-from core.entities.storage import get_entity
+from core.entities.storage import EntityRow, get_entity
 from core.mcp.registry import list_servers, register_server
 from core.process.authoring import get_definition
 from core.process.awaits import satisfy_await
@@ -691,6 +692,28 @@ async def _resolve_session_repo_server(
     return fallback_server_key, None
 
 
+def _select_assignee(
+    named: str, devs: list[Any], by_name: dict[str, Any], index: int
+) -> tuple[Any | None, bool]:
+    """Which dev builds this work item.
+
+    The name the item carries wins when it matches a dev on the roster -- that is what
+    lets a supervisor match work to a person (by seniority, by ownership, by whatever it
+    can reason about) instead of items landing in persona-id order. An unrecognised name
+    falls back to the round robin and is reported rather than failing the batch: a typo in
+    a plan should not stall every other item in it.
+
+    Returns (persona, the_name_did_not_resolve).
+    """
+    fallback = devs[index % len(devs)] if devs else None
+    if not named:
+        return fallback, False
+    chosen = by_name.get(named.strip().lower())
+    if chosen is not None:
+        return chosen, False
+    return fallback, True
+
+
 class DelegateRequest(BaseModel):
     # The work-item entities (by id) the facilitator is delegating -- one branch/PR each,
     # worked in parallel. repo_id picks the target among the session's selected repos
@@ -761,16 +784,40 @@ async def delegate_endpoint(
         (e for e in roster if not e.is_supervisor), key=lambda e: str(e.persona_id)
     )
     assignments: list[tuple[uuid.UUID, uuid.UUID | None, str]] = []
+    unresolved: list[str] = []
     async with tenant_scope(ctx.tenant_id) as session:
+        # The devs on this roster, indexed by the names a plan would actually write.
+        devs: list[Persona] = []
+        by_name: dict[str, Persona] = {}
+        for entry in dev_entries:
+            persona = await session.get(Persona, entry.persona_id)
+            if persona is None:
+                continue
+            devs.append(persona)
+            by_name[persona.name.strip().lower()] = persona
+            by_name[persona.key.strip().lower()] = persona
+
         for i, work_item_id in enumerate(body.work_item_ids):
-            assignee_id: uuid.UUID | None = None
-            assignee_name = ""
-            if dev_entries:
-                entry = dev_entries[i % len(dev_entries)]
-                persona = await session.get(Persona, entry.persona_id)
-                if persona is not None:
-                    assignee_id, assignee_name = persona.id, persona.name
-            assignments.append((work_item_id, assignee_id, assignee_name))
+            # A work item carries an `assignee` field (swdev's schema has always had one);
+            # honouring it is what lets a supervisor match work to a specific dev -- by
+            # seniority, by ownership, by anything it can reason about -- instead of the
+            # round robin below handing items out in persona-id order. Falling back rather
+            # than failing on an unknown name keeps a typo in a plan from stalling the
+            # whole batch; the name that did not resolve is reported instead.
+            entity = await session.get(EntityRow, work_item_id)
+            named = str((entity.data or {}).get("assignee") or "").strip() if entity else ""
+            chosen, missed = _select_assignee(named, devs, by_name, i)
+            if missed:
+                unresolved.append(named)
+            assignments.append(
+                (work_item_id, chosen.id if chosen else None, chosen.name if chosen else "")
+            )
+    if unresolved:
+        structlog.get_logger().warning(
+            "delegation.assignee_unresolved",
+            session_id=str(session_id),
+            names=sorted(set(unresolved)),
+        )
 
     # Reserve one event_seq per item so their branches (pyr/<session8>-<seq>) are distinct.
     n = len(body.work_item_ids)
