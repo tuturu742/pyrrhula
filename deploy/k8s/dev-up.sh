@@ -99,6 +99,27 @@ if [ -n "$HOST_IP" ]; then
   done
 fi
 
+# Make a re-run actually redeploy the code that was just built.
+#
+# `kubectl apply` changes nothing when the Deployment spec is identical, and the `dev`
+# tag is mutable -- so importing a rebuilt image under the same tag leaves every EXISTING
+# pod running the old code, silently. This script promises the opposite at the top of the
+# file ("rerun after code changes to redeploy"), and it was not true: a fix could be
+# built, imported and applied, and the running pods would never pick it up.
+#
+# Stamping the built image's ID onto the pod template is precise rather than blunt: an
+# unchanged ID patches to a no-op and nothing restarts, a new ID rolls the deployment.
+stamp_image() { # stamp_image <deployment> <local image ref>
+  _id=$("$ENGINE" image inspect --format '{{.Id}}' "$2" 2>/dev/null || echo unknown)
+  _patch='{"spec":{"template":{"metadata":{"annotations":{"pyrrhula.io/image-id":"'"$_id"'"}}}}}'
+  kubectl -n pyrrhula patch deploy "$1" -p "$_patch" >/dev/null
+}
+echo "== roll deployments whose image changed"
+for _d in pyrrhula-api pyrrhula-worker pyrrhula-admin; do
+  stamp_image "$_d" localhost/pyrrhula:dev
+done
+stamp_image pyrrhula-web localhost/pyrrhula-web:dev
+
 # Wait, but say WHY when nothing moves. A bare `kubectl wait` prints nothing for five
 # minutes and then "timed out" -- the least useful thing an installer can do, because
 # the real cause (an image the kubelet cannot pull, a claim no provisioner will bind)
@@ -158,8 +179,11 @@ wait_with_reason() {
 
 wait_with_reason "the migration" \
   '[ "$(kubectl -n pyrrhula get job pyrrhula-migrate -o jsonpath="{.status.succeeded}")" = "1" ]'
+# readyReplicas is already satisfied by the OLD pod while a rollout is in flight, so
+# ask whether the rollout itself finished -- otherwise the installer declares success
+# on the very code it just replaced.
 wait_with_reason "the api" \
-  '[ "$(kubectl -n pyrrhula get deploy pyrrhula-api -o jsonpath="{.status.readyReplicas}")" = "1" ]'
+  'kubectl -n pyrrhula rollout status deploy/pyrrhula-api --timeout=10s'
 
 # Pre-warm the embedding model (bge-m3, ~2.2GB) during install: a cold in-request
 # download blocks the first knowledge/assistant call for minutes and has been seen
