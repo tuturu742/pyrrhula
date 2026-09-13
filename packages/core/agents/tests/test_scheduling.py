@@ -107,3 +107,57 @@ async def test_initiative_with_no_explicit_selector_returns_empty(db_available: 
 
     candidates = await resolver(spec, ctx)
     assert candidates == []
+
+
+async def test_any_of_preserves_the_declared_role_order(db_available: None) -> None:
+    """`order: "declared"` means the order the author wrote, not alphabetical.
+
+    The resolver put the role tokens in a set and then sorted them, so
+    ["supervisor_agent", "participant_agent"] scheduled every participant ahead of the
+    supervisor. A phase meant to be opened by its facilitator instead opened with
+    whichever participant sorted first -- seen in the Hägnaryd sample, where a suspect
+    spoke first and the investigator leading the interrogation took the sixth turn.
+    """
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"sched-order-{uuid.uuid4().hex[:8]}"
+    )
+    facilitator_id = await seed_dev_agent(
+        tenant_id, workspace_id, key="facilitator", persona_type="supervisor"
+    )
+    await seed_dev_agent(tenant_id, workspace_id, key="participant", persona_type="participant")
+    facilitator = await get_persona(tenant_id, facilitator_id)
+    assert facilitator is not None
+
+    resolver = make_persona_candidate_resolver(tenant_id, workspace_id)
+    spec = ActorSpec(any_of=["supervisor_agent", "participant_agent"], mode="generate")
+    phase = _phase([spec])
+    ctx = InterpreterContext(tenant_id, uuid.uuid4(), "test_phase", phase, {})
+
+    candidates = await resolver(spec, ctx)
+
+    assert candidates[0].principal_id == facilitator.principal_id, (
+        "the first declared role has to come first"
+    )
+
+
+async def test_any_of_reversed_puts_participants_first(db_available: None) -> None:
+    """The mirror image: declaring participants first must actually do that, or the
+    fix is just a different hardcoded order."""
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"sched-order-rev-{uuid.uuid4().hex[:8]}"
+    )
+    await seed_dev_agent(tenant_id, workspace_id, key="facilitator", persona_type="supervisor")
+    participant_id = await seed_dev_agent(
+        tenant_id, workspace_id, key="participant", persona_type="participant"
+    )
+    participant = await get_persona(tenant_id, participant_id)
+    assert participant is not None
+
+    resolver = make_persona_candidate_resolver(tenant_id, workspace_id)
+    spec = ActorSpec(any_of=["participant_agent", "supervisor_agent"], mode="generate")
+    phase = _phase([spec])
+    ctx = InterpreterContext(tenant_id, uuid.uuid4(), "test_phase", phase, {})
+
+    candidates = await resolver(spec, ctx)
+
+    assert candidates[0].principal_id == participant.principal_id

@@ -391,6 +391,32 @@ async def run_agent_turn(
         raise ToolLoopExceededError(f"tool loop exceeded {max_tool_loop} iterations")
 
 
+_SELF_ATTRIBUTION_LIMIT = 120
+
+
+def strip_self_attribution(content: str, author_name: str) -> str:
+    """Drop a leading "<own name>:" the model wrote into its own turn.
+
+    Every other speaker's turn reaches the model as "Name: text" (live_session builds the
+    replayed conversation that way, so a multi-party scene is legible at all), and models
+    reliably imitate the pattern on their own line. The transcript already attributes each
+    turn, so the prefix renders twice -- "Petra Lind: Petra Lind: Sit down" -- and reads
+    as a character announcing herself.
+
+    Only an exact leading match of this speaker's own name is removed, only once, and only
+    when something remains after it; anything else is the model's prose and is left alone.
+    """
+    name = (author_name or "").strip()
+    if not name or not content:
+        return content
+    head = content.lstrip()
+    prefix = f"{name}:"
+    if len(prefix) > _SELF_ATTRIBUTION_LIMIT or not head.lower().startswith(prefix.lower()):
+        return content
+    remainder = head[len(prefix) :].lstrip()
+    return remainder or content
+
+
 async def _commit_turn(
     *,
     _retry_on_seq_conflict: bool = True,
@@ -499,6 +525,11 @@ async def _commit_turn_once(
         # out twice (observed live as uq_session_event_seq violations on notes).
         session_row.next_event_seq = max(session_row.next_event_seq, event_seq + 1)
 
+        # Resolved before the row is built: the speaker's own name is what identifies a
+        # self-attribution prefix to strip.
+        author_name = await resolve_author_name(session, tenant_id, author_principal_id)
+        content = strip_self_attribution(content, author_name)
+
         message = MessageRow(
             tenant_id=tenant_id,
             session_id=session_id,
@@ -555,7 +586,6 @@ async def _commit_turn_once(
             await session.flush()
             usage_record_ids.append(usage_row.id)
 
-        author_name = await resolve_author_name(session, tenant_id, author_principal_id)
         session.add(
             SessionEventRow(
                 tenant_id=tenant_id,

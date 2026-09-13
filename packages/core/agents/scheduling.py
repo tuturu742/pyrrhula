@@ -76,13 +76,20 @@ def make_persona_candidate_resolver(
             )
 
         if spec.any_of is not None:
-            roles = {
-                token[: -len(_AGENT_TOKEN_SUFFIX)]
-                for token in spec.any_of
-                if token.endswith(_AGENT_TOKEN_SUFFIX)
-            }
+            # In the order the author wrote them, not alphabetically. `order: "declared"`
+            # promises the declared order, and a set + sorted() threw it away twice over:
+            # any_of ["supervisor_agent", "participant_agent"] scheduled every participant
+            # ahead of the supervisor, so a phase meant to be led by its facilitator opened
+            # with whichever suspect sorted first. Dedupe keeping first appearance.
+            roles: list[str] = []
+            for token in spec.any_of:
+                if not token.endswith(_AGENT_TOKEN_SUFFIX):
+                    continue
+                role_token = token[: -len(_AGENT_TOKEN_SUFFIX)]
+                if role_token not in roles:
+                    roles.append(role_token)
             candidates: list[Candidate] = []
-            for role in sorted(roles):
+            for role in roles:
                 candidates.extend(
                     await _personas_with_type(tenant_id, workspace_id, role, session_id=session_id)
                 )
