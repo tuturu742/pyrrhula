@@ -51,3 +51,21 @@ def test_a_turn_that_is_only_the_name_is_kept_intact() -> None:
 def test_no_name_or_no_content_changes_nothing() -> None:
     assert strip_self_attribution("Sit down.", "") == "Sit down."
     assert strip_self_attribution("", "Petra Lind") == ""
+
+
+def test_a_shortened_form_of_the_own_name_is_also_removed() -> None:
+    """Models abbreviate themselves as often as not -- seen live as
+    "Kriminalinspektör Lind:" from "Kriminalinspektör Petra Lind"."""
+    assert (
+        strip_self_attribution(
+            "Kriminalinspektör Lind: Thank you, Fru Sjöberg.",
+            "Kriminalinspektör Petra Lind",
+        )
+        == "Thank you, Fru Sjöberg."
+    )
+    assert strip_self_attribution("Petra: Sit down.", "Kriminalinspektör Petra Lind") == "Sit down."
+
+
+def test_a_prefix_mixing_in_foreign_words_is_dialogue() -> None:
+    said = "Dear Petra: you are wrong."
+    assert strip_self_attribution(said, "Kriminalinspektör Petra Lind") == said

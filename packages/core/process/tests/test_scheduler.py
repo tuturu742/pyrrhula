@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+
 from core.agents.authoring import get_persona
 from core.agents.scheduling import make_persona_candidate_resolver
 from core.agents.seed import seed_dev_agent
@@ -401,3 +403,104 @@ async def test_scheduler_plugs_directly_into_advance_session_as_next_actor_fn(
 
     assert result.status == "active"
     assert result.steps_taken == 1
+
+
+# ── order: "addressed" ───────────────────────────────────────────────────────────────
+def _named(name: str) -> Candidate:
+    return Candidate(principal_id=uuid.uuid4(), name=name)
+
+
+def test_addressed_puts_the_named_candidate_first() -> None:
+    """The point of the mode: "Marta, where were you at six?" reaches Marta first, not
+    whoever the roster declared first. Before this, suspects answered strictly in
+    declared order and the transcript opened with characters saying "you've asked
+    Marta, not me" -- the models noticing what the scheduler could not."""
+    from core.process.scheduler import _addressed_first
+
+    elin, marta, viktor = (
+        _named("Elin Wallmark"),
+        _named("Marta Sjöberg"),
+        _named("Viktor Wallmark"),
+    )
+
+    out = _addressed_first(
+        [elin, marta, viktor], "Quiet, all of you. Marta, where were you at six?"
+    )
+
+    assert out[0] is marta
+    assert out[1:] == [elin, viktor], "the rest keep declared order"
+
+
+def test_the_last_named_person_is_the_addressee() -> None:
+    """A question mentions people along the way and ends by naming its addressee."""
+    from core.process.scheduler import _addressed_first
+
+    elin, viktor = _named("Elin Wallmark"), _named("Viktor Wallmark")
+
+    out = _addressed_first([elin, viktor], "Elin says she saw you on the stairs. Viktor?")
+
+    assert out[0] is viktor
+
+
+def test_a_full_name_beats_a_shared_surname() -> None:
+    """Casts share surnames: "Viktor Wallmark?" must reach Viktor, not Elin Wallmark via
+    her bare surname matching at the same position."""
+    from core.process.scheduler import _addressed_first
+
+    elin, viktor = _named("Elin Wallmark"), _named("Viktor Wallmark")
+
+    out = _addressed_first([elin, viktor], "I want the truth now, Viktor Wallmark.")
+
+    assert out[0] is viktor
+
+
+def test_nobody_named_keeps_declared_order() -> None:
+    from core.process.scheduler import _addressed_first
+
+    elin, marta = _named("Elin Wallmark"), _named("Marta Sjöberg")
+
+    assert _addressed_first([elin, marta], "Somebody here is lying to me.") == [elin, marta]
+    assert _addressed_first([elin, marta], "") == [elin, marta]
+
+
+async def test_addressed_entry_walks_addressee_first_then_the_rest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Through the real cursor machinery: the addressed candidate takes the first turn,
+    the others still get theirs, and the entry exhausts at max_turns."""
+    from core.process import scheduler as sched
+
+    elin, marta, viktor = (
+        _named("Elin Wallmark"),
+        _named("Marta Sjöberg"),
+        _named("Viktor Wallmark"),
+    )
+
+    async def fake_text(tenant_id, session_id):  # noqa: ANN001, ANN202
+        return "Enough. Marta, answer me."
+
+    monkeypatch.setattr(sched, "_last_assistant_text", fake_text)
+
+    async def resolve(spec, ctx):  # noqa: ANN001, ANN202
+        return [elin, marta, viktor]
+
+    spec = ActorSpec(any_of=["participant_agent"], mode="generate", order="addressed", max_turns=3)
+    phase = PhaseSpec(
+        label_key="x",
+        actors=[spec],
+        visibility=VisibilitySpec(
+            knowledge_classes=[], scopes=[], entity_fields=[], secrets="none"
+        ),
+    )
+    ctx = InterpreterContext(uuid.uuid4(), uuid.uuid4(), "q", phase, {})
+
+    cursor = sched._EntryCursor(resolved_order=None, turn_index=0, turns_taken=0)
+    picks = []
+    for _ in range(3):
+        actor, cursor = await sched._next_from_entry(spec, cursor, ctx, resolve)
+        assert actor is not None
+        picks.append(actor.principal_id)
+    exhausted, _ = await sched._next_from_entry(spec, cursor, ctx, resolve)
+
+    assert picks == [marta.principal_id, elin.principal_id, viktor.principal_id]
+    assert exhausted is None

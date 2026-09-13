@@ -410,10 +410,19 @@ def strip_self_attribution(content: str, author_name: str) -> str:
     if not name or not content:
         return content
     head = content.lstrip()
-    prefix = f"{name}:"
-    if len(prefix) > _SELF_ATTRIBUTION_LIMIT or not head.lower().startswith(prefix.lower()):
+    colon = head.find(":")
+    if colon <= 0 or colon > _SELF_ATTRIBUTION_LIMIT:
         return content
-    remainder = head[len(prefix) :].lstrip()
+    # Models shorten their own name as often as they state it in full -- observed live as
+    # "Kriminalinspektör Lind:" from a persona named "Kriminalinspektör Petra Lind", which
+    # an exact match let straight through. A prefix is self-attribution when every word of
+    # it is a word of this speaker's own name. Another character's name fails the test
+    # (addressing someone is dialogue), and ordinary prose before a colon fails it too.
+    name_words = {w.lower() for w in name.replace(":", " ").split()}
+    prefix_words = head[:colon].split()
+    if not prefix_words or not all(w.lower() in name_words for w in prefix_words):
+        return content
+    remainder = head[colon + 1 :].lstrip()
     return remainder or content
 
 

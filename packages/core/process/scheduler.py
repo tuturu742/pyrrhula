@@ -43,6 +43,10 @@ _HUMAN_TOKENS = frozenset({"human_participant", "human_overseer"})
 class Candidate:
     principal_id: uuid.UUID
     initiative: float | None = None
+    # Display name, filled by the persona resolver. Only "addressed" ordering reads it:
+    # matching who the previous speaker named requires knowing what the candidates are
+    # called.
+    name: str | None = None
 
 
 # Resolves ONE actor spec entry into its currently eligible concrete candidates -- called
@@ -134,6 +138,63 @@ def _cap(spec: ActorSpec) -> int:
     return spec.max_turns or 1
 
 
+async def _last_assistant_text(tenant_id: uuid.UUID, session_id: uuid.UUID) -> str:
+    """The most recent generated turn's text -- the utterance that may name an addressee.
+    Split out so tests can monkeypatch it instead of standing up a transcript."""
+    from core.sessions.models import MessageRow
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.scalar(
+            select(MessageRow.content_md)
+            .where(MessageRow.session_id == session_id, MessageRow.role == "assistant")
+            .order_by(MessageRow.event_seq.desc())
+            .limit(1)
+        )
+    return row or ""
+
+
+def _addressed_first(candidates: list[Candidate], text: str) -> list[Candidate]:
+    """Reorder so the candidate the text names last comes first; declared order otherwise.
+
+    Deterministic string matching, no model call: for each candidate, the latest position
+    at which its full name or any single word of its name (3+ chars, so initials and
+    particles do not trigger) occurs in the text. A full-name match outranks a bare word
+    at the same position -- casts share surnames ("Viktor Wallmark" must beat Elin
+    Wallmark's bare surname hit. The last-named candidate wins because a question ends by
+    naming its addressee far more often than it opens with one. Nobody named -> declared
+    order untouched.
+    """
+    lowered = text.lower()
+    if not lowered:
+        return candidates
+    best_index: int | None = None
+    best_score = -1
+    for index, candidate in enumerate(candidates):
+        name = (candidate.name or "").strip().lower()
+        if not name:
+            continue
+        # Ranked by where the match ENDS, not where it starts: "Viktor Wallmark" ends
+        # exactly where Elin Wallmark's bare surname hit ends, and only the end-position
+        # tie lets the full-name bonus decide it. Start-position ranking handed that
+        # sentence to the wrong sibling.
+        score = -1
+        full_at = lowered.rfind(name)
+        if full_at >= 0:
+            score = (full_at + len(name)) * 2 + 1
+        for word in name.split():
+            if len(word) < 3:
+                continue
+            word_at = lowered.rfind(word)
+            if word_at >= 0:
+                score = max(score, (word_at + len(word)) * 2)
+        if score > best_score:
+            best_score, best_index = score, index
+    if best_index is None or best_score < 0:
+        return candidates
+    chosen = candidates[best_index]
+    return [chosen, *(c for i, c in enumerate(candidates) if i != best_index)]
+
+
 async def _next_from_entry(
     spec: ActorSpec,
     cursor: _EntryCursor,
@@ -167,6 +228,14 @@ async def _next_from_entry(
             indexed = list(enumerate(fresh))
             indexed.sort(key=lambda pair: (-(pair[1].initiative or 0.0), pair[0]))
             ordered_candidates = [c for _i, c in indexed]
+        elif spec.order == "addressed":
+            # Whoever the previous speaker named answers first; the rest keep declared
+            # order. Resolved once at phase entry like declared order, so one question
+            # gets one addressee -- a phase that presses a new person re-enters and
+            # re-resolves.
+            ordered_candidates = _addressed_first(
+                fresh, await _last_assistant_text(ctx.tenant_id, ctx.session_id)
+            )
         else:
             ordered_candidates = fresh
         resolved_order = [str(c.principal_id) for c in ordered_candidates]

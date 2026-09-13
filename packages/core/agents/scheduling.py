@@ -47,7 +47,7 @@ async def _personas_with_type(
     sessions with no roster) they fall back to the whole workspace. Archived personas never
     qualify either way."""
     async with tenant_scope(tenant_id) as session:
-        stmt = select(Persona.principal_id).where(
+        stmt = select(Persona.principal_id, Persona.name).where(
             Persona.tenant_id == tenant_id,
             Persona.persona_type == persona_type,
             Persona.archived_at.is_(None),
@@ -58,8 +58,8 @@ async def _personas_with_type(
             )
         else:
             stmt = stmt.where(Persona.workspace_id == workspace_id)
-        rows = (await session.execute(stmt.order_by(Persona.principal_id))).scalars()
-        return [Candidate(principal_id=pid) for pid in rows]
+        rows = (await session.execute(stmt.order_by(Persona.principal_id))).all()
+        return [Candidate(principal_id=pid, name=name) for pid, name in rows]
 
 
 def make_persona_candidate_resolver(

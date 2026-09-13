@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator
 from copy import deepcopy
 from dataclasses import dataclass, field
 
+import pytest
 from sqlalchemy import select
 
 from core.agents.seed import seed_dev_agent
@@ -231,3 +232,67 @@ async def test_minimal_mvp_flow_runs_two_rounds_through_the_real_interpreter_and
         # The context assembler (C1.2) actually ran for this turn -- a manifest was
         # written and linked, not skipped.
         assert manifest_row is not None
+
+
+async def test_the_scheduler_path_threads_on_event_into_the_turn(
+    monkeypatch: pytest.MonkeyPatch, db_available: None
+) -> None:
+    """The typing cue and the rich completed-message mirror live inside
+    run_one_persona_turn and hang off on_event. _make_execute_turn -- the factory behind
+    every autonomous process-definition turn -- dropped it, so live viewers streamed every
+    turn with no cue: the UI could not say who was speaking and labelled each in-flight
+    reply with the facilitator fallback ("Arbiter" under the rpg overlay), which read as
+    one agent answering for the whole cast. Found by capturing the wire order of a real
+    turn: chunk, message, transition -- and no typing event at all.
+    """
+    import uuid as _uuid
+
+    from core.agents.seed import seed_dev_agent
+    from core.process import live_session as ls
+    from core.process.dsl.schema import ActorSpec, PhaseSpec, VisibilitySpec
+    from core.process.interpreter import ActorRef, InterpreterContext
+    from core.tenancy.seed import seed_dev_tenant
+
+    tenant_id, _owner, workspace_id = await seed_dev_tenant(slug=f"onevent-{_uuid.uuid4().hex[:8]}")
+    persona_id = await seed_dev_agent(tenant_id, workspace_id, key="p", persona_type="supervisor")
+    from core.agents.authoring import get_persona
+
+    persona = await get_persona(tenant_id, persona_id)
+    assert persona is not None
+
+    seen: dict[str, object] = {}
+
+    async def fake_turn(**kwargs):  # noqa: ANN003, ANN202
+        seen.update(kwargs)
+        raise RuntimeError("stop here -- wiring is what this test is about")
+
+    monkeypatch.setattr(ls, "run_one_persona_turn", fake_turn)
+
+    async def sentinel_on_event(seq, kind, payload):  # noqa: ANN001, ANN202
+        pass
+
+    execute_turn = ls._make_execute_turn(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        model_provider_factory=lambda _p: None,
+        embedding_provider=None,  # type: ignore[arg-type]
+        rule_system=None,  # type: ignore[arg-type]
+        rule_system_id=_uuid.uuid4(),
+        on_chunk=None,
+        on_event=sentinel_on_event,
+    )
+    phase = PhaseSpec(
+        label_key="x",
+        actors=[ActorSpec(persona_type="supervisor", mode="generate")],
+        visibility=VisibilitySpec(
+            knowledge_classes=[], scopes=[], entity_fields=[], secrets="none"
+        ),
+    )
+    ctx = InterpreterContext(tenant_id, _uuid.uuid4(), "x", phase, {}, event_seq=0)
+
+    with pytest.raises(RuntimeError, match="stop here"):
+        await execute_turn(ActorRef(principal_id=persona.principal_id, mode="generate"), ctx)
+
+    assert seen.get("on_event") is sentinel_on_event, (
+        "the factory has to hand on_event through to the turn"
+    )

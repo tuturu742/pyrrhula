@@ -699,6 +699,7 @@ def _make_execute_turn(
     permission_service: PermissionService | None = None,
     mcp_transport: McpTransport | None = None,
     moderation_provider: ModerationProvider | None = None,
+    on_event: OnEvent | None = None,
 ) -> Callable[[ActorRef, InterpreterContext], Awaitable[ActorTurnResult]]:
     async def execute_turn(actor: ActorRef, ctx: InterpreterContext) -> ActorTurnResult:
         # 'free' (human-typed) and 'generate_as' (human-typed-in-an-agent's-place) both
@@ -738,6 +739,13 @@ def _make_execute_turn(
             permission_service=permission_service,
             mcp_transport=mcp_transport,
             moderation_provider=moderation_provider,
+            # The typing cue and the rich completed-message mirror both live inside
+            # run_one_persona_turn and both hang off this. Omitting it meant the
+            # autonomous scheduler -- the path every process-definition session actually
+            # runs on -- streamed every turn with no cue at all, so the UI could not say
+            # who was speaking and labelled every in-flight reply with the facilitator
+            # fallback ("Arbiter" under the rpg overlay).
+            on_event=on_event,
         )
 
     return execute_turn
@@ -818,6 +826,7 @@ async def run_process_definition_session(
         permission_service=permission_service,
         mcp_transport=mcp_transport,
         moderation_provider=moderation_provider,
+        on_event=on_event,
     )
 
     return await advance_session(

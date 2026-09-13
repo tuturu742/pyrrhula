@@ -99,7 +99,10 @@ class ActorSpec(BaseModel):
     any_of: list[str] | None = None
     human_participant: Literal["all"] | None = None
     mode: Literal["free", "generate", "generate_as"]
-    order: Literal["declared", "initiative", "free"] = "declared"
+    # "addressed": like declared, but whoever the previous speaker named goes first --
+    # what lets a facilitator's "Marta, where were you?" actually reach Marta before the
+    # roster walk hands the floor to whoever was declared first.
+    order: Literal["declared", "initiative", "free", "addressed"] = "declared"
     from_field: str | None = Field(default=None, alias="from")
     max_turns: int | None = None
 
