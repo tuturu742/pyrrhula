@@ -17,8 +17,10 @@ flow through the existing resolve chain untouched. Tenant rows carry only the sa
 
 from __future__ import annotations
 
+import pathlib
 import re
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 
@@ -283,12 +285,22 @@ async def set_tenant_workflow(tenant_id: uuid.UUID, workflow_key: str | None) ->
 
 
 async def _load_workflow_pack(tenant_id: uuid.UUID, workflow_key: str) -> None:
-    """Materialize the workflow's pack content (schemas, processes, rule systems,
-    tools, axes) into the tenant through the generic loader -- selecting a workflow is
-    what makes its content exist for a tenant. Idempotent per plugin ref: a stamp in
-    ``tenant.settings`` skips reloading the same content (the loader would otherwise
-    version-bump schemas/definitions on every reselect). Global system templates whose
-    content shipped via migrations (no plugin owner) load nothing here."""
+    """Materialize the workflow's pack content into EVERY workspace of the tenant.
+
+    A workflow is pinned per tenant, so every workspace under it runs that workflow --
+    but two of the content kinds a pack carries (entity schemas, process definitions) are
+    workspace-scoped rows. This used to load them into ``limit(1)`` with no ``ORDER BY``:
+    one arbitrary, non-deterministic workspace. On a tenant with more than one, the others
+    silently had no processes to run, so a session there could only use whatever process
+    happened to be imported alongside it -- observed as a workspace whose only flow was a
+    bundle's own single-phase one, with the pack's facilitator-led flow sitting in a
+    different workspace entirely.
+
+    The stamp is per (workflow, workspace) rather than per workflow, so a workspace that
+    has not been loaded still gets the content even when a sibling already has it -- which
+    is also what lets a workspace created later catch up (see
+    ``ensure_workflow_pack_for_workspace``).
+    """
     from core.packs.loader import load_pack
     from core.plugins.service import list_repositories, pack_dir_for_workflow
 
@@ -299,29 +311,93 @@ async def _load_workflow_pack(tenant_id: uuid.UUID, workflow_key: str) -> None:
     owner = next(r for r in repositories if workflow_key in r.workflow_keys)
     stamp = f"{owner.name}@{owner.ref}:{workflow_key}"
 
+    async with tenant_scope(tenant_id) as session:
+        workspace_ids = [
+            w
+            for (w,) in await session.execute(
+                select(Workspace.id)
+                .where(Workspace.tenant_id == tenant_id)
+                .order_by(Workspace.created_at, Workspace.id)
+            )
+        ]
+    for workspace_id in workspace_ids:
+        await _load_pack_into_workspace(
+            pack_dir, tenant_id, workspace_id, workflow_key, stamp, load_pack
+        )
+
+
+async def _loaded_stamps(tenant_id: uuid.UUID, workflow_key: str) -> dict[str, str]:
+    """Per-workspace load stamps for this workflow.
+
+    Tolerates the old shape, where the value was a single stamp string for the whole
+    tenant: it is read as "the one workspace that was loaded is unknown", so every
+    workspace reloads once and settles into the new shape. Reloading is safe -- the
+    loader upserts or versions, never fails.
+    """
     async with unscoped_session() as session:
         tenant = await session.get(Tenant, tenant_id)
         assert tenant is not None
         stored = dict(tenant.settings).get("loaded_workflow_packs")
-        loaded = stored if isinstance(stored, dict) else {}
-        if loaded.get(workflow_key) == stamp:
-            return
+    entry = (stored or {}).get(workflow_key) if isinstance(stored, dict) else None
+    return dict(entry) if isinstance(entry, dict) else {}
 
-    async with tenant_scope(tenant_id) as session:
-        workspace_id = await session.scalar(
-            select(Workspace.id).where(Workspace.tenant_id == tenant_id).limit(1)
-        )
+
+async def _load_pack_into_workspace(
+    pack_dir: pathlib.Path,
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    workflow_key: str,
+    stamp: str,
+    load_pack: Any,
+) -> None:
+    if (await _loaded_stamps(tenant_id, workflow_key)).get(str(workspace_id)) == stamp:
+        return
     await load_pack(pack_dir, tenant_id, workspace_id)
 
     async with unscoped_session() as session:
         tenant = await session.get(Tenant, tenant_id)
         assert tenant is not None
         settings = dict(tenant.settings)
-        raw_loaded = settings.get("loaded_workflow_packs")
-        loaded = dict(raw_loaded) if isinstance(raw_loaded, dict) else {}
-        loaded[workflow_key] = stamp
+        raw = settings.get("loaded_workflow_packs")
+        loaded = dict(raw) if isinstance(raw, dict) else {}
+        per_workspace = loaded.get(workflow_key)
+        per_workspace = dict(per_workspace) if isinstance(per_workspace, dict) else {}
+        per_workspace[str(workspace_id)] = stamp
+        loaded[workflow_key] = per_workspace
         settings["loaded_workflow_packs"] = loaded
         tenant.settings = settings
+
+
+async def ensure_workflow_pack_for_workspace(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> str:
+    """Give a newly created workspace the pinned workflow's content.
+
+    Without this a workspace made after the workflow was selected has no processes and no
+    schemas, because the pack was loaded into the workspaces that existed at the time.
+    Returns the workflow key loaded, or "" when the tenant has none pinned or its pack is
+    not available in this deployment.
+    """
+    from core.packs.loader import load_pack
+    from core.plugins.service import list_repositories, pack_dir_for_workflow
+
+    workflow_key = await get_tenant_workflow_key(tenant_id)
+    if not workflow_key:
+        return ""
+    repositories = await list_repositories()
+    pack_dir = pack_dir_for_workflow(workflow_key, repositories)
+    if pack_dir is None or not pack_dir.is_dir():
+        return ""
+    owner = next((r for r in repositories if workflow_key in r.workflow_keys), None)
+    if owner is None:
+        return ""
+    await _load_pack_into_workspace(
+        pack_dir,
+        tenant_id,
+        workspace_id,
+        workflow_key,
+        f"{owner.name}@{owner.ref}:{workflow_key}",
+        load_pack,
+    )
+    return workflow_key
 
 
 async def apply_workflow_capabilities(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> list[str]:

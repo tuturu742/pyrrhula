@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import structlog
 from sqlalchemy import func, select
 
 # Workspace.vocabulary_overlay_id FKs to vocabulary_overlay.id by string reference, resolved
@@ -142,6 +143,18 @@ async def create_workspace(tenant_id: uuid.UUID, key: str, name: str) -> uuid.UU
         await session.flush()
         workspace_id = workspace.id
     await seed_default_scopes(tenant_id, workspace_id)
+    # The tenant's workflow was pinned before this workspace existed, so its pack content
+    # (entity schemas, process definitions -- the workspace-scoped kinds) was loaded into
+    # the workspaces of the time. Without this catch-up the new workspace has no processes
+    # to run at all. Best-effort: a missing pack must not fail workspace creation.
+    try:
+        from core.workflows.service import ensure_workflow_pack_for_workspace
+
+        await ensure_workflow_pack_for_workspace(tenant_id, workspace_id)
+    except Exception:  # noqa: BLE001 -- the workspace exists either way
+        structlog.get_logger().warning(
+            "workspace.workflow_pack_load_failed", workspace_id=str(workspace_id)
+        )
     return workspace_id
 
 

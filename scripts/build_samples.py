@@ -100,47 +100,102 @@ class SampleSpec:
 # opening the Flows page after importing should recognise what they are looking at.
 
 
-def _round_table_flow(name: str, overlay: str, phase: str, label: str, max_turns: int) -> dict:
-    """One long phase in which everyone speaks in turn -- the interrogation/round-table
-    shape. `secrets: held_by_actor` is the line that matters: an agent's own secrets are
-    eligible for its context and nobody else's ever are."""
+def _facilitator_led_flow(name: str, overlay: str, answer_turns: int, rounds: int) -> dict:
+    """Facilitator frames, participants answer, facilitator presses, facilitator concludes.
+
+    This is the shape the plan describes and the rpg pack's own `standard_session_flow`
+    uses, and it is the product's actual claim: the facilitator leads. The sample used to
+    ship one phase in which the supervisor and every participant were pooled together,
+    which produced neither -- with `order: "declared"` the scheduler walks the roster
+    exactly once, so `max_turns: 60` bought nothing and a six-person cast got six
+    monologues and a finished phase.
+
+    `secrets: held_by_actor` is still the line that matters: an agent's own secrets are
+    eligible for its context and nobody else's ever are.
+    """
+    visibility = {
+        "knowledge_classes": ["lore", "rules"],
+        "scopes": ["workspace_public"],
+        "entity_fields": "all",
+        "secrets": "held_by_actor",
+    }
+    budget = {
+        "ratio": {"lore": 0.7, "misc": 0.3},
+        "spill": "proportional",
+        "max_tokens": 3000,
+        # Half the budget is the conversation. At 0.0 -- the value every pre-G4.1 flow
+        # carries -- each speaker answers into a void and the table reads like monologues.
+        "history_ratio": 0.5,
+    }
+
+    def phase(label: str, actors: list[dict], prompt: str, **rest: object) -> dict:
+        return {
+            "label_key": label,
+            "actors": actors,
+            "visibility": visibility,
+            "budget": budget,
+            "prompt": prompt,
+            "tools": [],
+            **rest,
+        }
+
+    supervisor = [{"persona_type": "supervisor", "mode": "generate"}]
     return {
         "name": name,
         "vocabulary_overlay": overlay,
-        "initial_phase": phase,
+        "state": {"round": {"type": "integer", "default": 0}},
+        "initial_phase": "frame",
         "phases": {
-            phase: {
-                "label_key": label,
-                "actors": [
+            # Only label keys the overlay actually defines -- an invented one renders as
+            # the raw key in the UI, which is how "phase.interrogation" used to show.
+            "frame": phase(
+                "phase.arbiter_narration",
+                supervisor,
+                "You are leading this session. Open it: say where everyone is, what is "
+                "established so far, and put one specific question to one named person. "
+                "Do not restate the case file and do not answer for anyone else. End on "
+                "the question.",
+                on_complete="questioning",
+            ),
+            "questioning": phase(
+                "phase.discussion",
+                [
                     {
+                        "any_of": ["participant_agent"],
                         "mode": "generate",
                         "order": "declared",
-                        "any_of": ["supervisor_agent", "participant_agent"],
-                        "max_turns": max_turns,
+                        "max_turns": answer_turns,
                     }
                 ],
-                "visibility": {
-                    "knowledge_classes": ["lore", "rules"],
-                    "scopes": ["workspace_public"],
-                    "entity_fields": "all",
-                    "secrets": "held_by_actor",
-                },
-                "budget": {
-                    "ratio": {"lore": 0.7, "misc": 0.3},
-                    "spill": "proportional",
-                    "max_tokens": 3000,
-                    # Half the budget is the conversation. At 0.0 -- the value every
-                    # pre-G4.1 flow carries -- each speaker answers into a void and the
-                    # table reads like five monologues.
-                    "history_ratio": 0.5,
-                },
-                "gates": [{"on": "timeout(24h)", "to": phase}],
-                # Managed mode only gates a phase that says it is conductable;
-                # without this the scheduler keeps running and 'let me pick who
-                # answers next' silently does nothing. An interrogation is the case.
-                "flags": ["conductable"],
-                "tools": [],
-            }
+                "Answer in your own voice, as yourself. Say only what this character "
+                "would say aloud here. Do not narrate anyone else's thoughts, do not "
+                "invent what another character said, and do not write your own name "
+                "before your line -- the transcript already says who is speaking.",
+                # Managed mode only gates a phase that says it is conductable; without
+                # this the scheduler keeps running and 'let me pick who answers next'
+                # silently does nothing.
+                flags=["conductable"],
+                on_complete="pressing",
+            ),
+            "pressing": phase(
+                "phase.deliberation",
+                supervisor,
+                "You have heard the room. Name the single contradiction that matters "
+                "most and who it implicates, then put a sharper question to a named "
+                "person. Rely only on what has been said in this session.",
+                effects=[{"set": "round", "to": "state.round + 1"}],
+                gates=[
+                    {"when": f"state.round >= {rounds}", "to": "verdict"},
+                    {"else": True, "to": "questioning"},
+                ],
+            ),
+            "verdict": phase(
+                "phase.resolution",
+                supervisor,
+                "State your conclusion: what you believe happened and who is "
+                "responsible, with the evidence from this session that supports it. Say "
+                "plainly what remains unproven.",
+            ),
         },
     }
 
@@ -318,9 +373,7 @@ def _mystery_sample() -> SampleSpec:
         source_class="lore",
         entries=tuple(sections),
         flow_key="hagnaryd",
-        flow=_round_table_flow(
-            "The Hägnaryd Case", "rpg_v1", "interrogation", "phase.interrogation", 60
-        ),
+        flow=_facilitator_led_flow("The Hägnaryd Case", "rpg_v1", answer_turns=8, rounds=3),
         secrets=secrets,
         conduct_rules=case.CONDUCT_RULES,
         axis_pack="rpg",
