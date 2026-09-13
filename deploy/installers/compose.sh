@@ -48,6 +48,15 @@ fi
 PROJECT="${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}"
 CARGS=(-p "$PROJECT" -f docker/compose.selfhost.yml)
 
+# Read KEY=value out of an env file, with a fallback. POSIX sed rather than `grep -oP`:
+# -P is a GNU extension, so on macOS's BSD grep every one of these silently produced an
+# empty string -- wrong ports in the printed URLs, and blank admin credentials on the
+# fresh machine that most needs them.
+envval() { # envval <file> <key> <default>
+  _v=$(sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1)
+  if [ -n "$_v" ]; then printf '%s' "$_v"; else printf '%s' "$3"; fi
+}
+
 # --- secrets ----------------------------------------------------------------------
 FRESH_ENV=0
 if [ ! -f .env ]; then
@@ -59,6 +68,8 @@ PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)
 PYRRHULA_JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 PYRRHULA_ADMIN_TOKEN=$(openssl rand -hex 24)
 PYRRHULA_ENCRYPTION_KEY=$(openssl rand -base64 32)
+PYRRHULA_ADMIN_EMAIL=admin@example.com
+PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)
 EOF
   [ -n "$SOCKET" ] && echo "PYRRHULA_ENGINE_SOCKET=$SOCKET" >> .env
   chmod 600 .env
@@ -68,6 +79,16 @@ EOF
   echo "   BACK UP the PYRRHULA_ENCRYPTION_KEY line -- losing it orphans every stored credential."
 else
   say "using existing .env"
+fi
+
+# Top-up for stacks created before the installer generated an admin login: without these
+# the admin console can only be reached through the deprecated token app.
+if ! grep -q '^PYRRHULA_ADMIN_EMAIL=' .env; then
+  say "adding a platform-admin login to .env"
+  {
+    echo "PYRRHULA_ADMIN_EMAIL=admin@example.com"
+    echo "PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)"
+  } >> .env
 fi
 
 # Fresh secrets over an existing database can never work (postgres only applies its
@@ -92,7 +113,7 @@ say "building and starting (first build takes a few minutes)"
 "${COMPOSE[@]}" "${CARGS[@]}" up -d --build
 
 say "waiting for the stack"
-WEB_PORT=$(grep -oP '^PYRRHULA_WEB_PORT=\K.*' .env 2>/dev/null || echo 5173)
+WEB_PORT=$(envval .env PYRRHULA_WEB_PORT 5173)
 for _ in $(seq 1 60); do
   # The readiness probe must touch the DATABASE, not just the process: a login with
   # bogus credentials answers 401/422 when the stack (incl. migrations) is healthy,
@@ -157,8 +178,17 @@ if s.reranker_enabled:
       fi
       say "up."
       echo
-      echo "  Open   http://localhost:${WEB_PORT}  and Sign up."
-      echo "  Admin  http://localhost:$(grep -oP '^PYRRHULA_ADMIN_PORT=\K.*' .env 2>/dev/null || echo 8100)  (token: grep ADMIN_TOKEN .env)"
+      echo "  Open   http://localhost:${WEB_PORT}"
+      echo
+      echo "  Sign in as the platform admin:"
+      echo "    organization  admin"
+      echo "    email         $(envval .env PYRRHULA_ADMIN_EMAIL '(not set)')"
+      echo "    password      $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)')"
+      echo "  (generated on first run, stored in .env; change the password IN THE APP"
+      echo "   after first login -- editing .env afterwards does not rotate it)"
+      echo
+      echo "  Or Sign up to create your own organization."
+      echo "  Legacy token console (deprecated): http://localhost:$(envval .env PYRRHULA_ADMIN_PORT 8100)  (token: grep ADMIN_TOKEN .env)"
       echo "  Next   add a model connection (Connections page), then launch a session."
       echo "  Docs   docs/install.md (post-install, TLS, upgrades, troubleshooting)"
       exit 0
