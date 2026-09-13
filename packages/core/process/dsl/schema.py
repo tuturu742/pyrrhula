@@ -102,7 +102,11 @@ class ActorSpec(BaseModel):
     # "addressed": like declared, but whoever the previous speaker named goes first --
     # what lets a facilitator's "Marta, where were you?" actually reach Marta before the
     # roster walk hands the floor to whoever was declared first.
-    order: Literal["declared", "initiative", "free", "addressed"] = "declared"
+    # "natural": SillyTavern-style reactive discussion -- whoever the last message
+    # names goes next; nobody named, a deterministic pick weighted by each persona's
+    # talkativeness axis; the previous speaker never follows themselves. The floor
+    # follows the conversation instead of a roster.
+    order: Literal["declared", "initiative", "free", "addressed", "natural"] = "declared"
     from_field: str | None = Field(default=None, alias="from")
     max_turns: int | None = None
 

@@ -92,7 +92,12 @@ CAST: tuple[CastMember, ...] = (
             "here. You were in your room dressing from 18:30, crossed the gallery at 19:08 "
             "to speak to her before dinner, and came back at 19:12."
         ),
-        axis_values={"malice": 25, "secret_disclosure_propensity": 30, "deception_propensity": 55},
+        axis_values={
+            "malice": 25,
+            "secret_disclosure_propensity": 30,
+            "deception_propensity": 55,
+            "talkativeness": 80,
+        },
         secrets=(
             CaseSecret(
                 gist="viktor falsified the board reports and reads his mother's email",
@@ -151,7 +156,12 @@ CAST: tuple[CastMember, ...] = (
             "spent the evening at the piano in the salon, apart from one trip to the kitchen "
             "for ice at about seven."
         ),
-        axis_values={"malice": 85, "secret_disclosure_propensity": 5, "deception_propensity": 90},
+        axis_values={
+            "malice": 85,
+            "secret_disclosure_propensity": 5,
+            "deception_propensity": 90,
+            "talkativeness": 60,
+        },
         secrets=(
             CaseSecret(
                 gist="elin sold eleven pieces from the collection through a malmo dealer",
@@ -226,7 +236,12 @@ CAST: tuple[CastMember, ...] = (
             "18:42, came down the main stairs at 19:00, and were the one who said at 19:55 "
             "that they should start dinner without her."
         ),
-        axis_values={"malice": 60, "secret_disclosure_propensity": 15, "deception_propensity": 80},
+        axis_values={
+            "malice": 60,
+            "secret_disclosure_propensity": 15,
+            "deception_propensity": 80,
+            "talkativeness": 70,
+        },
         secrets=(
             CaseSecret(
                 gist="lager embezzled from the foundation and was to resign that night",
@@ -303,7 +318,12 @@ CAST: tuple[CastMember, ...] = (
             "the last person to see her alive, at 18:40, and you were in the hall doing the "
             "flowers from 18:50 until dinner."
         ),
-        axis_values={"malice": 15, "secret_disclosure_propensity": 40, "deception_propensity": 50},
+        axis_values={
+            "malice": 15,
+            "secret_disclosure_propensity": 40,
+            "deception_propensity": 50,
+            "talkativeness": 35,
+        },
         secrets=(
             CaseSecret(
                 gist="sofia leaked to kastrup and was confronted twenty minutes before the death",
@@ -364,7 +384,12 @@ CAST: tuple[CastMember, ...] = (
             "from 17:30, took a tray up the service stairs at 19:06, and opened the bedroom "
             "door with your key at 20:40."
         ),
-        axis_values={"malice": 20, "secret_disclosure_propensity": 10, "deception_propensity": 25},
+        axis_values={
+            "malice": 20,
+            "secret_disclosure_propensity": 10,
+            "deception_propensity": 25,
+            "talkativeness": 20,
+        },
         secrets=(
             CaseSecret(
                 gist="marta was in the cellar drinking for ten minutes at exactly the wrong time",

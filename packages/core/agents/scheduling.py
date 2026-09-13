@@ -41,13 +41,14 @@ async def _personas_with_type(
     persona_type: str,
     *,
     session_id: uuid.UUID | None = None,
+    with_talkativeness: bool = False,
 ) -> list[Candidate]:
     """Personas of ``persona_type`` eligible to act. When ``session_id`` names a session with
     an explicit roster (#4), candidates come from that roster; otherwise (skeleton/legacy
     sessions with no roster) they fall back to the whole workspace. Archived personas never
     qualify either way."""
     async with tenant_scope(tenant_id) as session:
-        stmt = select(Persona.principal_id, Persona.name).where(
+        stmt = select(Persona.id, Persona.principal_id, Persona.name).where(
             Persona.tenant_id == tenant_id,
             Persona.persona_type == persona_type,
             Persona.archived_at.is_(None),
@@ -59,7 +60,23 @@ async def _personas_with_type(
         else:
             stmt = stmt.where(Persona.workspace_id == workspace_id)
         rows = (await session.execute(stmt.order_by(Persona.principal_id))).all()
-        return [Candidate(principal_id=pid, name=name) for pid, name in rows]
+
+    if not with_talkativeness:
+        return [Candidate(principal_id=pid, name=name) for _persona_id, pid, name in rows]
+
+    # Each candidate's talkativeness axis value, when its behaviour profile sets one --
+    # "natural" ordering weights unprompted turns by it, and is the only mode that does,
+    # so the per-persona profile reads happen only when a phase actually asked for them.
+    # Personas with no profile (or one that never set the axis) ride the neutral default.
+    from core.behavior.repo import get_current_behavior_profile
+
+    candidates: list[Candidate] = []
+    for persona_id, pid, name in rows:
+        profile = await get_current_behavior_profile(tenant_id, persona_id)
+        raw = (profile.axis_values or {}).get("talkativeness") if profile is not None else None
+        talkativeness = float(raw) if isinstance(raw, (int, float)) else None
+        candidates.append(Candidate(principal_id=pid, name=name, talkativeness=talkativeness))
+    return candidates
 
 
 def make_persona_candidate_resolver(
@@ -72,7 +89,11 @@ def make_persona_candidate_resolver(
         session_id = ctx.session_id
         if spec.persona_type is not None:
             return await _personas_with_type(
-                tenant_id, workspace_id, spec.persona_type, session_id=session_id
+                tenant_id,
+                workspace_id,
+                spec.persona_type,
+                session_id=session_id,
+                with_talkativeness=spec.order == "natural",
             )
 
         if spec.any_of is not None:
@@ -91,7 +112,13 @@ def make_persona_candidate_resolver(
             candidates: list[Candidate] = []
             for role in roles:
                 candidates.extend(
-                    await _personas_with_type(tenant_id, workspace_id, role, session_id=session_id)
+                    await _personas_with_type(
+                        tenant_id,
+                        workspace_id,
+                        role,
+                        session_id=session_id,
+                        with_talkativeness=spec.order == "natural",
+                    )
                 )
             return candidates
 

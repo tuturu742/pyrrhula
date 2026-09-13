@@ -163,11 +163,11 @@ def _facilitator_led_flow(name: str, overlay: str, answer_turns: int, rounds: in
                     {
                         "any_of": ["participant_agent"],
                         "mode": "generate",
-                        # Whoever the inspector just named answers first; the rest follow
-                        # in declared order. Plain declared order walked the roster from
-                        # the top regardless of who was asked, and the transcript opened
-                        # with suspects noting "you've asked Marta, not me".
-                        "order": "addressed",
+                        # Reactive: whoever the last speaker named answers next -- the
+                        # inspector's addressee first, then the person an answer pushes
+                        # toward, and so on; nobody named, a talkativeness-weighted pick.
+                        # The floor follows the accusations instead of a roster.
+                        "order": "natural",
                         "max_turns": answer_turns,
                     }
                 ],

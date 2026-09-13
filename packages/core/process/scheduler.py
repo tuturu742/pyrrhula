@@ -24,6 +24,7 @@ through on the returned ``ActorRef``. Do not confuse the two fields; the DSL sch
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -43,10 +44,13 @@ _HUMAN_TOKENS = frozenset({"human_participant", "human_overseer"})
 class Candidate:
     principal_id: uuid.UUID
     initiative: float | None = None
-    # Display name, filled by the persona resolver. Only "addressed" ordering reads it:
-    # matching who the previous speaker named requires knowing what the candidates are
-    # called.
+    # Display name, filled by the persona resolver. "addressed" and "natural" ordering
+    # read it: matching who the previous speaker named requires knowing what the
+    # candidates are called.
     name: str | None = None
+    # The persona's talkativeness axis value (0-100), when its behaviour profile sets
+    # one. "natural" ordering weights unprompted turns by it; everything else ignores it.
+    talkativeness: float | None = None
 
 
 # Resolves ONE actor spec entry into its currently eligible concrete candidates -- called
@@ -141,52 +145,107 @@ def _cap(spec: ActorSpec) -> int:
 async def _last_assistant_text(tenant_id: uuid.UUID, session_id: uuid.UUID) -> str:
     """The most recent generated turn's text -- the utterance that may name an addressee.
     Split out so tests can monkeypatch it instead of standing up a transcript."""
+    text, _author = await _last_assistant_turn(tenant_id, session_id)
+    return text
+
+
+async def _last_assistant_turn(
+    tenant_id: uuid.UUID, session_id: uuid.UUID
+) -> tuple[str, uuid.UUID | None]:
+    """The most recent generated turn's text and its author -- "natural" ordering needs
+    both: the text may name the next speaker, and the author must not follow themselves."""
     from core.sessions.models import MessageRow
 
     async with tenant_scope(tenant_id) as session:
-        row = await session.scalar(
-            select(MessageRow.content_md)
-            .where(MessageRow.session_id == session_id, MessageRow.role == "assistant")
-            .order_by(MessageRow.event_seq.desc())
-            .limit(1)
-        )
-    return row or ""
+        row = (
+            await session.execute(
+                select(MessageRow.content_md, MessageRow.author_principal_id)
+                .where(MessageRow.session_id == session_id, MessageRow.role == "assistant")
+                .order_by(MessageRow.event_seq.desc())
+                .limit(1)
+            )
+        ).first()
+    if row is None:
+        return "", None
+    return row[0] or "", row[1]
+
+
+def _mention_score(name: str | None, lowered_text: str) -> int:
+    """Where (if anywhere) this candidate is named in the text. Ranked by where the
+    match ENDS, with a full-name bonus, so "Viktor Wallmark" beats Elin Wallmark's bare
+    surname hit at the same position; -1 when not named. 3+ character words only, so
+    initials and particles never trigger."""
+    lname = (name or "").strip().lower()
+    if not lname or not lowered_text:
+        return -1
+    score = -1
+    full_at = lowered_text.rfind(lname)
+    if full_at >= 0:
+        score = (full_at + len(lname)) * 2 + 1
+    for word in lname.split():
+        if len(word) < 3:
+            continue
+        word_at = lowered_text.rfind(word)
+        if word_at >= 0:
+            score = max(score, (word_at + len(word)) * 2)
+    return score
+
+
+def _natural_pick(
+    candidates: list[Candidate],
+    text: str,
+    previous_author: uuid.UUID | None,
+    seed: str,
+) -> Candidate | None:
+    """One reactive turn: the person the last message names goes next; nobody named, a
+    deterministic talkativeness-weighted pick. The previous speaker never follows
+    themselves while anyone else is eligible -- being pushed toward IS how they get the
+    floor back, one turn later.
+
+    Determinism matters (INV-10): the "random" pick is sha256(seed) over cumulative
+    talkativeness weights, so a replay makes the identical choice. Weight 0 personas
+    never speak unprompted but still answer when named -- exactly SillyTavern's
+    talkativeness semantics, which this deliberately mirrors.
+    """
+    if not candidates:
+        return None
+    pool = [c for c in candidates if c.principal_id != previous_author] or candidates
+
+    lowered = text.lower()
+    best: Candidate | None = None
+    best_score = -1
+    for candidate in pool:
+        score = _mention_score(candidate.name, lowered)
+        if score > best_score:
+            best_score, best = score, candidate
+    if best is not None and best_score >= 0:
+        return best
+
+    weights = [max(0.0, c.talkativeness if c.talkativeness is not None else 50.0) for c in pool]
+    total = sum(weights)
+    if total <= 0:
+        return pool[0]
+    digest = hashlib.sha256(seed.encode()).digest()
+    point = (int.from_bytes(digest[:8], "big") / 2**64) * total
+    running = 0.0
+    for candidate, weight in zip(pool, weights, strict=True):
+        running += weight
+        if point < running:
+            return candidate
+    return pool[-1]
 
 
 def _addressed_first(candidates: list[Candidate], text: str) -> list[Candidate]:
     """Reorder so the candidate the text names last comes first; declared order otherwise.
-
-    Deterministic string matching, no model call: for each candidate, the latest position
-    at which its full name or any single word of its name (3+ chars, so initials and
-    particles do not trigger) occurs in the text. A full-name match outranks a bare word
-    at the same position -- casts share surnames ("Viktor Wallmark" must beat Elin
-    Wallmark's bare surname hit. The last-named candidate wins because a question ends by
-    naming its addressee far more often than it opens with one. Nobody named -> declared
-    order untouched.
-    """
+    Deterministic string matching, no model call -- see _mention_score for the ranking.
+    Nobody named -> declared order untouched."""
     lowered = text.lower()
     if not lowered:
         return candidates
     best_index: int | None = None
     best_score = -1
     for index, candidate in enumerate(candidates):
-        name = (candidate.name or "").strip().lower()
-        if not name:
-            continue
-        # Ranked by where the match ENDS, not where it starts: "Viktor Wallmark" ends
-        # exactly where Elin Wallmark's bare surname hit ends, and only the end-position
-        # tie lets the full-name bonus decide it. Start-position ranking handed that
-        # sentence to the wrong sibling.
-        score = -1
-        full_at = lowered.rfind(name)
-        if full_at >= 0:
-            score = (full_at + len(name)) * 2 + 1
-        for word in name.split():
-            if len(word) < 3:
-                continue
-            word_at = lowered.rfind(word)
-            if word_at >= 0:
-                score = max(score, (word_at + len(word)) * 2)
+        score = _mention_score(candidate.name, lowered)
         if score > best_score:
             best_score, best_index = score, index
     if best_index is None or best_score < 0:
@@ -207,6 +266,15 @@ async def _next_from_entry(
 
     fresh = await resolve_candidates(spec, ctx)
     eligible_ids = {str(c.principal_id) for c in fresh}
+
+    if spec.order == "natural":
+        text, previous_author = await _last_assistant_turn(ctx.tenant_id, ctx.session_id)
+        seed = f"{ctx.session_id}:{ctx.event_seq}:{cursor.turns_taken}"
+        chosen = _natural_pick(fresh, text, previous_author, seed)
+        if chosen is None:
+            return None, cursor
+        new_cursor = _EntryCursor(None, 0, cursor.turns_taken + 1)
+        return ActorRef(principal_id=chosen.principal_id, mode=spec.mode), new_cursor
 
     if spec.order == "free":
         # Deterministic pick among currently-eligible candidates -- no fixed order is

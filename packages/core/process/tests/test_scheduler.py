@@ -504,3 +504,108 @@ async def test_addressed_entry_walks_addressee_first_then_the_rest(
 
     assert picks == [marta.principal_id, elin.principal_id, viktor.principal_id]
     assert exhausted is None
+
+
+# ── order: "natural" (SillyTavern-style reactive discussion) ─────────────────────────
+def _chatty(name: str, talkativeness: float | None = None) -> Candidate:
+    return Candidate(principal_id=uuid.uuid4(), name=name, talkativeness=talkativeness)
+
+
+def test_natural_hands_the_floor_to_whoever_was_pushed_toward() -> None:
+    """The user's mystery scenario: Elin points at Viktor -> Viktor answers; Viktor
+    pushes toward Sofia -> Sofia answers; Sofia names Viktor -> Viktor again. No fixed
+    order -- the floor follows the accusations."""
+    from core.process.scheduler import _natural_pick
+
+    elin, sofia, viktor = (
+        _chatty("Elin Wallmark"),
+        _chatty("Sofia Nyqvist"),
+        _chatty("Viktor Wallmark"),
+    )
+    cast = [elin, sofia, viktor]
+
+    assert _natural_pick(cast, "It was Viktor on the stairs.", elin.principal_id, "s") is viktor
+    assert _natural_pick(cast, "Ask Sofia about the timings.", viktor.principal_id, "s") is sofia
+    assert _natural_pick(cast, "Viktor is lying about the door.", sofia.principal_id, "s") is viktor
+
+
+def test_natural_never_lets_a_speaker_follow_themselves() -> None:
+    """Even when the last message names its own author (a stripped self-attribution, a
+    boast), the floor moves -- exactly SillyTavern's no-self-response rule."""
+    from core.process.scheduler import _natural_pick
+
+    elin, viktor = _chatty("Elin Wallmark"), _chatty("Viktor Wallmark")
+
+    picked = _natural_pick(
+        [elin, viktor], "Viktor Wallmark has nothing to hide.", viktor.principal_id, "s"
+    )
+
+    assert picked is elin
+
+
+def test_natural_weights_unprompted_turns_by_talkativeness() -> None:
+    """Nobody named: the pick is deterministic per seed, and across many seeds a
+    talkative persona takes the floor far more often -- the seniority lever the SWE
+    discussion wants. Zero-talkativeness personas never speak unprompted."""
+    from collections import Counter
+
+    from core.process.scheduler import _natural_pick
+
+    senior = _chatty("Senior", talkativeness=90.0)
+    junior = _chatty("Junior", talkativeness=10.0)
+    silent = _chatty("Silent", talkativeness=0.0)
+    counts = Counter()
+    for i in range(300):
+        picked = _natural_pick([senior, junior, silent], "No names here.", None, f"seed-{i}")
+        counts[picked.name] += 1
+
+    assert counts["Silent"] == 0, "weight 0 must never speak unprompted"
+    assert counts["Senior"] > counts["Junior"] * 3, counts
+    # Determinism (INV-10): the same seed always picks the same persona.
+    again = _natural_pick([senior, junior, silent], "No names here.", None, "seed-7")
+    assert again is _natural_pick([senior, junior, silent], "No names here.", None, "seed-7")
+
+
+def test_natural_zero_weight_still_answers_when_named() -> None:
+    from core.process.scheduler import _natural_pick
+
+    silent = _chatty("Marta Sjöberg", talkativeness=0.0)
+    other = _chatty("Elin Wallmark", talkativeness=80.0)
+
+    assert _natural_pick([silent, other], "Marta, answer me.", None, "s") is silent
+
+
+async def test_natural_entry_is_reactive_per_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Through the real cursor machinery: each turn re-reads the last message, so the
+    order tracks the conversation instead of being fixed at phase entry."""
+    from core.process import scheduler as sched
+
+    elin, viktor = _chatty("Elin Wallmark", 50.0), _chatty("Viktor Wallmark", 50.0)
+    said: list[tuple[str, uuid.UUID | None]] = [("Elin, you first.", None)]
+
+    async def fake_turn(tenant_id, session_id):  # noqa: ANN001, ANN202
+        return said[-1]
+
+    monkeypatch.setattr(sched, "_last_assistant_turn", fake_turn)
+
+    async def resolve(spec, ctx):  # noqa: ANN001, ANN202
+        return [elin, viktor]
+
+    spec = ActorSpec(any_of=["participant_agent"], mode="generate", order="natural", max_turns=2)
+    phase = PhaseSpec(
+        label_key="x",
+        actors=[spec],
+        visibility=VisibilitySpec(
+            knowledge_classes=[], scopes=[], entity_fields=[], secrets="none"
+        ),
+    )
+    ctx = InterpreterContext(uuid.uuid4(), uuid.uuid4(), "q", phase, {}, event_seq=0)
+    cursor = sched._EntryCursor(resolved_order=None, turn_index=0, turns_taken=0)
+
+    first, cursor = await sched._next_from_entry(spec, cursor, ctx, resolve)
+    assert first is not None and first.principal_id == elin.principal_id
+    said.append(("I saw Viktor by the tower door.", elin.principal_id))
+    second, cursor = await sched._next_from_entry(spec, cursor, ctx, resolve)
+    assert second is not None and second.principal_id == viktor.principal_id
+    exhausted, _ = await sched._next_from_entry(spec, cursor, ctx, resolve)
+    assert exhausted is None, "max_turns still caps the discussion"
