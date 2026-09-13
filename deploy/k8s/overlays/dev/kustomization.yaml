@@ -4,33 +4,30 @@ kind: Kustomization
 resources:
   - ../../base
 
-# Images come from the host's local registry (rootless podman on 127.0.0.1:5000);
-# containerd trusts it via /etc/rancher/k3s/registries.yaml (one-time sudo setup --
-# see README). After that, updating an image is `podman push` + rollout restart,
-# no `k3s ctr images import`, no sudo.
-images:
-  - name: localhost/pyrrhula
-    newName: localhost:5000/pyrrhula
-    newTag: dev
-  - name: localhost/pyrrhula-web
-    newName: localhost:5000/pyrrhula-web
-    newTag: dev
-
-# Mutable `dev` tags demand Always, or containerd keeps yesterday's image.
+# Images are the ones dev-up.sh builds and imports straight into k3s's containerd
+# (`k3s ctr images import`), under the names the base already uses -- no registry, no
+# extra host setup. A fresh machine needs nothing beyond k3s and podman/docker.
+#
+# IfNotPresent, NOT Always: `localhost/pyrrhula:dev` exists only inside containerd, so
+# Always would send the kubelet looking for a registry host literally named "localhost"
+# and fail with ImagePullBackOff. The import replaces the tag's content in place, so a
+# rebuilt image is picked up on the next pod start without a pull.
+#
+# For the push-based loop instead (no per-update sudo), use overlays/dev-registry.
 patches:
   - target:
       kind: Deployment
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
-        value: Always
+        value: IfNotPresent
   - target:
       kind: Job
       name: pyrrhula-migrate
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
-        value: Always
+        value: IfNotPresent
 
 # secrets.env is git-ignored; create it next to this file:
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)

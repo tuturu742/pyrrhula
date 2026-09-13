@@ -9,8 +9,9 @@ ENGINE=$(command -v podman || command -v docker)
 
 # The k3s image import below needs sudo. Fail HERE, loudly, when sudo cannot prompt
 # (no TTY -- e.g. launched from an IDE task runner) instead of dying mid-install
-# after minutes of building.
-if command -v k3s >/dev/null && ! sudo -n true 2>/dev/null; then
+# after minutes of building. Registry mode pushes instead of importing, so it needs
+# no sudo at all.
+if [ -z "${PYRRHULA_K8S_REGISTRY:-}" ] && command -v k3s >/dev/null && ! sudo -n true 2>/dev/null; then
   if [ ! -t 0 ]; then
     echo "ERROR: this install needs sudo (k3s image import), but there is no terminal"
     echo "       to type the password into. Run it from an interactive shell, or"
@@ -28,9 +29,22 @@ echo "== build images"
 "$ENGINE" build -t localhost/pyrrhula:dev -f "$REPO_ROOT/docker/Dockerfile" "$REPO_ROOT"
 "$ENGINE" build -t localhost/pyrrhula-web:dev -f "$REPO_ROOT/docker/web.Dockerfile" "$REPO_ROOT"
 
-echo "== import into k3s containerd (needs sudo)"
-"$ENGINE" save localhost/pyrrhula:dev | sudo k3s ctr images import -
-"$ENGINE" save localhost/pyrrhula-web:dev | sudo k3s ctr images import -
+# Two ways to get the images to the kubelet. The default imports them straight into
+# k3s's containerd, because that works on a machine with nothing set up beyond k3s and
+# a container engine. Setting PYRRHULA_K8S_REGISTRY switches to pushing at a registry
+# you already run (no sudo per update) -- see overlays/dev-registry for its prerequisites.
+OVERLAY=overlays/dev
+if [ -n "${PYRRHULA_K8S_REGISTRY:-}" ]; then
+  echo "== push images to $PYRRHULA_K8S_REGISTRY"
+  for img in pyrrhula pyrrhula-web; do
+    "$ENGINE" push --tls-verify=false "localhost/$img:dev" "$PYRRHULA_K8S_REGISTRY/$img:dev"
+  done
+  OVERLAY=overlays/dev-registry
+else
+  echo "== import into k3s containerd (needs sudo)"
+  "$ENGINE" save localhost/pyrrhula:dev | sudo k3s ctr images import -
+  "$ENGINE" save localhost/pyrrhula-web:dev | sudo k3s ctr images import -
+fi
 
 SECRETS=overlays/dev/secrets.env
 if [ ! -f "$SECRETS" ]; then
@@ -43,6 +57,8 @@ APP_DB_PASSWORD=$APPPW
 JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 ADMIN_TOKEN=$(openssl rand -hex 24)
 ENCRYPTION_KEY=$(openssl rand -base64 32)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=$(openssl rand -hex 12)
 DATABASE_URL=postgresql+asyncpg://pyrrhula:$PG@postgres:5432/pyrrhula
 APP_DATABASE_URL=postgresql+asyncpg://pyrrhula_app:$APPPW@postgres:5432/pyrrhula
 EOF
@@ -50,23 +66,100 @@ EOF
   echo "   BACK UP the ENCRYPTION_KEY line -- losing it orphans every sealed credential."
 fi
 
-# Point the in-cluster ollama Service at THIS machine (host GPU); skip if offline.
+# Top-up for deployments created before the installer generated an admin login. Without
+# these the only way into the admin console is the deprecated token app, which is not
+# what the docs tell people to use.
+if ! grep -q '^ADMIN_EMAIL=' "$SECRETS"; then
+  echo "== adding a platform-admin login to $SECRETS"
+  {
+    echo "ADMIN_EMAIL=admin@example.com"
+    echo "ADMIN_PASSWORD=$(openssl rand -hex 12)"
+  } >> "$SECRETS"
+fi
+
+# Anything running on the host that pods reach by name -- the opt-in ollama component,
+# an MCP server attached from host-mcp.example.yaml -- is wired with a hand-written
+# EndpointSlice whose address is a placeholder. Fill in THIS machine's address.
 HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)
 
 echo "== apply"
 kubectl delete job pyrrhula-migrate -n pyrrhula --ignore-not-found
-kubectl apply -k overlays/dev
+kubectl apply -k "$OVERLAY"
 if [ -n "$HOST_IP" ]; then
-  for slice in ollama-1 godot-mcp-1 comfy-mcp-1; do
+  # Discovered by label, never by a hardcoded list: attaching a host MCP server should
+  # be copying one manifest, not editing the installer. The old list named one
+  # developer's sidecars and shipped them to everyone.
+  SLICES=$(kubectl -n pyrrhula get endpointslice -l pyrrhula.io/host-endpoint=true \
+    -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
+  for slice in $SLICES; do
+    echo "   host endpoint $slice -> $HOST_IP"
     kubectl -n pyrrhula patch endpointslice "$slice" --type=json \
       -p "[{\"op\":\"replace\",\"path\":\"/endpoints/0/addresses/0\",\"value\":\"$HOST_IP\"}]" \
-      || true
+      >/dev/null || true
   done
 fi
 
-echo "== waiting for migration"
-kubectl -n pyrrhula wait --for=condition=complete job/pyrrhula-migrate --timeout=300s
-kubectl -n pyrrhula rollout status deploy/pyrrhula-api --timeout=300s
+# Wait, but say WHY when nothing moves. A bare `kubectl wait` prints nothing for five
+# minutes and then "timed out" -- the least useful thing an installer can do, because
+# the real cause (an image the kubelet cannot pull, a claim no provisioner will bind)
+# is sitting in the events the whole time. Report it while still waiting, then fail
+# with it rather than making the reader go find it.
+diagnose() {
+  echo "   -- pods"
+  kubectl -n pyrrhula get pods 2>&1 | sed 's/^/      /'
+  unbound=$(kubectl -n pyrrhula get pvc \
+    -o jsonpath='{range .items[?(@.status.phase!="Bound")]}{.metadata.name} {end}' 2>/dev/null || true)
+  if [ -n "${unbound// /}" ]; then
+    echo "   -- volume claims not bound: $unbound"
+    echo "      Nothing has provisioned storage. On k3s that is local-path:"
+    echo "        kubectl -n kube-system get pods -l app=local-path-provisioner"
+    echo "        kubectl -n kube-system logs -l app=local-path-provisioner --tail=20"
+    echo "      If it is running but idle, restart it:"
+    echo "        kubectl -n kube-system rollout restart deploy/local-path-provisioner"
+  fi
+  if kubectl -n pyrrhula get pods -o jsonpath='{range .items[*]}{.status.containerStatuses[*].state.waiting.reason}{"\n"}{end}' 2>/dev/null \
+     | grep -qE 'ImagePullBackOff|ErrImagePull'; then
+    echo "   -- an image could not be pulled"
+    if [ -n "${PYRRHULA_K8S_REGISTRY:-}" ]; then
+      echo "      Registry mode is on (PYRRHULA_K8S_REGISTRY=$PYRRHULA_K8S_REGISTRY)."
+      echo "      Check the registry is up and that containerd trusts it"
+      echo "      (/etc/rancher/k3s/registries.yaml -- see overlays/dev-registry)."
+    else
+      echo "      The images are imported into containerd, so this usually means the"
+      echo "      import did not happen or went to a different runtime. Verify with:"
+      echo "        sudo k3s ctr images ls | grep pyrrhula"
+    fi
+  fi
+  echo "   -- recent warnings"
+  kubectl -n pyrrhula get events --field-selector type=Warning \
+    --sort-by=.lastTimestamp 2>/dev/null | tail -6 | sed 's/^/      /'
+}
+
+# $1 = human label, $2 = shell snippet that succeeds once the thing is ready
+wait_with_reason() {
+  label="$1"; check="$2"
+  echo "== waiting for $label"
+  deadline=$(( $(date +%s) + 300 )); warned=0
+  while ! eval "$check" >/dev/null 2>&1; do
+    now=$(date +%s)
+    if [ "$now" -ge "$deadline" ]; then
+      echo "ERROR: $label did not become ready within 5 minutes."
+      diagnose
+      exit 1
+    fi
+    if [ "$warned" -eq 0 ] && [ "$now" -ge "$(( deadline - 255 ))" ]; then
+      warned=1
+      echo "   still waiting after 45s -- what the cluster says right now:"
+      diagnose
+    fi
+    sleep 5
+  done
+}
+
+wait_with_reason "the migration" \
+  '[ "$(kubectl -n pyrrhula get job pyrrhula-migrate -o jsonpath="{.status.succeeded}")" = "1" ]'
+wait_with_reason "the api" \
+  '[ "$(kubectl -n pyrrhula get deploy pyrrhula-api -o jsonpath="{.status.readyReplicas}")" = "1" ]'
 
 # Pre-warm the embedding model (bge-m3, ~2.2GB) during install: a cold in-request
 # download blocks the first knowledge/assistant call for minutes and has been seen
@@ -111,7 +204,25 @@ if [ "${HF_SIZE:-0}" -gt 1000 ]; then
   echo "   embedding cache present (${HF_SIZE}MB) -> pods set to HF offline mode"
 fi
 
+# POSIX sed, not `grep -oP`: -P is a GNU extension and BSD grep (macOS) has no such
+# flag, so the credentials would print as nothing on exactly the fresh machine that
+# needs them most.
+ADMIN_EMAIL_VALUE=$(sed -n 's/^ADMIN_EMAIL=//p' "$SECRETS" 2>/dev/null || true)
+ADMIN_PASSWORD_VALUE=$(sed -n 's/^ADMIN_PASSWORD=//p' "$SECRETS" 2>/dev/null || true)
+
 echo
-echo "Up. Open http://pyrrhula.localhost and Sign up."
-echo "Admin console: kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100"
-echo "Admin token:   grep ADMIN_TOKEN $SECRETS"
+echo "Up. Open http://pyrrhula.localhost"
+echo
+echo "  Sign in as the platform admin:"
+echo "    organization  admin"
+echo "    email         $ADMIN_EMAIL_VALUE"
+echo "    password      $ADMIN_PASSWORD_VALUE"
+echo
+echo "  Or Sign up to create your own organization."
+echo
+echo "  Generated on first run and stored in $SECRETS."
+echo "  Change the password IN THE APP after first login -- the account is created once"
+echo "  and editing the file afterwards does not rotate it."
+echo "  Legacy token console (deprecated):"
+echo "    kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100"
+echo "    token: grep ADMIN_TOKEN $SECRETS"

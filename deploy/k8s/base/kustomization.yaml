@@ -14,8 +14,12 @@ resources:
   - web.yaml
   - admin.yaml
   - migrate-job.yaml
-  - ollama-host.yaml
-  - mcp-sidecars-host.yaml
+  - searxng.yaml
+  # No ollama and no MCP sidecars here on purpose. Both used to ship in the base with a
+  # hardcoded LAN address, so every install -- on any machine -- came up with Services
+  # pointing at one developer's network. They are opt-in now: components/host-ollama for
+  # a host-local model provider, host-mcp.example.yaml for a host-local MCP server. An
+  # MCP server that already has a reachable URL needs neither; just register the URL.
   - backup-cronjob.yaml
   - envs-networkpolicy.yaml
 
@@ -32,10 +36,16 @@ configMapGenerator:
       - PYRRHULA_REQUIRE_ENCRYPTION=1
       - PYRRHULA_BLOB_STORE_ROOT=/app/data/blobs
       - PYRRHULA_GIT_HTTP_BASE=http://pyrrhula-api:8000
+      # Agent web search, served by the bundled searxng (searxng.yaml). Clear this
+      # to disable the feature, or point it at your own SearXNG-compatible host.
+      - PYRRHULA_WEB_SEARCH_URL=http://searxng:8080
       # Where a browser reaches this deployment -- the base of a preview share link.
       # Distinct from GIT_HTTP_BASE, which is in-network and meaningless to a tester.
       - PYRRHULA_PUBLIC_BASE_URL=https://pyrrhula.localhost
-      - PYRRHULA_ASSISTANT_MODEL=ollama/qwen3.8:27b
-      - PYRRHULA_ASSISTANT_API_BASE=http://ollama:11434
+      # No assistant model is configured by default: a fresh install has no provider,
+      # and naming one here pointed every deployment at a host and model tag that did
+      # not exist. Set ASSISTANT_MODEL (and ASSISTANT_API_BASE for a local provider) in
+      # overlays/dev/secrets.env -- they reach the app prefixed with PYRRHULA_ -- or
+      # pick a model on the "Assistant model" profile in the UI. See docs/mcp.md.
       - HF_HUB_OFFLINE=0
       - TRANSFORMERS_OFFLINE=0

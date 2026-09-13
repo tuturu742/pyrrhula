@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Opt-in: a model provider running on the host (ollama with a GPU, typically) made
+# reachable from pods as http://ollama:11434.
+#
+# Enable it by adding this line to overlays/dev/kustomization.yaml:
+#
+#   components:
+#     - ../../components/host-ollama
+#
+# then name a model in overlays/dev/secrets.env (values there reach the app prefixed
+# with PYRRHULA_):
+#
+#   ASSISTANT_MODEL=ollama/<your tag>
+#   ASSISTANT_API_BASE=http://ollama:11434
+#
+# dev-up.sh fills in this machine's IP at apply time -- see the host-endpoint label.
+
+resources:
+  - ollama.yaml

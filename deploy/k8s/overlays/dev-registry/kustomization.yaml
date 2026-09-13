@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Opt-in variant of overlays/dev for the faster inner loop: images are pushed to a
+# rootless registry on the host instead of imported into containerd, so updating an
+# image needs no sudo. NOT the default -- it requires host setup a fresh machine does
+# not have (a registry container, plus containerd configured to trust plain HTTP).
+#
+#   podman run -d --name pyr-registry --restart=always \
+#     -p 127.0.0.1:5000:5000 -v pyr-registry:/var/lib/registry docker.io/library/registry:2
+#
+#   sudo mkdir -p /etc/rancher/k3s
+#   sudo tee /etc/rancher/k3s/registries.yaml >/dev/null <<'YAML'
+#   mirrors:
+#     "localhost:5000":
+#       endpoint:
+#         - "http://127.0.0.1:5000"
+#   YAML
+#   sudo systemctl restart k3s
+#
+# Then:  PYRRHULA_K8S_REGISTRY=127.0.0.1:5000 deploy/k8s/dev-up.sh
+
+resources:
+  - ../dev
+
+images:
+  - name: localhost/pyrrhula
+    newName: localhost:5000/pyrrhula
+    newTag: dev
+  - name: localhost/pyrrhula-web
+    newName: localhost:5000/pyrrhula-web
+    newTag: dev
+
+# Mutable `dev` tags demand Always here, or containerd keeps yesterday's pushed image.
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: Job
+      name: pyrrhula-migrate
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  # The worker's init container runs the same image and must not be left behind on a
+  # cached copy: a patch aimed only at containers/0 never touches it, so a rebuilt
+  # image would run new worker code behind a stale init step.
+  - target:
+      kind: Deployment
+      name: pyrrhula-worker
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: Always

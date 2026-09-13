@@ -1,0 +1,86 @@
+# Agent web search. A persona's "web search" toggle routes through this; nothing reaches
+# it unless a persona has that toggle on, and it is not exposed outside the cluster.
+#
+# Bundled here so Kubernetes matches the other two targets: compose ships a searxng
+# service and the AWS stack runs one as an ECS task, but k8s had neither the service nor
+# PYRRHULA_WEB_SEARCH_URL -- so the feature silently did not exist there at all.
+#
+# To turn it off: drop this file from base/kustomization.yaml and clear
+# PYRRHULA_WEB_SEARCH_URL. To use your own SearXNG (or compatible) instance instead: do
+# the same, then point PYRRHULA_WEB_SEARCH_URL at it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: pyrrhula
+  name: searxng-settings
+data:
+  settings.yml: |
+    # Keep in sync with docker/searxng-settings.yml. The one deviation from stock that
+    # matters: the JSON output format. The platform queries /search?format=json, which
+    # stock SearXNG refuses with 403 unless it is enabled here.
+    use_default_settings: true
+    search:
+      formats:
+        - html
+        - json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: searxng
+spec:
+  selector:
+    app: searxng
+  ports:
+    - port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: pyrrhula
+  name: searxng
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng
+  template:
+    metadata:
+      labels:
+        app: searxng
+    spec:
+      containers:
+        - name: searxng
+          image: docker.io/searxng/searxng:latest
+          ports:
+            - containerPort: 8080
+          env:
+            # Same source as compose uses: one generated secret, not a second thing to
+            # manage. SearXNG only signs its own session state with it.
+            - name: SEARXNG_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pyrrhula-secrets
+                  key: JWT_SECRET
+            - name: SEARXNG_BASE_URL
+              value: http://searxng:8080/
+          volumeMounts:
+            - name: settings
+              mountPath: /etc/searxng/settings.yml
+              subPath: settings.yml
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: settings
+          configMap:
+            name: searxng-settings

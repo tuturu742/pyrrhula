@@ -1,0 +1,29 @@
+# A Service with a hand-written EndpointSlice is how a pod reaches something running on
+# the host: there is no Pod to select, so the address is supplied directly. The address
+# below is a placeholder -- dev-up.sh rewrites every EndpointSlice carrying the
+# pyrrhula.io/host-endpoint label to the address of the machine it runs on, so nothing
+# here is tied to one network.
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: ollama
+spec:
+  ports:
+    - port: 11434
+      targetPort: 11434
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  namespace: pyrrhula
+  name: ollama-1
+  labels:
+    kubernetes.io/service-name: ollama
+    pyrrhula.io/host-endpoint: "true"
+addressType: IPv4
+ports:
+  - port: 11434
+endpoints:
+  - addresses:
+      - 127.0.0.1 # placeholder; dev-up.sh patches this to the host's address

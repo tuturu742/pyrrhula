@@ -1,0 +1,46 @@
+# Attaching an MCP server that runs on the HOST machine.
+#
+# You only need this file when the MCP server runs on the same machine as the cluster
+# and has no address a pod can reach. If your MCP server already has a reachable URL
+# (another host, a container in the cluster, a hosted service), skip all of this --
+# there is nothing to deploy. Registering the URL on a workspace is the whole job.
+#
+# Usage:
+#   1. cp host-mcp.example.yaml my-mcp.yaml
+#   2. edit the name and port (two places each)
+#   3. kubectl apply -f my-mcp.yaml
+#   4. re-run deploy/k8s/dev-up.sh, or patch the address yourself -- dev-up.sh rewrites
+#      every EndpointSlice labelled pyrrhula.io/host-endpoint to this machine's address
+#   5. register it on a workspace: Workspace -> MCP servers -> Add, with
+#      url http://<name>:<port>, and tick only the tools you want reachable
+#
+# Step 5 is the one that matters for security: the URL being reachable grants nothing.
+# A workspace can only call tools you explicitly allowed. See docs/mcp.md.
+
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: pyrrhula
+  name: my-mcp # <- the hostname pods will use
+spec:
+  ports:
+    - port: 9000 # <- the port pods will use
+      targetPort: 9000 # <- the port the server listens on, on the host
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  namespace: pyrrhula
+  name: my-mcp-1 # <- must be <service name>-<n>
+  labels:
+    # Ties this slice to the Service above.
+    kubernetes.io/service-name: my-mcp
+    # Tells dev-up.sh to point this at whatever machine it is running on, so the file
+    # stays portable instead of hardcoding one network's address.
+    pyrrhula.io/host-endpoint: "true"
+addressType: IPv4
+ports:
+  - port: 9000
+endpoints:
+  - addresses:
+      - 127.0.0.1 # placeholder; dev-up.sh patches this
