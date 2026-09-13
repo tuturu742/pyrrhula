@@ -1,11 +1,15 @@
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import BaseModel
 
 from adapters.models.litellm.provider import (
     LiteLLMModelProvider,
     _apply_cache_boundary,
     _extract_cached_tokens,
+    _first_json_object,
+    _rejects_schema_constrained_output,
 )
 from core.ports.model_provider import EgressDeniedError, GenerationRequest, check_egress
 
@@ -190,3 +194,96 @@ async def test_cached_tokens_flow_into_the_yielded_chunk(monkeypatch: pytest.Mon
     chunks = [c async for c in provider.generate(req)]
 
     assert chunks[0].cached_tokens == 9
+
+
+# ── structured output on endpoints that refuse json_schema ──────────────────────────
+class _Draft(BaseModel):
+    text: str
+
+
+def test_first_json_object_tolerates_fences_and_prose() -> None:
+    """Unconstrained output is not guaranteed to be bare JSON, so the fallback does what
+    the refused response_format would have done."""
+    assert _first_json_object('{"text": "a"}') == '{"text": "a"}'
+    assert json.loads(_first_json_object('```json\n{"text": "a"}\n```')) == {"text": "a"}
+    assert json.loads(_first_json_object('Sure!\n{"text": "a"}\nHope that helps.')) == {"text": "a"}
+    # Nothing parseable degrades to the raw text, which then fails validation loudly
+    # rather than silently returning a wrong object.
+    assert _first_json_object("no json here") == "no json here"
+
+
+def test_rejects_schema_constrained_output_matches_the_parameter_not_a_vendor() -> None:
+    assert _rejects_schema_constrained_output(
+        Exception("OpenAIException - This response_format type is unavailable now")
+    )
+    assert _rejects_schema_constrained_output(Exception("unsupported json_schema"))
+    assert not _rejects_schema_constrained_output(Exception("rate limit exceeded"))
+
+
+async def test_generate_structured_falls_back_when_json_schema_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DeepSeek (and other OpenAI-compatible endpoints) reject `json_schema` while
+    accepting `json_object`. Every structured call failed there -- persona drafting,
+    knowledge drafting -- surfacing as "Assistant call failed". The retry must ask for
+    the same object with the schema in the prompt and still return a validated instance.
+    """
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception("OpenAIException - This response_format type is unavailable now")
+        reply = MagicMock()
+        reply.choices = [MagicMock(message=MagicMock(content='```json\n{"text": "drafted"}\n```'))]
+        return reply
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/deepseek-flash",
+        messages=[{"role": "user", "content": "draft me a persona"}],
+        purpose="generation",
+        api_base="https://api.deepseek.com/v1",
+    )
+
+    result = await provider.generate_structured(req, _Draft)
+
+    assert result.text == "drafted"
+    assert len(calls) == 2, "expected one refused attempt then one fallback"
+    assert calls[0]["response_format"] is _Draft
+    assert calls[1]["response_format"] == {"type": "json_object"}
+    # The schema has to travel in the prompt, or the model has nothing to conform to.
+    assert "json schema" in calls[1]["messages"][-1]["content"].lower()
+    assert "text" in calls[1]["messages"][-1]["content"]
+    # api_base and friends must survive the retry.
+    assert calls[1]["api_base"] == "https://api.deepseek.com/v1"
+
+
+async def test_generate_structured_does_not_retry_unrelated_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rate limit is not a capability gap; retrying it would double the damage."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        raise Exception("rate limit exceeded")
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/deepseek-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+
+    with pytest.raises(Exception, match="rate limit"):
+        await provider.generate_structured(req, _Draft)
+    assert len(calls) == 1

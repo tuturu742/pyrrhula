@@ -101,6 +101,55 @@ def _extract_cached_tokens(usage: Any) -> int:
     return int(cache_read) if cache_read is not None else 0
 
 
+def _rejects_schema_constrained_output(exc: Exception) -> bool:
+    """Does this failure mean the endpoint cannot do schema-constrained JSON?
+
+    OpenAI-compatible endpoints differ on `response_format`: DeepSeek answers "This
+    response_format type is unavailable now" for `json_schema` while accepting
+    `json_object`. Match on the parameter rather than one vendor's sentence, so the next
+    provider with the same gap does not need its own special case.
+    """
+    text = str(exc).lower()
+    return "response_format" in text or "json_schema" in text
+
+
+def _schema_in_the_prompt(
+    messages: list[dict[str, Any]], schema: type[BaseModel]
+) -> list[dict[str, Any]]:
+    """The fallback when the endpoint will not enforce a schema: ask for it in words."""
+    return [
+        *messages,
+        {
+            "role": "user",
+            "content": (
+                "Reply with ONLY a JSON object conforming to this JSON Schema. "
+                "No prose, no code fences.\n" + json.dumps(schema.model_json_schema())
+            ),
+        },
+    ]
+
+
+def _first_json_object(raw: str) -> str:
+    """The first complete JSON object in a reply, tolerating fences and stray prose.
+
+    Unconstrained output is not guaranteed to be bare JSON, so this does what the
+    `response_format` the endpoint refused would have done for us.
+    """
+    text = (raw or "").strip()
+    if "```" in text:
+        fenced = text.split("```")
+        if len(fenced) >= 3:
+            text = fenced[1].removeprefix("json").strip()
+    start = text.find("{")
+    if start == -1:
+        return text
+    try:
+        obj, _end = json.JSONDecoder().raw_decode(text, start)
+    except json.JSONDecodeError:
+        return text
+    return json.dumps(obj)
+
+
 def _parse_streamed_arguments(raw: str) -> dict[str, Any]:
     """Tolerant tool-argument parse. Some local models (observed: qwen3 via ollama_chat)
     stream the SAME arguments object more than once, so the accumulated fragments read
@@ -265,16 +314,33 @@ class LiteLLMModelProvider:
         if model.startswith("ollama_chat/"):
             # Same silent-empty-generation hazard as generate(): default num_ctx is 4096.
             extra["num_ctx"] = int(os.environ.get("PYRRHULA_OLLAMA_NUM_CTX", "16384"))
-        response = await litellm.acompletion(
-            model=model,
-            messages=_anthropic_turn_shim(model, list(req.messages)),
-            response_format=schema,
-            api_base=req.api_base,
-            api_key=req.api_key,
+        messages = _anthropic_turn_shim(model, list(req.messages))
+        common: dict[str, Any] = {
+            "model": model,
+            "api_base": req.api_base,
+            "api_key": req.api_key,
             **extra,
-        )
+        }
+        try:
+            response = await litellm.acompletion(
+                messages=messages, response_format=schema, **common
+            )
+        except Exception as exc:
+            if not _rejects_schema_constrained_output(exc):
+                raise
+            # The endpoint does schema-constrained output no favours (DeepSeek rejects
+            # `json_schema` outright while accepting `json_object`). Ask for the same
+            # object with the schema in the prompt and validate it here -- the port's
+            # contract is a validated instance, not a particular wire parameter. Without
+            # this, every structured call on such a provider failed: persona drafting,
+            # knowledge drafting, anything using generate_structured.
+            response = await litellm.acompletion(
+                messages=_schema_in_the_prompt(messages, schema),
+                response_format={"type": "json_object"},
+                **common,
+            )
         content = response.choices[0].message.content
-        return schema.model_validate_json(content)
+        return schema.model_validate_json(_first_json_object(content))
 
     def count_tokens(self, text: str, model: str) -> int:
         import tiktoken
