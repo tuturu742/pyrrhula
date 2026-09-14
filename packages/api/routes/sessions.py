@@ -1267,6 +1267,12 @@ async def _run_generation(tenant_id: uuid.UUID, session_id: uuid.UUID) -> None:
         pass
 
 
+# How many times the background task will re-enter the interpreter after it stops on its
+# own per-advance step guard. Bounds total autonomous work while letting a long session
+# (a multi-round interrogation, a full RPG scene) run to its real end.
+_MAX_ADVANCE_CONTINUATIONS = 20
+
+
 async def _run_process_definition_advance(
     tenant_id: uuid.UUID, session_id: uuid.UUID, process_definition_id: uuid.UUID
 ) -> None:
@@ -1283,19 +1289,31 @@ async def _run_process_definition_advance(
     async def on_event(event_seq: int, kind: str, payload: dict[str, Any]) -> None:
         await publish_event(session_id, event_seq, kind, payload)
 
-    await run_process_definition_session(
-        tenant_id,
-        session_id,
-        dsl,
-        model_provider_factory=get_model_provider,
-        embedding_provider=get_embedding_provider(),
-        on_chunk=on_chunk,
-        on_event=on_event,
-        encryptor=get_encryptor(),
-        permission_service=get_permission_service(),
-        mcp_transport=get_mcp_transport(),
-        moderation_provider=get_moderation_provider(),
-    )
+    # ``advance_session`` stops at its runaway-loop guard (max_steps) and reports
+    # 'active', meaning "nothing is blocking, there is simply more to do". Calling it
+    # once and returning abandons the session right there: it stays 'active' with no
+    # interpreter running and no fault to show, indistinguishable from working, until a
+    # human happens to poke it. Keep advancing while it says 'active' -- every other
+    # status ('awaiting', 'awaiting_human', 'paused', 'terminal') is a real stop.
+    for _ in range(_MAX_ADVANCE_CONTINUATIONS):
+        result = await run_process_definition_session(
+            tenant_id,
+            session_id,
+            dsl,
+            model_provider_factory=get_model_provider,
+            embedding_provider=get_embedding_provider(),
+            on_chunk=on_chunk,
+            on_event=on_event,
+            encryptor=get_encryptor(),
+            permission_service=get_permission_service(),
+            mcp_transport=get_mcp_transport(),
+            moderation_provider=get_moderation_provider(),
+        )
+        if result.status != "active":
+            return
+        if result.steps_taken == 0:
+            # Defensive: 'active' with no progress would spin. Treat it as a stop.
+            return
 
 
 @router.post("/{session_id}/messages", status_code=202)

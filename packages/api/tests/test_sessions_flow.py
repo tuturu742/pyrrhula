@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -411,3 +412,52 @@ async def test_second_tenant_cannot_reach_first_tenants_session_via_api(
             )
         ).all()
     assert messages == []
+
+
+async def test_advance_continues_until_the_interpreter_really_stops(monkeypatch) -> None:
+    """``advance_session`` stops at its own runaway-loop guard and reports 'active',
+    meaning "nothing is blocking, there is just more to do". Calling it once and
+    returning strands the session: active, no interpreter running, no fault to show --
+    observed live as a mystery session frozen mid-interrogation that a manual poke
+    revived. Statuses other than 'active' are real stops and must not be re-entered."""
+    import api.routes.sessions as sessions_module
+    from core.process.interpreter import AdvanceResult
+
+    async def _definition(*_a, **_k):  # noqa: ANN002, ANN003, ANN202
+        return SimpleNamespace(id=uuid.uuid4(), definition={}, version=1)
+
+    monkeypatch.setattr(sessions_module, "get_definition", _definition)
+    monkeypatch.setattr(sessions_module, "validate_raw", lambda _d: (object(), []))
+
+    seen: list[str] = []
+
+    def _runner(statuses: list[str]):  # noqa: ANN202
+        async def _run(*_a, **_k):  # noqa: ANN002, ANN003, ANN202
+            status = statuses[len(seen)]
+            seen.append(status)
+            return AdvanceResult(
+                status=status, steps_taken=200, final_phase="talk", flags=()
+            )
+
+        return _run
+
+    # Three guard-stops, then a real end: the task must ride through the guard-stops.
+    monkeypatch.setattr(
+        sessions_module,
+        "run_process_definition_session",
+        _runner(["active", "active", "active", "terminal"]),
+    )
+    await sessions_module._run_process_definition_advance(
+        uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    )
+    assert seen == ["active", "active", "active", "terminal"]
+
+    # A blocking status stops immediately -- re-entering would fight the human.
+    seen.clear()
+    monkeypatch.setattr(
+        sessions_module, "run_process_definition_session", _runner(["awaiting_human"])
+    )
+    await sessions_module._run_process_definition_advance(
+        uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    )
+    assert seen == ["awaiting_human"], "a real stop must not be re-entered"
