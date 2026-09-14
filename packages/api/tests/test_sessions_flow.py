@@ -154,6 +154,72 @@ async def test_pause_and_resume_session_endpoints(
     assert resume_resp.json()["status"] == "active"
 
 
+async def test_resume_restarts_the_interpreter(
+    client: TestClient, db_available: None, redis_available: None, monkeypatch
+) -> None:
+    """Resuming a paused autonomous session must kick the advance task. It used to flip
+    the status and return: the session sat "active" with no interpreter running, stuck
+    until someone posted a message or toggled the turn policy -- observed live after a
+    fault-pause, where resume appeared to do nothing at all."""
+    import api.routes.sessions as sessions_module
+
+    slug = f"sessflow-kick-{uuid.uuid4().hex[:8]}"
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    persona_id = await seed_dev_agent(tenant_id, workspace_id)
+    token = _register_and_login(client, slug)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    kicked: list[tuple] = []
+
+    async def _fake_advance(tenant_id, session_id, process_definition_id):  # noqa: ANN001, ANN202
+        kicked.append((tenant_id, session_id, process_definition_id))
+
+    monkeypatch.setattr(sessions_module, "_run_process_definition_advance", _fake_advance)
+
+    flow = {
+        "name": "kick",
+        "vocabulary_overlay": "default_v1",
+        "initial_phase": "talk",
+        "phases": {
+            "talk": {
+                "label_key": "phase.discussion",
+                "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
+                "visibility": {
+                    "knowledge_classes": [],
+                    "scopes": ["workspace_public"],
+                    "entity_fields": "all",
+                    "secrets": "none",
+                },
+                "budget": {"ratio": {"lore": 1.0}, "max_tokens": 200},
+                "tools": [],
+            }
+        },
+    }
+    from core.process.authoring import create_definition
+
+    row = await create_definition(tenant_id, "kick", "kick", flow, workspace_id=workspace_id)
+
+    create_resp = client.post(
+        "/sessions",
+        json={
+            "workspace_id": str(workspace_id),
+            "persona_id": str(persona_id),
+            "process_definition_id": str(row.id),
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code in (200, 201), create_resp.text
+    session_id = create_resp.json()["id"]
+    kicked.clear()  # creation kicks too; this test is about resume
+
+    assert client.post(f"/sessions/{session_id}/pause", headers=headers).status_code == 200
+    resume_resp = client.post(f"/sessions/{session_id}/resume", headers=headers)
+    assert resume_resp.status_code == 200, resume_resp.text
+
+    assert kicked, "resume must restart the interpreter for an auto process session"
+    assert str(kicked[0][1]) == session_id
+
+
 async def test_checkpoints_and_fork_endpoints(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:

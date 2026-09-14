@@ -961,12 +961,22 @@ async def pause_session_endpoint(
 
 @router.post("/{session_id}/resume")
 async def resume_session_endpoint(
-    session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
+    session_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    ctx: RequestContext = Depends(get_request_context),
 ) -> SessionResponse:
     try:
         sess = await resume_session(ctx.tenant_id, session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    # Resuming a paused autonomous session must also restart the interpreter --
+    # flipping the status alone left the session "active" with no advance task, stuck
+    # until someone happened to post a message or toggle the turn policy. Same kick as
+    # session creation and the policy endpoint.
+    if sess.turn_policy == "auto" and sess.process_definition_id is not None:
+        background_tasks.add_task(
+            _run_process_definition_advance, ctx.tenant_id, session_id, sess.process_definition_id
+        )
     return _session_response(sess)
 
 
