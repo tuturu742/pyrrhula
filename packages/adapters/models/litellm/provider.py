@@ -343,14 +343,34 @@ class LiteLLMModelProvider:
         async for chunk, had_output in _attempt(call):
             produced = produced or had_output
             yield chunk
-        # A reasoning model can spend its whole completion budget on hidden reasoning and
-        # return nothing (seen live: gpt-5.6-terra mid-interrogation). Retrying the
-        # identical request -- which the turn runtime already does -- reproduces it; one
-        # retry with reasoning_effort forced off leaves budget for actual output. Skipped
-        # when the caller chose an effort on purpose, or already asked for none.
-        if not produced and str((req.params or {}).get("reasoning_effort", "")) != "none":
-            async for chunk, _had in _attempt({**call, "reasoning_effort": "none"}):
-                yield chunk
+        if not produced:
+            # A reasoning model can spend its whole completion budget on hidden reasoning
+            # and return nothing (seen live: gpt-5.6-terra mid-interrogation). Retrying
+            # the identical request -- which the turn runtime already does -- reproduces
+            # it. The cause is budget starvation, not reasoning itself, so the retry
+            # RAISES the completion budget and KEEPS the caller's reasoning_effort: a
+            # deliberate high-effort run stays high-effort, just with room to answer after
+            # it thinks. Only when no budget was set (nothing to raise) does it fall back
+            # to forcing effort off, and never over an effort the caller chose on purpose.
+            retry = dict(call)
+            requested_effort = str((req.params or {}).get("reasoning_effort", ""))
+            # The budget may come from the request OR from connection/persona params --
+            # read the merged call, not req.max_tokens, or a params-supplied budget
+            # would dodge the raise.
+            budget = call.get("max_tokens")
+            if isinstance(budget, int) and budget > 0:
+                factor = int(os.environ.get("PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR", "4"))
+                floor = int(os.environ.get("PYRRHULA_REASONING_MIN_COMPLETION_TOKENS", "2048"))
+                retry["max_tokens"] = max(budget * factor, floor)
+                async for chunk, _had in _attempt(retry):
+                    yield chunk
+            elif not requested_effort:
+                # No budget to raise and no effort chosen: forcing reasoning off is the
+                # only lever left. A caller who *chose* an effort keeps it -- and keeps
+                # the empty generation, which the runtime reports rather than papering
+                # over a deliberate configuration.
+                async for chunk, _had in _attempt({**retry, "reasoning_effort": "none"}):
+                    yield chunk
 
     async def generate_structured(self, req: GenerationRequest, schema: type[ModelT]) -> ModelT:
         check_egress(req.purpose, req.model, req.egress_policy)

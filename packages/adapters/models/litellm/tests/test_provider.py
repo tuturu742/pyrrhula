@@ -398,9 +398,8 @@ async def test_empty_generation_retries_once_with_reasoning_off(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A reasoning model can burn its whole completion budget on hidden reasoning and
-    stream nothing (seen live: gpt-5.6-terra mid-interrogation). The turn runtime already
-    retries, but identically -- so it reproduces. The adapter retries once with
-    reasoning_effort forced off, which leaves budget for output, and only then."""
+    stream nothing (seen live: gpt-5.6-terra mid-interrogation). With no budget set and
+    no effort chosen, the only lever is forcing reasoning off for one retry."""
     import litellm
 
     calls: list[dict] = []
@@ -472,3 +471,135 @@ async def test_a_nonempty_generation_does_not_retry(monkeypatch: pytest.MonkeyPa
     text = "".join([c.text async for c in provider.generate(req)])
     assert text == "hello"
     assert len(calls) == 1, "a productive generation must not retry"
+
+
+async def test_empty_generation_with_a_budget_retries_bigger_and_keeps_the_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cause is budget starvation, not reasoning itself. A deliberate high-effort
+    run must STAY high-effort on the retry -- silently downgrading it would corrupt
+    exactly the experiment that set it -- so the retry raises max_tokens instead and
+    leaves reasoning_effort untouched, at every level."""
+    import litellm
+
+    calls: list[dict] = []
+
+    def _delta(content, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        choice.delta = MagicMock(content=content, tool_calls=None)
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    def _stream(chunks):  # noqa: ANN001, ANN202
+        async def gen():
+            for c in chunks:
+                yield c
+
+        return gen()
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return _stream([_delta("", "stop")])
+        return _stream([_delta("After long thought: Elin."), _delta("", "stop")])
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "who did it?"}],
+        purpose="generation",
+        max_tokens=900,
+        params={"reasoning_effort": "high"},
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "After long thought: Elin."
+    assert len(calls) == 2
+    assert calls[0]["reasoning_effort"] == "high"
+    assert calls[1]["reasoning_effort"] == "high", "the chosen effort survives the retry"
+    assert calls[1]["max_tokens"] == max(900 * 4, 2048), "the budget is what got raised"
+
+
+async def test_params_supplied_budget_also_gets_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """max_tokens set on the connection/persona params (not the request) is still a
+    budget the retry can raise -- reading req.max_tokens alone would have missed it and
+    wrongly fallen through to the effort-off path."""
+    import litellm
+
+    calls: list[dict] = []
+
+    def _delta(content, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        choice.delta = MagicMock(content=content, tool_calls=None)
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+
+        async def gen():
+            if len(calls) == 1:
+                yield _delta("", "stop")
+            else:
+                yield _delta("ok", "stop")
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        params={"max_tokens": 500},
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+    assert text == "ok"
+    assert calls[1]["max_tokens"] == 2048
+    assert "reasoning_effort" not in calls[1]
+
+
+async def test_chosen_effort_with_no_budget_is_not_papered_over(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No budget to raise AND an effort the caller chose: there is no honest retry.
+    The empty generation surfaces to the runtime instead of the adapter silently
+    downgrading a deliberate configuration."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        params={"reasoning_effort": "high"},
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+    assert text == ""
+    assert len(calls) == 1, "no silent downgrade of a deliberate effort"
