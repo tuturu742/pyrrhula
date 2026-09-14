@@ -468,6 +468,9 @@ class PersonaResponse(BaseModel):
     entity_id: uuid.UUID | None
     agent_id: uuid.UUID
     web_search: bool = False
+    # Per-persona generation overrides, merged over the connection's params -- distinct
+    # voices on a shared connection without cloning it.
+    params: dict[str, object] = {}
 
 
 def _agent_response(row: Persona) -> PersonaResponse:
@@ -481,6 +484,7 @@ def _agent_response(row: Persona) -> PersonaResponse:
         entity_id=row.entity_id,
         agent_id=row.agent_id,
         web_search=row.web_search,
+        params=dict(row.params or {}),
     )
 
 
@@ -569,6 +573,7 @@ class CreatePersonaRequest(BaseModel):
     # Per-persona internet-search switch. Enabling it also registers the workspace's
     # `web_search` MCP server (the allowlist row is the egress control).
     web_search: bool = False
+    params: dict[str, object] = {}
 
 
 class UpdatePersonaRequest(BaseModel):
@@ -578,6 +583,7 @@ class UpdatePersonaRequest(BaseModel):
     entity_id: uuid.UUID | None = None
     agent_id: uuid.UUID | None = None
     web_search: bool | None = None
+    params: dict[str, object] | None = None
 
 
 async def _ensure_web_search_server(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> None:
@@ -615,6 +621,7 @@ async def create_persona_endpoint(
         persona_md=body.persona_md,
         entity_id=body.entity_id,
         web_search=body.web_search,
+        params=body.params,
     )
     if body.web_search:
         await _ensure_web_search_server(ctx.tenant_id, body.workspace_id)
@@ -661,6 +668,7 @@ async def update_persona_endpoint(
             entity_id=entity_id_arg,
             agent_id=body.agent_id,
             web_search=body.web_search,
+            params=body.params,
         )
     except PersonaNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

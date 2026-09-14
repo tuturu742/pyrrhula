@@ -345,3 +345,76 @@ async def test_cached_tokens_reach_the_usage_record(db_available: None) -> None:
         usage_row = await session.get(UsageRecordRow, result.usage_record_ids[0])
     assert usage_row is not None
     assert usage_row.cached_tokens == 123
+
+
+async def test_persona_params_ride_over_the_connections(db_available: None) -> None:
+    """A persona's own generation overrides reach the provider merged OVER its
+    connection's params -- the mechanism that keeps five suspects on one shared
+    connection from converging into one voice. The connection sets the base; the
+    persona's temperature wins; the request's own fields still outrank both."""
+    import uuid as _uuid
+
+    from core.agents import runtime as rt
+    from core.agents.authoring import create_agent, create_persona
+    from core.agents.tools import ToolRegistry
+    from core.tenancy.seed import seed_dev_tenant
+
+    tenant_id, _o, workspace_id = await seed_dev_tenant(slug=f"pp-{_uuid.uuid4().hex[:8]}")
+    from adapters.encryptor.identity import IdentityEncryptor
+
+    profile = await create_agent(
+        tenant_id,
+        "conn",
+        "echo",
+        "echo-model",
+        params={"temperature": 0.2, "top_p": 0.9},
+        encryptor=IdentityEncryptor(),
+    )
+    persona = await create_persona(
+        tenant_id,
+        workspace_id,
+        "spread",
+        "Spread",
+        profile.id,
+        params={"temperature": 0.9, "presence_penalty": 0.4},
+    )
+
+    seen: list[dict] = []
+
+    class _Provider:
+        async def generate(self, req):  # noqa: ANN001, ANN202
+            seen.append(dict(req.params))
+            from core.ports.model_provider import Chunk
+
+            yield Chunk(text="ok", finish_reason="stop")
+
+        def count_tokens(self, text, model):  # noqa: ANN001, ANN202
+            return 1
+
+        def capabilities(self, model):  # noqa: ANN001, ANN202
+            from core.ports.model_provider import Capabilities
+
+            return Capabilities(
+                supports_tools=False, supports_json_mode=False, supports_prompt_caching=False
+            )
+
+    from core.process.skeleton import create_session
+
+    sess = await create_session(tenant_id, workspace_id, persona.id)
+    await rt.run_agent_turn(
+        tenant_id,
+        persona.id,
+        sess.id,
+        [{"role": "user", "content": "hi"}],
+        model_provider_factory=lambda _p: _Provider(),
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"t:{sess.id}:0",
+        encryptor=IdentityEncryptor(),
+        event_seq=0,
+    )
+
+    assert seen, "the provider was never called"
+    merged = seen[0]
+    assert merged["temperature"] == 0.9, "persona wins over connection"
+    assert merged["top_p"] == 0.9, "connection fills what the persona left alone"
+    assert merged["presence_penalty"] == 0.4

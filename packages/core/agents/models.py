@@ -100,6 +100,13 @@ class Persona(Base):
     principal_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("principal.id", ondelete="CASCADE"), nullable=False
     )
+    # Per-persona generation overrides, merged OVER the connection's params (an
+    # explicit request value still wins over both). This is what keeps five suspects
+    # sharing one connection from converging into one voice: each can carry its own
+    # temperature, seed, or penalty without anyone cloning connections.
+    params: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     key: Mapped[str] = mapped_column(String(63), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     agent_id: Mapped[uuid.UUID] = mapped_column(

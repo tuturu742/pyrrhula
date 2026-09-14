@@ -47,6 +47,25 @@ export function AgentEditor({
     existingAgent?.agent_id ?? modelProfiles[0]?.id ?? "",
   );
   const [entityId, setEntityId] = useState(existingAgent?.entity_id ?? "");
+  // Per-persona generation overrides (JSON), merged over the connection's params --
+  // distinct voices on a shared connection: a temperature spread, a seed, penalties.
+  const [genParams, setGenParams] = useState(() => {
+    const existing = existingAgent?.params ?? {};
+    return Object.keys(existing).length ? JSON.stringify(existing, null, 2) : "";
+  });
+  const [genParamsError, setGenParamsError] = useState<string | null>(null);
+
+  function parsedParams(): Record<string, unknown> {
+    if (!genParams.trim()) return {};
+    try {
+      const value = JSON.parse(genParams) as Record<string, unknown>;
+      setGenParamsError(null);
+      return value;
+    } catch {
+      setGenParamsError("Must be a JSON object.");
+      throw new Error("invalid persona params");
+    }
+  }
 
   const save = useMutation({
     mutationFn: async () => {
@@ -59,6 +78,7 @@ export function AgentEditor({
             persona_md: personaMd,
             entity_id: entityId.trim() === "" ? null : entityId.trim(),
             agent_id: modelProfileId,
+            params: parsedParams(),
           },
         });
         if (error) throw error;
@@ -74,6 +94,7 @@ export function AgentEditor({
           entity_id: entityId.trim() === "" ? null : entityId.trim(),
           agent_id: modelProfileId,
           web_search: false,
+          params: parsedParams(),
         },
       });
       if (error) throw error;
@@ -157,6 +178,23 @@ export function AgentEditor({
           task="draft_persona"
           subject={name || key}
           onDraft={setPersonaMd}
+        />
+      </Field>
+
+      <Field
+        label="Generation overrides (JSON)"
+        hint={
+          genParamsError ??
+          "Merged over the connection's params — e.g. a temperature or seed that keeps " +
+            "this persona's voice distinct on a shared connection."
+        }
+      >
+        <textarea
+          className="min-h-16 w-full rounded-md border border-input bg-transparent px-2 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          value={genParams}
+          onChange={(e) => setGenParams(e.target.value)}
+          placeholder='{"temperature": 0.9}'
+          spellCheck={false}
         />
       </Field>
 

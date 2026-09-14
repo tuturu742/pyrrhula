@@ -148,6 +148,7 @@ async def _call_provider_with_retry(
     cache_boundary_index: int | None,
     api_keys: dict[uuid.UUID, str | None] | None = None,
     egress_policy: dict[str, list[str]] | None = None,
+    persona_params: dict[str, object] | None = None,
 ) -> tuple[str, list[ToolCall], _UsagePoint]:
     """Tries ``profile`` up to ``max_retries`` times with exponential backoff; on total
     failure, tries ``fallback_profile`` once (if set). Raises
@@ -170,7 +171,7 @@ async def _call_provider_with_retry(
                     tools=tools,
                     cache_boundary_index=cache_boundary_index,
                     api_base=candidate.api_base,
-                    params=dict(candidate.params or {}),
+                    params={**dict(candidate.params or {}), **(persona_params or {})},
                     api_key=(api_keys or {}).get(candidate.id),
                     egress_policy=egress_policy or {},
                 )
@@ -280,6 +281,10 @@ async def run_agent_turn(
                 else None
             )
             agent_principal_id = agent.principal_id
+            # The persona's own generation overrides sit on top of whichever
+            # connection ends up serving the turn (fallbacks included) -- this is what
+            # keeps a cast sharing one connection from converging into one voice.
+            persona_params = dict(agent.params or {})
             workspace_id = agent.workspace_id
 
         # Hard daily caps (core.usage_limits) -- checked before any provider call.
@@ -322,6 +327,7 @@ async def run_agent_turn(
                 cache_boundary_index,
                 api_keys,
                 egress_policy,
+                persona_params=persona_params,
             )
             usage_points.append(usage)
 

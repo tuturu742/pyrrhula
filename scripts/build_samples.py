@@ -48,6 +48,9 @@ class PersonaSpec:
     persona_type: str  # supervisor | participant | informational
     persona_md: str
     axis_values: dict[str, int] = field(default_factory=dict)
+    # Generation overrides merged over the connection's params at turn time -- a shared
+    # connection with per-persona sampling, so a cast does not converge into one voice.
+    params: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -341,6 +344,15 @@ _CAMPAIGN_FLOW = {
 def _mystery_sample() -> SampleSpec:
     from eval.scenarios import hagnaryd_case as case
 
+    sampling_by_key: dict[str, dict[str, object]] = {
+        "lind": {"temperature": 0.4},
+        "viktor": {"temperature": 0.9, "presence_penalty": 0.4},
+        "elin": {"temperature": 0.8, "presence_penalty": 0.3},
+        "lager": {"temperature": 0.7, "presence_penalty": 0.3},
+        "sofia": {"temperature": 0.7, "presence_penalty": 0.4},
+        "marta": {"temperature": 0.6, "presence_penalty": 0.5},
+    }
+
     personas = tuple(
         PersonaSpec(
             key=m.key,
@@ -352,6 +364,11 @@ def _mystery_sample() -> SampleSpec:
                 else m.persona_md
             ),
             axis_values=dict(m.axis_values),
+            # A sampling spread across the cast, over the ONE shared connection: without
+            # it five suspects on the same model converged into one voice by round three
+            # (identical sentences migrating between speakers). The inspector stays
+            # cool and deterministic; the suspects get progressively looser tongues.
+            params=dict(sampling_by_key.get(m.key, {})),
         )
         for m in (case.INVESTIGATOR, *case.CAST)
     )
@@ -1161,6 +1178,7 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
             connection.id,
             persona_type=persona_spec.persona_type,
             persona_md=persona_spec.persona_md,
+            params=dict(persona_spec.params),
         )
         persona_ids[persona_spec.key] = persona.id
         persona_principals[persona_spec.key] = persona.principal_id

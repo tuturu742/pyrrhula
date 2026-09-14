@@ -499,6 +499,7 @@ async def _add_agents(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: 
                 "name": agent.name,
                 "persona_type": agent.persona_type,
                 "persona_md": agent.persona_md,
+                "params": dict(agent.params or {}),
                 "model_profile_ref": str(agent.agent_id),
                 "behavior_profile_versions": [
                     {

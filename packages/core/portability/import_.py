@@ -470,6 +470,7 @@ async def _import_personas(
             connection_id,
             persona_type=record.get("persona_type", "participant"),
             persona_md=record.get("persona_md", ""),
+            params=dict(record.get("params") or {}),
         )
         report.id_map[str(record["id"])] = str(persona.id)
         report.persona_principals[str(record["id"])] = persona.principal_id

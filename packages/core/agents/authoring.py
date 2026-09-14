@@ -173,6 +173,7 @@ async def create_persona(
     persona_md: str = "",
     entity_id: uuid.UUID | None = None,
     web_search: bool = False,
+    params: dict[str, object] | None = None,
 ) -> Persona:
     async with tenant_scope(tenant_id) as session:
         agent_principal = Principal(tenant_id=tenant_id, kind="agent", display_name=name)
@@ -190,6 +191,7 @@ async def create_persona(
             persona_md=persona_md,
             entity_id=entity_id,
             web_search=web_search,
+            params=dict(params or {}),
         )
         session.add(agent)
         await session.flush()
@@ -206,6 +208,7 @@ async def update_persona(
     entity_id: uuid.UUID | None | object = ...,
     agent_id: uuid.UUID | None = None,
     web_search: bool | None = None,
+    params: dict[str, object] | None = None,
 ) -> Persona:
     """``entity_id``'s default is the sentinel ``...`` (not ``None``), the same "was this
     field even sent" distinction every other update function here needs: ``None`` is a
@@ -217,6 +220,8 @@ async def update_persona(
             raise PersonaNotFoundError(f"no agent {persona_id}")
         if name is not None:
             agent.name = name
+        if params is not None:
+            agent.params = dict(params)
         if web_search is not None:
             agent.web_search = web_search
         if persona_type is not None:

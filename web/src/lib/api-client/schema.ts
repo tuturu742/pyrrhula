@@ -4081,6 +4081,13 @@ export interface components {
              * @default false
              */
             web_search: boolean;
+            /**
+             * Params
+             * @default {}
+             */
+            params: {
+                [key: string]: unknown;
+            };
         };
         /** CreatePreviewRequest */
         CreatePreviewRequest: {
@@ -6103,6 +6110,10 @@ export interface components {
             agent_id?: string | null;
             /** Web Search */
             web_search?: boolean | null;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UpdateRepoRequest */
         UpdateRepoRequest: {
@@ -6504,6 +6515,13 @@ export interface components {
              * @default false
              */
             web_search: boolean;
+            /**
+             * Params
+             * @default {}
+             */
+            params: {
+                [key: string]: unknown;
+            };
         };
         /** TemplateResponse */
         api__routes__process_definitions__TemplateResponse: {
