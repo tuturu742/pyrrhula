@@ -603,3 +603,68 @@ async def test_chosen_effort_with_no_budget_is_not_papered_over(
     text = "".join([c.text async for c in provider.generate(req)])
     assert text == ""
     assert len(calls) == 1, "no silent downgrade of a deliberate effort"
+
+
+async def test_a_parameter_the_endpoint_refuses_is_dropped_and_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Connection and persona params exist so ONE connection can serve models with
+    different knobs -- and models genuinely differ: gpt-5.6-terra refuses a
+    presence_penalty other OpenAI models accept, which killed whole RPG turns. Only the
+    keys the endpoint named are dropped, and everything else survives the retry."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception(  # noqa: TRY002
+                "litellm.UnsupportedParamsError: openai does not support parameters: "
+                "['presence_penalty'], for model=gpt-5.6-terra."
+            )
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="in character", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "speak"}],
+        purpose="generation",
+        params={"presence_penalty": 0.4, "temperature": 0.9},
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "in character"
+    assert len(calls) == 2
+    assert "presence_penalty" not in calls[1], "the refused parameter was not dropped"
+    assert calls[1]["temperature"] == 0.9, "an unrelated parameter must survive the retry"
+
+
+async def test_an_unrelated_failure_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dropping parameters is only correct when the endpoint named them. Anything else is
+    a real failure the runtime must see."""
+    import litellm
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        raise Exception("litellm.AuthenticationError: invalid api key")  # noqa: TRY002
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+    with pytest.raises(Exception, match="AuthenticationError"):
+        [c async for c in provider.generate(req)]

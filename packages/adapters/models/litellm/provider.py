@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import AsyncIterator
 from typing import Any, TypeVar
 
@@ -228,6 +229,25 @@ def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, A
     return kwargs
 
 
+_UNSUPPORTED_PARAMS_RE = re.compile(r"does not support parameters:\s*\[([^\]]*)\]", re.I)
+
+
+def _unsupported_params(exc: Exception) -> list[str]:
+    """Parameter names an endpoint has just refused outright.
+
+    Connection and persona params exist so one connection can serve models with different
+    knobs -- and models genuinely differ: gpt-5.6-terra refuses presence_penalty that
+    other OpenAI models accept. Refusing the whole turn over a sampling nicety would make
+    the feature a liability, so the offending keys are dropped and the call retried.
+    Matched on the shape of the message, not one vendor's wording, and it only ever drops
+    keys the endpoint itself named.
+    """
+    match = _UNSUPPORTED_PARAMS_RE.search(str(exc))
+    if not match:
+        return []
+    return [name.strip().strip("'\"") for name in match.group(1).split(",") if name.strip()]
+
+
 def _rejects_tools_with_reasoning(exc: Exception) -> bool:
     """Some chat-completions endpoints (observed: gpt-5.6-luna) refuse function tools
     while a reasoning_effort is in play and say to set it to 'none'. Matched on the
@@ -286,17 +306,28 @@ class LiteLLMModelProvider:
             try:
                 response = await litellm.acompletion(**this_call)
             except Exception as exc:
+                # A parameter the endpoint refuses by name. Connection and persona params
+                # exist so one connection can serve models with different knobs, and
+                # models genuinely differ -- refusing the whole turn over a sampling
+                # nicety would make the feature a liability. Drop exactly what was named
+                # and retry.
+                dropped = [k for k in _unsupported_params(exc) if k in this_call]
+                if dropped:
+                    this_call = {k: v for k, v in this_call.items() if k not in dropped}
+                    response = await litellm.acompletion(**this_call)
                 # Endpoints that refuse function tools while a reasoning effort is in
                 # play (observed: gpt-5.6-luna) tell the caller to set it to 'none'. Do
                 # that once, unless the connection's params already chose a value -- then
                 # the choice is deliberate and the error is the operator's to see.
-                if (
-                    not tools
-                    or not _rejects_tools_with_reasoning(exc)
-                    or "reasoning_effort" in dict(req.params or {})
+                elif (
+                    tools
+                    and _rejects_tools_with_reasoning(exc)
+                    and "reasoning_effort" not in dict(req.params or {})
                 ):
+                    this_call = {**this_call, "reasoning_effort": "none"}
+                    response = await litellm.acompletion(**this_call)
+                else:
                     raise
-                response = await litellm.acompletion(**{**this_call, "reasoning_effort": "none"})
 
             pending_calls: dict[int, dict[str, Any]] = {}
             async for part in response:
