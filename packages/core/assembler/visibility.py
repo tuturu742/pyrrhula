@@ -174,3 +174,36 @@ def _grants(row: ScopeRow, role: str, principal_id: uuid.UUID) -> bool:
         principal_ids = row.members.get("principal_ids", [])
         return isinstance(principal_ids, list) and str(principal_id) in principal_ids
     return False
+
+
+async def portable_scope_bands(
+    tenant_id: uuid.UUID, workspace_id: uuid.UUID
+) -> list[dict[str, object]]:
+    """The workspace's non-default group bands, described portably for a bundle.
+
+    This lives here rather than in the portability layer on purpose: scope semantics --
+    which bands exist, which are seeded defaults, that a private compartment is a
+    convention and never a row -- belong to the one module that owns them. An exporter
+    reaching for ``ScopeRow`` itself is how a second visibility implementation gets built
+    by accident (``tests/isolation/test_pyr_export.py`` enforces this).
+
+    Members come back as principal ids; the caller maps them onto whatever portable
+    identity its format uses, because only the caller knows what it is carrying.
+    """
+    default_keys = {key for key, _kind, _members in _DEFAULT_SCOPES}
+    async with tenant_scope(tenant_id) as session:
+        rows = list(
+            (
+                await session.execute(select(ScopeRow).where(ScopeRow.workspace_id == workspace_id))
+            ).scalars()
+        )
+        return [
+            {
+                "key": row.key,
+                "kind": row.kind,
+                "principal_ids": [str(pid) for pid in (row.members or {}).get("principal_ids", [])],
+                "roles": list((row.members or {}).get("roles", [])),
+            }
+            for row in rows
+            if row.key not in default_keys and row.kind != "private"
+        ]

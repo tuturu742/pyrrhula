@@ -75,6 +75,14 @@ class SourceSpec:
     name: str
     class_: str  # rules | lore | misc
     entries: tuple[EntrySpec, ...]
+    # Which scope band this source is filed under. "workspace_public" is common
+    # knowledge every persona may retrieve; a named band is lore only the personas whose
+    # scope membership includes it can ever see -- the levels-of-lore mechanism
+    # (docs/knowledge-classes.md). Retrieval filters on it as a SQL predicate (INV-4),
+    # so a restricted band is not "asked for", it is unreachable.
+    scope_key: str = "workspace_public"
+    # Persona keys admitted to a named band. Ignored for workspace_public.
+    scope_members: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -432,6 +440,138 @@ def _mystery_sample() -> SampleSpec:
         conduct_rules=case.CONDUCT_RULES,
         axis_pack="rpg",
     )
+
+
+def _karsh_vale_flow() -> dict:
+    """Referee frames a scene, the players declare, the referee resolves with dice.
+
+    The scope lists are the sample's point. Every phase declares all three lore bands;
+    ``VisibilityResolver`` then intersects that list with what each *principal* is
+    entitled to, so the same phase hands the referee the history of the Crown, hands
+    Bram and Linnea the guild knowledge they plausibly earned, and hands Pip neither --
+    without a word of instruction to any of them. A phase that failed to declare a band
+    would hide it from everyone, membership or not.
+    """
+    all_bands = ["workspace_public", "guild_lore", "referee_lore"]
+    return {
+        "name": "The Hollow Crown of Karsh Vale",
+        "vocabulary_overlay": "rpg_v1",
+        # The scene counter the resolve gate reads; without a declared default the CEL
+        # expression has no `round` member to evaluate.
+        "state": {"round": {"type": "integer", "default": 0}},
+        "initial_phase": "scene",
+        "phases": {
+            "scene": {
+                "label_key": "phase.framing",
+                "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
+                "visibility": {
+                    "knowledge_classes": ["rules", "lore", "misc"],
+                    "scopes": all_bands,
+                    "entity_fields": "all",
+                    "secrets": "none",
+                },
+                # Lore-led: framing a scene is describing a place, not quoting a table.
+                # misc gets a real slice -- the rhyme and the inn's candle are how the
+                # Vale feels, and a budget that funds only rules and plot loses them.
+                "budget": {
+                    "ratio": {"rules": 0.2, "lore": 0.55, "misc": 0.25},
+                    "max_tokens": 3000,
+                    "history_ratio": 0.3,
+                },
+                "tools": [],
+                "prompt": (
+                    "Frame the next scene for the party. Two or three sentences of what "
+                    "they see, hear and smell -- then stop and ask what they do. Address "
+                    "someone by name if it is their moment. Do not speak or decide for "
+                    "any player character, and do not resolve anything yet."
+                ),
+                "on_complete": "declare",
+            },
+            "declare": {
+                "label_key": "phase.turn",
+                "flags": ["conductable"],
+                "actors": [
+                    {
+                        "persona_type": "participant",
+                        # Reactive: the players answer the referee and each other rather
+                        # than marching in a fixed rota -- a table, not a queue.
+                        "order": "reactive",
+                        "mode": "generate",
+                        "max_turns": 3,
+                    }
+                ],
+                "visibility": {
+                    "knowledge_classes": ["rules", "lore", "misc"],
+                    "scopes": all_bands,
+                    "entity_fields": "all",
+                    "secrets": "none",
+                },
+                "budget": {
+                    "ratio": {"rules": 0.45, "lore": 0.4, "misc": 0.15},
+                    "max_tokens": 3000,
+                    "history_ratio": 0.35,
+                },
+                "tools": [],
+                "prompt": (
+                    "Say what your character does or says, in your own voice and briefly. "
+                    "Declare the attempt only -- never roll dice, never state whether you "
+                    "succeeded, and never narrate another character's action. If another "
+                    "player just said something your character would react to, react."
+                ),
+                "on_complete": "resolve",
+            },
+            "resolve": {
+                "label_key": "phase.resolution",
+                "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 2}],
+                "visibility": {
+                    "knowledge_classes": ["rules", "lore"],
+                    "scopes": all_bands,
+                    "entity_fields": "all",
+                    "secrets": "none",
+                },
+                # Rules-led: this is the phase where the maths has to be right.
+                "budget": {
+                    "ratio": {"rules": 0.7, "lore": 0.3},
+                    "max_tokens": 3000,
+                    "history_ratio": 0.3,
+                },
+                "tools": ["dice_roller"],
+                "prompt": (
+                    "Resolve what the players just attempted. Name the rule you are "
+                    "invoking and the target number, CALL THE DICE TOOL rather than "
+                    "imagining a number, and narrate the outcome the roll actually gave "
+                    "you -- including when it goes badly. Then hand the scene back."
+                ),
+                "gates": [
+                    {"when": "state.round >= 3", "to": "reckoning"},
+                    {"else": True, "to": "scene"},
+                ],
+                "effects": [{"set": "round", "to": "state.round + 1"}],
+            },
+            "reckoning": {
+                "label_key": "phase.synthesis",
+                "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
+                "visibility": {
+                    "knowledge_classes": ["rules", "lore", "misc"],
+                    "scopes": all_bands,
+                    "entity_fields": "all",
+                    "secrets": "none",
+                },
+                "budget": {
+                    "ratio": {"rules": 0.2, "lore": 0.6, "misc": 0.2},
+                    "max_tokens": 3000,
+                    "history_ratio": 0.4,
+                },
+                "tools": [],
+                "prompt": (
+                    "Bring this session to a resting point. Say where the party stands, "
+                    "what they have learned and what it has cost them, and leave the "
+                    "open question in front of them. Do not resolve the Crown for them "
+                    "and do not ask for further rolls."
+                ),
+            },
+        },
+    }
 
 
 _GAMEDEV = SampleSpec(
@@ -890,7 +1030,124 @@ _DOGFOOD = SampleSpec(
 )
 
 
-SAMPLES: tuple[SampleSpec, ...] = (_mystery_sample(), _GAMEDEV, _COFFEE, _DOGFOOD)
+def _karsh_vale_sample() -> SampleSpec:
+    """Basic Fantasy RPG at a Pyrrhula table, with lore in three bands.
+
+    Rules text is abridged from Basic Fantasy RPG r142 (CC BY-SA 4.0, Chris Gonnerman);
+    the Vale and the Crown are original. See the sample README for attribution.
+    """
+    from eval.scenarios import basic_fantasy as bf
+
+    personas = tuple(
+        PersonaSpec(
+            key=m.key,
+            name=m.name,
+            persona_type=m.persona_type,
+            persona_md=m.persona_md,
+            axis_values=dict(m.axis_values),
+            params=dict(m.params),
+        )
+        for m in (bf.REFEREE, *bf.CAST)
+    )
+
+    def _entries(rows: tuple[tuple[str, str, str], ...]) -> tuple[EntrySpec, ...]:
+        return tuple(EntrySpec(key, title, body) for key, title, body in rows)
+
+    return SampleSpec(
+        key="karsh-vale",
+        name="The Hollow Crown of Karsh Vale — Basic Fantasy RPG",
+        workflow="rpg",
+        overlay="rpg_v1",
+        personas=personas,
+        # The primary source is the rulebook: at a table, the rules are the one thing
+        # everybody is entitled to look up.
+        source_key="bfrpg-rules",
+        source_name="Basic Fantasy RPG — the rules in play",
+        source_class="rules",
+        entries=_entries(bf.RULES),
+        extra_sources=(
+            # Band 1 -- common talk, open to the whole table.
+            SourceSpec(
+                key="karsh-vale-common",
+                name="Karsh Vale — what everyone knows",
+                class_="lore",
+                entries=_entries(bf.COMMON_LORE),
+            ),
+            # Band 2 -- guild knowledge. A stonemason's son and a college-trained elf can
+            # reach it; the halfling thief has no route to it at all.
+            SourceSpec(
+                key="karsh-vale-guild",
+                name="Guild knowledge — masons' marks and ward-cant",
+                class_="lore",
+                entries=_entries(bf.GUILD_LORE),
+                scope_key="guild_lore",
+                scope_members=("referee", "bram", "linnea"),
+            ),
+            # Band 3 -- the referee's own history. One member, so no player character can
+            # retrieve a word of it. This is the band the whole sample exists to show.
+            SourceSpec(
+                key="karsh-vale-truth",
+                name="The truth of the Hollow Crown (referee only)",
+                class_="lore",
+                entries=_entries(bf.REFEREE_LORE),
+                scope_key="referee_lore",
+                scope_members=("referee",),
+            ),
+            # misc -- the songs, the rhyme and the running joke about the cheese.
+            SourceSpec(
+                key="karsh-vale-misc",
+                name="Vale miscellany — rhymes, signs and the cheese",
+                class_="misc",
+                entries=_entries(bf.MISCELLANY),
+            ),
+        ),
+        flow_key="karsh-vale",
+        flow=_karsh_vale_flow(),
+        conduct_rules=(
+            "The referee frames and resolves; the players declare. No player character "
+            "rolls their own dice or narrates their own success, and no one -- referee "
+            "included -- speaks in another character's voice.\n\n"
+            "What a character knows is enforced by the table's scope bands, not by "
+            "good manners: if something is not in your context, your character has not "
+            "heard it, and saying so is correct play rather than a limitation to argue "
+            "around."
+        ),
+        axis_pack="rpg",
+    )
+
+
+SAMPLES: tuple[SampleSpec, ...] = (
+    _mystery_sample(),
+    _karsh_vale_sample(),
+    _GAMEDEV,
+    _COFFEE,
+    _DOGFOOD,
+)
+
+
+async def _build_scope_band(
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    key: str,
+    principal_ids: list[uuid.UUID],
+) -> None:
+    """A group scope: the levels-of-lore mechanism. Knowledge filed under this band is
+    retrievable only by the principals named here, enforced as a SQL predicate on every
+    query (INV-4) rather than asked of the model. Same machinery as secrets, one notch
+    softer -- static who-knows-what instead of a per-turn gate."""
+    from core.assembler.models import ScopeRow
+    from core.tenancy.scope import tenant_scope
+
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            ScopeRow(
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                key=key,
+                kind="group",
+                members={"principal_ids": [str(p) for p in principal_ids]},
+            )
+        )
 
 
 async def _build_source(tenant_id: uuid.UUID, workspace_id: uuid.UUID, source_spec: SourceSpec):
@@ -914,6 +1171,7 @@ async def _build_source(tenant_id: uuid.UUID, workspace_id: uuid.UUID, source_sp
     source = await create_source(
         tenant_id, key=source_spec.key, name=source_spec.name, class_=source_spec.class_
     )
+    scope_key = source_spec.scope_key
     for entry in source_spec.entries:
         await upsert_draft_entry(
             tenant_id,
@@ -923,12 +1181,12 @@ async def _build_source(tenant_id: uuid.UUID, workspace_id: uuid.UUID, source_sp
                 title=entry.title,
                 body_md=entry.body_md,
                 class_=source_spec.class_,
-                scope_key="workspace_public",
+                scope_key=scope_key,
             ),
         )
     version = await publish_version(tenant_id, source.id)
     await attach_source_to_workspace(
-        tenant_id, workspace_id, source.id, "workspace_public", version_pin=version.id
+        tenant_id, workspace_id, source.id, scope_key, version_pin=version.id
     )
     async with tenant_scope(tenant_id) as session:
         # constant: always activated, so the setting survives a deployment that has not
@@ -1218,9 +1476,28 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
         SourceSpec(spec.source_key, spec.source_name, spec.source_class, spec.entries),
         *spec.extra_sources,
     )
+    # Named scope bands first: a source attached to a band whose scope row does not
+    # exist yet would be filed where nobody can reach it.
+    for source_spec in all_sources:
+        if source_spec.scope_key == "workspace_public" or not source_spec.scope_members:
+            continue
+        await _build_scope_band(
+            tenant_id,
+            workspace_id,
+            source_spec.scope_key,
+            # The builder joins every band it authors, or export redacts the band's own
+            # content out of the bundle -- correctly, since a principal may not export
+            # what it cannot read. Membership at PLAY time is what the sample is about,
+            # and that is decided by the persona principals listed below.
+            [builder_id, *(persona_principals[k] for k in source_spec.scope_members)],
+        )
+        members = ", ".join(source_spec.scope_members)
+        print(f"    scope[{source_spec.scope_key}]: {members}")
+
     for source_spec in all_sources:
         await _build_source(tenant_id, workspace_id, source_spec)
-        print(f"    knowledge[{source_spec.class_}]: {source_spec.name}")
+        band = "" if source_spec.scope_key == "workspace_public" else f" @{source_spec.scope_key}"
+        print(f"    knowledge[{source_spec.class_}]{band}: {source_spec.name}")
 
     for secret_spec in spec.secrets:
         secret = await create_secret(
@@ -1297,7 +1574,11 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
     )
     if result.redactions:
         for redaction in result.redactions:
-            print(f"    redacted {redaction.type} {redaction.id}: {redaction.reason}")
+            # Redactions come back as plain dicts, not objects.
+            print(
+                f"    redacted {redaction.get('type')} {redaction.get('id')}: "
+                f"{redaction.get('reason')}"
+            )
     return path
 
 

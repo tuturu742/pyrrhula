@@ -488,3 +488,132 @@ async def test_import_conflicts_fork_and_never_overwrite(
     # Importing the same bundle twice forks again rather than merging into the first fork.
     second = await import_bundle(result.data, tenant_b, workspace_b, bundle_ref="colliding-again")
     assert (shared_key, f"{shared_key}-imported-2") in second.forked_keys
+
+
+async def test_scope_bands_survive_the_round_trip_and_still_gate_retrieval(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Levels of lore must travel. Knowledge exports with its ``scope_key``, but the band
+    itself used to be left behind: the source landed in the target workspace pointing at
+    a scope that did not exist and failed closed -- unreachable by everyone, including the
+    personas it was written for. Safe, and useless.
+
+    Members travel as persona keys, not principal ids (an id from the exporting tenant is
+    meaningless here), and the imported band must still *exclude* the persona who was
+    never in it.
+    """
+    from core.agents.authoring import create_agent, create_persona
+    from core.agents.models import Persona
+    from core.assembler.models import ScopeRow
+    from core.assembler.visibility import scopes_for
+    from core.knowledge.authoring import (
+        EntryFields,
+        attach_source_to_workspace,
+        create_source,
+        publish_version,
+        upsert_draft_entry,
+    )
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a = await _workspace_of(tenant_a)
+    await seed_default_scopes(tenant_a, workspace_a)
+    exporter = await _facilitator(tenant_a, workspace_a)
+
+    conn = await create_agent(
+        tenant_a, "conn", "echo", "echo-model", encryptor=_ENCRYPTOR
+    )
+    insider = await create_persona(
+        tenant_a, workspace_a, "insider", "Insider", conn.id, persona_type="participant"
+    )
+    outsider = await create_persona(
+        tenant_a, workspace_a, "outsider", "Outsider", conn.id, persona_type="participant"
+    )
+
+    async with tenant_scope(tenant_a) as session:
+        session.add(
+            ScopeRow(
+                tenant_id=tenant_a,
+                workspace_id=workspace_a,
+                key="guild_lore",
+                kind="group",
+                members={"principal_ids": [str(insider.principal_id), str(exporter.id)]},
+            )
+        )
+
+    source = await create_source(tenant_a, key="guild", name="Guild", class_="lore")
+    await upsert_draft_entry(
+        tenant_a,
+        source.id,
+        "marks",
+        EntryFields(
+            title="Masons' marks",
+            body_md="The last builders were sealing something in.",
+            class_="lore",
+            scope_key="guild_lore",
+        ),
+    )
+    version = await publish_version(tenant_a, source.id)
+    await attach_source_to_workspace(
+        tenant_a, workspace_a, source.id, "guild_lore", version_pin=version.id
+    )
+
+    result = await export_workspace(
+        exporter, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    assert any(p.startswith("scopes/") for p in open_bundle(result.data).files), (
+        "the band itself never travelled"
+    )
+
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    await seed_dev_agent(tenant_b, workspace_b)
+    # Personas only import when an encryptor is supplied -- and without personas the
+    # band would have nobody to map its member keys onto.
+    await import_bundle(
+        result.data, tenant_b, workspace_b, bundle_ref="scoped", encryptor=_ENCRYPTOR
+    )
+
+    async with tenant_scope(tenant_b) as session:
+        band = await session.scalar(
+            select(ScopeRow).where(
+                ScopeRow.workspace_id == workspace_b, ScopeRow.key == "guild_lore"
+            )
+        )
+        assert band is not None, "the imported workspace has no guild_lore band"
+        personas = {
+            row.key: row
+            for row in (
+                await session.execute(
+                    select(Persona).where(Persona.workspace_id == workspace_b)
+                )
+            ).scalars()
+        }
+
+    members = band.members.get("principal_ids", [])
+    assert str(personas["insider"].principal_id) in members, "the insider lost their band"
+    assert str(personas["outsider"].principal_id) not in members, (
+        "import widened the band to a persona who was never in it"
+    )
+
+    # And the band still gates retrieval, per principal, in the target tenant.
+    phase = PhaseSpec(
+        label_key="turn",
+        actors=[ActorSpec(persona_type="participant", mode="generate")],
+        visibility=VisibilitySpec(
+            knowledge_classes=["lore"],
+            scopes=["workspace_public", "guild_lore"],
+            entity_fields="all",
+            secrets="none",
+        ),
+        budget=BudgetSpec(ratio={"lore": 1.0}, max_tokens=4000),
+    )
+    insider_scopes = await scopes_for(
+        tenant_b, personas["insider"].principal_id, workspace_b, phase.visibility, None
+    )
+    outsider_scopes = await scopes_for(
+        tenant_b, personas["outsider"].principal_id, workspace_b, phase.visibility, None
+    )
+    assert "guild_lore" in insider_scopes
+    assert "guild_lore" not in outsider_scopes, (
+        "the band must still exclude the persona who was never a member"
+    )

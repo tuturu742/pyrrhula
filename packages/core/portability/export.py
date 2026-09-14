@@ -38,7 +38,7 @@ from sqlalchemy import text as sa_text
 
 from core.agents.models import Persona
 from core.assembler.models import ContextManifestRow
-from core.assembler.visibility import EXPORT, scopes_for
+from core.assembler.visibility import EXPORT, portable_scope_bands, scopes_for
 from core.audit.service import AuditService
 from core.behavior.repo import list_behavior_profile_versions
 from core.entities.repo import list_latest_schemas
@@ -230,6 +230,7 @@ async def export_workspace(
         await _add_entities(writer, tenant_id, workspace_id, visible)
     if "personas" in opts.sections:
         await _add_agents(writer, tenant_id, workspace_id)
+        await _add_scopes(writer, tenant_id, workspace_id)
     if "connections" in opts.sections:
         await _add_connections(writer, tenant_id, workspace_id, encryptor=encryptor)
     if "process" in opts.sections:
@@ -509,6 +510,52 @@ async def _add_agents(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: 
                     }
                     for v in versions
                 ],
+            },
+        )
+
+
+async def _add_scopes(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> None:
+    """Group scope rows -- the "levels of lore" bands.
+
+    Knowledge already travels with its ``scope_key``, but without the band itself a
+    restricted source lands in the target workspace pointing at a scope that does not
+    exist, and fails closed: unreachable by everyone, including the personas it was
+    written for. That is safe and useless.
+
+    Members travel as **persona keys**, never principal ids: a principal id is
+    meaningless in the importing tenant, while a persona key is exactly what the importer
+    has just recreated. The seeded default scopes are re-created by
+    the importer itself, so only non-default bands are carried; private compartments are
+    a convention rather than rows and are never exported.
+    """
+    bands = await portable_scope_bands(tenant_id, workspace_id)
+    if not bands:
+        return
+
+    async with tenant_scope(tenant_id) as session:
+        personas = list(
+            (
+                await session.execute(select(Persona).where(Persona.workspace_id == workspace_id))
+            ).scalars()
+        )
+        key_by_principal = {str(p.principal_id): p.key for p in personas}
+
+    for band in bands:
+        # A member with no persona in this workspace (the human builder, an operator) has
+        # no portable identity; drop it rather than invent one. The importer re-admits
+        # whoever performs the import, so an imported band is never orphaned.
+        persona_keys = [
+            key_by_principal[pid]
+            for pid in band["principal_ids"]  # type: ignore[union-attr]
+            if pid in key_by_principal
+        ]
+        writer.add_json(
+            f"scopes/scope_{band['key']}.json",
+            {
+                "key": band["key"],
+                "kind": band["kind"],
+                "persona_keys": persona_keys,
+                "roles": band["roles"],
             },
         )
 

@@ -310,6 +310,9 @@ async def import_bundle(
     await _import_personas(
         files, tenant_id, workspace_id, report, encryptor=encryptor, manifest=manifest
     )
+    # After personas (their principals are what a band's membership resolves to) and
+    # before nothing in particular -- knowledge already landed carrying its scope_key.
+    await _import_scopes(files, tenant_id, workspace_id, report)
     await _import_process(files, tenant_id, workspace_id, report)
     await _import_vocabulary(files, tenant_id, workspace_id, report)
     # Last, and deliberately: a secret is attached to a persona or an entity and held by
@@ -889,6 +892,78 @@ def _read_jsonl(files: dict[str, bytes], path: str) -> list[dict[str, Any]]:
 # The sections export has always written and import used to walk past. A bundle whose
 # flow, vocabulary and secrets evaporate on arrival is not a portable workspace: it is a
 # pile of knowledge entries with no way to run them.
+
+
+
+async def _import_scopes(
+    files: dict[str, bytes],
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    report: ImportReport,
+) -> None:
+    """Recreate the bundle's group scope bands -- the "levels of lore".
+
+    Knowledge arrives already carrying its ``scope_key``; without the band itself that
+    knowledge points at a scope that does not exist and fails closed, unreachable by
+    everyone including the personas it was written for. Members travel as persona keys
+    and are resolved to THIS workspace's principals, because a principal id from the
+    exporting tenant means nothing here.
+
+    Additive and idempotent: a band the target workspace already defines is left exactly
+    as it is (re-importing must not quietly widen who can read a band), and a member
+    whose persona did not travel is skipped rather than invented.
+    """
+    paths = sorted(p for p in files if p.startswith("scopes/") and p.endswith(".json"))
+    if not paths:
+        return
+
+    from sqlalchemy import select as sa_select
+
+    from core.agents.models import Persona
+    from core.assembler.models import ScopeRow
+    from core.tenancy.scope import tenant_scope
+
+    async with tenant_scope(tenant_id) as session:
+        personas = list(
+            (
+                await session.execute(
+                    sa_select(Persona).where(Persona.workspace_id == workspace_id)
+                )
+            ).scalars()
+        )
+        principal_by_key = {p.key: str(p.principal_id) for p in personas}
+        existing = set(
+            (
+                await session.execute(
+                    sa_select(ScopeRow.key).where(ScopeRow.workspace_id == workspace_id)
+                )
+            ).scalars()
+        )
+
+        for path in paths:
+            record = _json(files[path].decode())
+            key = str(record.get("key") or "").strip()
+            if not key or key in existing:
+                continue
+            principal_ids = [
+                principal_by_key[k]
+                for k in (record.get("persona_keys") or [])
+                if k in principal_by_key
+            ]
+            session.add(
+                ScopeRow(
+                    tenant_id=tenant_id,
+                    workspace_id=workspace_id,
+                    key=key,
+                    kind=str(record.get("kind") or "group"),
+                    members={
+                        "principal_ids": principal_ids,
+                        "roles": list(record.get("roles") or []),
+                    },
+                )
+            )
+            existing.add(key)
+            report.imported.append(f"scope:{key} ({len(principal_ids)} member(s))")
 
 
 async def _import_process(
