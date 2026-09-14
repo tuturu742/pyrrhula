@@ -668,3 +668,48 @@ async def test_an_unrelated_failure_still_raises(monkeypatch: pytest.MonkeyPatch
     )
     with pytest.raises(Exception, match="AuthenticationError"):
         [c async for c in provider.generate(req)]
+
+
+async def test_the_reasoning_retry_does_not_require_locally_declared_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The endpoint is the authority on what it was sent. A workspace's remote tools can
+    reach a request without the phase declaring any, so gating this retry on a local
+    ``tools`` variable made it stop firing for exactly the turns that needed it -- seen
+    live as an RPG session that paused every time the players took a turn."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception(  # noqa: TRY002
+                "litellm.BadRequestError: Function tools with reasoning_effort are not "
+                "supported for gpt-5.6-terra. Set reasoning_effort to 'none'."
+            )
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="Bram lifts the lantern.", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "your move"}],
+        purpose="generation",
+        # No tools on the request at all -- the refusal still arrives.
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "Bram lifts the lantern."
+    assert len(calls) == 2
+    assert calls[1]["reasoning_effort"] == "none"

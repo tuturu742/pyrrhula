@@ -479,6 +479,7 @@ def _karsh_vale_flow() -> dict:
                     "history_ratio": 0.3,
                 },
                 "tools": [],
+                "remote_tools": [],
                 "prompt": (
                     "Frame the next scene for the party. Two or three sentences of what "
                     "they see, hear and smell -- then stop and ask what they do. Address "
@@ -512,6 +513,10 @@ def _karsh_vale_flow() -> dict:
                     "history_ratio": 0.35,
                 },
                 "tools": [],
+                # The players reach no tool at all. Without an explicit empty list a
+                # phase inherits every remote tool the workspace has registered -- which
+                # is how the table's dice server ended up offered to the suspects.
+                "remote_tools": [],
                 "prompt": (
                     "Say what your character does or says, in your own voice and briefly. "
                     "Declare the attempt only -- never roll dice, never state whether you "
@@ -536,6 +541,7 @@ def _karsh_vale_flow() -> dict:
                     "history_ratio": 0.3,
                 },
                 "tools": ["dice_roller"],
+                "remote_tools": ["dice_roller", "bfrpg_dice"],
                 "prompt": (
                     "Resolve what the players just attempted. Name the rule you are "
                     "invoking and the target number, CALL THE DICE TOOL rather than "
@@ -563,6 +569,7 @@ def _karsh_vale_flow() -> dict:
                     "history_ratio": 0.4,
                 },
                 "tools": [],
+                "remote_tools": [],
                 "prompt": (
                     "Bring this session to a resting point. Say where the party stands, "
                     "what they have learned and what it has cost them, and leave the "

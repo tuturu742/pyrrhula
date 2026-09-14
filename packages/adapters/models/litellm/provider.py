@@ -249,9 +249,14 @@ def _unsupported_params(exc: Exception) -> list[str]:
 
 
 def _rejects_tools_with_reasoning(exc: Exception) -> bool:
-    """Some chat-completions endpoints (observed: gpt-5.6-luna) refuse function tools
-    while a reasoning_effort is in play and say to set it to 'none'. Matched on the
-    parameter names, not one vendor's sentence."""
+    """Some chat-completions endpoints (observed: gpt-5.6-luna, gpt-5.6-terra) refuse
+    function tools while a reasoning_effort is in play and say to set it to 'none'.
+    Matched on the parameter names, not one vendor's sentence.
+
+    The caller must NOT also require its own ``tools`` to be truthy before retrying: the
+    endpoint is the authority on what it was sent (a workspace's remote tools can reach a
+    request without the phase listing any), and gating on a local variable is how this
+    retry silently stopped firing for exactly the turns that needed it."""
     text = str(exc).lower()
     return "reasoning_effort" in text and "tool" in text
 
@@ -320,8 +325,7 @@ class LiteLLMModelProvider:
                 # that once, unless the connection's params already chose a value -- then
                 # the choice is deliberate and the error is the operator's to see.
                 elif (
-                    tools
-                    and _rejects_tools_with_reasoning(exc)
+                    _rejects_tools_with_reasoning(exc)
                     and "reasoning_effort" not in dict(req.params or {})
                 ):
                     this_call = {**this_call, "reasoning_effort": "none"}
