@@ -151,6 +151,18 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
   );
   const [topP, setTopP] = useState(String(existingProfile?.params.top_p ?? ""));
   const [maxTokens, setMaxTokens] = useState(String(existingProfile?.params.max_tokens ?? ""));
+  // Everything else in params: raw provider knobs (reasoning_effort, num_ctx, ...) as
+  // JSON. This is what lets one deployment span models with incompatible defaults --
+  // e.g. some endpoints refuse function tools unless reasoning_effort is "none".
+  const [extraParams, setExtraParams] = useState(() => {
+    const rest = Object.fromEntries(
+      Object.entries(existingProfile?.params ?? {}).filter(
+        ([k]) => !["temperature", "top_p", "max_tokens"].includes(k),
+      ),
+    );
+    return Object.keys(rest).length ? JSON.stringify(rest, null, 2) : "";
+  });
+  const [extraParamsError, setExtraParamsError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [apiBase, setApiBase] = useState(existingProfile?.api_base ?? "");
   const [fallbackProfileId, setFallbackProfileId] = useState(
@@ -215,6 +227,15 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
   const save = useMutation({
     mutationFn: async () => {
       const params: Record<string, unknown> = {};
+      if (extraParams.trim()) {
+        try {
+          Object.assign(params, JSON.parse(extraParams) as Record<string, unknown>);
+        } catch {
+          setExtraParamsError("Extra params must be a JSON object.");
+          throw new Error("invalid extra params");
+        }
+      }
+      setExtraParamsError(null);
       if (temperature !== "") params.temperature = Number(temperature);
       if (topP !== "") params.top_p = Number(topP);
       if (maxTokens !== "") params.max_tokens = Number(maxTokens);
@@ -401,6 +422,23 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
           />
         </Field>
       </div>
+
+      <Field
+        label="Extra provider params (JSON)"
+        hint={
+          extraParamsError ??
+          'Passed through to the provider as-is — e.g. {"reasoning_effort": "none"} for ' +
+            "endpoints that refuse function tools while reasoning is on."
+        }
+      >
+        <textarea
+          className="min-h-16 w-full rounded-md border border-input bg-transparent px-2 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          value={extraParams}
+          onChange={(e) => setExtraParams(e.target.value)}
+          placeholder='{"reasoning_effort": "none"}'
+          spellCheck={false}
+        />
+      </Field>
 
       <div className="grid grid-cols-2 gap-2">
         <Field

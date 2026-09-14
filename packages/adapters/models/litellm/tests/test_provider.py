@@ -287,3 +287,108 @@ async def test_generate_structured_does_not_retry_unrelated_failures(
     with pytest.raises(Exception, match="rate limit"):
         await provider.generate_structured(req, _Draft)
     assert len(calls) == 1
+
+
+# ── connection params passthrough + the tools/reasoning fallback ─────────────────────
+def test_merge_connection_params_precedence_and_reserved_keys() -> None:
+    """A connection's params fill gaps and never override what the platform manages.
+    None counts as unset, so a connection-level temperature default lands when the
+    request has no opinion -- and a request's explicit value always wins."""
+    from adapters.models.litellm.provider import _merge_connection_params
+
+    merged = _merge_connection_params(
+        {"temperature": None, "max_tokens": 900},
+        {
+            "temperature": 0.3,  # fills the gap
+            "max_tokens": 5,  # loses to the explicit request value
+            "reasoning_effort": "none",  # passes through
+            "api_key": "sk-steal",  # managed: dropped
+            "model": "other/model",  # managed: dropped
+            "tools": [],  # managed: dropped
+        },
+    )
+    assert merged["temperature"] == 0.3
+    assert merged["max_tokens"] == 900
+    assert merged["reasoning_effort"] == "none"
+    assert "api_key" not in merged and "model" not in merged and "tools" not in merged
+
+
+async def test_generate_retries_without_reasoning_when_tools_are_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gpt-5.6-luna's chat-completions endpoint refuses function tools while a
+    reasoning_effort is in play and says to set it to 'none'. Verified live: the default
+    call fails, the same call with reasoning_effort='none' succeeds. The retry must do
+    exactly that -- once, and only for this failure."""
+    import litellm
+
+    from core.ports.model_provider import ToolSpec
+
+    calls: list[dict] = []
+
+    chunk = MagicMock()
+    chunk.choices = [
+        MagicMock(delta=MagicMock(content="hi", tool_calls=None), finish_reason="stop")
+    ]
+    chunk.usage = None
+
+    async def _fake_stream():
+        yield chunk
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise Exception(
+                "OpenAIException - Function tools with reasoning_effort are not supported "
+                "for gpt-5.6-luna in /v1/chat/completions. To use function tools, use "
+                "/v1/responses or set reasoning_effort to 'none'."
+            )
+        return _fake_stream()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-luna",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        tools=(ToolSpec(name="probe", description="x", parameters={"type": "object"}),),
+    )
+    async for _ in provider.generate(req):
+        pass
+
+    assert len(calls) == 2, "one refused attempt, then the retry"
+    assert "reasoning_effort" not in calls[0]
+    assert calls[1]["reasoning_effort"] == "none"
+
+
+async def test_no_retry_when_the_connection_chose_a_reasoning_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """params: {reasoning_effort: high} is a deliberate choice; masking the provider's
+    refusal by silently downgrading it would hide the operator's own misconfiguration."""
+    import litellm
+
+    from core.ports.model_provider import ToolSpec
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        raise Exception("Function tools with reasoning_effort are not supported")
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-luna",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        tools=(ToolSpec(name="probe", description="x", parameters={"type": "object"}),),
+        params={"reasoning_effort": "high"},
+    )
+    with pytest.raises(Exception, match="reasoning_effort"):
+        async for _ in provider.generate(req):
+            pass
+    assert len(calls) == 1
+    assert calls[0]["reasoning_effort"] == "high", "the connection's choice was sent"

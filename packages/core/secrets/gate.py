@@ -140,6 +140,7 @@ def _build_gate_request(
     egress_policy: dict[str, list[str]] | None = None,
     axis_definitions: Sequence[object] = (),
     api_key: str | None = None,
+    params: dict[str, object] | None = None,
 ) -> GenerationRequest:
     """The request payload contains `{secret_id, gist}` pairs and nothing else about each
     secret -- structurally, since `CandidateSecret` has no `content` field for this
@@ -195,6 +196,7 @@ def _build_gate_request(
         api_base=api_base,
         api_key=api_key,
         egress_policy=egress_policy or {},
+        params=dict(params or {}),
     )
 
 
@@ -291,6 +293,7 @@ async def run_disclosure_gate(
         addressed_by=addressed_by,
         model=model_string,
         api_base=agent.api_base,
+        params=dict(agent.params or {}),
         egress_policy=egress_policy,
         axis_definitions=axis_definitions,
         api_key=api_key,

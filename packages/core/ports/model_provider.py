@@ -96,6 +96,14 @@ class GenerationRequest:
     # for a local provider (Ollama), and for a cloud provider it falls back to the process
     # env (e.g. ANTHROPIC_API_KEY) exactly as before. Never logged, never persisted.
     api_key: str | None = None
+    # Per-``Agent`` provider passthrough knobs (``agent.params``): whatever the target
+    # endpoint needs that the platform has no opinion on -- ``reasoning_effort``,
+    # ``top_p``, ``extra_headers``, an ``extra_body``. Adapters forward them to the SDK
+    # after stripping the keys the platform itself manages (model, messages, tools,
+    # credentials); an explicit request field always wins over a params entry. This is
+    # what lets one deployment span models with incompatible defaults -- a connection
+    # says "reasoning_effort: none" once instead of the adapter growing a vendor case.
+    params: Mapping[str, object] = field(default_factory=dict)
 
 
 class ModelProvider(Protocol):

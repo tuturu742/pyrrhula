@@ -176,6 +176,7 @@ async def draft_override(
         purpose=_REWRITE_PURPOSE,
         max_tokens=800,
         api_base=agent.api_base,
+        params=dict(agent.params or {}),
         api_key=api_key,
     )
 

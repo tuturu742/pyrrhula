@@ -104,6 +104,7 @@ async def _call_prose(
         purpose=_PURPOSE,
         max_tokens=max_tokens,
         api_base=profile.api_base,
+        params=dict(profile.params or {}),
         api_key=api_key,
     )
     start = time.monotonic()
@@ -141,6 +142,7 @@ async def _call_graph(
         purpose=_PURPOSE,
         max_tokens=1200,
         api_base=profile.api_base,
+        params=dict(profile.params or {}),
         api_key=api_key,
     )
     start = time.monotonic()

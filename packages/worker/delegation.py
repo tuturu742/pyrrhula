@@ -168,6 +168,7 @@ async def _codegen_profile_for(tenant_id: uuid.UUID, assignee: Any | None) -> di
     return {
         "model": f"{profile.provider}/{profile.model}",
         "api_base": profile.api_base,
+        "params": dict(profile.params or {}),
         "credential_ref": profile.credential_ref,
         "tenant_id": str(tenant_id),
     }
@@ -189,6 +190,7 @@ async def _supervisor_codegen_profile(
     return {
         "model": f"{profile.provider}/{profile.model}",
         "api_base": profile.api_base,
+        "params": dict(profile.params or {}),
         "credential_ref": profile.credential_ref,
         "tenant_id": str(tenant_id),
     }

@@ -170,6 +170,7 @@ async def _call_provider_with_retry(
                     tools=tools,
                     cache_boundary_index=cache_boundary_index,
                     api_base=candidate.api_base,
+                    params=dict(candidate.params or {}),
                     api_key=(api_keys or {}).get(candidate.id),
                     egress_policy=egress_policy or {},
                 )

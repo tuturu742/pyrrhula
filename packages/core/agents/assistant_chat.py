@@ -525,6 +525,7 @@ async def _chat_inner(
             max_tokens=900,
             tools=registry.specs(),
             api_base=profile.api_base,
+            params=dict(profile.params or {}),
             api_key=api_key,
         )
         pieces: list[str] = []

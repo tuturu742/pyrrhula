@@ -245,6 +245,7 @@ async def assist(
         purpose=_TASK_PURPOSES[task],
         max_tokens=900,
         api_base=profile.api_base,
+        params=dict(profile.params or {}),
         api_key=api_key,
     )
 

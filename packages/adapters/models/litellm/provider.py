@@ -203,6 +203,39 @@ def _dispatch_model(model: str, has_tools: bool) -> str:
     return model
 
 
+# Keys the platform manages itself; a connection's params may not override them.
+# api_key/api_base come from the sealed credential and the profile's own field, tools
+# and response_format from the request -- letting params replace any of these would turn
+# a convenience knob into a way to reroute calls.
+_MANAGED_KEYS = frozenset(
+    {"model", "messages", "tools", "api_key", "api_base", "stream", "response_format", "n"}
+)
+
+
+def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, Any]:
+    """Connection passthrough knobs, under the platform's values.
+
+    Managed keys are dropped; for everything else an explicit request value wins and a
+    params entry fills the gaps (None counts as unset -- temperature is passed as None
+    when the request has no opinion, and a connection default should be able to supply
+    one).
+    """
+    for key, value in dict(params or {}).items():
+        if key in _MANAGED_KEYS:
+            continue
+        if kwargs.get(key) is None:
+            kwargs[key] = value
+    return kwargs
+
+
+def _rejects_tools_with_reasoning(exc: Exception) -> bool:
+    """Some chat-completions endpoints (observed: gpt-5.6-luna) refuse function tools
+    while a reasoning_effort is in play and say to set it to 'none'. Matched on the
+    parameter names, not one vendor's sentence."""
+    text = str(exc).lower()
+    return "reasoning_effort" in text and "tool" in text
+
+
 class LiteLLMModelProvider:
     async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
         check_egress(req.purpose, req.model, req.egress_policy)
@@ -228,18 +261,38 @@ class LiteLLMModelProvider:
             # the per-request window; deployment-tunable, generous default.
             extra["num_ctx"] = int(os.environ.get("PYRRHULA_OLLAMA_NUM_CTX", "16384"))
         messages = _anthropic_turn_shim(req.model, messages)
-        response = await litellm.acompletion(
+        kwargs: dict[str, Any] = _merge_connection_params(
+            {
+                "temperature": req.temperature,
+                "max_tokens": req.max_tokens,
+            },
+            req.params,
+        )
+        call = dict(
             model=_dispatch_model(req.model, bool(tools)),
             messages=messages,
-            temperature=req.temperature,
-            max_tokens=req.max_tokens,
             tools=tools,
             api_base=req.api_base,
             api_key=req.api_key,
             stream=True,
             stream_options={"include_usage": True},
             **extra,
+            **kwargs,
         )
+        try:
+            response = await litellm.acompletion(**call)
+        except Exception as exc:
+            # Endpoints that refuse function tools while a reasoning effort is in play
+            # (observed: gpt-5.6-luna) tell the caller to set it to 'none'. Do that once,
+            # unless the connection's params already chose a value -- then the choice is
+            # deliberate and the error is the operator's to see.
+            if (
+                not tools
+                or not _rejects_tools_with_reasoning(exc)
+                or "reasoning_effort" in dict(req.params or {})
+            ):
+                raise
+            response = await litellm.acompletion(**{**call, "reasoning_effort": "none"})
         # Accumulates streamed tool-call argument fragments by index -- see module
         # docstring. Never yielded mid-accumulation: only once, on the chunk carrying
         # finish_reason == 'tool_calls'.
@@ -315,12 +368,15 @@ class LiteLLMModelProvider:
             # Same silent-empty-generation hazard as generate(): default num_ctx is 4096.
             extra["num_ctx"] = int(os.environ.get("PYRRHULA_OLLAMA_NUM_CTX", "16384"))
         messages = _anthropic_turn_shim(model, list(req.messages))
-        common: dict[str, Any] = {
-            "model": model,
-            "api_base": req.api_base,
-            "api_key": req.api_key,
-            **extra,
-        }
+        common: dict[str, Any] = _merge_connection_params(
+            {
+                "model": model,
+                "api_base": req.api_base,
+                "api_key": req.api_key,
+                **extra,
+            },
+            req.params,
+        )
         try:
             response = await litellm.acompletion(
                 messages=messages, response_format=schema, **common

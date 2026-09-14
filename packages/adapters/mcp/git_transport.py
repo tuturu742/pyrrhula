@@ -201,6 +201,7 @@ class GitMcpTransport:
         return make_model_codegen(
             model=str(profile["model"]),
             api_base=profile.get("api_base") or None,
+            params=dict(profile.get("params") or {}),
             api_key=api_key,
         )
 

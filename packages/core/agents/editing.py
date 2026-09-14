@@ -87,6 +87,7 @@ async def propose_persona_edit(
         purpose=_PURPOSE,
         max_tokens=500,
         api_base=agent.api_base,
+        params=dict(agent.params or {}),
         api_key=api_key,
     )
 

@@ -121,6 +121,7 @@ async def propose_schema_edit(
         purpose=_PURPOSE,
         max_tokens=1500,
         api_base=agent.api_base,
+        params=dict(agent.params or {}),
     )
 
     start = time.monotonic()

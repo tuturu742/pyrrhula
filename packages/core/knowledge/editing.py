@@ -119,6 +119,7 @@ async def propose_knowledge_edit(
         purpose=_PURPOSE,
         max_tokens=800,
         api_base=agent.api_base,
+        params=dict(agent.params or {}),
     )
 
     start = time.monotonic()

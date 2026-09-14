@@ -338,6 +338,7 @@ async def _call(
         purpose=_PURPOSE,
         max_tokens=max(64, max_tokens),
         api_base=agent.api_base,
+        params=dict(agent.params or {}),
     )
     start = time.monotonic()
     result = await provider.generate_structured(req, schema)

@@ -522,6 +522,7 @@ async def summarise_history(
                 purpose=_PURPOSE,
                 max_tokens=max(64, max_tokens),
                 api_base=agent.api_base,
+                params=dict(agent.params or {}),
             )
             start = time.monotonic()
             chunk_result = await provider.generate_structured(req, _PhaseSummary)
@@ -552,6 +553,7 @@ async def summarise_history(
             purpose=_PURPOSE,
             max_tokens=max(64, max_tokens),
             api_base=agent.api_base,
+            params=dict(agent.params or {}),
         )
         start = time.monotonic()
         reduced = await provider.generate_structured(reduce_req, _ReducedSummary)

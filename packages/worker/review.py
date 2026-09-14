@@ -249,6 +249,7 @@ async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
         purpose=_PURPOSE,
         max_tokens=800,
         api_base=profile.api_base,
+        params=dict(profile.params or {}),
         api_key=await resolve_connection_api_key(
             tenant_id, profile.credential_ref, encryptor=get_encryptor()
         ),
@@ -444,6 +445,7 @@ async def handle_merge_order(payload: dict[str, Any]) -> dict[str, Any]:
         purpose=_PURPOSE,
         max_tokens=500,
         api_base=profile.api_base,
+        params=dict(profile.params or {}),
         api_key=await resolve_connection_api_key(
             tenant_id, profile.credential_ref, encryptor=get_encryptor()
         ),

@@ -107,6 +107,7 @@ def make_model_codegen(
     *,
     model: str,
     api_base: str | None = None,
+    params: dict[str, object] | None = None,
     api_key: str | None = None,
     # Reasoning models spend this budget on thinking BEFORE emitting any content, and the
     # thinking is not part of the returned text. At 4000 a local qwen3.8 asked for a full
@@ -136,6 +137,7 @@ def make_model_codegen(
             temperature=0.2,
             max_tokens=max_tokens,
             api_base=api_base,
+            params=dict(params or {}),
             api_key=api_key,
             purpose="delegation",
         )
@@ -170,6 +172,7 @@ def make_model_codegen(
                 temperature=0.2,
                 max_tokens=max_tokens,
                 api_base=api_base,
+                params=dict(params or {}),
                 purpose="delegation",
             )
             second = await run(repair)

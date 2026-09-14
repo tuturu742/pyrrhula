@@ -616,6 +616,7 @@ async def run_one_persona_turn(
                 messages=nudged,
                 purpose="generation",
                 api_base=persona_agent.api_base,
+                params=dict(persona_agent.params or {}),
                 egress_policy=await load_egress_policy(tenant_id),
             )
             parts: list[str] = []
