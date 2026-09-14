@@ -186,7 +186,9 @@ def _facilitator_led_flow(
                 "Answer in your own voice, as yourself. Say only what this character "
                 "would say aloud here. Do not narrate anyone else's thoughts, do not "
                 "invent what another character said, and do not write your own name "
-                "before your line -- the transcript already says who is speaking.",
+                "before your line -- the transcript already says who is speaking. "
+                "Never repeat a sentence someone at this table has already said; if "
+                "you truly have nothing new, say so in one short line of your own.",
                 # Managed mode only gates a phase that says it is conductable; without
                 # this the scheduler keeps running and 'let me pick who answers next'
                 # silently does nothing.
@@ -990,18 +992,28 @@ TOOL = {
 
 
 def call(request: str) -> dict:
+    import datetime
+
     request = request.strip()
+    stamp = datetime.datetime.now().strftime("%H:%M:%S")
     if request not in RESULTS:
+        print(f"[{stamp}] REFUSED unknown request {request!r}", flush=True)
         return {"error": "unknown_request", "available": sorted(RESULTS)}
     with _lock:
         if request in _used:  # a repeat does not spend budget
+            print(
+                f"[{stamp}] repeat: {request} (budget unchanged: {len(_used)}/{LIMIT})",
+                flush=True,
+            )
             return {"request": request, "result": RESULTS[request]}
         if len(_used) >= LIMIT:
+            print(f"[{stamp}] REFUSED {request}: budget exhausted ({_used})", flush=True)
             return {
                 "error": "budget_exhausted",
                 "message": f"only {LIMIT} lab requests are allowed; you have used {_used}",
             }
         _used.append(request)
+    print(f"[{stamp}] answered: {request} (budget: {len(_used)}/{LIMIT})", flush=True)
     return {"request": request, "result": RESULTS[request]}
 
 
