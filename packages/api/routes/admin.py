@@ -397,6 +397,23 @@ async def create_tenant_endpoint(body: CreateTenantRequest) -> dict[str, str]:
         owner_principal_id = await _create_user(
             tenant_id, body.owner_email, body.owner_password, body.owner_display_name, "owner"
         )
+        # The same grant self-serve signup makes, for the same reason: conducting,
+        # entity work and MCP registration are workspace-gated, and a tenant role alone
+        # satisfies none of them. Without this an admin-created owner landed in a
+        # default workspace nobody was a member of and hit "not a member of this
+        # workspace" on the first thing they tried.
+        from core.tenancy.models import WorkspaceMembership
+        from core.tenancy.scope import tenant_scope as _tenant_scope
+
+        async with _tenant_scope(tenant_id) as session:
+            session.add(
+                WorkspaceMembership(
+                    tenant_id=tenant_id,
+                    workspace_id=workspace_id,
+                    principal_id=owner_principal_id,
+                    role="steward",
+                )
+            )
     return {
         "tenant_id": str(tenant_id),
         "workspace_id": str(workspace_id),

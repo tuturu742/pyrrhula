@@ -83,7 +83,26 @@ def test_create_tenant_and_user_then_login(
     )
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
-    assert api.get("/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    auth = {"Authorization": f"Bearer {token}", "X-Pyrrhula-Tenant": slug}
+    assert api.get("/me", headers=auth).status_code == 200
+
+    # ... and is a MEMBER of the default workspace, not just a tenant owner. Signup
+    # granted this and the admin path did not, so an admin-created owner hit "not a
+    # member of this workspace" on MCP registration, conducting, everything
+    # workspace-gated -- in a workspace with no members at all.
+    workspaces = api.get("/workspaces", headers=auth).json()
+    assert workspaces, "the seeded default workspace should list"
+    put = api.put(
+        "/mcp-servers",
+        json={
+            "workspace_id": workspaces[0]["id"],
+            "key": "evidence",
+            "url": "http://127.0.0.1:9",
+            "enabled_tools": ["evidence_check"],
+        },
+        headers=auth,
+    )
+    assert put.status_code == 200, put.text
 
 
 def test_two_tenants_can_share_an_owner_email(
