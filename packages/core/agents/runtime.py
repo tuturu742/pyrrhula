@@ -419,11 +419,15 @@ def strip_self_attribution(content: str, author_name: str) -> str:
     # an exact match let straight through. A prefix is self-attribution when every word of
     # it is a word of this speaker's own name. Another character's name fails the test
     # (addressing someone is dialogue), and ordinary prose before a colon fails it too.
+    # Markdown emphasis around the name -- "**Petra Lind:** ..." -- is the same
+    # self-attribution wearing bold (observed live from a supervisor turn); strip the
+    # emphasis characters before comparing words and from what follows the colon.
     name_words = {w.lower() for w in name.replace(":", " ").split()}
-    prefix_words = head[:colon].split()
+    prefix_words = [w.strip("*_`") for w in head[:colon].split()]
+    prefix_words = [w for w in prefix_words if w]
     if not prefix_words or not all(w.lower() in name_words for w in prefix_words):
         return content
-    remainder = head[colon + 1 :].lstrip()
+    remainder = head[colon + 1 :].lstrip().lstrip("*_`").lstrip()
     return remainder or content
 
 

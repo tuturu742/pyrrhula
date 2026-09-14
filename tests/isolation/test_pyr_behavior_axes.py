@@ -143,3 +143,85 @@ async def test_reimporting_into_the_same_workspace_does_not_duplicate(
     assert any("(key exists)" in s for s in reports[1].skipped), (
         "the second import should report the personas it left alone"
     )
+
+
+async def test_a_reimport_heals_secrets_the_first_pass_was_refused(
+    db_available: None,
+) -> None:
+    """The live failure: a tenant made through the admin console had an owner with no
+    workspace membership, so every create_secret in the import was refused authorship --
+    silently, into the skip list -- and the cast played a murder mystery with nothing to
+    hide (0 secrets, 0 gate decisions). Re-importing after the membership exists must
+    attach the secrets to the personas already there, and doing it twice must not double
+    them.
+    """
+    import pathlib as _pathlib
+
+    from sqlalchemy import select
+
+    from adapters.encryptor.identity import IdentityEncryptor
+    from adapters.moderation.allow_all import AllowAllModerationProvider
+    from adapters.permission.role_permission import RolePermissionService
+    from core.plugins.service import ensure_default_synced
+    from core.portability.import_ import import_bundle
+    from core.secrets.models import SecretRow
+    from core.tenancy.models import WorkspaceMembership
+    from core.tenancy.scope import tenant_scope
+
+    bundle = _pathlib.Path(
+        "/home/okurok/code/pyrrhula-samples/hagnaryd-mystery/hagnaryd-mystery.pyr"
+    )
+    if not bundle.is_file():
+        pytest.skip("sample bundle not present on this machine")
+
+    await ensure_default_synced()
+    tenant_id, owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"pyrheal-{uuid.uuid4().hex[:8]}"
+    )
+    # Reproduce the broken state: the importer holds NO workspace membership.
+    async with tenant_scope(tenant_id) as session:
+        for row in (await session.execute(select(WorkspaceMembership))).scalars().all():
+            await session.delete(row)
+
+    data = bundle.read_bytes()
+    perms = RolePermissionService()
+    first = await import_bundle(
+        data,
+        tenant_id,
+        workspace_id,
+        bundle_ref="heal",
+        encryptor=IdentityEncryptor(),
+        importing_principal_id=owner_id,
+        permission_service=perms,
+        moderation_provider=AllowAllModerationProvider(),
+    )
+    async with tenant_scope(tenant_id) as session:
+        after_first = len((await session.execute(select(SecretRow))).scalars().all())
+    assert after_first == 0, "the broken import should refuse every secret"
+    assert any("secret" in x for x in first.skipped)
+
+    # The membership arrives (the backfill / the fixed admin path), and a RE-IMPORT
+    # into the same workspace heals: resident personas are mapped, secrets attach.
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            WorkspaceMembership(
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                principal_id=owner_id,
+                role="steward",
+            )
+        )
+    for _ in range(2):  # and a third pass must not double them
+        await import_bundle(
+            data,
+            tenant_id,
+            workspace_id,
+            bundle_ref="heal",
+            encryptor=IdentityEncryptor(),
+            importing_principal_id=owner_id,
+            permission_service=perms,
+            moderation_provider=AllowAllModerationProvider(),
+        )
+    async with tenant_scope(tenant_id) as session:
+        secrets = (await session.execute(select(SecretRow))).scalars().all()
+    assert len(secrets) == 11, f"expected the case's 11 secrets, got {len(secrets)}"

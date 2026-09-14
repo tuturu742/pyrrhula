@@ -69,3 +69,16 @@ def test_a_shortened_form_of_the_own_name_is_also_removed() -> None:
 def test_a_prefix_mixing_in_foreign_words_is_dialogue() -> None:
     said = "Dear Petra: you are wrong."
     assert strip_self_attribution(said, "Kriminalinspektör Petra Lind") == said
+
+
+def test_bold_markdown_around_the_own_name_is_removed() -> None:
+    """Seen live: '**Kriminalinspektör Petra Lind:** It is 21:05.' -- the same
+    self-attribution wearing markdown bold, which the word check let through."""
+    assert (
+        strip_self_attribution(
+            "**Kriminalinspektör Petra Lind:** Sit down, all of you.",
+            "Kriminalinspektör Petra Lind",
+        )
+        == "Sit down, all of you."
+    )
+    assert strip_self_attribution("*Lind:* Quiet.", "Petra Lind") == "Quiet."

@@ -386,8 +386,8 @@ async def _import_personas(
 
     placeholder_id: uuid.UUID | None = None
     async with tenant_scope(tenant_id) as session:
-        existing_keys = {
-            p.key
+        existing_by_key = {
+            p.key: (p.id, p.principal_id)
             for p in (
                 await session.execute(
                     sa_select(Persona).where(
@@ -399,8 +399,18 @@ async def _import_personas(
 
     for path in persona_paths:
         record = json.loads(files[path].decode())
-        if record["key"] in existing_keys:
-            report.skipped.append(f"persona:{record['key']} (key exists)")
+        if record["key"] in existing_by_key:
+            # Skipped, but still MAPPED: later sections resolve their subjects through
+            # id_map, so a re-import that skips a resident persona must still let that
+            # persona receive what the first pass could not attach. Without this, an
+            # import whose secrets were refused (observed live: the importer lacked the
+            # workspace membership, every create_secret was denied, and the whole cast
+            # played a mystery with nothing to hide) could never be repaired by
+            # re-importing -- the secrets' subjects "did not come with the bundle".
+            existing_id, existing_principal = existing_by_key[record["key"]]
+            report.id_map[str(record["id"])] = str(existing_id)
+            report.persona_principals[str(record["id"])] = existing_principal
+            report.skipped.append(f"persona:{record['key']} (key exists; mapped to resident)")
             continue
         connection_id = connection_map.get(record.get("model_profile_ref") or "")
         if connection_id is None:
@@ -1002,6 +1012,22 @@ async def _import_secrets(
             subject_id = uuid.UUID(mapped) if mapped else None
         if subject_id is None:
             report.skipped.append(f"secret:{ref} (its {subject_kind} did not come with the bundle)")
+            continue
+
+        # A healing re-import must not double the secrets that DID land the first time:
+        # the same subject holding the same gist is the same secret.
+        async with tenant_scope(tenant_id) as session:
+            from core.secrets.models import SecretRow
+
+            duplicate = await session.scalar(
+                select(SecretRow.id).where(
+                    SecretRow.workspace_id == workspace_id,
+                    SecretRow.subject_id == subject_id,
+                    SecretRow.gist == str(record.get("gist") or ""),
+                )
+            )
+        if duplicate is not None:
+            report.skipped.append(f"secret:{ref} (already present)")
             continue
 
         try:
