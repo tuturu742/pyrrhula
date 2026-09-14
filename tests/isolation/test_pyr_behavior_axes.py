@@ -140,7 +140,7 @@ async def test_reimporting_into_the_same_workspace_does_not_duplicate(
             )
         ]
     assert len(keys) == len(set(keys)), f"duplicate persona keys after re-import: {sorted(keys)}"
-    assert any("(key exists)" in s for s in reports[1].skipped), (
+    assert any("key exists" in s for s in reports[1].skipped), (
         "the second import should report the personas it left alone"
     )
 
