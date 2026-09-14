@@ -170,6 +170,47 @@ def _fork_key(key: str, taken: set[str]) -> str:
     return candidate
 
 
+_ADOPTABLE_WORKSPACE_SETTINGS = ("secret_mode", "conduct_rules")
+
+
+async def _adopt_workspace_settings(
+    tenant_id: uuid.UUID, workspace_id: uuid.UUID, files: dict[str, bytes], report: ImportReport
+) -> None:
+    """Adopt the bundle's workspace settings the target has no opinion on yet.
+
+    The bundle has always carried ``workspace.json`` and nothing ever read it. That lost
+    exactly the settings a sample depends on: ``secret_mode`` (without it an imported
+    mystery ran in the leak-proof default and the whole cast played with nothing to
+    hide) and ``conduct_rules``. Additive only -- a key the target workspace already set
+    is never overwritten, so importing a bundle cannot silently reconfigure a workspace
+    someone tuned.
+    """
+    raw = files.get("workspace.json")
+    if raw is None:
+        return
+    try:
+        source_settings = dict(json.loads(raw.decode()).get("settings") or {})
+    except (ValueError, AttributeError):
+        return
+    from core.tenancy.models import Workspace
+
+    async with tenant_scope(tenant_id) as session:
+        workspace = await session.get(Workspace, workspace_id)
+        if workspace is None:
+            return
+        settings = dict(workspace.settings)
+        adopted = [
+            key
+            for key in _ADOPTABLE_WORKSPACE_SETTINGS
+            if key in source_settings and key not in settings
+        ]
+        for key in adopted:
+            settings[key] = source_settings[key]
+        if adopted:
+            workspace.settings = settings
+            report.imported.append(f"workspace settings: {', '.join(adopted)}")
+
+
 async def ensure_workflow_for_bundle(
     tenant_id: uuid.UUID, manifest: dict[str, Any], agent_records: list[dict[str, Any]]
 ) -> str:
@@ -260,6 +301,7 @@ async def import_bundle(
         verify_resolution_chain(records, tenant_ref, session_ref)
 
     report = ImportReport()
+    await _adopt_workspace_settings(tenant_id, workspace_id, files, report)
     await _import_knowledge(files, tenant_id, workspace_id, report, bundle_ref=bundle_ref)
     await _import_schemas_and_entities(
         files, tenant_id, workspace_id, report, bundle_ref=bundle_ref

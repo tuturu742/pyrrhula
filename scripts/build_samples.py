@@ -191,7 +191,17 @@ def _facilitator_led_flow(
                 # this the scheduler keeps running and 'let me pick who answers next'
                 # silently does nothing.
                 flags=["conductable"],
-                on_complete="pressing",
+                # The round is counted on the ANSWERS, and the gate to the verdict sits
+                # here -- so the verdict always follows a round of answers. It used to
+                # sit on the pressing phase, whose whole prompt is "ask a sharper
+                # question": the final round's question dangled unanswered, the flow
+                # jumped to the verdict, and the model chased its own open question
+                # instead of concluding -- the session then ended under it mid-thought.
+                effects=[{"set": "round", "to": "state.round + 1"}],
+                gates=[
+                    {"when": f"state.round >= {rounds}", "to": "verdict"},
+                    {"else": True, "to": "pressing"},
+                ],
                 **cast_tools,
             ),
             "pressing": phase(
@@ -199,20 +209,20 @@ def _facilitator_led_flow(
                 supervisor,
                 "You have heard the room. Name the single contradiction that matters "
                 "most and who it implicates, then put a sharper question to a named "
-                "person. Rely only on what has been said in this session.",
-                effects=[{"set": "round", "to": "state.round + 1"}],
+                "person. If a lab request would settle it, radio it now with the "
+                "evidence_check tool before you ask. Rely only on what has been said "
+                "in this session and what the lab has told you.",
+                on_complete="questioning",
                 **fac_tools,
-                gates=[
-                    {"when": f"state.round >= {rounds}", "to": "verdict"},
-                    {"else": True, "to": "questioning"},
-                ],
             ),
             "verdict": phase(
                 "phase.resolution",
                 supervisor,
-                "State your conclusion: what you believe happened and who is "
-                "responsible, with the evidence from this session that supports it. Say "
-                "plainly what remains unproven.",
+                "The interview is over: ask no further questions. Any question of "
+                "yours that went unanswered, resolve from what is on record. State "
+                "your conclusion -- what you believe happened and who is responsible, "
+                "with the evidence from this session and the lab that supports it -- "
+                "and say plainly what remains unproven.",
                 **fac_tools,
             ),
         },
@@ -1110,7 +1120,16 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
         if spec.conduct_rules:
             workspace = await session.get(Workspace, workspace_id)
             assert workspace is not None
-            workspace.settings = {**dict(workspace.settings), "conduct_rules": spec.conduct_rules}
+            workspace.settings = {
+                **dict(workspace.settings),
+                "conduct_rules": spec.conduct_rules,
+                # Travels in workspace.json and is applied additively on import: without
+                # it a fresh import ran in the leak-proof default (secrets excluded from
+                # everyone's context) and the whole cast played with nothing to hide.
+                # "trust" = the holder's own briefs enter its context, no extra calls;
+                # the README says when to switch the workspace to "gate" instead.
+                "secret_mode": "trust",
+            }
 
     # A bundle never carries credentials, so this connection exists only to satisfy the
     # persona FK here; on import each persona binds to the reader's own placeholder until

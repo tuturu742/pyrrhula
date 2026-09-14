@@ -225,3 +225,54 @@ async def test_a_reimport_heals_secrets_the_first_pass_was_refused(
     async with tenant_scope(tenant_id) as session:
         secrets = (await session.execute(select(SecretRow))).scalars().all()
     assert len(secrets) == 11, f"expected the case's 11 secrets, got {len(secrets)}"
+
+
+async def test_import_adopts_secret_mode_from_the_bundle(db_available: None) -> None:
+    """The bundle has always carried workspace.json and nothing ever read it. The cost
+    was invisible: secret_mode stayed on the leak-proof default, held secrets never
+    entered anyone's context, the gate never ran, and a whole interrogation played with
+    nothing to hide -- twice, in two differently-broken runs. Adoption is additive: a
+    workspace that already chose a mode keeps it.
+    """
+    import pathlib as _pathlib
+
+    from adapters.encryptor.identity import IdentityEncryptor
+    from core.plugins.service import ensure_default_synced
+    from core.portability.import_ import import_bundle
+    from core.tenancy.models import Workspace
+    from core.tenancy.scope import tenant_scope
+
+    bundle = _pathlib.Path(
+        "/home/okurok/code/pyrrhula-samples/hagnaryd-mystery/hagnaryd-mystery.pyr"
+    )
+    if not bundle.is_file():
+        pytest.skip("sample bundle not present on this machine")
+
+    await ensure_default_synced()
+    tenant_id, _o, workspace_id = await seed_dev_tenant(slug=f"pyrsm-{uuid.uuid4().hex[:8]}")
+    await import_bundle(
+        bundle.read_bytes(),
+        tenant_id,
+        workspace_id,
+        bundle_ref="sm",
+        encryptor=IdentityEncryptor(),
+    )
+    async with tenant_scope(tenant_id) as session:
+        ws = await session.get(Workspace, workspace_id)
+        assert ws is not None and ws.settings.get("secret_mode") == "trust"
+
+    # A workspace that already chose is never reconfigured by an import.
+    tenant2, _o2, ws2_id = await seed_dev_tenant(slug=f"pyrsm-{uuid.uuid4().hex[:8]}")
+    async with tenant_scope(tenant2) as session:
+        ws2 = await session.get(Workspace, ws2_id)
+        ws2.settings = {"secret_mode": "gate"}
+    await import_bundle(
+        bundle.read_bytes(),
+        tenant2,
+        ws2_id,
+        bundle_ref="sm",
+        encryptor=IdentityEncryptor(),
+    )
+    async with tenant_scope(tenant2) as session:
+        ws2 = await session.get(Workspace, ws2_id)
+        assert ws2.settings.get("secret_mode") == "gate", "an explicit choice must survive"

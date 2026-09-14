@@ -60,7 +60,7 @@ export function HolderManager({ secretId }: { secretId: string }) {
         {holders?.map((holder) => (
           <li key={holder.id} className="flex items-center justify-between text-sm">
             <span>
-              {holder.holder_principal_id}{" "}
+              {holder.holder_name ?? holder.holder_principal_id}{" "}
               <span className="text-xs text-muted-foreground">({holder.holder_kind})</span>
             </span>
             <button

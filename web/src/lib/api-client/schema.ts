@@ -5802,6 +5802,8 @@ export interface components {
              * Format: uuid
              */
             subject_id: string;
+            /** Subject Name */
+            subject_name?: string | null;
             /** Gist */
             gist: string;
             /** Disclosure State */
@@ -6541,6 +6543,8 @@ export interface components {
             holder_principal_id: string;
             /** Holder Kind */
             holder_kind: string;
+            /** Holder Name */
+            holder_name?: string | null;
         };
         /** PersonaResponse */
         api__routes__workspaces__PersonaResponse: {

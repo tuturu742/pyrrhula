@@ -86,6 +86,10 @@ class SecretResponse(BaseModel):
     workspace_id: uuid.UUID
     subject_kind: str
     subject_id: uuid.UUID
+    # Who this secret is about, by NAME. The list used to show "agent · undisclosed"
+    # for every row -- eleven identical labels on a murder mystery's secret list, with
+    # no way to tell whose motive was whose without opening each one.
+    subject_name: str | None = None
     gist: str
     disclosure_state: str
     scope_key: str
@@ -106,6 +110,7 @@ class HolderResponse(BaseModel):
     id: uuid.UUID
     holder_principal_id: uuid.UUID
     holder_kind: str
+    holder_name: str | None = None
 
 
 class DraftRequest(BaseModel):
@@ -287,9 +292,37 @@ async def list_holders_endpoint(
     secret_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> list[HolderResponse]:
     rows = await list_holders(ctx.tenant_id, secret_id)
+    # Holders are principals; show them as the personas (or humans) they are, not ids.
+    from sqlalchemy import select
+
+    from core.agents.models import Persona
+    from core.tenancy.models import Principal
+    from core.tenancy.scope import tenant_scope
+
+    holder_names: dict[uuid.UUID, str] = {}
+    principal_ids = {r.holder_principal_id for r in rows}
+    if principal_ids:
+        async with tenant_scope(ctx.tenant_id) as session:
+            for pid, name in await session.execute(
+                select(Persona.principal_id, Persona.name).where(
+                    Persona.principal_id.in_(principal_ids)
+                )
+            ):
+                holder_names[pid] = name
+            unresolved = principal_ids - set(holder_names)
+            if unresolved:
+                for pid, name in await session.execute(
+                    select(Principal.id, Principal.display_name).where(
+                        Principal.id.in_(unresolved)
+                    )
+                ):
+                    holder_names.setdefault(pid, name)
     return [
         HolderResponse(
-            id=r.id, holder_principal_id=r.holder_principal_id, holder_kind=r.holder_kind
+            id=r.id,
+            holder_principal_id=r.holder_principal_id,
+            holder_kind=r.holder_kind,
+            holder_name=holder_names.get(r.holder_principal_id),
         )
         for r in rows
     ]

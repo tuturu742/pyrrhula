@@ -116,7 +116,7 @@ export function SecretListPage() {
               <div>
                 <div className="font-medium">{secret.gist}</div>
                 <div className="text-sm text-muted-foreground">
-                  {secret.subject_kind} · {secret.disclosure_state}
+                  {secret.subject_name ?? secret.subject_kind} · {secret.disclosure_state}
                 </div>
               </div>
               <span className="flex items-center gap-2">
