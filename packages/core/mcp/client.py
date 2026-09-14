@@ -40,7 +40,14 @@ from core.actions.effectful import (
     claim,
     complete,
 )
-from core.mcp.registry import AllowedTool, apply_allowlist, get_server, list_servers
+from core.mcp.registry import (
+    AllowedTool,
+    apply_allowlist,
+    count_session_calls,
+    get_server,
+    list_servers,
+    record_call,
+)
 from core.ports.mcp import McpToolResult, McpTransport, McpTransportError
 from core.process.dsl.schema import PhaseSpec
 
@@ -56,6 +63,20 @@ class ToolNotAvailableError(Exception):
     """The tool is not in the workspace allowlist, or not in this phase's policy. One error
     for both, deliberately: telling a caller *which* test it failed would let it enumerate
     the allowlist by probing."""
+
+
+class SessionCallCapError(Exception):
+    """This session has spent its allowance of calls to a server. The cap lives on the
+    registration because an external MCP server cannot enforce one per session: it is
+    sent only the model's arguments, never a trusted session id, so its own budget --
+    if it has one -- is a single pool shared by every session hitting that process."""
+
+    def __init__(self, server_key: str, cap: int) -> None:
+        self.server_key = server_key
+        self.cap = cap
+        super().__init__(
+            f"this session has used all {cap} of its allowed calls to {server_key!r}"
+        )
 
 
 class ConfirmationRequiredError(Exception):
@@ -153,8 +174,38 @@ async def call_tool(
     row = await get_server(tenant_id, workspace_id, server_key)
     assert row is not None  # available_tools only returns tools of listed servers
 
+    cap = row.max_calls_per_session
+    if cap is not None and session_id is not None:
+        spent = await count_session_calls(tenant_id, session_id, server_key)
+        if spent >= cap:
+            await record_call(
+                tenant_id,
+                session_id,
+                server_key=server_key,
+                tool_name=tool_name,
+                event_seq=event_seq,
+                effectful=tool.effectful,
+                outcome="refused",
+                detail={"reason": "session_cap", "cap": cap},
+            )
+            raise SessionCallCapError(server_key, cap)
+
     if not tool.effectful:
-        result = await transport.call_tool(row.to_ref(), tool_name, arguments)
+        try:
+            result = await transport.call_tool(row.to_ref(), tool_name, arguments)
+        except McpTransportError:
+            # A call that never reached the server spends nothing.
+            raise
+        if session_id is not None:
+            await record_call(
+                tenant_id,
+                session_id,
+                server_key=server_key,
+                tool_name=tool_name,
+                event_seq=event_seq,
+                effectful=False,
+                outcome="failed" if result.is_error else "completed",
+            )
         return ToolInvocation(
             server_key=server_key,
             tool_name=tool_name,
@@ -210,6 +261,18 @@ async def call_tool(
         "failed" if result.is_error else "completed",
         {"content": result.content, "structured": result.structured},
     )
+    if session_id is not None:
+        # Effectful calls count against the same session cap as read-only ones: the cap
+        # is about how often a session may reach this server at all.
+        await record_call(
+            tenant_id,
+            session_id,
+            server_key=server_key,
+            tool_name=tool_name,
+            event_seq=event_seq,
+            effectful=True,
+            outcome="failed" if result.is_error else "completed",
+        )
     return ToolInvocation(
         server_key=server_key,
         tool_name=tool_name,

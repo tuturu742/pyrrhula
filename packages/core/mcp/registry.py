@@ -28,6 +28,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     func,
@@ -70,6 +71,10 @@ class McpServerRow(Base):
     enabled_tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     effectful_tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     require_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Per-session ceiling on calls to this server (NULL = unlimited). An external MCP
+    # server cannot budget per session -- it is sent only the model's arguments, never a
+    # trusted session id -- so the cap belongs here, where the session IS known.
+    max_calls_per_session: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -138,6 +143,7 @@ async def register_server(
     effectful_tools: list[str] | None = None,
     credential_ref: str | None | object = _UNSET,
     require_confirmation: bool | object = _UNSET,
+    max_calls_per_session: int | None | object = _UNSET,
 ) -> McpServerRow:
     """Upsert by `(workspace, key)`, so re-running a deployment's registry setup is
     idempotent rather than a source of duplicates. Omitted ``credential_ref`` /
@@ -174,6 +180,10 @@ async def register_server(
         row.effectful_tools = list(effectful_tools or [])
         if require_confirmation is not _UNSET:
             row.require_confirmation = bool(require_confirmation)
+        if max_calls_per_session is not _UNSET:
+            row.max_calls_per_session = (
+                None if max_calls_per_session is None else int(max_calls_per_session)  # type: ignore[arg-type]
+            )
         if existing is None:
             session.add(row)
         await session.flush()
@@ -366,3 +376,81 @@ WEB_SEARCH_PRESET = {
     "effectful_tools": [],
     "require_confirmation": False,
 }
+
+
+class McpCallRecord(Base):
+    """Append-only ledger of external MCP calls, one row per call.
+
+    Two jobs. It is what ``max_calls_per_session`` counts -- the platform knows the
+    session an external server cannot be told about -- and it is the only durable trace a
+    non-effectful call leaves at all (effectful calls have ``action_record``; read-only
+    ones previously vanished, which is also why tool use was invisible in a session's
+    record)."""
+
+    __tablename__ = "mcp_call_record"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("session.id", ondelete="CASCADE"), nullable=False
+    )
+    server_key: Mapped[str] = mapped_column(String(63), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    effectful: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_mcp_call_record_session_server", "session_id", "server_key"),)
+
+
+async def count_session_calls(
+    tenant_id: uuid.UUID, session_id: uuid.UUID, server_key: str
+) -> int:
+    """Calls this session has already spent against one server. Refusals are not counted
+    -- a refused call reached nobody, and counting it would let a capped-out session
+    burn its own error messages."""
+    async with tenant_scope(tenant_id) as session:
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(McpCallRecord)
+                .where(
+                    McpCallRecord.session_id == session_id,
+                    McpCallRecord.server_key == server_key,
+                    McpCallRecord.outcome != "refused",
+                )
+            )
+            or 0
+        )
+
+
+async def record_call(
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    *,
+    server_key: str,
+    tool_name: str,
+    event_seq: int,
+    effectful: bool,
+    outcome: str,
+    detail: dict[str, object] | None = None,
+) -> None:
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            McpCallRecord(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                server_key=server_key,
+                tool_name=tool_name,
+                event_seq=event_seq,
+                effectful=effectful,
+                outcome=outcome,
+                detail=dict(detail or {}),
+            )
+        )

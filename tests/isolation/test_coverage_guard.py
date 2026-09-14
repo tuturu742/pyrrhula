@@ -75,6 +75,7 @@ _COVERED_TABLES = {
     "notification",
     "report",
     "mcp_server",
+    "mcp_call_record",
     "action_record",
     # test_workflow_authoring.py (moddable workflows)
     "workflow",

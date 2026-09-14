@@ -38,6 +38,10 @@ _APPEND_ONLY_TABLES_TODAY = {
     # append-only by the same REVOKE convention, and this catalog test is strictly more
     # useful catching a missing REVOKE on it too.
     "persona_version",
+    # The per-session MCP call ledger: append-only by the same REVOKE convention, and the
+    # thing max_calls_per_session counts -- a session that could amend it could uncap
+    # itself.
+    "mcp_call_record",
 }
 
 # Every rule-5 append-only table, whether or not it exists yet. A table from this set

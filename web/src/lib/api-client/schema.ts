@@ -5020,6 +5020,8 @@ export interface components {
              * @default true
              */
             require_confirmation: boolean;
+            /** Max Calls Per Session */
+            max_calls_per_session?: number | null;
         };
         /** McpServerResponse */
         McpServerResponse: {
@@ -5038,6 +5040,8 @@ export interface components {
             effectful_tools: string[];
             /** Require Confirmation */
             require_confirmation: boolean;
+            /** Max Calls Per Session */
+            max_calls_per_session?: number | null;
             /** Credential Ref */
             credential_ref: string | null;
         };

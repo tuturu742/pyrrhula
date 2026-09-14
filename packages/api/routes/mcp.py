@@ -55,6 +55,9 @@ class McpServerRequest(BaseModel):
     effectful_tools: list[str] = []
     credential_ref: str | None = None
     require_confirmation: bool = True
+    # Per-session ceiling on calls to this server; None = unlimited. The cap lives here
+    # because an external server is never told which session is calling it.
+    max_calls_per_session: int | None = None
 
 
 class McpServerResponse(BaseModel):
@@ -64,6 +67,7 @@ class McpServerResponse(BaseModel):
     enabled_tools: list[str]
     effectful_tools: list[str]
     require_confirmation: bool
+    max_calls_per_session: int | None = None
     credential_ref: str | None
 
 
@@ -75,6 +79,7 @@ def _to_response(row: object) -> McpServerResponse:
         enabled_tools=list(row.enabled_tools),  # type: ignore[attr-defined]
         effectful_tools=list(row.effectful_tools),  # type: ignore[attr-defined]
         require_confirmation=row.require_confirmation,  # type: ignore[attr-defined]
+        max_calls_per_session=row.max_calls_per_session,  # type: ignore[attr-defined]
         credential_ref=row.credential_ref,  # type: ignore[attr-defined]
     )
 
@@ -120,6 +125,7 @@ async def upsert_mcp_server(
             effectful_tools=body.effectful_tools,
             credential_ref=body.credential_ref,
             require_confirmation=body.require_confirmation,
+            max_calls_per_session=body.max_calls_per_session,
         )
     except CredentialInRegistryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

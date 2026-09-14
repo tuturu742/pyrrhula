@@ -15,6 +15,9 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
   const [key, setKey] = useState("");
   const [url, setUrl] = useState("");
   const [tools, setTools] = useState("");
+  // Per-session call ceiling; blank = unlimited. An external server cannot enforce one
+  // itself -- it is never told which session is calling -- so the platform holds it.
+  const [cap, setCap] = useState("");
 
   const servers = useQuery({
     queryKey: ["mcp-servers", workspaceId],
@@ -40,6 +43,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
             .filter(Boolean),
           effectful_tools: [],
           require_confirmation: true,
+          max_calls_per_session: cap.trim() ? Number(cap.trim()) : null,
         },
       });
       if (error) throw error;
@@ -49,6 +53,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
       setKey("");
       setUrl("");
       setTools("");
+      setCap("");
       void queryClient.invalidateQueries({ queryKey: ["mcp-servers", workspaceId] });
     },
     onError: (e) =>
@@ -88,6 +93,9 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
               <span className="ml-2 text-xs text-muted-foreground">{server.url}</span>
               <span className="block text-xs text-muted-foreground">
                 tools: {server.enabled_tools.join(", ") || "none"}
+                {server.max_calls_per_session != null
+                  ? ` · ${server.max_calls_per_session} calls per session`
+                  : ""}
               </span>
             </span>
             <ConfirmButton
@@ -128,6 +136,13 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           className="w-64"
           value={tools}
           onChange={(e) => setTools(e.target.value)}
+        />
+        <Input
+          placeholder="calls/session (blank = ∞)"
+          className="w-40"
+          inputMode="numeric"
+          value={cap}
+          onChange={(e) => setCap(e.target.value.replace(/[^0-9]/g, ""))}
         />
         <Button
           type="submit"

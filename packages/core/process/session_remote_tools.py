@@ -19,7 +19,12 @@ import json
 import uuid
 
 from core.agents.tools import ToolContext, ToolHandler, ToolResult
-from core.mcp.client import ConfirmationRequiredError, ToolNotAvailableError, available_tools
+from core.mcp.client import (
+    ConfirmationRequiredError,
+    SessionCallCapError,
+    ToolNotAvailableError,
+    available_tools,
+)
 from core.mcp.client import call_tool as mcp_call_tool
 from core.mcp.registry import list_servers
 from core.ports.mcp import McpTransport, McpTransportError
@@ -123,6 +128,17 @@ def make_remote_tool_handler(
                 tool_name,
                 arguments,
                 transport=transport,
+            )
+        except SessionCallCapError as exc:
+            # The model gets a plain, honest refusal it can reason about -- the same
+            # shape the sample lab's own budget message takes -- rather than a failure.
+            return ToolResult(
+                content=json.dumps(
+                    {
+                        "error": "session_call_cap_reached",
+                        "message": str(exc),
+                    }
+                )
             )
         except ConfirmationRequiredError:
             return ToolResult(

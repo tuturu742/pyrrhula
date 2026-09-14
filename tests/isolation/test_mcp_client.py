@@ -27,6 +27,7 @@ from core.actions.effectful import (
 from core.agents.seed import seed_dev_agent
 from core.mcp.client import (
     ConfirmationRequiredError,
+    SessionCallCapError,
     ToolNotAvailableError,
     available_tools,
     call_tool,
@@ -35,6 +36,7 @@ from core.mcp.client import (
 from core.mcp.registry import (
     CredentialInRegistryError,
     apply_allowlist,
+    count_session_calls,
     get_server,
     register_server,
 )
@@ -153,6 +155,10 @@ async def test_mcp_server_and_action_record_filter_omission(
 
     assert {row[0] for row in servers} == {tenant_a}
     assert {row[0] for row in actions} == {tenant_a}
+
+    async with tenant_scope(tenant_a) as session:
+        calls = (await session.execute(text("SELECT tenant_id FROM mcp_call_record"))).all()
+    assert {row[0] for row in calls} == {tenant_a}, "the call ledger is tenant-isolated too"
 
 
 async def test_the_registry_refuses_a_credential_pasted_into_credential_ref(
@@ -507,3 +513,114 @@ async def test_workspace_effectfulness_is_a_floor_the_server_cannot_lower(
 
     resolved = {t.spec.name: t.effectful for t in apply_allowlist(row, _tools())}
     assert resolved == {"search": True, "post_message": True}
+
+
+async def test_a_session_cap_is_per_session_not_per_server_process(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The point of moving the cap into the platform: an external MCP server sees only
+    the model's arguments and cannot tell sessions apart, so a budget it enforces itself
+    is one pool shared by everyone. ``max_calls_per_session`` gives each session its own
+    allowance -- a second session starts fresh while the first stays capped."""
+    tenant_a, _tenant_b = two_tenants
+    transport = _ScriptedTransport(tools=_tools())
+    workspace_id, session_one = await _setup(tenant_a)
+    await register_server(
+        tenant_a,
+        workspace_id,
+        _SERVER_KEY,
+        "https://mcp.example.invalid/sandbox",
+        enabled_tools=["search", "post_message"],
+        require_confirmation=False,
+        max_calls_per_session=2,
+    )
+
+    async def _search(session_id: uuid.UUID, seq: int):  # noqa: ANN202
+        return await call_tool(
+            tenant_a,
+            workspace_id,
+            session_id,
+            seq,
+            _phase(["search"]),
+            _SERVER_KEY,
+            "search",
+            {"q": "prints"},
+            transport=transport,
+        )
+
+    await _search(session_one, 1)
+    await _search(session_one, 2)
+    with pytest.raises(SessionCallCapError):
+        await _search(session_one, 3)
+
+    persona_id = await seed_dev_agent(tenant_a, workspace_id)
+    session_two = (await create_session(tenant_a, workspace_id, persona_id)).id
+    result = await _search(session_two, 1)
+    assert result.tool_name == "search", "a second session starts with a full allowance"
+    assert await count_session_calls(tenant_a, session_one, _SERVER_KEY) == 2
+    assert await count_session_calls(tenant_a, session_two, _SERVER_KEY) == 1
+
+
+async def test_a_refused_call_does_not_spend_the_allowance(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """A refusal reached no server. Counting it would let a capped-out session burn its
+    own error messages, and would make the ledger a record of calls that never
+    happened."""
+    tenant_a, _tenant_b = two_tenants
+    transport = _ScriptedTransport(tools=_tools())
+    workspace_id, session_id = await _setup(tenant_a)
+    await register_server(
+        tenant_a,
+        workspace_id,
+        _SERVER_KEY,
+        "https://mcp.example.invalid/sandbox",
+        enabled_tools=["search", "post_message"],
+        require_confirmation=False,
+        max_calls_per_session=1,
+    )
+
+    async def _search(seq: int):  # noqa: ANN202
+        return await call_tool(
+            tenant_a,
+            workspace_id,
+            session_id,
+            seq,
+            _phase(["search"]),
+            _SERVER_KEY,
+            "search",
+            {"q": "prints"},
+            transport=transport,
+        )
+
+    await _search(1)
+    for seq in (2, 3, 4):
+        with pytest.raises(SessionCallCapError):
+            await _search(seq)
+
+    assert await count_session_calls(tenant_a, session_id, _SERVER_KEY) == 1, (
+        "refusals must not accumulate against the cap"
+    )
+
+
+async def test_no_cap_means_unlimited_so_existing_registrations_are_unchanged(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The column defaults to NULL; every registration that predates it keeps working
+    exactly as before."""
+    tenant_a, _tenant_b = two_tenants
+    transport = _ScriptedTransport(tools=_tools())
+    workspace_id, session_id = await _setup(tenant_a)
+    for seq in range(1, 6):
+        await call_tool(
+            tenant_a,
+            workspace_id,
+            session_id,
+            seq,
+            _phase(["search"]),
+            _SERVER_KEY,
+            "search",
+            {"q": "prints"},
+            transport=transport,
+        )
+    assert await count_session_calls(tenant_a, session_id, _SERVER_KEY) == 5
