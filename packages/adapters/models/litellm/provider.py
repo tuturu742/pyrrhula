@@ -279,72 +279,78 @@ class LiteLLMModelProvider:
             **extra,
             **kwargs,
         )
-        try:
-            response = await litellm.acompletion(**call)
-        except Exception as exc:
-            # Endpoints that refuse function tools while a reasoning effort is in play
-            # (observed: gpt-5.6-luna) tell the caller to set it to 'none'. Do that once,
-            # unless the connection's params already chose a value -- then the choice is
-            # deliberate and the error is the operator's to see.
-            if (
-                not tools
-                or not _rejects_tools_with_reasoning(exc)
-                or "reasoning_effort" in dict(req.params or {})
-            ):
-                raise
-            response = await litellm.acompletion(**{**call, "reasoning_effort": "none"})
-        # Accumulates streamed tool-call argument fragments by index -- see module
-        # docstring. Never yielded mid-accumulation: only once, on the chunk carrying
-        # finish_reason == 'tool_calls'.
-        pending_calls: dict[int, dict[str, Any]] = {}
+        async def _attempt(this_call: dict[str, Any]) -> AsyncIterator[tuple[Chunk, bool]]:
+            """Stream one acompletion, tagging each yielded Chunk with whether it carried
+            real output (text or tool calls). The caller uses the tag to decide whether an
+            empty generation is worth one reasoning-free retry."""
+            try:
+                response = await litellm.acompletion(**this_call)
+            except Exception as exc:
+                # Endpoints that refuse function tools while a reasoning effort is in
+                # play (observed: gpt-5.6-luna) tell the caller to set it to 'none'. Do
+                # that once, unless the connection's params already chose a value -- then
+                # the choice is deliberate and the error is the operator's to see.
+                if (
+                    not tools
+                    or not _rejects_tools_with_reasoning(exc)
+                    or "reasoning_effort" in dict(req.params or {})
+                ):
+                    raise
+                response = await litellm.acompletion(**{**this_call, "reasoning_effort": "none"})
 
-        async for part in response:
-            cached_tokens = _extract_cached_tokens(getattr(part, "usage", None))
-            if not part.choices:
-                # The terminal usage-only chunk (stream_options include_usage) some
-                # providers send after the last real delta -- nothing to accumulate,
-                # but its usage was already captured above for the *next* iteration's
-                # cached_tokens if this loop had one more delta; for providers that put
-                # usage on the same chunk as the last delta instead, cached_tokens below
-                # already picks it up in that same iteration.
-                continue
-            delta = part.choices[0].delta
-            finish_reason = part.choices[0].finish_reason
-            text = delta.content or ""
+            pending_calls: dict[int, dict[str, Any]] = {}
+            async for part in response:
+                cached_tokens = _extract_cached_tokens(getattr(part, "usage", None))
+                if not part.choices:
+                    continue
+                delta = part.choices[0].delta
+                finish_reason = part.choices[0].finish_reason
+                text = delta.content or ""
 
-            for fragment in delta.tool_calls or []:
-                slot = pending_calls.setdefault(
-                    fragment.index, {"id": None, "name": None, "arguments": ""}
-                )
-                if fragment.id:
-                    slot["id"] = fragment.id
-                if fragment.function and fragment.function.name:
-                    slot["name"] = fragment.function.name
-                if fragment.function and fragment.function.arguments:
-                    slot["arguments"] += fragment.function.arguments
-
-            # Flush accumulated calls on ANY terminal chunk that has some, not only on
-            # finish_reason == 'tool_calls': LiteLLM's ollama_chat route streams real
-            # tool-call deltas but finishes with plain 'stop', and holding the flush
-            # hostage to the OpenAI-style reason silently dropped every local-model tool
-            # call (empty message, zero dispatches).
-            if finish_reason and pending_calls:
-                tool_calls = tuple(
-                    ToolCall(
-                        id=slot["id"] or f"call_{index}",
-                        name=slot["name"] or "",
-                        arguments=_parse_streamed_arguments(slot["arguments"]),
+                for fragment in delta.tool_calls or []:
+                    slot = pending_calls.setdefault(
+                        fragment.index, {"id": None, "name": None, "arguments": ""}
                     )
-                    for index, slot in sorted(pending_calls.items())
-                )
-                yield Chunk(
-                    text=text,
-                    finish_reason="tool_calls",
-                    tool_calls=tool_calls,
-                    cached_tokens=cached_tokens,
-                )
-            elif text or finish_reason:
-                yield Chunk(text=text, finish_reason=finish_reason, cached_tokens=cached_tokens)
+                    if fragment.id:
+                        slot["id"] = fragment.id
+                    if fragment.function and fragment.function.name:
+                        slot["name"] = fragment.function.name
+                    if fragment.function and fragment.function.arguments:
+                        slot["arguments"] += fragment.function.arguments
+
+                if finish_reason and pending_calls:
+                    tool_calls = tuple(
+                        ToolCall(
+                            id=slot["id"] or f"call_{index}",
+                            name=slot["name"] or "",
+                            arguments=_parse_streamed_arguments(slot["arguments"]),
+                        )
+                        for index, slot in sorted(pending_calls.items())
+                    )
+                    yield Chunk(
+                        text=text,
+                        finish_reason="tool_calls",
+                        tool_calls=tool_calls,
+                        cached_tokens=cached_tokens,
+                    ), True
+                elif text or finish_reason:
+                    yield (
+                        Chunk(text=text, finish_reason=finish_reason, cached_tokens=cached_tokens),
+                        bool(text),
+                    )
+
+        produced = False
+        async for chunk, had_output in _attempt(call):
+            produced = produced or had_output
+            yield chunk
+        # A reasoning model can spend its whole completion budget on hidden reasoning and
+        # return nothing (seen live: gpt-5.6-terra mid-interrogation). Retrying the
+        # identical request -- which the turn runtime already does -- reproduces it; one
+        # retry with reasoning_effort forced off leaves budget for actual output. Skipped
+        # when the caller chose an effort on purpose, or already asked for none.
+        if not produced and str((req.params or {}).get("reasoning_effort", "")) != "none":
+            async for chunk, _had in _attempt({**call, "reasoning_effort": "none"}):
+                yield chunk
 
     async def generate_structured(self, req: GenerationRequest, schema: type[ModelT]) -> ModelT:
         check_egress(req.purpose, req.model, req.egress_policy)

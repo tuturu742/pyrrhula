@@ -392,3 +392,83 @@ async def test_no_retry_when_the_connection_chose_a_reasoning_effort(
             pass
     assert len(calls) == 1
     assert calls[0]["reasoning_effort"] == "high", "the connection's choice was sent"
+
+
+async def test_empty_generation_retries_once_with_reasoning_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reasoning model can burn its whole completion budget on hidden reasoning and
+    stream nothing (seen live: gpt-5.6-terra mid-interrogation). The turn runtime already
+    retries, but identically -- so it reproduces. The adapter retries once with
+    reasoning_effort forced off, which leaves budget for output, and only then."""
+    import litellm
+
+    calls: list[dict] = []
+
+    def _stream(chunks):  # noqa: ANN001, ANN202
+        async def gen():
+            for c in chunks:
+                yield c
+
+        return gen()
+
+    def _delta(content, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        choice.delta = MagicMock(content=content, tool_calls=None)
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return _stream([_delta("", "stop")])  # empty: all budget went to reasoning
+        return _stream([_delta("There you are."), _delta("", "stop")])
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "answer in character"}],
+        purpose="generation",
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "There you are."
+    assert len(calls) == 2
+    assert "reasoning_effort" not in calls[0]
+    assert calls[1]["reasoning_effort"] == "none"
+
+
+async def test_a_nonempty_generation_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="hello", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+    assert text == "hello"
+    assert len(calls) == 1, "a productive generation must not retry"
