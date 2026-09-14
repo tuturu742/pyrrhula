@@ -57,6 +57,7 @@ export async function applyAssistantAction(
           persona_type: args.persona_type ? s(args.persona_type) : "participant",
           persona_md: s(args.persona_md ?? ""),
           web_search: false,
+          params: {},
         },
       });
       return result(error, "Persona created.");

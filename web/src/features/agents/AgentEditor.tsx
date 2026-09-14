@@ -13,6 +13,7 @@ interface ExistingAgent {
   persona_md: string;
   entity_id: string | null;
   agent_id: string;
+  params: { [key: string]: unknown };
 }
 
 interface AgentEditorProps {
