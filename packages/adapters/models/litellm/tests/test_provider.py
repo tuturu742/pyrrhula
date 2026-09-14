@@ -713,3 +713,77 @@ async def test_the_reasoning_retry_does_not_require_locally_declared_tools(
     assert text == "Bram lifts the lantern."
     assert len(calls) == 2
     assert calls[1]["reasoning_effort"] == "none"
+
+
+async def test_repairs_chain_when_one_refusal_hides_the_next(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real request carries several knobs and an endpoint refuses them one at a time:
+    the unsupported sampling parameter first, then -- on the repaired call -- the
+    reasoning effort. Fixing one inside the other's handler left the second refusal
+    uncaught, which paused a live RPG session on every player turn."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "presence_penalty" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.UnsupportedParamsError: openai does not support parameters: "
+                "['presence_penalty'], for model=gpt-5.6-terra."
+            )
+        if kwargs.get("reasoning_effort") != "none":
+            raise Exception(  # noqa: TRY002
+                "litellm.BadRequestError: Function tools with reasoning_effort are not "
+                "supported for gpt-5.6-terra. Set reasoning_effort to 'none'."
+            )
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="Pip listens at the door.", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "your move"}],
+        purpose="generation",
+        params={"presence_penalty": 0.4, "temperature": 0.9},
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "Pip listens at the door."
+    assert len(calls) == 3, "both refusals must be repaired, in turn"
+    assert "presence_penalty" not in calls[-1]
+    assert calls[-1]["reasoning_effort"] == "none"
+    assert calls[-1]["temperature"] == 0.9, "unrelated parameters survive every repair"
+
+
+async def test_an_unrepairable_refusal_does_not_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chained repairs must terminate: a refusal nothing can fix has to raise, not spin."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        raise Exception("litellm.RateLimitError: slow down")  # noqa: TRY002
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+    with pytest.raises(Exception, match="RateLimitError"):
+        [c async for c in provider.generate(req)]
+    assert len(calls) == 1

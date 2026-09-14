@@ -261,6 +261,36 @@ def _rejects_tools_with_reasoning(exc: Exception) -> bool:
     return "reasoning_effort" in text and "tool" in text
 
 
+def _repair_call(
+    call: dict[str, Any], exc: Exception, req: GenerationRequest
+) -> dict[str, Any] | None:
+    """One repair for a refused request, or None when nothing honest applies.
+
+    Each repair addresses a refusal the endpoint stated in its own words, and changes
+    only what it named. Returning a new call (rather than retrying in place) is what lets
+    the caller chain them: real requests carry several knobs and an endpoint refuses them
+    one at a time.
+    """
+    # A parameter refused by name. Connection and persona params exist so ONE connection
+    # can serve models with different knobs, and models genuinely differ -- refusing the
+    # whole turn over a sampling nicety would make the feature a liability.
+    dropped = [key for key in _unsupported_params(exc) if key in call]
+    if dropped:
+        return {key: value for key, value in call.items() if key not in dropped}
+
+    # Endpoints that refuse function tools while a reasoning effort is in play tell the
+    # caller to set it to 'none'. Do that once, and never over an effort the caller chose
+    # on purpose -- then the choice is deliberate and the error is the operator's to see.
+    if (
+        _rejects_tools_with_reasoning(exc)
+        and call.get("reasoning_effort") != "none"
+        and "reasoning_effort" not in dict(req.params or {})
+    ):
+        return {**call, "reasoning_effort": "none"}
+
+    return None
+
+
 class LiteLLMModelProvider:
     async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
         check_egress(req.purpose, req.model, req.egress_policy)
@@ -308,30 +338,21 @@ class LiteLLMModelProvider:
             """Stream one acompletion, tagging each yielded Chunk with whether it carried
             real output (text or tool calls). The caller uses the tag to decide whether an
             empty generation is worth one reasoning-free retry."""
-            try:
-                response = await litellm.acompletion(**this_call)
-            except Exception as exc:
-                # A parameter the endpoint refuses by name. Connection and persona params
-                # exist so one connection can serve models with different knobs, and
-                # models genuinely differ -- refusing the whole turn over a sampling
-                # nicety would make the feature a liability. Drop exactly what was named
-                # and retry.
-                dropped = [k for k in _unsupported_params(exc) if k in this_call]
-                if dropped:
-                    this_call = {k: v for k, v in this_call.items() if k not in dropped}
+            # Repairs CHAIN. One rejected request can hide the next: a call carrying both
+            # an unsupported sampling knob and a reasoning effort is refused for the knob
+            # first, and the repaired call is then refused for the effort. Fixing one
+            # inside the other's handler left that second refusal uncaught, which paused
+            # a live RPG session on every player turn. Keep applying repairs until the
+            # call goes through or nothing else applies.
+            response = None
+            while response is None:
+                try:
                     response = await litellm.acompletion(**this_call)
-                # Endpoints that refuse function tools while a reasoning effort is in
-                # play (observed: gpt-5.6-luna) tell the caller to set it to 'none'. Do
-                # that once, unless the connection's params already chose a value -- then
-                # the choice is deliberate and the error is the operator's to see.
-                elif (
-                    _rejects_tools_with_reasoning(exc)
-                    and "reasoning_effort" not in dict(req.params or {})
-                ):
-                    this_call = {**this_call, "reasoning_effort": "none"}
-                    response = await litellm.acompletion(**this_call)
-                else:
-                    raise
+                except Exception as exc:
+                    repaired = _repair_call(this_call, exc, req)
+                    if repaired is None:
+                        raise
+                    this_call = repaired
 
             pending_calls: dict[int, dict[str, Any]] = {}
             async for part in response:
