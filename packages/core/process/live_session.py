@@ -25,6 +25,7 @@ from core.assembler.context_assembler import assemble
 from core.assembler.manifest import write_context_manifest
 from core.behavior.directives import render_directives_for_profile
 from core.behavior.repo import get_current_behavior_profile, list_axis_definitions
+from core.entities.storage import EntityRow
 from core.ports.embedding import EmbeddingProvider, EmbedRequest
 from core.ports.encryptor import Encryptor
 from core.ports.mcp import McpTransport
@@ -56,7 +57,7 @@ from core.process.session_web_tools import (
 )
 from core.resolution.registry import DICE_ROLLER_DEFINITION, ensure_tool_definition
 from core.resolution.rule_system import RuleSystemDefinition, get_or_create_default_rule_system
-from core.resolution.service import make_dice_roller_handler
+from core.resolution.service import ActorFieldsResolver, make_dice_roller_handler
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionPersonaRow, SessionRow
 from core.tenancy.models import Principal, Workspace
@@ -67,12 +68,39 @@ ModelProviderFactory = Callable[[str], ModelProvider]
 OnChunk = Callable[[str], Awaitable[None]]
 
 
-async def _actor_fields_resolver_stub(actor_entity_id: uuid.UUID | None) -> dict[str, object]:
-    """No Entity system exists in Phase 1 (F3.6 is Phase 3) -- a small fixed stat block,
-    matching every existing C1.6 test's own stub. Real per-character stats are F3.6's
-    job to supply, not this composition root's."""
-    del actor_entity_id
-    return {"dexterity": 14, "strength": 14}
+# What a character is, when nothing says otherwise. A roll still has to resolve for an
+# actor with no entity behind it -- an NPC the facilitator invented mid-scene, a session
+# whose workspace never defined a sheet -- so this is the floor, not the answer.
+_UNSHEETED_ACTOR_FIELDS: dict[str, object] = {"dexterity": 14, "strength": 14}
+
+
+def _make_actor_fields_resolver(tenant_id: uuid.UUID) -> ActorFieldsResolver:
+    """Read an actor's stats off its own entity row.
+
+    This used to be a fixed ``{dexterity: 14, strength: 14}`` stub on the grounds that no
+    entity system existed yet. One has existed since F3.6, and the stub outliving it meant
+    every character in every session rolled with identical stats: a dice tool that
+    validates ``1d20+STR`` against a constant is theatre, and the sheet the player was
+    handed was fiction.
+
+    Entity ``data`` is read inside ``tenant_scope``, so an actor id from another tenant
+    resolves to nothing rather than to someone else's character."""
+
+    async def resolve(actor_entity_id: uuid.UUID | None) -> dict[str, object]:
+        if actor_entity_id is None:
+            return dict(_UNSHEETED_ACTOR_FIELDS)
+        async with tenant_scope(tenant_id) as session:
+            entity = await session.get(EntityRow, actor_entity_id)
+            if entity is None or entity.tenant_id != tenant_id:
+                return dict(_UNSHEETED_ACTOR_FIELDS)
+            fields = dict(entity.data or {})
+        # A sheet that omits an ability still has to answer for it -- fall back per key
+        # rather than discarding the whole sheet because one stat is missing.
+        for key, value in _UNSHEETED_ACTOR_FIELDS.items():
+            fields.setdefault(key, value)
+        return fields
+
+    return resolve
 
 
 async def _load_conversation(
@@ -400,7 +428,7 @@ async def run_one_persona_turn(
             rule_system=rule_system,
             rule_system_id=rule_system_id,
             legal_check_types=rule_system.check_types,
-            actor_fields_resolver=_actor_fields_resolver_stub,
+            actor_fields_resolver=_make_actor_fields_resolver(tenant_id),
         )
         tool_registry.register(
             ToolSpec(

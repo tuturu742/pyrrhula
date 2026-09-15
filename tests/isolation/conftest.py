@@ -79,3 +79,46 @@ def _ensure_packs(repo_root: pathlib.Path) -> None:
             "  here (a private repo is not, over unauthenticated HTTPS), or point that\n"
             "  file at a copy you can read."
         )
+
+
+@pytest_asyncio.fixture(scope="session")
+async def hagnaryd_bundle() -> pathlib.Path:
+    """The Hägnaryd sample bundle, built here rather than read from somewhere on disk.
+
+    These tests used to point at an absolute path in a sibling checkout and
+    ``pytest.skip`` when it was missing, which meant they were green-by-skipping on every
+    machine except one -- and the path carried a real username into a public repo. Build
+    it instead, so the test runs wherever the builder runs, and skip with the actual
+    reason when it cannot.
+
+    ``PYRRHULA_SAMPLE_BUNDLE`` short-circuits to a prebuilt file, for a machine that has
+    one and would rather not spend the build.
+    """
+    import os
+
+    override = os.environ.get("PYRRHULA_SAMPLE_BUNDLE", "")
+    if override:
+        path = pathlib.Path(override)
+        if not path.is_file():
+            pytest.skip(f"PYRRHULA_SAMPLE_BUNDLE points at nothing: {path}")
+        return path
+
+    import sys
+    import tempfile
+
+    repo_root = pathlib.Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    try:
+        from build_samples import SAMPLES, build_sample  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001 -- the builder is optional tooling
+        pytest.skip(f"sample builder unavailable: {exc}")
+
+    spec = next((s for s in SAMPLES if s.key == "hagnaryd-mystery"), None)
+    if spec is None:
+        pytest.skip("hagnaryd-mystery is no longer one of the samples")
+
+    out_dir = pathlib.Path(tempfile.mkdtemp(prefix="pyr-sample-"))
+    try:
+        return await build_sample(spec, out_dir / spec.key)
+    except Exception as exc:  # noqa: BLE001 -- report why, never a bare skip
+        pytest.skip(f"could not build the sample bundle: {type(exc).__name__}: {exc}")

@@ -33,6 +33,7 @@ locals {
     { name = "PYRRHULA_GIT_HTTP_BASE", value = "http://${local.api_host}:8000" },
     # Base of a preview share link as a browser sees it -- the ALB, not the in-VPC api.
     { name = "PYRRHULA_PUBLIC_BASE_URL", value = local.public_base_url },
+    { name = "PYRRHULA_ADMIN_EMAIL", value = var.admin_email },
     { name = "PYRRHULA_ASSISTANT_MODEL", value = var.assistant_model },
     { name = "PYRRHULA_ASSISTANT_API_BASE", value = "" },
     { name = "PYRRHULA_WEB_SEARCH_URL", value = "http://searxng.${var.name}.local:8080" },
@@ -47,6 +48,7 @@ locals {
     { name = "PYRRHULA_JWT_SECRET", valueFrom = aws_secretsmanager_secret.this["jwt-secret"].arn },
     { name = "PYRRHULA_ADMIN_TOKEN", valueFrom = aws_secretsmanager_secret.this["admin-token"].arn },
     { name = "PYRRHULA_ENCRYPTION_KEY", valueFrom = aws_secretsmanager_secret.this["encryption-key"].arn },
+    { name = "PYRRHULA_ADMIN_PASSWORD", valueFrom = aws_secretsmanager_secret.this["admin-password"].arn },
   ]
 
   # The worker's engine declaration: delegated coding work runs as one-shot Fargate

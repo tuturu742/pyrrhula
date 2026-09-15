@@ -3,6 +3,17 @@ output "url" {
   value       = "http://${aws_lb.this.dns_name}"
 }
 
+# The generated password is never printed: it is in Secrets Manager, and this says how to
+# read it rather than putting it in terraform's output (and therefore in state and CI logs).
+output "platform_admin_signin" {
+  description = "How to sign in as the platform admin created on first boot."
+  value = join(" ", [
+    "organization 'admin', email '${var.admin_email}';",
+    "password: aws secretsmanager get-secret-value --secret-id ${var.name}/admin-password",
+    "--query SecretString --output text",
+  ])
+}
+
 output "admin_url" {
   description = "Platform-admin console (only if admin_cidrs was set)."
   value       = length(var.admin_cidrs) > 0 ? "http://${aws_lb.this.dns_name}:8100" : "(disabled -- set admin_cidrs)"

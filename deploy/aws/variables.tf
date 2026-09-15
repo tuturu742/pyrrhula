@@ -57,9 +57,15 @@ variable "worker_memory" {
 }
 
 variable "assistant_model" {
-  description = "Cold-start default for the workspace assistant (provider/model). Attach the provider API key to the 'Assistant model' connection in the UI after first login."
+  description = "Cold-start default for the workspace assistant (provider/model). Empty by default, like every other deployment path: baking in a model points a fresh install at something it has no credential for. Set it, then attach the key to the 'Assistant model' connection after first login."
   type        = string
-  default     = "anthropic/claude-sonnet-5"
+  default     = ""
+}
+
+variable "admin_email" {
+  description = "Platform admin account created on first boot; its password is generated into Secrets Manager as 'admin-password'."
+  type        = string
+  default     = "admin@pyrrhula.app"
 }
 
 variable "single_tenant_ui" {

@@ -43,11 +43,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiry_seconds: int = 60 * 60 * 24
 
-    # Phase B admin console (separate port). A shared bearer token gates the platform-admin
-    # API -- deliberately simple for a self-host ops console, and entirely separate from the
-    # per-tenant JWTs above. Empty = the admin app refuses to start (no accidental open admin).
+    # Legacy ops shortcut into the platform-admin API: a shared bearer token, entirely
+    # separate from the per-tenant JWTs above. Empty does NOT stop anything from starting
+    # (nothing checks it at startup) -- it disables the shortcut, and every admin request
+    # then has to authenticate as an owner/admin of the reserved admin tenant through the
+    # normal JWT path (api/routes/admin.py: `if expected and ...`). That is the supported
+    # route now; the standalone console it serves is marked deprecated.
     admin_token: str = ""
-    admin_port: int = 8100
     # Bootstrap login for the reserved admin tenant (organization "admin" on the normal
     # login form): when both are set, api startup idempotently ensures this owner account
     # exists. Rotating the password here does NOT update an existing account.

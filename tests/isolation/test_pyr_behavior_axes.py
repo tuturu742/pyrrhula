@@ -10,6 +10,7 @@ failure was swallowed as advisory. Observed on the shipped hagnaryd-mystery samp
 
 from __future__ import annotations
 
+import pathlib
 import uuid
 
 import pytest
@@ -97,6 +98,7 @@ async def test_pinning_the_workflow_materializes_its_axes(db_available: None) ->
 
 async def test_reimporting_into_the_same_workspace_does_not_duplicate(
     db_available: None,
+    hagnaryd_bundle: pathlib.Path,
 ) -> None:
     """Re-importing a bundle must not leave two personas sharing a key.
 
@@ -106,8 +108,6 @@ async def test_reimporting_into_the_same_workspace_does_not_duplicate(
     nothing. (Importing into a *different* workspace is a separate copy by design, and is
     what two sets of personas in one tenant actually means.)
     """
-    import pathlib
-
     from sqlalchemy import select
 
     from adapters.encryptor.identity import IdentityEncryptor
@@ -116,11 +116,7 @@ async def test_reimporting_into_the_same_workspace_does_not_duplicate(
     from core.portability.import_ import import_bundle
     from core.tenancy.scope import tenant_scope
 
-    bundle = pathlib.Path(
-        "/home/okurok/code/pyrrhula-samples/hagnaryd-mystery/hagnaryd-mystery.pyr"
-    )
-    if not bundle.is_file():
-        pytest.skip("sample bundle not present on this machine")
+    bundle = hagnaryd_bundle
 
     await ensure_default_synced()
     tenant_id, _o, workspace_id = await seed_dev_tenant(slug=f"pyrdup-{uuid.uuid4().hex[:8]}")
@@ -147,6 +143,7 @@ async def test_reimporting_into_the_same_workspace_does_not_duplicate(
 
 async def test_a_reimport_heals_secrets_the_first_pass_was_refused(
     db_available: None,
+    hagnaryd_bundle: pathlib.Path,
 ) -> None:
     """The live failure: a tenant made through the admin console had an owner with no
     workspace membership, so every create_secret in the import was refused authorship --
@@ -155,8 +152,6 @@ async def test_a_reimport_heals_secrets_the_first_pass_was_refused(
     attach the secrets to the personas already there, and doing it twice must not double
     them.
     """
-    import pathlib as _pathlib
-
     from sqlalchemy import select
 
     from adapters.encryptor.identity import IdentityEncryptor
@@ -168,11 +163,7 @@ async def test_a_reimport_heals_secrets_the_first_pass_was_refused(
     from core.tenancy.models import WorkspaceMembership
     from core.tenancy.scope import tenant_scope
 
-    bundle = _pathlib.Path(
-        "/home/okurok/code/pyrrhula-samples/hagnaryd-mystery/hagnaryd-mystery.pyr"
-    )
-    if not bundle.is_file():
-        pytest.skip("sample bundle not present on this machine")
+    bundle = hagnaryd_bundle
 
     await ensure_default_synced()
     tenant_id, owner_id, workspace_id = await seed_dev_tenant(
@@ -227,26 +218,22 @@ async def test_a_reimport_heals_secrets_the_first_pass_was_refused(
     assert len(secrets) == 11, f"expected the case's 11 secrets, got {len(secrets)}"
 
 
-async def test_import_adopts_secret_mode_from_the_bundle(db_available: None) -> None:
+async def test_import_adopts_secret_mode_from_the_bundle(
+    db_available: None, hagnaryd_bundle: pathlib.Path
+) -> None:
     """The bundle has always carried workspace.json and nothing ever read it. The cost
     was invisible: secret_mode stayed on the leak-proof default, held secrets never
     entered anyone's context, the gate never ran, and a whole interrogation played with
     nothing to hide -- twice, in two differently-broken runs. Adoption is additive: a
     workspace that already chose a mode keeps it.
     """
-    import pathlib as _pathlib
-
     from adapters.encryptor.identity import IdentityEncryptor
     from core.plugins.service import ensure_default_synced
     from core.portability.import_ import import_bundle
     from core.tenancy.models import Workspace
     from core.tenancy.scope import tenant_scope
 
-    bundle = _pathlib.Path(
-        "/home/okurok/code/pyrrhula-samples/hagnaryd-mystery/hagnaryd-mystery.pyr"
-    )
-    if not bundle.is_file():
-        pytest.skip("sample bundle not present on this machine")
+    bundle = hagnaryd_bundle
 
     await ensure_default_synced()
     tenant_id, _o, workspace_id = await seed_dev_tenant(slug=f"pyrsm-{uuid.uuid4().hex[:8]}")
