@@ -25,6 +25,7 @@ interface RepoRowData {
   runtime?: string;
   setup_cmds?: string[];
   test_cmd?: string | null;
+  build_cmd?: string | null;
   artifact_name?: string | null;
 }
 
@@ -599,6 +600,8 @@ function RepoForm({
   const [registryToken, setRegistryToken] = useState("");
   const [setupCmds, setSetupCmds] = useState((existing?.setup_cmds ?? []).join("\n"));
   const [testCmd, setTestCmd] = useState(existing?.test_cmd ?? "");
+  const [buildCmd, setBuildCmd] = useState(existing?.build_cmd ?? "");
+  const [artifactName, setArtifactName] = useState(existing?.artifact_name ?? "");
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const { data: runtimes } = useQuery({
@@ -627,6 +630,8 @@ function RepoForm({
           .map((s) => s.trim())
           .filter(Boolean),
         test_cmd: testCmd.trim() === "" ? null : testCmd.trim(),
+        build_cmd: buildCmd.trim() === "" ? null : buildCmd.trim(),
+        artifact_name: artifactName.trim() === "" ? null : artifactName.trim(),
         // Preview recipe: left alone by this form. Sending {} would wipe an operator
         // override, so the edit path explicitly does not clear it either.
         preview_env: {},
@@ -636,7 +641,9 @@ function RepoForm({
           params: { path: { repo_id: existing.id } },
           body: {
             ...shared,
-            clear_build: false,
+            // Both blank clears the build step; either one alone is useless, so they
+            // are cleared together the way the API treats them.
+            clear_build: buildCmd.trim() === "" && artifactName.trim() === "",
             clear_preview: false,
             clear_test_cmd: testCmd.trim() === "",
           },
@@ -800,6 +807,33 @@ function RepoForm({
           />
           <span className="text-xs text-muted-foreground">
             Run after each delegated change; its pass/fail becomes the PR's CI status.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Build command (optional)</span>
+          <input
+            className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            value={buildCmd}
+            onChange={(e) => setBuildCmd(e.target.value)}
+            placeholder="npm run build && tar czf dist.tgz -C dist ."
+          />
+          <span className="text-xs text-muted-foreground">
+            Runs after the tests pass. Whatever it produces is uploaded as the build
+            artifact — which is what a preview serves.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Artifact file (optional)</span>
+          <input
+            className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            value={artifactName}
+            onChange={(e) => setArtifactName(e.target.value)}
+            placeholder="dist.tgz"
+          />
+          <span className="text-xs text-muted-foreground">
+            The file the build command leaves behind, relative to the repo root.{" "}
+            <b>Both this and the build command are required</b> — with either missing there
+            is no artifact, and nothing to preview.
           </span>
         </label>
       </div>

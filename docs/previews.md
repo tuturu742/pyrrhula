@@ -4,6 +4,27 @@ A preview takes a repo's build artifact and runs it somewhere a human can open i
 a share link that expires. It is the "look at the thing that was just built" half of the
 delegation pipeline — the build half is in [exec-engines.md](exec-engines.md).
 
+## Before a preview exists: the build
+
+A preview serves a **build artifact**, so the repo has to produce one. On the repo's page
+(**Repos → the repo → Edit**), two fields together create the build step:
+
+| Field | Example |
+|---|---|
+| **Build command** | `npm run build && tar czf dist.tgz -C dist .` |
+| **Artifact file** | `dist.tgz` |
+
+**Both are required.** With either missing there is no build step at all, no artifact is
+uploaded, and *Deploy preview* has nothing to serve — which looks the same as a preview
+that failed.
+
+The build command runs in the repo's exec environment after the tests pass (or immediately,
+if no test command is set), from the repo root. Whatever file you name is uploaded to the
+artifact store and is what the preview container downloads.
+
+A `.tar.gz` is the shape the default static server expects (it unpacks it and looks for
+`index.html`). A recipe can take any shape it knows how to run.
+
 ## What a preview runs
 
 By default: your artifact, extracted, served as a static site. That covers a web build —
