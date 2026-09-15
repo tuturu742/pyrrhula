@@ -1,24 +1,35 @@
 """The one place a concrete ``ModerationProvider`` adapter is selected (E2.2/G4.14).
 Mirrors ``api.encryptor_factory``'s composition-root pattern (CLAUDE.md rule 12).
-``PYRRHULA_MODERATION_MODEL`` set -> the model-backed classifier; empty -> allow-all.
+
+The choice is resolved **per tenant** (workspace setting, then tenant setting, then
+``PYRRHULA_MODERATION_MODEL``): two tenants can reasonably want different moderation, and
+a composition root is exactly where that selection belongs -- the port itself stays
+tenant-agnostic.
 """
 
 from __future__ import annotations
 
-from adapters.moderation.allow_all import AllowAllModerationProvider
-from adapters.moderation.model_backed import ModelBackedModerationProvider
-from core.config import get_settings
+import uuid
+
+from fastapi import Depends
+
+from api.middleware.auth import get_request_context
+from core.moderation_selection import build_provider, moderation_choice
 from core.ports.moderation import ModerationProvider
+from core.tenancy.context import RequestContext
 
 
-def get_moderation_provider() -> ModerationProvider:
-    settings = get_settings()
-    if settings.moderation_model:
-        from adapters.models.litellm.provider import LiteLLMModelProvider
+async def moderation_provider_for(
+    tenant_id: uuid.UUID | None, workspace_id: uuid.UUID | None = None
+) -> ModerationProvider:
+    """For callers holding a tenant directly (background tasks, internal helpers)."""
+    model, api_base = await moderation_choice(tenant_id, workspace_id)
+    return build_provider(model, api_base)
 
-        return ModelBackedModerationProvider(
-            provider=LiteLLMModelProvider(),
-            model=settings.moderation_model,
-            api_base=settings.moderation_api_base or None,
-        )
-    return AllowAllModerationProvider()
+
+async def get_moderation_provider(
+    ctx: RequestContext = Depends(get_request_context),
+) -> ModerationProvider:
+    """The FastAPI dependency. Kept separate from ``moderation_provider_for`` so a direct
+    call cannot accidentally bind a tenant id to the injected request context."""
+    return await moderation_provider_for(ctx.tenant_id)

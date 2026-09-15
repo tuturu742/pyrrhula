@@ -17,7 +17,6 @@ contents in a branch a human reviews, never instructions to this process.
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -103,6 +102,20 @@ def _prompt(
     )
 
 
+# Enough for a reasoning model to think AND write a whole file; a connection whose model
+# needs more (or less) says so in its own params rather than through the deployment's
+# environment, because that is a fact about the model, not about the host.
+_DEFAULT_CODEGEN_MAX_TOKENS = 12000
+
+
+def _budget_from(params: dict | None, fallback: int) -> int:
+    raw = dict(params or {}).get("max_tokens")
+    try:
+        return int(raw) if raw else fallback
+    except (TypeError, ValueError):
+        return fallback
+
+
 def make_model_codegen(
     *,
     model: str,
@@ -114,7 +127,7 @@ def make_model_codegen(
     # game loop reasoned right through the allowance and returned an empty string --
     # which surfaced only as "model produced no parseable file blocks" and a silent
     # fallback to the scaffold. The budget has to cover think + write, not just write.
-    max_tokens: int = int(os.environ.get("PYRRHULA_CODEGEN_MAX_TOKENS", "12000")),
+    max_tokens: int = _DEFAULT_CODEGEN_MAX_TOKENS,
 ) -> CodegenFn:
     """A ``CodegenFn`` backed by the ``ModelProvider`` port (LiteLLM adapter) -- a plain,
     tool-free generation, so the default provider route applies."""
@@ -135,7 +148,9 @@ def make_model_codegen(
                 {"role": "user", "content": _prompt(work_item, brief, repo_files, rework_comment)}
             ],
             temperature=0.2,
-            max_tokens=max_tokens,
+            # A connection that states its own budget wins: the request-level value is
+            # only this adapter's default, and a default must not outrank a choice.
+            max_tokens=_budget_from(params, max_tokens),
             api_base=api_base,
             params=dict(params or {}),
             api_key=api_key,

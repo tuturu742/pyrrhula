@@ -142,6 +142,11 @@ class WorkspaceSettingsBody(BaseModel):
     # Whether an agent may merge an approved PR itself (True) or merging is a human's job
     # (False, the default). Off is the conservative posture: a merge is consequential.
     allow_automerge: bool | None = None
+    # Values resolved through the settings chain (core/settings/resolve.py). Omitting a
+    # field leaves it as it is; sending null CLEARS it, which is how a workspace goes back
+    # to inheriting its tenant's value rather than storing an empty one.
+    max_review_rounds: int | None = None
+    moderation_model: str | None = None
 
 
 @router.get("/{workspace_id}/settings")
@@ -199,6 +204,16 @@ async def patch_workspace_settings(
             settings["conduct_rules"] = body.conduct_rules.strip()
         if body.allow_automerge is not None:
             settings["allow_automerge"] = body.allow_automerge
+        # Inheritable keys: present-and-null means "stop overriding", which is removing
+        # the key rather than storing a falsy value the resolver would treat as a choice.
+        for field_name in ("max_review_rounds", "moderation_model"):
+            if field_name not in body.model_fields_set:
+                continue
+            value = getattr(body, field_name)
+            if value is None:
+                settings.pop(field_name, None)
+            else:
+                settings[field_name] = value
         row.settings = settings
     return {"settings": settings}
 

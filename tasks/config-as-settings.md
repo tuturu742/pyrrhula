@@ -1,6 +1,6 @@
 # CFG — Deployment config becomes tenant/workspace settings
 
-**Track:** Config · **Status:** in-progress
+**Track:** Config · **Status:** done
 **Plan refs:** §12.2 (the overlay fallback chain this reuses), §13.9 (D14 reads
 `tenant.settings` already), D11 (ports — an adapter reads a resolved value, never an env).
 
@@ -43,7 +43,7 @@ argument` on every turn for the one tenant whose hardware justified setting it.
       accessor per group below. One implementation; no call site re-derives the chain.
       Unit tests for each layer winning, and for a workspace value of `""`/`0`/`false`
       counting as *set* rather than falling through.
-- [~] **CFG.2 — model selection.** Narrowed by inspection, most of it already correct:
+- [x] **CFG.2 — model selection.** Narrowed by inspection, most of it already correct:
       - *gate* — already a **tenant** choice (`core/secrets/gate_config.py`) naming one of
         the tenant's own connections, with the env as the system default beneath it.
         Correct as it stands. Nearly deleted as "dead" because the factory reads it via
@@ -54,10 +54,12 @@ argument` on every turn for the one tenant whose hardware justified setting it.
         providers hold a loaded model in memory.
       - *assistant* — a cold-start seed only; the profile it creates is ordinary editable
         tenant data afterwards. Correct as it stands.
-      - [ ] *moderation* — the one real gap, and blocked on a decision:
-        `ModerationProvider.check()` takes no tenant, so making it per-tenant is a **port
-        signature change** (CLAUDE.md rule 12). Worth doing deliberately, not slipping in.
-- [ ] **CFG.3 — budget knobs onto the connection.** `PYRRHULA_HISTORY_CHAR_BUDGET` and
+      - [x] *moderation* — resolved per tenant/workspace **without a port change**. The
+        port was never the right seam: `check()` stays tenant-agnostic and the composition
+        root resolves which adapter to build, which is where a selection decision belongs.
+        `core/moderation_selection.py`; the API dependency and the direct-call form are
+        kept separate so a tenant id cannot bind to an injected request context.
+- [x] **CFG.3 — budget knobs onto the connection.** `PYRRHULA_HISTORY_CHAR_BUDGET` and
       `PYRRHULA_CODEGEN_MAX_TOKENS` become connection params (`max_tokens` already
       merges; history budget needs a named key), env value demoted to system default.
       Both are justified in code comments by *which model on what hardware* — the
@@ -66,19 +68,22 @@ argument` on every turn for the one tenant whose hardware justified setting it.
       reviewer may send work back is workflow policy, the same kind of decision as how
       many rounds an interrogation runs. Keep a deployment ceiling as the system default
       so a workspace cannot set it unbounded.
-- [ ] **CFG.5 — web search onto the registration.** `PYRRHULA_WEB_SEARCH_ENGINES` belongs
+- [x] **CFG.5 — web search onto the registration.** Via a generic `options` JSONB bag on
+      `mcp_server`, so one transport's vocabulary never lands in the generic registration
+      and the next knob costs no migration.
+- [x] ~~CFG.5 (original wording)~~ `PYRRHULA_WEB_SEARCH_ENGINES` belongs
       on the `web_search` MCP server row, next to its URL, not in the environment.
 - [x] **CFG.6 — demote non-settings to constants.** `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR`
       and `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` are repair heuristics no tenant
       should need to differ on. If they are not settings they are not env vars either:
       make them module constants.
-- [ ] **CFG.7 — UI.** A workspace settings panel for CFG.2/CFG.4 (the MCP card already
+- [x] **CFG.7 — UI.** A workspace settings panel for CFG.2/CFG.4 (the MCP card already
       covers its own fields). Empty input = inherit, shown as the inherited value in
       placeholder text so "unset" is never mistaken for "zero".
 - [x] **CFG.8 — docs + a CI guard.** `scripts/check_env_docs.py` runs in the lint job:
       every variable the code reads has a table row, and every row is still read. Prose
       may name a retired variable as history without it counting as live.
-- [ ] **CFG.8b — remaining docs.** `docs/configuration.md` updated as each group lands; the
+- [x] **CFG.8b — remaining docs.** `docs/configuration.md` updated as each group lands; the
       coverage cross-check re-run so no variable is documented that no longer exists.
 
 ## Acceptance criteria

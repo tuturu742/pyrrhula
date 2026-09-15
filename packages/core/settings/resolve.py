@@ -28,19 +28,17 @@ so picking those per tenant would be incoherent rather than merely expensive.
 from __future__ import annotations
 
 import uuid
-from typing import Any, TypeVar
+from typing import Any
 
 from sqlalchemy import select
 
 from core.tenancy.models import Tenant, Workspace
 from core.tenancy.scope import tenant_scope
 
-T = TypeVar("T")
-
 _UNSET = object()
 
 
-async def resolved_setting(
+async def resolved_setting[T](
     tenant_id: uuid.UUID,
     workspace_id: uuid.UUID | None,
     key: str,

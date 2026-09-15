@@ -33,6 +33,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
     select,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -81,6 +82,12 @@ class McpServerRow(Base):
     # everything else hang that long when it dies. NULL = the platform default.
     timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_result_chars: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Transport-specific knobs for THIS server (a SearXNG instance's engine list, and
+    # whatever the next transport needs). A bag rather than a column per knob, so one
+    # transport's vocabulary never lands in the generic registration.
+    options: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -96,6 +103,7 @@ class McpServerRow(Base):
             credential_ref=self.credential_ref,
             timeout_seconds=self.timeout_seconds,
             max_result_chars=self.max_result_chars,
+            options=dict(self.options or {}),
         )
 
 
@@ -158,6 +166,7 @@ async def register_server(
     max_calls_per_session: int | None | object = _UNSET,
     timeout_seconds: int | None | object = _UNSET,
     max_result_chars: int | None | object = _UNSET,
+    options: dict[str, object] | None | object = _UNSET,
 ) -> McpServerRow:
     """Upsert by `(workspace, key)`, so re-running a deployment's registry setup is
     idempotent rather than a source of duplicates. Omitted ``credential_ref`` /
@@ -204,6 +213,8 @@ async def register_server(
             row.max_result_chars = (
                 None if max_result_chars is None else int(max_result_chars)  # type: ignore[arg-type]
             )
+        if options is not _UNSET:
+            row.options = dict(options or {})  # type: ignore[arg-type]
         if existing is None:
             session.add(row)
         await session.flush()

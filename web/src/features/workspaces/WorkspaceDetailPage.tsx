@@ -8,7 +8,7 @@ import { useWorkspaceVocabulary } from "@/lib/vocabulary/useWorkspaceVocabulary"
 import { useDirectorViewAccess } from "@/features/director-view/useDirectorViewAccess";
 import { SessionStatusDot } from "@/features/session/SessionStatusDot";
 import { SetupChecklist } from "./SetupChecklist";
-import { AutoMergeCard, ConductRulesCard, SecretsGateCard } from "./SecretsGateCard";
+import { AutoMergeCard, ConductRulesCard, SecretsGateCard, InheritedSettingsCard } from "./SecretsGateCard";
 import { MembersCard } from "./MembersCard";
 import { ClockCard } from "./ClockCard";
 import { McpServersCard } from "./McpServersCard";
@@ -225,6 +225,7 @@ export function WorkspaceDetailPage() {
           <SecretsGateCard workspaceId={workspaceId!} />
           <ConductRulesCard workspaceId={workspaceId!} />
           <AutoMergeCard workspaceId={workspaceId!} />
+          <InheritedSettingsCard workspaceId={workspaceId!} />
           <MembersCard workspaceId={workspaceId!} />
           <VisibilityCard workspaceId={workspaceId!} />
           <McpServersCard workspaceId={workspaceId!} />

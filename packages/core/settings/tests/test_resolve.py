@@ -115,3 +115,72 @@ async def test_review_rounds_resolve_per_workspace_and_stay_under_the_ceiling(
     # Nonsense stored by hand falls back rather than crashing a worker mid-review.
     await _set(Workspace, workspace_id, tenant_id, {"max_review_rounds": "lots"})
     assert await max_review_rounds(tenant_id, workspace_id) == 2
+
+
+async def test_moderation_resolves_per_tenant_without_changing_the_port(
+    db_available: None,
+) -> None:
+    """Two tenants can reasonably want different moderation, so the model is a setting.
+    The port stays tenant-agnostic -- ``ModerationProvider.check()`` is unchanged; it is
+    the composition root that resolves which adapter to build, which is where a selection
+    decision belongs (CLAUDE.md rule 12)."""
+    import inspect
+
+    from adapters.moderation.allow_all import AllowAllModerationProvider
+    from core.moderation_selection import build_provider, moderation_choice
+    from core.ports.moderation import ModerationProvider
+
+    assert "tenant" not in inspect.signature(ModerationProvider.check).parameters, (
+        "the port must not have grown a tenant argument"
+    )
+
+    a_id, _a_owner, a_ws = await seed_dev_tenant(slug=f"mod-a-{uuid.uuid4().hex[:8]}")
+    b_id, _b_owner, _b_ws = await seed_dev_tenant(slug=f"mod-b-{uuid.uuid4().hex[:8]}")
+
+    # Nothing set: the deployment default, which is allow-all on a bare test deployment.
+    model, _base = await moderation_choice(a_id, a_ws)
+    assert isinstance(build_provider(model, None), AllowAllModerationProvider)
+
+    # One tenant opts into a classifier; the other is untouched.
+    await _set(Tenant, a_id, a_id, {"moderation_model": "openai/guard-1"})
+    a_model, _ = await moderation_choice(a_id, a_ws)
+    b_model, _ = await moderation_choice(b_id, None)
+    assert a_model == "openai/guard-1"
+    assert b_model == ""
+    assert not isinstance(build_provider(a_model, None), AllowAllModerationProvider)
+
+    # A workspace can be stricter than its tenant.
+    await _set(Workspace, a_ws, a_id, {"moderation_model": "openai/guard-strict"})
+    ws_model, _ = await moderation_choice(a_id, a_ws)
+    assert ws_model == "openai/guard-strict"
+
+
+async def test_clearing_a_workspace_override_restores_inheritance(db_available: None) -> None:
+    """Blank in the UI means inherit, so the endpoint must REMOVE the key rather than
+    store an empty value -- a stored 0 is a deliberate choice of zero and the resolver is
+    right to honour it, which is exactly why "clear" cannot be spelled that way."""
+    from api.routes.workspaces import WorkspaceSettingsBody, patch_workspace_settings
+    from core.tenancy.context import RequestContext
+    from core.tenancy.models import WorkspaceMembership
+
+    tenant_id, owner_id, workspace_id = await seed_dev_tenant(slug=f"cfg-{uuid.uuid4().hex[:8]}")
+    await _set(Tenant, tenant_id, tenant_id, {"max_review_rounds": 7})
+    # manage_workspace rides on the membership, not on being the tenant's owner.
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            WorkspaceMembership(
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                principal_id=owner_id,
+                role="facilitator",
+            )
+        )
+    ctx = RequestContext(tenant_id=tenant_id, principal_id=owner_id)
+
+    await patch_workspace_settings(workspace_id, WorkspaceSettingsBody(max_review_rounds=1), ctx)
+    assert await resolved_setting(tenant_id, workspace_id, "max_review_rounds", 2) == 1
+
+    # Explicit null clears the override and the tenant's value applies again.
+    await patch_workspace_settings(workspace_id, WorkspaceSettingsBody(max_review_rounds=None), ctx)
+    assert await resolved_setting(tenant_id, workspace_id, "max_review_rounds", 2) == 7
+    assert await source_of(tenant_id, workspace_id, "max_review_rounds") == "tenant"

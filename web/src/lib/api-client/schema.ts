@@ -5026,6 +5026,13 @@ export interface components {
             timeout_seconds?: number | null;
             /** Max Result Chars */
             max_result_chars?: number | null;
+            /**
+             * Options
+             * @default {}
+             */
+            options: {
+                [key: string]: unknown;
+            };
         };
         /** McpServerResponse */
         McpServerResponse: {
@@ -5050,6 +5057,13 @@ export interface components {
             timeout_seconds?: number | null;
             /** Max Result Chars */
             max_result_chars?: number | null;
+            /**
+             * Options
+             * @default {}
+             */
+            options: {
+                [key: string]: unknown;
+            };
             /** Credential Ref */
             credential_ref: string | null;
         };
@@ -6484,6 +6498,10 @@ export interface components {
             conduct_rules?: string | null;
             /** Allow Automerge */
             allow_automerge?: boolean | null;
+            /** Max Review Rounds */
+            max_review_rounds?: number | null;
+            /** Moderation Model */
+            moderation_model?: string | null;
         };
         /** HolderResponse */
         api__overseer__routes__HolderResponse: {

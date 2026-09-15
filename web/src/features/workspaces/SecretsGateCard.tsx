@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client/client";
+import { Button } from "@/components/ui/button";
 
 /**
  * How held secrets reach their holders in secret-capable phases: a trust level the
@@ -213,6 +214,101 @@ export function AutoMergeCard({ workspaceId }: { workspaceId: string }) {
           : "Off (default) — agents review and approve, but a human merges. An approved PR is marked ready and waits."}{" "}
         The host's own branch protection still applies on top of this.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Settings that resolve through the chain (workspace → tenant → deployment default).
+ *
+ * Blank means inherit, and the placeholder shows what is actually in force, so nobody has
+ * to guess whether an empty box means "off" or "not set here". Saving a blank field CLEARS
+ * the workspace's override rather than storing an empty value — storing one would read as
+ * a deliberate choice of nothing.
+ */
+export function InheritedSettingsCard({ workspaceId }: { workspaceId: string }) {
+  const queryClient = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["workspace-settings", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/workspaces/{workspace_id}/settings", {
+        params: { path: { workspace_id: workspaceId } },
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const stored = (settings.data?.settings ?? {}) as Record<string, unknown>;
+  const [rounds, setRounds] = useState<string | null>(null);
+  const [moderation, setModeration] = useState<string | null>(null);
+
+  const roundsValue = rounds ?? (stored.max_review_rounds != null ? String(stored.max_review_rounds) : "");
+  const moderationValue = moderation ?? (stored.moderation_model != null ? String(stored.moderation_model) : "");
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await apiClient.PATCH("/workspaces/{workspace_id}/settings", {
+        params: { path: { workspace_id: workspaceId } },
+        body: {
+          // null clears the override; the resolver then falls back to the tenant.
+          max_review_rounds: roundsValue.trim() === "" ? null : Number(roundsValue),
+          moderation_model: moderationValue.trim() === "" ? null : moderationValue.trim(),
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setRounds(null);
+      setModeration(null);
+      toast.success("Workspace settings saved.");
+      void queryClient.invalidateQueries({ queryKey: ["workspace-settings", workspaceId] });
+    },
+    onError: () => toast.error("Could not save the workspace settings."),
+  });
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border p-4">
+      <div>
+        <h3 className="text-sm font-medium">Workspace overrides</h3>
+        <p className="text-sm text-muted-foreground">
+          Leave a field blank to inherit the organisation&apos;s value.
+        </p>
+      </div>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Review rounds
+        <input
+          className="w-40 rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          inputMode="numeric"
+          placeholder="inherit"
+          value={roundsValue}
+          onChange={(e) => setRounds(e.target.value.replace(/[^0-9]/g, ""))}
+        />
+        <span className="text-xs text-muted-foreground">
+          How many times a reviewer may send work back before it waits for a human.
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Moderation model
+        <input
+          className="w-72 rounded-md border border-input bg-transparent px-2 py-1 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          placeholder="inherit"
+          value={moderationValue}
+          onChange={(e) => setModeration(e.target.value)}
+        />
+        <span className="text-xs text-muted-foreground">
+          Provider/model that screens authored content, e.g. <code>openai/gpt-5.6-luna</code>.
+          Blank inherits; if nothing is set anywhere, content is not screened.
+        </span>
+      </label>
+
+      <div>
+        <Button size="sm" variant="outline" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+      </div>
     </div>
   );
 }

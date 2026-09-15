@@ -62,6 +62,8 @@ class McpServerRequest(BaseModel):
     # should say so rather than inherit a build tool's ten-minute patience.
     timeout_seconds: int | None = None
     max_result_chars: int | None = None
+    # Transport-specific knobs for this server, e.g. {"engines": "bing,duckduckgo"}.
+    options: dict[str, object] = {}
 
 
 class McpServerResponse(BaseModel):
@@ -74,6 +76,7 @@ class McpServerResponse(BaseModel):
     max_calls_per_session: int | None = None
     timeout_seconds: int | None = None
     max_result_chars: int | None = None
+    options: dict[str, object] = {}
     credential_ref: str | None
 
 
@@ -88,6 +91,7 @@ def _to_response(row: object) -> McpServerResponse:
         max_calls_per_session=row.max_calls_per_session,  # type: ignore[attr-defined]
         timeout_seconds=row.timeout_seconds,  # type: ignore[attr-defined]
         max_result_chars=row.max_result_chars,  # type: ignore[attr-defined]
+        options=dict(row.options or {}),  # type: ignore[attr-defined]
         credential_ref=row.credential_ref,  # type: ignore[attr-defined]
     )
 
@@ -136,6 +140,7 @@ async def upsert_mcp_server(
             max_calls_per_session=body.max_calls_per_session,
             timeout_seconds=body.timeout_seconds,
             max_result_chars=body.max_result_chars,
+            options=body.options,
         )
     except CredentialInRegistryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -1,24 +1,20 @@
-"""The one place a concrete ``ModerationProvider`` adapter is selected (E2.2/G4.14).
-Mirrors ``worker composition root``'s composition-root pattern (CLAUDE.md rule 12).
-``PYRRHULA_MODERATION_MODEL`` set -> the model-backed classifier; empty -> allow-all.
+"""The one place a concrete ``ModerationProvider`` adapter is selected in the worker
+(E2.2/G4.14), mirroring the API's composition root (CLAUDE.md rule 12).
+
+Resolved per tenant, same as the API. A worker job always knows whose work it is running,
+so it passes that in rather than falling back to a deployment-wide answer.
 """
 
 from __future__ import annotations
 
-from adapters.moderation.allow_all import AllowAllModerationProvider
-from adapters.moderation.model_backed import ModelBackedModerationProvider
-from core.config import get_settings
+import uuid
+
+from core.moderation_selection import build_provider, moderation_choice
 from core.ports.moderation import ModerationProvider
 
 
-def get_moderation_provider() -> ModerationProvider:
-    settings = get_settings()
-    if settings.moderation_model:
-        from adapters.models.litellm.provider import LiteLLMModelProvider
-
-        return ModelBackedModerationProvider(
-            provider=LiteLLMModelProvider(),
-            model=settings.moderation_model,
-            api_base=settings.moderation_api_base or None,
-        )
-    return AllowAllModerationProvider()
+async def get_moderation_provider(
+    tenant_id: uuid.UUID | None = None, workspace_id: uuid.UUID | None = None
+) -> ModerationProvider:
+    model, api_base = await moderation_choice(tenant_id, workspace_id)
+    return build_provider(model, api_base)

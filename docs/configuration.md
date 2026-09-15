@@ -57,10 +57,9 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_RERANKER_ENABLED` | `true` | Whether retrieved chunks are reranked. |
 | `PYRRHULA_RERANKER_MODEL` | `local/BAAI/bge-reranker-v2-m3` | The reranker. |
 | `PYRRHULA_GATE_MODEL` / `PYRRHULA_GATE_API_BASE` | unset | Deployment-wide **default** model for the secret-disclosure gate. A tenant that picks one of its own connections (Admin → gate model) overrides this; unset and unchosen means the gate runs on the acting persona's model. |
-| `PYRRHULA_MODERATION_MODEL` / `PYRRHULA_MODERATION_API_BASE` | unset | Model for the moderation provider. ⚠️ deployment-wide — see "Still open". |
+| `PYRRHULA_MODERATION_MODEL` / `PYRRHULA_MODERATION_API_BASE` | unset | Deployment **default** for the moderation classifier. A workspace or tenant that sets `moderation_model` overrides it; unset everywhere means content is not screened. |
 | `PYRRHULA_ASSISTANT_MODEL` / `PYRRHULA_ASSISTANT_API_BASE` | unset | Model for the workspace assistant. **Leave unset on a clean install** — the deployment should assume nothing about what models a user has. |
 | `PYRRHULA_WEB_SEARCH_URL` | unset | SearXNG endpoint backing the `web_search` MCP preset. |
-| `PYRRHULA_WEB_SEARCH_ENGINES` | `bing` | Which engines that SearXNG instance should query. |
 
 ## Execution, previews and repos
 
@@ -103,8 +102,6 @@ to set them. Defaults are the supported configuration.
 | Variable | Default | What it does |
 |---|---|---|
 | `PYRRHULA_OLLAMA_NUM_CTX` | `16384` | Per-request context window for Ollama. Its default of 4096 makes real prompts return **empty generations silently**, which is why this is forced. |
-| `PYRRHULA_HISTORY_CHAR_BUDGET` | `24000` | Ceiling on transcript characters fed to a turn, above the flow's own budget. |
-| `PYRRHULA_CODEGEN_MAX_TOKENS` | `12000` | Completion budget for the codegen tool, which writes whole files. |
 | `PYRRHULA_REVIEW_ROUNDS_CEILING` | `10` | Hard ceiling on review→rework cycles. The *number of rounds* is a workspace setting (`max_review_rounds`); this is only the bound a workspace cannot exceed, because an unbounded review loop spends a tenant's API budget in a cycle nobody watched. |
 
 ### Resolved since the audit
@@ -123,11 +120,19 @@ to set them. Defaults are the supported configuration.
   raising — a deployment's gate would quietly fall back to each persona's own model. They
   are the system default at the bottom of the chain, which is exactly where they belong.
 
+- `PYRRHULA_MODERATION_MODEL` → resolved per tenant/workspace, **without touching the
+  port**. `ModerationProvider.check()` still knows nothing about tenants; the composition
+  root resolves which adapter to build, which is where a selection decision belongs.
+- `PYRRHULA_WEB_SEARCH_ENGINES` → `options.engines` on the `web_search` registration.
+  Which engines an instance can actually use is a fact about that instance.
+- `PYRRHULA_HISTORY_CHAR_BUDGET`, `PYRRHULA_CODEGEN_MAX_TOKENS` → connection/persona
+  params (`history_char_budget`, `max_tokens`). Both were justified in code comments by
+  *which model on what hardware*, which is the definition of per-connection.
+
 ### Still open
 
-`PYRRHULA_MODERATION_MODEL` is deployment-wide because `ModerationProvider.check()` takes
-no tenant — giving it one is a port change (CLAUDE.md rule 12) and deserves its own
-decision rather than being slipped in. Tracked in `tasks/config-as-settings.md`.
+Nothing. Every variable below is a deployment fact, a system default beneath a resolution
+chain, or the documented exception.
 
 ## Container image
 
@@ -181,3 +186,6 @@ These were considered and put somewhere a user will actually find them:
 - **How secrets are handled** — `secret_mode` on the workspace; it also travels in a `.pyr`.
 - **How many rounds a discussion runs** — the flow's own state and gates.
 - **How many times work goes back for rework** — `max_review_rounds` on the workspace.
+- **Which classifier screens authored content** — `moderation_model` on the workspace.
+- **How much transcript a model is given, and how big a file it may write** —
+  `history_char_budget` and `max_tokens` on the connection.

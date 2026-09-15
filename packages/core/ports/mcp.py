@@ -33,6 +33,8 @@ class McpServerRef:
     # deployment that happens to host both.
     timeout_seconds: int | None = None
     max_result_chars: int | None = None
+    # Transport-specific knobs for this server; each transport reads only its own keys.
+    options: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -48,6 +48,9 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           require_confirmation: true,
           max_calls_per_session: cap.trim() ? Number(cap.trim()) : null,
           timeout_seconds: timeout.trim() ? Number(timeout.trim()) : null,
+          // Transport-specific knobs (a SearXNG engine list, say). Registered empty here;
+          // the API is the surface for setting them until a form needs to.
+          options: {},
         },
       });
       if (error) throw error;

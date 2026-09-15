@@ -8,7 +8,6 @@ established "build the seam, wire it in once the real pieces exist" discipline.
 
 from __future__ import annotations
 
-import os
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
@@ -17,6 +16,7 @@ from typing import Any
 import structlog
 from sqlalchemy import select
 
+from core.agents.authoring import HISTORY_CHAR_BUDGET_KEY, merged_persona_params
 from core.agents.models import Agent, Persona
 from core.agents.runtime import AllRetriesExhaustedError, ToolLoopExceededError, run_agent_turn
 from core.agents.scheduling import make_persona_candidate_resolver
@@ -79,6 +79,7 @@ async def _load_conversation(
     tenant_id: uuid.UUID,
     session_id: uuid.UUID,
     viewer_principal_id: uuid.UUID | None = None,
+    history_char_budget: int | None = None,
 ) -> list[dict[str, str]]:
     """The transcript as chat messages. With a ``viewer_principal_id``, roles are
     mapped from that actor's perspective: its own past turns keep their stored role,
@@ -107,7 +108,7 @@ async def _load_conversation(
             else:
                 content = f"{author_name}: {m.content_md}" if author_name else m.content_md
                 out.append({"role": "user", "content": content})
-        return _tail_trim(out)
+        return _tail_trim(out, history_char_budget)
 
 
 def _replayed_from_seq(conversation: list[dict[str, str]], event_seq: int) -> int:
@@ -119,13 +120,22 @@ def _replayed_from_seq(conversation: list[dict[str, str]], event_seq: int) -> in
     return dropped
 
 
-def _tail_trim(conversation: list[dict[str, str]]) -> list[dict[str, str]]:
+# The transcript budget when nothing more specific is configured. It is a property of
+# the model, not the deployment -- a local 8B on a laptop and a hosted frontier model do
+# not want the same number -- so a connection or persona sets `history_char_budget` in
+# its params and this is only the floor beneath them.
+_DEFAULT_HISTORY_CHAR_BUDGET = 24000
+
+
+def _tail_trim(
+    conversation: list[dict[str, str]], budget: int | None = None
+) -> list[dict[str, str]]:
     """Keep the newest messages within a character budget (always at least the two
     newest). Local models degrade into token noise well before their nominal context
     window on modest hardware, and the assembled manifest already carries the durable
     knowledge -- replaying the whole transcript verbatim is the part that grows without
-    bound. Deployment-tunable: PYRRHULA_HISTORY_CHAR_BUDGET (chars, default 24000)."""
-    budget = int(os.environ.get("PYRRHULA_HISTORY_CHAR_BUDGET", "24000"))
+    bound."""
+    budget = int(budget or _DEFAULT_HISTORY_CHAR_BUDGET)
     kept: list[dict[str, str]] = []
     used = 0
     for message in reversed(conversation):
@@ -210,7 +220,16 @@ async def run_one_persona_turn(
     if on_event is not None:
         await on_event(-1, "typing", {"persona_id": str(persona_id), "name": persona_name})
 
-    conversation = await _load_conversation(tenant_id, session_id, principal_id)
+    # The transcript budget belongs to whichever model is about to read it.
+    turn_params = await merged_persona_params(tenant_id, persona_id)
+    raw_budget = turn_params.get(HISTORY_CHAR_BUDGET_KEY)
+    try:
+        history_budget_chars = int(raw_budget) if raw_budget is not None else None
+    except (TypeError, ValueError):
+        history_budget_chars = None
+    conversation = await _load_conversation(
+        tenant_id, session_id, principal_id, history_budget_chars
+    )
     query_text = conversation[-1]["content"] if conversation else ""
 
     embeddings = await embedding_provider.embed(

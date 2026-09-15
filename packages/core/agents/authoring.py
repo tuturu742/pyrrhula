@@ -309,3 +309,25 @@ async def list_persona_versions(
             )
         ).scalars()
         return list(rows)
+
+
+# Turn-time knobs that are properties of the MODEL rather than of the deployment, keyed
+# the same way a provider parameter is so one merge answers both. A tenant running a
+# local 8B on a laptop and a tenant on a hosted frontier model do not want the same
+# transcript budget, which is the test for whether something belongs in the environment.
+HISTORY_CHAR_BUDGET_KEY = "history_char_budget"
+
+
+async def merged_persona_params(tenant_id: uuid.UUID, persona_id: uuid.UUID) -> dict[str, object]:
+    """A persona's generation params over its connection's -- the same precedence the
+    provider applies, exposed for callers that need one of these values *before* the
+    request is built (the history trim decides what to send, so it cannot read it back
+    out of the request it is helping to build)."""
+    async with tenant_scope(tenant_id) as session:
+        persona = await session.get(Persona, persona_id)
+        if persona is None:
+            return {}
+        connection = await session.get(Agent, persona.agent_id)
+        merged: dict[str, object] = dict((connection.params if connection else None) or {})
+        merged.update(dict(persona.params or {}))
+        return merged

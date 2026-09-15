@@ -12,7 +12,6 @@ output. Only title/URL/snippet are returned, trimmed hard.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import httpx
@@ -33,8 +32,10 @@ SEARCH_TOOL = McpToolSpec(
 )
 
 # The default engine set favours reliability over breadth: big engines CAPTCHA-block fresh
-# self-hosted SearXNG IPs quickly; bing tolerates them. Overridable per deployment.
-_DEFAULT_ENGINES = os.environ.get("PYRRHULA_WEB_SEARCH_ENGINES", "bing")
+# self-hosted SearXNG IPs quickly; bing tolerates them. A registration overrides it with
+# `options: {"engines": "..."}` -- which engines an instance can actually use is a fact
+# about that instance, and two tenants running two instances share no such fact.
+_DEFAULT_ENGINES = "bing"
 _MAX_RESULTS = 5
 
 
@@ -56,8 +57,9 @@ class SearxngSearchTransport:
                 f"web_search server {server.key!r} has no usable url ({server.url!r})"
             )
         params = {"q": query, "format": "json"}
-        if _DEFAULT_ENGINES:
-            params["engines"] = _DEFAULT_ENGINES
+        engines = str(server.options.get("engines") or _DEFAULT_ENGINES)
+        if engines:
+            params["engines"] = engines
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(f"{base}/search", params=params)

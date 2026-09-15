@@ -27,7 +27,7 @@ from api.mcp_transport_factory import get_mcp_transport
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from api.model_provider_factory import get_model_provider
-from api.moderation_provider_factory import get_moderation_provider
+from api.moderation_provider_factory import moderation_provider_for
 from api.permission_service_factory import get_permission_service
 from api.streaming.pubsub import publish_chunk, publish_event
 from api.streaming.sse import sse_stream
@@ -483,7 +483,7 @@ async def _run_directed_turn(
             encryptor=get_encryptor(),
             permission_service=get_permission_service(),
             mcp_transport=get_mcp_transport(),
-            moderation_provider=get_moderation_provider(),
+            moderation_provider=await moderation_provider_for(tenant_id),
         )
     except DirectedTurnError:
         # A roster/phase setup error is not a session fault -- the pre-flight check in the
@@ -1307,7 +1307,7 @@ async def _run_process_definition_advance(
             encryptor=get_encryptor(),
             permission_service=get_permission_service(),
             mcp_transport=get_mcp_transport(),
-            moderation_provider=get_moderation_provider(),
+            moderation_provider=await moderation_provider_for(tenant_id),
         )
         if result.status != "active":
             return
@@ -1338,7 +1338,7 @@ async def submit_message_endpoint(
         target_type="message",
         target_id=None,
         actor_principal_id=ctx.principal_id,
-        provider=get_moderation_provider(),
+        provider=await moderation_provider_for(ctx.tenant_id),
     )
     if not authored.allowed:
         raise HTTPException(
