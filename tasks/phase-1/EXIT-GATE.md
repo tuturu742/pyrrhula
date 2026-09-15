@@ -38,10 +38,13 @@ recorded demo):
       reached through a *live, interpreter-driven* turn (not a direct `resolve()` or
       `run_agent_turn()` call) still validates, executes seeded, and writes a real
       `ResolutionRecord` correlated to the message -- proven by the same
-      `test_live_session.py` test. "The entity's actual STR": still a fixed-dict stub
-      (`core.process.live_session._actor_fields_resolver_stub`) -- no Entity system
-      exists anywhere in Phase 1 (F3.6 is Phase 3), a real, honestly-flagged limitation,
-      not a silent gap.
+      `test_live_session.py` test. "The entity's actual STR" was a fixed-dict stub here
+      (no Entity system existed in Phase 1; F3.6 is Phase 3) -- honestly flagged at the
+      time, but the stub then outlived the entity system by two phases and every
+      character kept rolling with identical stats. Closed 2026-09-15:
+      `core.process.live_session._make_actor_fields_resolver` reads the acting entity's
+      own `data`, inside `tenant_scope`, with a per-key fallback for an incomplete sheet
+      (`tests/isolation/test_actor_fields_resolver.py`).
 - [x] A second tenant provably cannot see any of it — the filter-omission test suite (T0.4)
       is green against the **full** Phase-1 schema.
       → `tests/isolation/` green (49 tests) against the schema as of B1.8, including

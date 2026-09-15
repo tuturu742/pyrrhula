@@ -95,9 +95,41 @@ G4.17) rides beside the critical path, not on it.
 | C — Assembler & resolution | C1.1–C1.8 | `core/assembler/`, `core/resolution/` |
 | D — Frontend | D1.1–D1.6 | `web/` |
 | E — Secrets & behaviour (Phase 2) | E2.1–E2.12 | `core/secrets/`, `core/behavior/`, `core/overseer/`, `packages/eval/` |
-| F — Entities & packs (Phase 3) | F3.1–F3.14 | `core/entities/`, `packs/`, `tests/packs/` |
+| F — Entities & packs (Phase 3) | F3.1–F3.14 | `core/entities/`, `.plugins/`, `tests/packs/` |
 | G — Continuity & portability (Phase 4) | G4.1–G4.14 | `core/portability/`, `core/reporting/`, `core/actions/`, `api/mcp_server/` |
-| S — swdev / delegation lane (Phase 4, D15) | G4.15–G4.17 | repo ingestion, MCP delegation, dogfood pilot |
+| S — swdev / delegation lane (Phase 4, D15) | G4.15–G4.18 | repo ingestion, MCP delegation, dogfood pilot, per-agent git identity |
 
 Tracks A, B and C1.1/C1.5 can run in parallel after Phase 0. C1.2 needs A1.7 + C1.1; C1.6
 needs C1.5. Track D trails its backend counterparts.
+
+## Reading this backlog in 2026 and later
+
+Most of these files were written against a sandbox with no live models, no git remote, no
+MCP server and in-tree packs. All four of those constraints are gone, so a scope note
+saying "not wired yet" usually means *was* not wired. Where that is most misleading the
+file carries a dated **Since then** banner; otherwise, check the code before believing a
+gap. Four changes the backlog never absorbed, and which make older files read wrong:
+
+**Two renames.** What the early tasks call a *model profile* is the `agent` table; what
+they call an *agent* is the `persona` table (`persona_md`, `entity_id`, `persona_type ∈
+supervisor|participant|informational`). There is no `model_profile` table and no
+`agent.agent_role` column. Separately, `facilitator` is now a **workspace-membership**
+role, not a persona type — and a `steward` role exists (the solo-creator seat that collapses
+the author/overseer split) with no task file at all.
+
+**`packs/` is gone.** Pack content lives in a pinned external repository
+(`deploy/plugins.json` → `pyrrhula-workflows`), fetched by `scripts/fetch_plugins.py` into
+gitignored `.plugins/`. Every `packs/rpg/…` path in F3.* is now a plugin path. This changes
+what "INV-9 green in CI" means: `tests/architecture/test_packs_independence.py` scans
+`.plugins/`, so a checkout where the fetch failed lints an empty corpus and passes
+vacuously.
+
+**The migrations were squashed.** ~80 incremental revisions became
+`migrations/versions/a0000000b458_baseline.py`. Nine revision ids cited as evidence in
+`done` tasks no longer resolve; that is the squash, not a missing migration.
+
+**Shipped subsystems with no task file.** Steward role, plugin repositories, preview
+environments, exec engines, usage limits, workspace clock, the assistant widget,
+notifications, tenant workflows, and the config-as-settings work
+(`tasks/config-as-settings.md`, the one loose file that is accurate). Absence from this
+backlog is not evidence of absence from the product.

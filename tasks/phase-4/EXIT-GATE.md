@@ -1,7 +1,9 @@
 # Phase 4 exit gate
 
-**Status:** closed (with recorded exceptions — see notes under each item) · **Plan refs:**
-§15.7, §11, §14.5
+**Status:** open — every criterion but one is met and recorded below; the dogfood pilot
+(G4.17) is the one still outstanding, and `tasks/README.md` names it as *the* Phase-4 exit
+criterion. This said "closed (with recorded exceptions)" while its headline box was
+unticked, which is not what closed means. · **Plan refs:** §15.7, §11, §14.5
 
 Phase 4 is done when all of the following are demonstrably true (each with a test or a
 recorded artefact):

@@ -34,6 +34,25 @@ def _imports_core(path: pathlib.Path) -> set[str]:
     return hits
 
 
+def test_the_pack_corpus_is_actually_present() -> None:
+    """INV-9 is only enforced if there is something to enforce it against.
+
+    Pack content left the repo for a pinned external plugin repo, fetched into gitignored
+    `.plugins/`. On a checkout where that fetch failed, the scan below walks an empty
+    directory and passes -- a green CI-blocking lint that examined nothing. The
+    self-test that follows proves the *scanner* works; this proves the *corpus* exists.
+    """
+    assert PACKS.is_dir(), (
+        f"{PACKS} is missing -- run scripts/fetch_plugins.py. Without it the INV-9 lint "
+        "below passes vacuously instead of checking the packs."
+    )
+    pack_files = list(PACKS.rglob("*.py")) + list(PACKS.rglob("*.json"))
+    assert pack_files, (
+        f"{PACKS} exists but is empty; the plugin fetch did not land any content, so the "
+        "INV-9 lint has nothing to check"
+    )
+
+
 def test_packs_import_nothing_from_core() -> None:
     offenders: list[str] = []
     for path in PACKS.rglob("*.py"):
