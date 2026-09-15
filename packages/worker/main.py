@@ -36,6 +36,7 @@ from worker.render_reports import handle_render_report
 from worker.repo_analysis import handle_analyze_workspace_repos
 from worker.repo_ingest import handle_ingest_repo_snapshot
 from worker.reports import handle_generate_report
+from worker.retrieval_models import handle_download_retrieval_models
 from worker.review import handle_facilitator_review, handle_merge_order
 from worker.schedules import handle_apply_due_schedules
 
@@ -63,6 +64,7 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
     "teardown_session_envs": handle_teardown_session_envs,
     "kill_exec_environment": handle_kill_exec_environment,
     "start_preview": handle_start_preview,
+    "download_retrieval_models": handle_download_retrieval_models,
     "stop_preview": handle_stop_preview,
 }
 

@@ -189,8 +189,13 @@ wait_with_reason "the api" \
 # download blocks the first knowledge/assistant call for minutes and has been seen
 # wedging the api's event loop on an HF-hub rate-limit stall.
 HF_SIZE=$(kubectl -n pyrrhula exec deploy/pyrrhula-api -- du -sm /app/.cache/huggingface 2>/dev/null | cut -f1 || echo 0)
-if [ "${HF_SIZE:-0}" -le 1000 ]; then
-  echo "== downloading the retrieval models (one-time, please wait)"
+if [ "${PYRRHULA_SKIP_MODEL_DOWNLOAD:-0}" = "1" ]; then
+  echo "== skipping the retrieval-model download (PYRRHULA_SKIP_MODEL_DOWNLOAD=1)"
+  echo "   Fetch them later from Admin -> Retrieval models -> Download, or upload a"
+  echo "   cache tarball there on a cluster with no route to huggingface.co."
+elif [ "${HF_SIZE:-0}" -le 1000 ]; then
+  echo "== downloading the retrieval models (one-time; set PYRRHULA_SKIP_MODEL_DOWNLOAD=1"
+  echo "   to skip and do it from the admin console instead)"
   # No model name here: the deployment's choice lives in its configuration
   # (PYRRHULA_EMBEDDING_MODEL / PYRRHULA_RERANKER_MODEL, see docs/install.md), so ask
   # the app what it is set to and warm that. A hardcoded name would pre-warm the wrong

@@ -24,6 +24,31 @@ connection, create a starter team, launch a session.
 
 ---
 
+## The retrieval models
+
+Pyrrhula runs two models itself: one embeds text for search, one reranks the results. They
+are ~3GB together and live in a cache volume shared by the api and the worker.
+
+The installer downloads them at the end of a first install, because the alternative is
+that somebody's first knowledge query stalls for several minutes. **It is no longer
+required.** Skip it with:
+
+```bash
+PYRRHULA_SKIP_MODEL_DOWNLOAD=1 ./install.sh compose   # or: k8s
+```
+
+Then get them whenever you like, from **Admin → Retrieval models**:
+
+- **Download from Hugging Face** — a background job; the sizes on that page grow as it
+  runs. Safe to press twice.
+- **Upload cache archive** — for a deployment with no route to `huggingface.co`. On a
+  machine that has one, fetch the models, then
+  `tar czf cache.tgz -C ~/.cache/huggingface hub` and upload that file.
+
+Nothing here is required for correctness: a model that is missing is fetched the first
+time something embeds. That first call is simply slow, and on an air-gapped box it fails
+instead — which is what the upload path is for.
+
 ## compose (docker / podman)
 
 ```bash

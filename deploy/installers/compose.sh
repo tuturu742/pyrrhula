@@ -135,7 +135,17 @@ for _ in $(seq 1 60); do
       # docs/install.md), so the installer asks the app what it is set to and warms
       # that. A hardcoded name here would silently pre-warm the wrong model for anyone
       # who changed it, and then charge them the cold download anyway.
-      say "downloading the retrieval models (one-time, please wait)"
+      # Opt-out: the models are no longer *required* at install time. They can be
+      # fetched later from Admin -> Retrieval models (a background job), or uploaded
+      # there as a cache tarball on a box with no route to huggingface.co. Skipping
+      # here costs a slow first knowledge call, nothing more.
+      if [ "${PYRRHULA_SKIP_MODEL_DOWNLOAD:-0}" = "1" ]; then
+        echo "   skipping the retrieval-model download (PYRRHULA_SKIP_MODEL_DOWNLOAD=1)."
+        echo "   Fetch them later: Admin -> Retrieval models -> Download, or upload a"
+        echo "   cache tarball there. Until then the first knowledge call fetches them."
+      else
+      say "downloading the retrieval models (one-time, please wait; set"
+      say "PYRRHULA_SKIP_MODEL_DOWNLOAD=1 to skip and do it from the admin console)"
       warm='
 from core.config import get_settings
 from sentence_transformers import CrossEncoder, SentenceTransformer
@@ -175,6 +185,7 @@ if s.reranker_enabled:
             echo "          then re-run: ./install.sh compose"
           fi
         fi
+      fi
       fi
       say "up."
       echo

@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Cookie, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 
@@ -77,6 +78,10 @@ async def require_platform_admin(
     if role not in _ADMIN_TENANT_ROLES:
         raise HTTPException(status_code=403, detail="platform admin required")
 
+
+# A whole HF cache for the default models is ~4GB; the ceiling is generous but finite
+# so a mistaken upload cannot fill the volume both services read from.
+_MAX_CACHE_UPLOAD_BYTES = 12 * 1024 * 1024 * 1024
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_platform_admin)])
 
@@ -297,6 +302,49 @@ async def get_retrieval_models_endpoint() -> RetrievalModelsResponse:
 
     effective = await get_retrieval_models()
     return RetrievalModelsResponse(**effective, embedded_chunks=await embedded_chunk_count())
+
+
+@router.get("/retrieval-models/cache")
+async def retrieval_cache_status_endpoint() -> dict:
+    """Whether the models are actually on this box, and how big they are.
+
+    The installers used to block on the download, so "did it work" was answered by the
+    install finishing. Now that it does not, something has to be able to say."""
+    from core.retrieval_cache import cache_status
+
+    return await cache_status()
+
+
+@router.post("/retrieval-models/download", status_code=202)
+async def download_retrieval_models_endpoint() -> dict:
+    """Fetch the configured models from Hugging Face, in the background.
+
+    202 and a job rather than a long request: this is gigabytes, and an operator who
+    closes the tab should not cancel it. Safe to press twice -- an already-cached model
+    costs a metadata check."""
+    from api.job_queue_factory import get_job_queue
+    from core.tenancy.admin import ADMIN_TENANT_ID
+
+    await get_job_queue().enqueue(ADMIN_TENANT_ID, "download_retrieval_models", {})
+    return {"status": "queued"}
+
+
+@router.post("/retrieval-models/upload", status_code=201)
+async def upload_retrieval_cache_endpoint(file: UploadFile = File(...)) -> dict:
+    """Install an operator-supplied Hugging Face cache tarball.
+
+    The air-gapped path: a box with no route to huggingface.co cannot download, and
+    waiting for one is not a deployment story. Fetch the cache where there is a route,
+    `tar czf` the hub directory, upload it here.
+    """
+    from core.retrieval_cache import CacheUploadError, install_from_tarball
+
+    try:
+        return await run_in_threadpool(
+            install_from_tarball, file.file, max_bytes=_MAX_CACHE_UPLOAD_BYTES
+        )
+    except CacheUploadError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.put("/retrieval-models")

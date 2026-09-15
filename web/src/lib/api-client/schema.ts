@@ -3298,6 +3298,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/retrieval-models/cache": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieval Cache Status Endpoint
+         * @description Whether the models are actually on this box, and how big they are.
+         *
+         *     The installers used to block on the download, so "did it work" was answered by the
+         *     install finishing. Now that it does not, something has to be able to say.
+         */
+        get: operations["retrieval_cache_status_endpoint_admin_retrieval_models_cache_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/retrieval-models/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Retrieval Models Endpoint
+         * @description Fetch the configured models from Hugging Face, in the background.
+         *
+         *     202 and a job rather than a long request: this is gigabytes, and an operator who
+         *     closes the tab should not cancel it. Safe to press twice -- an already-cached model
+         *     costs a metadata check.
+         */
+        post: operations["download_retrieval_models_endpoint_admin_retrieval_models_download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/retrieval-models/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Retrieval Cache Endpoint
+         * @description Install an operator-supplied Hugging Face cache tarball.
+         *
+         *     The air-gapped path: a box with no route to huggingface.co cannot download, and
+         *     waiting for one is not a deployment story. Fetch the cache where there is a route,
+         *     `tar czf` the hub directory, upload it here.
+         */
+        post: operations["upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/plugin-repositories": {
         parameters: {
             query?: never;
@@ -3882,6 +3953,11 @@ export interface components {
         Body_upload_plugin_endpoint_admin_plugin_repositories_upload_post: {
             /** Name */
             name: string;
+            /** File */
+            file: string;
+        };
+        /** Body_upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post */
+        Body_upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post: {
             /** File */
             file: string;
         };
@@ -14049,6 +14125,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetrievalModelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retrieval_cache_status_endpoint_admin_retrieval_models_cache_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_retrieval_models_endpoint_admin_retrieval_models_download_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

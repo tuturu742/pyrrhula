@@ -163,6 +163,7 @@ Never read by the running product.
 
 | Variable | What it does |
 |---|---|
+| `PYRRHULA_SKIP_MODEL_DOWNLOAD` | `1` skips the retrieval-model download at install time. Fetch or upload them later from Admin → Retrieval models; see `docs/install.md`. |
 | `PYRRHULA_K8S_REGISTRY` | Push images to a registry instead of importing into k3s — the no-sudo install path. |
 | `PYRRHULA_COMPOSE_PROJECT`, `PYRRHULA_WEB_PORT`, `PYRRHULA_API_UPSTREAM` | Compose naming and ports. |
 | `PYRRHULA_VERIFY_*` | Targets for `docs/deploy-verification.md` scripts (API URL, exec sockets, model names, MCP sidecars). |

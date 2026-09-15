@@ -14,6 +14,137 @@ import { Input } from "@/components/ui/input";
  * under a running process would change what a half-finished retrieval means partway
  * through.
  */
+
+/**
+ * Whether the models are actually on this box.
+ *
+ * The installers used to block on a multi-gigabyte download, so "did it work" was
+ * answered by the install finishing. They no longer have to, which means something has to
+ * be able to say — and an air-gapped deployment needs a way in that is not "reach
+ * huggingface.co".
+ */
+function ModelCacheCard() {
+  const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
+  const { data } = useQuery({
+    queryKey: ["admin-retrieval-cache"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/admin/retrieval-models/cache");
+      if (error) throw error;
+      return data as {
+        cache_path: string;
+        offline: boolean;
+        total_mb: number;
+        models: { model: string; present: boolean; size_mb: number }[];
+      };
+    },
+    // While a download runs there is no event to wait for, so ask periodically.
+    refetchInterval: 15000,
+  });
+
+  const download = useMutation({
+    mutationFn: async () => {
+      const { error } = await apiClient.POST("/admin/retrieval-models/download");
+      if (error) throw error;
+    },
+    onSuccess: () =>
+      toast.success("Download queued — this takes a few minutes; the sizes below will grow."),
+    onError: () => toast.error("Could not queue the download."),
+  });
+
+  async function upload(file: File) {
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const resp = await fetch("/api/admin/retrieval-models/upload", {
+        method: "POST",
+        body,
+        credentials: "include",
+      });
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => null);
+        throw new Error(detail?.detail ?? `upload failed (${resp.status})`);
+      }
+      toast.success("Cache installed.");
+      void queryClient.invalidateQueries({ queryKey: ["admin-retrieval-cache"] });
+    } catch (e) {
+      toast.error(String((e as Error).message));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const missing = (data?.models ?? []).filter((m) => !m.present);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+      <div>
+        <h2 className="text-sm font-medium">On this deployment</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Models are cached in <code>{data?.cache_path ?? "…"}</code>, shared by the api and
+          the worker. Nothing here is required: whatever is missing is fetched the first
+          time something embeds — that first call is just slow.
+        </p>
+      </div>
+
+      <ul className="flex flex-col gap-1 text-sm">
+        {(data?.models ?? []).map((m) => (
+          <li key={m.model} className="flex items-center gap-2">
+            <span className={m.present ? "text-emerald-600" : "text-amber-600"}>
+              {m.present ? "●" : "○"}
+            </span>
+            <code className="text-xs">{m.model}</code>
+            <span className="text-xs text-muted-foreground">
+              {m.present ? `${m.size_mb} MB` : "not downloaded"}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={download.isPending || data?.offline}
+          onClick={() => download.mutate()}
+        >
+          {download.isPending ? "Queueing…" : "Download from Hugging Face"}
+        </Button>
+        <label className="text-sm">
+          <span className="cursor-pointer rounded-md border border-input px-3 py-1.5 text-sm">
+            {uploading ? "Installing…" : "Upload cache archive"}
+          </span>
+          <input
+            type="file"
+            accept=".tar,.gz,.tgz,application/gzip,application/x-tar"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void upload(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+
+      {data?.offline ? (
+        <p className="text-xs text-amber-600">
+          This deployment runs with <code>HF_HUB_OFFLINE=1</code>, so it will not reach
+          Hugging Face. Upload a cache archive instead, or restart with it unset.
+        </p>
+      ) : null}
+      {missing.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Air-gapped? On a machine that can reach Hugging Face, fetch the models, then{" "}
+          <code>tar czf cache.tgz -C ~/.cache/huggingface hub</code> and upload that here.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminRetrievalModelsPage() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -72,6 +203,8 @@ export function AdminRetrievalModelsPage() {
           <b>{data.source}</b>. Changes apply {data.applies}.
         </p>
       </div>
+
+      <ModelCacheCard />
 
       <div className="flex flex-col gap-3 rounded-md border border-border p-4">
         <label className="flex flex-col gap-1 text-sm" htmlFor="embedding-model">
