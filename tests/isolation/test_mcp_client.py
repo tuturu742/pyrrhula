@@ -624,3 +624,42 @@ async def test_no_cap_means_unlimited_so_existing_registrations_are_unchanged(
             transport=transport,
         )
     assert await count_session_calls(tenant_a, session_id, _SERVER_KEY) == 5
+
+
+async def test_a_server_sets_its_own_timeout_and_result_cap(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """A timeout is a property of the server, not the deployment: a lookup tool answers
+    instantly while an engine tool runs a build. One global number meant tuning for the
+    slowest and letting every other server hang that long when it died, so both limits
+    ride on the registration and reach the transport through the ref."""
+    tenant_a, _tenant_b = two_tenants
+    workspace_id = await _workspace_of(tenant_a)
+    await register_server(
+        tenant_a,
+        workspace_id,
+        "fastlookup",
+        "https://mcp.example.invalid/lookup",
+        enabled_tools=["search"],
+        timeout_seconds=5,
+        max_result_chars=2000,
+    )
+    row = await get_server(tenant_a, workspace_id, "fastlookup")
+    assert row is not None
+    ref = row.to_ref()
+    assert ref.timeout_seconds == 5
+    assert ref.max_result_chars == 2000
+
+    # An omitted limit stays None, so the transport applies its own default rather than
+    # a zero that would fail every call.
+    await register_server(
+        tenant_a,
+        workspace_id,
+        "builder",
+        "https://mcp.example.invalid/build",
+        enabled_tools=["search"],
+    )
+    default_row = await get_server(tenant_a, workspace_id, "builder")
+    assert default_row is not None
+    assert default_row.to_ref().timeout_seconds is None
+    assert default_row.to_ref().max_result_chars is None

@@ -75,6 +75,12 @@ class McpServerRow(Base):
     # server cannot budget per session -- it is sent only the model's arguments, never a
     # trusted session id -- so the cap belongs here, where the session IS known.
     max_calls_per_session: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # How long to wait on this server, and how much of its answer to accept. Both are
+    # properties of the SERVER -- a lookup answers instantly, an engine tool runs a build
+    # -- so one deployment-wide number would mean tuning for the slowest and letting
+    # everything else hang that long when it dies. NULL = the platform default.
+    timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_result_chars: Mapped[int | None] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -84,7 +90,13 @@ class McpServerRow(Base):
     )
 
     def to_ref(self) -> McpServerRef:
-        return McpServerRef(key=self.key, url=self.url, credential_ref=self.credential_ref)
+        return McpServerRef(
+            key=self.key,
+            url=self.url,
+            credential_ref=self.credential_ref,
+            timeout_seconds=self.timeout_seconds,
+            max_result_chars=self.max_result_chars,
+        )
 
 
 class TenantMcpCapabilityRow(Base):
@@ -144,6 +156,8 @@ async def register_server(
     credential_ref: str | None | object = _UNSET,
     require_confirmation: bool | object = _UNSET,
     max_calls_per_session: int | None | object = _UNSET,
+    timeout_seconds: int | None | object = _UNSET,
+    max_result_chars: int | None | object = _UNSET,
 ) -> McpServerRow:
     """Upsert by `(workspace, key)`, so re-running a deployment's registry setup is
     idempotent rather than a source of duplicates. Omitted ``credential_ref`` /
@@ -183,6 +197,12 @@ async def register_server(
         if max_calls_per_session is not _UNSET:
             row.max_calls_per_session = (
                 None if max_calls_per_session is None else int(max_calls_per_session)  # type: ignore[arg-type]
+            )
+        if timeout_seconds is not _UNSET:
+            row.timeout_seconds = None if timeout_seconds is None else int(timeout_seconds)  # type: ignore[arg-type]
+        if max_result_chars is not _UNSET:
+            row.max_result_chars = (
+                None if max_result_chars is None else int(max_result_chars)  # type: ignore[arg-type]
             )
         if existing is None:
             session.add(row)

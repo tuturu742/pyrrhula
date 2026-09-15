@@ -18,6 +18,9 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
   // Per-session call ceiling; blank = unlimited. An external server cannot enforce one
   // itself -- it is never told which session is calling -- so the platform holds it.
   const [cap, setCap] = useState("");
+  // Seconds to wait on this server, blank = platform default. A lookup tool should fail
+  // fast; a build tool should not be cut off at a lookup tool's patience.
+  const [timeout, setTimeout_] = useState("");
 
   const servers = useQuery({
     queryKey: ["mcp-servers", workspaceId],
@@ -44,6 +47,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           effectful_tools: [],
           require_confirmation: true,
           max_calls_per_session: cap.trim() ? Number(cap.trim()) : null,
+          timeout_seconds: timeout.trim() ? Number(timeout.trim()) : null,
         },
       });
       if (error) throw error;
@@ -54,6 +58,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
       setUrl("");
       setTools("");
       setCap("");
+      setTimeout_("");
       void queryClient.invalidateQueries({ queryKey: ["mcp-servers", workspaceId] });
     },
     onError: (e) =>
@@ -96,6 +101,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
                 {server.max_calls_per_session != null
                   ? ` · ${server.max_calls_per_session} calls per session`
                   : ""}
+                {server.timeout_seconds != null ? ` · ${server.timeout_seconds}s timeout` : ""}
               </span>
             </span>
             <ConfirmButton
@@ -143,6 +149,13 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           inputMode="numeric"
           value={cap}
           onChange={(e) => setCap(e.target.value.replace(/[^0-9]/g, ""))}
+        />
+        <Input
+          placeholder="timeout s (blank = 120)"
+          className="w-40"
+          inputMode="numeric"
+          value={timeout}
+          onChange={(e) => setTimeout_(e.target.value.replace(/[^0-9]/g, ""))}
         />
         <Button
           type="submit"

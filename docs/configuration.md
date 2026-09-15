@@ -105,28 +105,21 @@ to set them. Defaults are the supported configuration.
 | `PYRRHULA_OLLAMA_NUM_CTX` | `16384` | Per-request context window for Ollama. Its default of 4096 makes real prompts return **empty generations silently**, which is why this is forced. |
 | `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR` | `4` | When a reasoning model burns its whole budget and returns nothing, the retry multiplies `max_tokens` by this — keeping the caller's reasoning level. |
 | `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` | `2048` | Floor for that retry. |
-| `PYRRHULA_REMOTE_MCP_TIMEOUT_S` | `120` | Read timeout for an external MCP call. Generous because engine tools legitimately run builds and tests. ⚠️ **Audit flag** — see below. |
-| `PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS` | `100000` | Caps a tool result so one server cannot flood a context. |
 | `PYRRHULA_HISTORY_CHAR_BUDGET` | `24000` | Ceiling on transcript characters fed to a turn, above the flow's own budget. |
 | `PYRRHULA_CODEGEN_MAX_TOKENS` | `12000` | Completion budget for the codegen tool, which writes whole files. |
 | `PYRRHULA_MAX_REVIEW_ROUNDS` | `2` | How many review→rework cycles a delegated work item may chain before stopping. ⚠️ **Audit flag** — see below. |
 
-### Two flagged by this audit
-
-**`PYRRHULA_REMOTE_MCP_TIMEOUT_S` is global, but a timeout is a property of a server.**
-A forensic lab answers in milliseconds; an engine tool running a build needs ten minutes.
-One number for both means tuning for the slowest and letting every other server hang that
-long when it dies. This is the same shape as the budget mistake: it belongs on the
-server's registration, next to `max_calls_per_session`, where the person attaching the
-server is already deciding things about it. `PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS` has the
-same argument, more weakly — a flood cap is closer to a deployment safety rail.
+### Still flagged
 
 **`PYRRHULA_MAX_REVIEW_ROUNDS` is workflow policy.** How many times a reviewer may send
 work back is the same kind of decision as how many rounds an interrogation runs — and that
-one lives in the flow, as declared state and a gate. The counter-argument is real: this
-also bounds runaway autonomous spend, which is a deployment concern like a rate limit. If
-it stays global it should at least be in `core/config.py` with the other settings rather
-than read straight from the environment.
+one lives in the flow, as declared state and a gate. Two tenants doing different work
+would want different values, so by the rule above it should be a workspace or flow
+setting, not an environment variable.
+
+*(`PYRRHULA_REMOTE_MCP_TIMEOUT_S` and `PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS` were also
+flagged here and have since been **removed**: both are now fields on the MCP server's
+registration, alongside `calls/session`.)*
 
 ## Container image
 
@@ -168,8 +161,9 @@ Never read by the running product.
 
 These were considered and put somewhere a user will actually find them:
 
-- **How many times a session may call an external MCP server** — `max_calls_per_session`,
-  a field on the server's registration. An env var would be global, and the external
+- **How long to wait on an external MCP server, how much of its answer to accept, and how
+  many times a session may call it** — `timeout_seconds`, `max_result_chars` and
+  `max_calls_per_session`, all fields on the server's registration. An env var would be global, and the external
   server cannot enforce it per session at all (it is never told which session is calling).
 - **Sampling parameters** (`temperature`, `seed`, `presence_penalty`, `reasoning_effort`) —
   on the connection, and per persona in the persona editor. One connection serves models

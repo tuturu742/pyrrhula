@@ -28,6 +28,11 @@ class McpServerRef:
     key: str
     url: str
     credential_ref: str | None = None
+    # Per-server limits; None means the transport's own default. A timeout belongs to the
+    # server (a lookup answers instantly, an engine tool runs a build), not to the
+    # deployment that happens to host both.
+    timeout_seconds: int | None = None
+    max_result_chars: int | None = None
 
 
 @dataclass(frozen=True)

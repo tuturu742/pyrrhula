@@ -5022,6 +5022,10 @@ export interface components {
             require_confirmation: boolean;
             /** Max Calls Per Session */
             max_calls_per_session?: number | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Max Result Chars */
+            max_result_chars?: number | null;
         };
         /** McpServerResponse */
         McpServerResponse: {
@@ -5042,6 +5046,10 @@ export interface components {
             require_confirmation: boolean;
             /** Max Calls Per Session */
             max_calls_per_session?: number | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Max Result Chars */
+            max_result_chars?: number | null;
             /** Credential Ref */
             credential_ref: string | null;
         };

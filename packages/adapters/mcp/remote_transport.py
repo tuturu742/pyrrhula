@@ -8,9 +8,9 @@ stream (FastMCP's default); both are parsed. Every safety property lives OUTSIDE
 adapter -- allowlist, phase policy, idempotency, effectful confirmation, and the
 injection envelope are ``core.mcp``'s job -- so this stays a dumb, bounded pipe:
 
-- connect/read timeouts (read tunable via ``PYRRHULA_REMOTE_MCP_TIMEOUT_S``, default
-  120 -- engine tools legitimately run tests/builds);
-- result size cap (``PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS``, default 100k) so a
+- connect/read timeouts (read from the server's own ``timeout_seconds``, default 120 --
+  engine tools legitimately run tests/builds, a lookup tool should fail fast);
+- result size cap (the server's ``max_result_chars``, default 100k) so a
   misbehaving server cannot flood a context window;
 - ``credential_ref`` names an ENVIRONMENT VARIABLE holding the bearer token (e.g.
   ``credential_ref: "MY_MCP_TOKEN"`` sends ``Authorization: Bearer $MY_MCP_TOKEN``).
@@ -32,12 +32,11 @@ from core.ports.mcp import McpServerRef, McpToolResult, McpToolSpec, McpTranspor
 _PROTOCOL_VERSION = "2025-03-26"
 
 
-def _read_timeout() -> float:
-    return float(os.environ.get("PYRRHULA_REMOTE_MCP_TIMEOUT_S", "120"))
-
-
-def _max_result_chars() -> int:
-    return int(os.environ.get("PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS", "100000"))
+# Defaults for a registration that sets no limit of its own. Generous on time because
+# engine tools legitimately run builds and tests; the per-server field is how a fast
+# server says it should fail fast.
+_DEFAULT_READ_TIMEOUT_S = 120.0
+_DEFAULT_MAX_RESULT_CHARS = 100_000
 
 
 def _parse_body(response: httpx.Response) -> dict[str, Any] | None:
@@ -102,7 +101,7 @@ class RemoteMcpTransport:
             if isinstance(item, dict) and item.get("type") == "text":
                 parts.append(str(item.get("text") or ""))
         content = "\n".join(parts)
-        cap = _max_result_chars()
+        cap = server.max_result_chars or _DEFAULT_MAX_RESULT_CHARS
         if len(content) > cap:
             content = content[:cap] + f"\n[truncated at {cap} characters]"
         structured = result.get("structuredContent")
@@ -127,7 +126,8 @@ class RemoteMcpTransport:
     async def _request(
         self, server: McpServerRef, method: str, params: dict[str, Any]
     ) -> dict[str, Any]:
-        timeout = httpx.Timeout(connect=5.0, read=_read_timeout(), write=10.0, pool=5.0)
+        read = float(server.timeout_seconds or _DEFAULT_READ_TIMEOUT_S)
+        timeout = httpx.Timeout(connect=5.0, read=read, write=10.0, pool=5.0)
         headers = self._headers(server)
         try:
             async with httpx.AsyncClient(

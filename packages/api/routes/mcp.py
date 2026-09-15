@@ -58,6 +58,10 @@ class McpServerRequest(BaseModel):
     # Per-session ceiling on calls to this server; None = unlimited. The cap lives here
     # because an external server is never told which session is calling it.
     max_calls_per_session: int | None = None
+    # Both default to the platform's value when omitted; a server that answers instantly
+    # should say so rather than inherit a build tool's ten-minute patience.
+    timeout_seconds: int | None = None
+    max_result_chars: int | None = None
 
 
 class McpServerResponse(BaseModel):
@@ -68,6 +72,8 @@ class McpServerResponse(BaseModel):
     effectful_tools: list[str]
     require_confirmation: bool
     max_calls_per_session: int | None = None
+    timeout_seconds: int | None = None
+    max_result_chars: int | None = None
     credential_ref: str | None
 
 
@@ -80,6 +86,8 @@ def _to_response(row: object) -> McpServerResponse:
         effectful_tools=list(row.effectful_tools),  # type: ignore[attr-defined]
         require_confirmation=row.require_confirmation,  # type: ignore[attr-defined]
         max_calls_per_session=row.max_calls_per_session,  # type: ignore[attr-defined]
+        timeout_seconds=row.timeout_seconds,  # type: ignore[attr-defined]
+        max_result_chars=row.max_result_chars,  # type: ignore[attr-defined]
         credential_ref=row.credential_ref,  # type: ignore[attr-defined]
     )
 
@@ -126,6 +134,8 @@ async def upsert_mcp_server(
             credential_ref=body.credential_ref,
             require_confirmation=body.require_confirmation,
             max_calls_per_session=body.max_calls_per_session,
+            timeout_seconds=body.timeout_seconds,
+            max_result_chars=body.max_result_chars,
         )
     except CredentialInRegistryError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
