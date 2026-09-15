@@ -15,7 +15,7 @@ Build:
     podman build -t comfy-mcp:dev -f Dockerfile.comfy .
 
 Run on the host (reachable from a k3s cluster via a host-endpoint Service, the
-same pattern as `deploy/k8s/base/ollama-host.yaml`):
+same pattern as `deploy/k8s/components/host-ollama/ollama.yaml`):
 
     podman run -d --name godot-mcp --restart=always -p 8090:8090 localhost/godot-mcp:dev
     podman run -d --name comfy-mcp --restart=always --network host \

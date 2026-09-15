@@ -41,7 +41,12 @@ configMapGenerator:
       - PYRRHULA_WEB_SEARCH_URL=http://searxng:8080
       # Where a browser reaches this deployment -- the base of a preview share link.
       # Distinct from GIT_HTTP_BASE, which is in-network and meaningless to a tester.
-      - PYRRHULA_PUBLIC_BASE_URL=https://pyrrhula.localhost
+      # http, not https: base ships a plain Ingress (web.yaml) and TLS is the opt-in
+      # overlay. This is the base of a preview share link handed to a human tester, so a
+      # scheme the stack does not serve makes every such link dead on arrival. If you
+      # apply deploy/k8s/tls, change this to https yourself -- that overlay applies its
+      # own resources rather than composing over this ConfigMap, so it cannot.
+      - PYRRHULA_PUBLIC_BASE_URL=http://pyrrhula.localhost
       # No assistant model is configured by default: a fresh install has no provider,
       # and naming one here pointed every deployment at a host and model tag that did
       # not exist. Set ASSISTANT_MODEL (and ASSISTANT_API_BASE for a local provider) in

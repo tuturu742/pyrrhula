@@ -4,6 +4,12 @@ kind: Kustomization
 # Apply AFTER cert-manager is installed and AFTER you have edited issuers.yaml's email
 # and ingress-tls-patch.yaml's host:
 #   kubectl apply -k deploy/k8s/tls
+#
+# Then switch the preview-link base to https, which this overlay cannot do for you (it
+# applies its own resources rather than composing over base's ConfigMap):
+#   kubectl -n pyrrhula set env deploy/pyrrhula-api \
+#     PYRRHULA_PUBLIC_BASE_URL=https://<your-host>
+# Leaving it http hands testers share links on a scheme the stack no longer serves.
 resources:
   - issuers.yaml
   - ingress-tls-patch.yaml

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build both images from the repo root and push them to the ECR repos Terraform
+# Build the images from the repo root and push them to the ECR repos Terraform
 # created. Works with docker or podman (whichever is on PATH; docker wins).
 set -euo pipefail
 cd "$(dirname "$0")"

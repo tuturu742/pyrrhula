@@ -58,7 +58,7 @@ output "private_subnet_note" {
 
 output "next_steps" {
   value = <<-EOT
-    1. ./build-and-push.sh          # build both images, push to ECR
+    1. ./build-and-push.sh          # build the images, push to ECR
     2. ./migrate.sh                 # run schema migrations (first boot: also seeds roles)
     3. open the url output above, Sign up, and you're in
     Admin token / DB password / encryption key live in Secrets Manager under "${var.name}/".

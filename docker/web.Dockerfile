@@ -16,7 +16,10 @@ RUN pnpm run build
 FROM docker.io/nginx:1.27-alpine
 # The nginx image's entrypoint envsubsts templates/ into conf.d/ on start; the api
 # upstream is overridable per deployment (ECS service discovery, k8s Service name).
-ENV PYRRHULA_API_UPSTREAM=pyrrhula_api_1:8000
+# The compose SERVICE name, not the container_name: both resolve on a compose network,
+# but compose.tls.yml already overrides this to `api:8000`, and two spellings of one
+# target in files meant to be layered together is how a wrong one gets copied onward.
+ENV PYRRHULA_API_UPSTREAM=api:8000
 COPY docker/web-nginx.conf.template /etc/nginx/templates/default.conf.template
 # Runs before the image's envsubst step; writes conf.d/00-resolver.conf so the
 # /api upstream can be re-resolved instead of pinned at startup.

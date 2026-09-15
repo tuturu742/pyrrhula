@@ -69,7 +69,7 @@ variable "admin_email" {
 }
 
 variable "single_tenant_ui" {
-  description = "true = hide the organization slug field on login (one-org demo)."
+  description = "true = hide the organization slug field on login (one-org demo). Defaults FALSE here where compose and k8s default true, on purpose: those two are somebody's own box running one organization, while an AWS deployment is the shape people put several on. Set true if this one is single-org."
   type        = bool
   default     = false
 }
