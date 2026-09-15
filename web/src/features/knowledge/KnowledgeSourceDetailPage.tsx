@@ -48,6 +48,27 @@ export function KnowledgeSourceDetailPage() {
     enabled: !!sourceId,
   });
 
+  // What the source actually CONTAINS. The list below it is drafts -- entries not yet
+  // published -- and an imported or freshly published source has none of those, so the
+  // page said "No draft entries yet" over a handbook with content in it and no way to
+  // see it. Reported as "the source is empty", which is exactly how it read.
+  const { data: publishedEntries } = useQuery({
+    enabled: Boolean(source?.current_version_id),
+    queryKey: ["knowledge-published", sourceId, source?.current_version_id],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET(
+        "/knowledge/sources/{source_id}/versions/{version_id}/entries",
+        {
+          params: {
+            path: { source_id: sourceId!, version_id: source!.current_version_id! },
+          },
+        },
+      );
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data: versions } = useQuery({
     queryKey: ["knowledge-versions", sourceId],
     queryFn: async () => {
@@ -149,9 +170,42 @@ export function KnowledgeSourceDetailPage() {
           />
         )}
 
+        {(publishedEntries?.length ?? 0) > 0 && (
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-medium">
+              Published{" "}
+              <span className="font-normal text-muted-foreground">
+                — {publishedEntries!.length} entr
+                {publishedEntries!.length === 1 ? "y" : "ies"} agents can retrieve
+              </span>
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {publishedEntries!.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="rounded-md border border-border bg-muted/30 px-4 py-2"
+                >
+                  <div className="text-sm font-medium">{entry.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    <code>{entry.entry_key}</code> · {entry.class}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Published entries are read-only. To change one, start a draft from this
+              version.
+            </p>
+          </div>
+        )}
+
         {entriesLoading && <p className="text-muted-foreground">Loading entries…</p>}
         {entries?.length === 0 && (
-          <p className="text-muted-foreground">No draft entries yet — add one above.</p>
+          <p className="text-muted-foreground">
+            {(publishedEntries?.length ?? 0) > 0
+              ? "No unpublished drafts — everything in this source is published."
+              : "No draft entries yet — add one above."}
+          </p>
         )}
         <ul className="flex flex-col gap-2">
           {entries?.map((entry) => (
