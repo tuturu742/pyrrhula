@@ -557,6 +557,15 @@ async def _import_knowledge(
                 session.add(version)
                 await session.flush()
                 version_id = version.id
+                # Point the source at what was just imported, the way publish_version
+                # does. Without it the entries exist, are published and retrieve fine
+                # (the workspace attachment pins the version directly), but the source
+                # reads as EMPTY everywhere that resolves through current_version_id --
+                # which is the authoring UI. An imported handbook you cannot open is
+                # indistinguishable from one that failed to import.
+                imported_source = await session.get(KnowledgeSource, source_id)
+                if imported_source is not None:
+                    imported_source.current_version_id = version_id
             report.id_map[str(version_meta["id"])] = str(version_id)
 
             entry_prefix = f"{prefix}/entries/{version_label}/"

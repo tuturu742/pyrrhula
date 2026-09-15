@@ -613,3 +613,47 @@ async def test_scope_bands_survive_the_round_trip_and_still_gate_retrieval(
     assert "guild_lore" not in outsider_scopes, (
         "the band must still exclude the persona who was never a member"
     )
+
+
+async def test_an_imported_source_is_openable_not_just_retrievable(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+    hagnaryd_bundle: pathlib.Path,
+) -> None:
+    """An imported knowledge source must point at the version it imported.
+
+    The entries landed, were published and retrieved correctly -- the workspace attachment
+    pins a version directly, so sessions saw the knowledge. But the source's own
+    `current_version_id` was never set, and everything that resolves through it (the
+    authoring UI) showed the source as EMPTY. An imported handbook you cannot open is
+    indistinguishable from one that failed to import, which is how it was reported.
+    """
+    from core.knowledge.models import KnowledgeEntry, KnowledgeSource
+
+    _tenant_a, tenant_b = two_tenants
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    await seed_dev_agent(tenant_b, workspace_b)
+    await import_bundle(hagnaryd_bundle.read_bytes(), tenant_b, workspace_b, bundle_ref="openable")
+
+    async with tenant_scope(tenant_b) as session:
+        sources = list((await session.execute(select(KnowledgeSource))).scalars())
+        assert sources, "nothing imported"
+        for source in sources:
+            entries = list(
+                (
+                    await session.execute(
+                        select(KnowledgeEntry).where(
+                            KnowledgeEntry.knowledge_source_id == source.id
+                        )
+                    )
+                ).scalars()
+            )
+            if not entries:
+                continue
+            assert source.current_version_id is not None, (
+                f"source {source.key!r} imported {len(entries)} entries but points at no "
+                "current version, so it reads as empty in the UI"
+            )
+            assert source.current_version_id in {e.version_id for e in entries}, (
+                f"source {source.key!r} points at a version none of its entries belong to"
+            )
