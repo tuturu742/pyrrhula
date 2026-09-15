@@ -15,7 +15,7 @@ The 10 steps of §6.3, and which task owns each:
 3-6. **Per-class hybrid retrieve, WRRF fuse, rerank, bucket fill** (A1.4-A1.7) --
    ``search_and_budget`` -- done, real.
 7. **Entity state** (F3.6) -- ``entity_state_renderer`` is an injection seam, still
-   defaulting to a no-op here (no live turn loop calls ``assemble()`` yet -- same "not
+   defaulting to a no-op here (every live turn now calls ``assemble()`` via core/process/live_session.py -- same "not
    yet wired into the runtime" gap every other injection seam in this module
    documents). ``core.entities.injection.render_entity_state`` is the real
    implementation a caller passes explicitly; it isn't imported as the default here to

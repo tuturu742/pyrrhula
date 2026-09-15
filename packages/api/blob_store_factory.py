@@ -1,7 +1,11 @@
-"""The api composition root for ``BlobStore`` selection (A1.2) — v1 is always the local
-filesystem adapter, rooted at ``Settings.blob_store_root``. A single process-wide instance
-(the adapter itself is just a resolved root path, no connection to manage) rather than
-constructing one per request.
+"""The api composition root for ``BlobStore`` selection (A1.2).
+
+The local filesystem adapter rooted at ``Settings.blob_store_root``, unless
+``blob_s3_bucket`` is set -- then the S3-compatible one. Choosing between them *is* what a
+composition root is for, so the branch lives here and nowhere else; the docstring used to
+say "always the local filesystem adapter", which its own body had already stopped being
+true of. A single process-wide instance (the local adapter is just a resolved root path,
+no connection to manage) rather than constructing one per request.
 """
 
 from __future__ import annotations

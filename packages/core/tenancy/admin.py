@@ -2,8 +2,9 @@
 
 Platform administration is ordinary tenancy: admins are principals with owner/admin
 memberships in this one reserved tenant, logging in through the normal auth flow by
-naming the ``admin`` organization. The fixed UUID (mirrored in the seeding migration,
-``migrations/versions/*_admin_tenant.py``) is the source of truth for "is this the
+naming the ``admin`` organization. The fixed UUID (mirrored in the baseline migration --
+the incremental ones were squashed into ``a0000000b458_baseline.py``) is the source of
+truth for "is this the
 admin tenant" -- never the slug, which a colliding self-serve signup could otherwise
 shadow (the migration falls back to another slug if ``admin`` is taken).
 """

@@ -77,6 +77,14 @@ pattern used throughout Track E instead: build the piece itself fully, with real
 call it from wherever it will eventually be called *once that caller exists* — documented,
 not hidden. Concretely, this looked like:
 
+> **These examples are history, not status.** Every gap listed below has since been
+> closed: the disclosure gate and the post-generation check run on live turns
+> (`core/process/live_session.py`), the eval harness has produced real numbers against a
+> live model (`eval-results/`), and the MCP server exists (`packages/api/mcp_server/`,
+> `tests/isolation/test_mcp_server.py`). They are kept because the *habit* they
+> illustrate is the point — say what is not wired, rather than implying it is.
+> `validate_overseer_requirement` is the one that is still genuinely uncalled.
+
 - `core.secrets.gate.run_disclosure_gate` and `core.secrets.leak_check
   .run_post_generation_check` (E2.5, E2.7) are complete, tested, callable functions with no
   live turn loop invoking them yet (that's a later task in a different track).
@@ -174,7 +182,7 @@ and app expect:
   /pyrrhula`).
 - App role (RLS-enforced): `pyrrhula_app`, password via `PYRRHULA_APP_DB_PASSWORD` — use
   `pyrrhula_app_ci` locally, matching what `.github/workflows/ci.yml` uses (not
-  `pyrrhula_app_dev`, which is `docker/compose.selfhost.yml`'s own default and won't match
+  `pyrrhula_app_dev`, which is `packages/core/config.py`'s default (compose has none — it requires the value) and won't match
   a hand-created role unless you set it to that instead).
 
 Then export, for every `pytest`/`uvicorn`/`alembic` invocation:

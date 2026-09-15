@@ -114,8 +114,10 @@ class Settings(BaseSettings):
     rate_limit_tenant_requests: int = 1200
     rate_limit_window_seconds: int = 60
 
-    # v1 BlobStore is local filesystem (A1.2); the S3-compatible adapter for the SaaS
-    # deployment mode is a swap behind the same port, not a config branch here.
+    # BlobStore is the local filesystem by default (A1.2). Setting blob_s3_bucket below
+    # selects the S3-compatible adapter instead -- the swap happens in the composition
+    # root (api/blob_store_factory.py), which is a config branch, exactly one level up
+    # from these fields. This comment used to deny that branch existed.
     blob_store_root: str = "/app/data/blobs"
     # Workflow packs an operator supplies by hand, for deployments that cannot reach the
     # pinned plugin repositories (private, air-gapped, or simply offline). Every

@@ -26,8 +26,12 @@ podman compose -f docker/compose.selfhost.yml up -d --build
 ```
 
 Then open http://localhost:5173 (UI). Platform admin lives in the same UI: sign in with
-organization `admin`, using the email and password the installer generated into `.env`
-as `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD` (it prints them when it finishes).
+organization `admin`, using `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD`.
+
+**Set both in `.env` before first start.** The account is bootstrapped only when both are
+present, so a manual quickstart that leaves them blank comes up with no platform admin and
+no way to become one. (`./install.sh` generates and prints them for you; this hand-rolled
+path does not — that is the difference between the two routes above.)
 Change the password in the app after first login; the account is bootstrapped once and
 editing `.env` later does not rotate it. The legacy token console on
 http://localhost:8100 (gated by `PYRRHULA_ADMIN_TOKEN`) is deprecated.

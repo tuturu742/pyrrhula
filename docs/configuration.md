@@ -21,8 +21,8 @@ in a `.env` file; the rest are read directly where they are used.
 | Variable | Default | What it does |
 |---|---|---|
 | `PYRRHULA_DATABASE_URL` | `postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula` | Owner connection: migrations and admin work. |
-| `PYRRHULA_APP_DATABASE_URL` | derived from the above | The **application** role's connection — the one RLS actually constrains. Never the owner in production. |
-| `PYRRHULA_APP_DB_PASSWORD` | — | Password for the app role, used when the app URL is derived rather than given. |
+| `PYRRHULA_APP_DATABASE_URL` | `postgresql+asyncpg://pyrrhula_app:pyrrhula_app_dev@localhost:5432/pyrrhula` | The **application** role's connection — the one RLS actually constrains. An independent default, *not* derived from `PYRRHULA_DATABASE_URL`. Never the owner in production. |
+| `PYRRHULA_APP_DB_PASSWORD` | — | Password the migration path grants the app role. Read by the deployment (compose, CI), not by `Settings`. |
 | `PYRRHULA_POSTGRES_PASSWORD` | generated | Compose/k8s only: seeds the database's own password on first boot. |
 | `PYRRHULA_REDIS_URL` | `redis://localhost:6379/0` | Cache, rate-limit counters, and the live event bus. |
 | `PYRRHULA_JWT_SECRET` | — (**required**) | Signs session tokens. Rotating it logs everyone out. |
@@ -75,7 +75,7 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_BLOB_S3_ENDPOINT` | unset | MinIO/R2/Spaces base URL. Empty means real AWS S3. |
 | `PYRRHULA_BLOB_S3_REGION` | `us-east-1` | Bucket region. |
 | `PYRRHULA_BLOB_S3_PREFIX` | unset | Key prefix, so one bucket can host several deployments. |
-| `PYRRHULA_PREVIEW_IMAGE` | `python:3.12-slim` | Image serving preview artifacts. |
+| `PYRRHULA_PREVIEW_IMAGE` | `docker.io/library/python:3.12-slim` | Image serving preview artifacts. Fully qualified on purpose: podman prompts on an unqualified name instead of assuming Docker Hub. |
 | `PYRRHULA_PREVIEW_TTL_SECONDS` | `14400` | Default preview lifetime. |
 | `PYRRHULA_PREVIEW_MAX_TTL_SECONDS` | `86400` | Ceiling a requester may ask for. |
 | `PYR_ARTIFACT_URL` / `PYR_ARTIFACT_TOKEN` | injected | Set **by** Pyrrhula inside a preview container so it can fetch its own artifact. Never set these yourself. |
@@ -149,13 +149,13 @@ application behaves.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PYRRHULA_WEB_PORT` | `80` | Host port the web container publishes (plain compose). |
+| `PYRRHULA_WEB_PORT` | `5173` | Host port the web container publishes (plain compose); `80` is the container port it maps to. |
 | `PYRRHULA_HTTP_PORT` | `80` | Host HTTP port when serving TLS (`compose.tls.yml`). |
 | `PYRRHULA_HTTPS_PORT` | `443` | Host HTTPS port. |
 | `PYRRHULA_TLS_CERT_DIR` | — (**required for TLS**) | Directory holding `fullchain.pem` and `privkey.pem`, mounted read-only. |
 | `PYRRHULA_TLS_SERVER_NAME` | `localhost` | Server name nginx serves the certificate for. |
 | `PYRRHULA_API_PORT` | `8000` | Host port the API is published on in the self-host compose file. |
-| `PYRRHULA_HF_OFFLINE` | `1` | Set `0` to let the image download embedding weights instead of using the baked cache. Needed only on a first run with no cache. |
+| `PYRRHULA_HF_OFFLINE` | `0` in compose (`1` baked into the image) | `1` uses the baked embedding cache and never reaches the network. Compose starts at `0` so a first run can fetch weights; flip it to `1` afterwards. |
 
 ## Installer and verification only
 

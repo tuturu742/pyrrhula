@@ -13,7 +13,7 @@ just that containers start. Loop until all scenarios pass.
   `podman rm -f pyrrhula_web && podman run -d --name pyrrhula_web --restart always
   --network pyrrhula_default -p 5173:80 pyrrhula-web:dev`. nginx serves the production
   build and proxies `/api/*` to `pyrrhula_api_1:8000` with buffering OFF (SSE + the
-  assistant chat's NDJSON depend on that — see docker/web-nginx.conf). For HMR while
+  assistant chat's NDJSON depend on that — see docker/web-nginx.conf.template). For HMR while
   developing, run `npm run dev` in `web/` manually (Vite picks a free port).
   **After recreating `pyrrhula_api_1`, also `podman restart pyrrhula_web`** — nginx
   resolves the api container's IP at startup, so a recreated api leaves the proxy
@@ -36,7 +36,7 @@ just that containers start. Loop until all scenarios pass.
   uid (10001): a store created before this change needs a one-time
   `podman exec pyrrhula_worker_1 chown -R 10001:10001 /app/data/blobs/repos`.
 - **Web search** (per-persona switch): set `PYRRHULA_WEB_SEARCH_URL` on the api container to
-  a SearXNG JSON endpoint reachable from it (dev: `http://odysseus_searxng:8080`; that
+  a SearXNG JSON endpoint reachable from it (dev: `http://searxng:8080`; that
   instance needs `search.formats: [html, json]` in its settings and working outbound DNS —
   custom podman networks may need `podman network update <net> --dns-add <upstream>`).
   Toggling a persona's "Web search" auto-registers the `web_search` MCP server on its
@@ -45,16 +45,18 @@ just that containers start. Loop until all scenarios pass.
 
 ## 1. After unit tests — prune test tenants
 The pytest suite defaults to the live DB and leaves hundreds of throwaway tenants
-(`agents-*`, `vocab-*`, `await-*`, …). Keep only the four demo tenants (+ the reserved library
+(`agents-*`, `vocab-*`, `await-*`, …). Keep only the demo tenants this runbook seeds (+ the reserved library
 tenant, which the purge always excludes):
 
 ```bash
 # Dry run first — prints counts, changes nothing:
 podman exec pyrrhula_api_1 python -m core.tenancy.purge \
-  --slug-prefix '' --except dev --except rpg --except swe --except exec
+  --slug-prefix '' --except dev --except rpg --except swe --except exec \
+  --except gamedev --except secrets
 # Then for real:
 podman exec pyrrhula_api_1 python -m core.tenancy.purge \
-  --slug-prefix '' --except dev --except rpg --except swe --except exec --yes
+  --slug-prefix '' --except dev --except rpg --except swe --except exec \
+  --except gamedev --except secrets --yes
 ```
 `--slug-prefix ''` matches every tenant; each `--except SLUG` keeps one. The api container
 carries the superuser DSN (`PYRRHULA_DATABASE_URL`, role `pyrrhula`) the purge needs.
@@ -76,7 +78,7 @@ python scripts/verify_deploy.py gamedev        # sidecar-backed game-dev path: t
 
 Seeding gives each tenant: a workspace, Ollama model connections (participants on `hermes3:8b`,
 supervisor on `qwen2.5:7b` — a better instruction-follower for the synthesis deliverable; the
-strong `llama3.3:70b` is reserved for the swe coding build), a persona roster (1 supervisor + N
+strong `qwen3.8:27b` is reserved for the swe coding build), a persona roster (1 supervisor + N
 participants), an **overseer `workspace_membership` for the tenant owner** (session-acting is
 gated on that — the owner does *not* get one automatically), and a fast single-round
 `verify_round_table` flow (`max_rounds=1`, distinct from any user-facing flow). It also resets
@@ -118,8 +120,10 @@ every page) is the front door; `/assist` (draft buttons) now has a 240s server t
 
 **Workspace assistant + repo knowledge graph** (both scenarios extend automatically):
 - exec also proves the **required assistant**: `GET /workspaces/{id}/assistant` ensures the
-  `informational` persona exists (its model profile defaults to `PYRRHULA_ASSISTANT_MODEL`,
-  `ollama/qwen3.8:27b`), and a `POST /assist` `draft_persona` call must return a real draft
+  `informational` persona exists (its model profile is seeded from
+  `PYRRHULA_ASSISTANT_MODEL`, which is **empty** on a clean install -- set it, or point the
+  "Assistant model" connection at something yourself, before expecting a draft back), and a
+  `POST /assist` `draft_persona` call must return a real draft
   (grounded in the caller's entitled workspace knowledge; metered `rewrite`/`generation`).
 - swe also runs **repo analysis**: `POST /workspaces/{id}/repo-analysis` → worker job
   `analyze_workspace_repos` reads the hosted store trees, ingests each repo as knowledge,

@@ -23,6 +23,65 @@ PATTERN = r"(PYRRHULA_[A-Z_0-9]+|PYR_ARTIFACT_[A-Z]+|GH_TOKEN|DEEPSEEK_KEY)"
 NOT_ENV = {"PYRRHULA_EXTENSION_KEY", "PYRRHULA_PLUGINS_LOCAL_"}
 
 
+def _documented_defaults(doc: str) -> dict[str, str]:
+    """Variable -> the Default cell, for rows that quote a single literal.
+
+    Rows whose default is prose ("generated", "derived from…", "unset", or a sentence
+    explaining that two deployments differ) are skipped deliberately: the point is to
+    catch a *stated* default drifting away from the code, not to forbid explaining one.
+    """
+    found: dict[str, str] = {}
+    for line in doc.splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        names = re.findall(rf"`{PATTERN}`", cells[0])
+        literal = re.fullmatch(r"`([^`]*)`", cells[1])
+        if len(names) == 1 and literal:
+            found[names[0]] = literal.group(1)
+    return found
+
+
+def _settings_defaults() -> dict[str, str]:
+    """What core/config.py actually falls back to, as text."""
+    from core.config import Settings
+
+    out: dict[str, str] = {}
+    for name, field in Settings.model_fields.items():
+        default = field.default
+        if default is None or repr(default) == "PydanticUndefined":
+            continue
+        if isinstance(default, bool):
+            rendered = "true" if default else "false"
+        else:
+            rendered = str(default)
+        out[f"PYRRHULA_{name.upper()}"] = rendered
+    return out
+
+
+def check_defaults(doc: str) -> list[str]:
+    """Every documented literal default must match the Settings field it names.
+
+    This column went unaudited for a long time and four of five values sampled in a
+    later review were wrong -- a reader configuring from the table got the wrong port,
+    the wrong offline flag and an image reference podman will not resolve.
+    """
+    problems: list[str] = []
+    documented = _documented_defaults(doc)
+    actual = _settings_defaults()
+    for name, stated in documented.items():
+        if name not in actual:
+            continue  # not a Settings field (compose-only, image-level); nothing to check
+        if stated.strip() != actual[name].strip():
+            problems.append(
+                f"default drift: {name} is documented as {stated!r} but core/config.py "
+                f"falls back to {actual[name]!r}"
+            )
+    return problems
+
+
 def main() -> int:
     doc = (ROOT / "docs" / "configuration.md").read_text()
     documented = {
@@ -52,9 +111,13 @@ def main() -> int:
         print(f"undocumented: {name} is read by the code but has no row in the reference")
     for name in stale:
         print(f"stale: {name} has a row but nothing reads it -- delete the row or the code")
-    if undocumented or stale:
+    drift = check_defaults(doc)
+    for problem in drift:
+        print(problem)
+
+    if undocumented or stale or drift:
         return 1
-    print(f"ok: {len(used)} environment variables, all documented")
+    print(f"ok: {len(used)} environment variables, all documented, defaults agree")
     return 0
 
 

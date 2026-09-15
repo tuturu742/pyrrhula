@@ -104,6 +104,10 @@ anything narrower.
 | `effectful_tools` | Which of those change something outside the platform. These are metered and audited as effectful, and are the ones `require_confirmation` gates. |
 | `require_confirmation` | Default `true`. A human approves each effectful call. Turn it off only for a server you own and trust to be idempotent. |
 | `credential_ref` | A *pointer* into a secret manager, never the credential itself. Pasting an obvious live key here is refused, but that check is a crude prefix guardrail (`sk-`, `ghp_`, `AKIA`, …), not a secret detector — do not rely on it to catch your mistake. |
+| `max_calls_per_session` | How many times one session may call this server. Blank means unlimited. The cap lives here because an external server is never told which session is calling, so any budget it kept itself would be one pool shared by every concurrent session. A capped-out caller gets a plain `session_call_cap_reached` refusal it can reason about. |
+| `timeout_seconds` | How long to wait, default 120. A property of the server, not the deployment: a lookup tool that answers instantly should fail fast, while an engine tool legitimately runs a build for ten minutes. |
+| `max_result_chars` | Caps one answer, default 100k, so a single server cannot flood a context. |
+| `options` | Transport-specific knobs for this server, e.g. `{"engines": "bing,duckduckgo"}` for a SearXNG instance. Each transport reads only its own keys. |
 
 The allowlist is enforced on the call path, not suggested to the model. Adding a server
 with three tools grants three tools, even if the server later advertises thirty.

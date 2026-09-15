@@ -24,7 +24,7 @@ your first implementation task.
 2. **INV-1.** No module outside `core/assembler/` and `core/overseer/` may import
    `core/knowledge/repo` or `core/secrets/repo`. The import-graph lint enforces this; never
    weaken or bypass the lint, never add an exemption.
-3. **INV-2.** `ContextAssembler.assemble(viewer: Principal, phase: Phase, ...)` — both
+3. **INV-2.** `core.assembler.context_assembler.assemble(viewer: Principal, phase: PhaseSpec, ...)` — both
    required, no defaults, no `Optional`. Same for `scope_key` on every vector/lexical query
    (INV-4): required, defaultless, pushed down as a SQL predicate — post-filtering is forbidden.
 4. **Tenancy.** Every tenant-scoped table gets `tenant_id` + RLS with `FORCE`. Database
@@ -65,9 +65,11 @@ your first implementation task.
     (D14); delegated MCP work is egress-controlled by the workspace MCP **allowlist**, not by
     D14 — do not extend D14 to cover it.
 12. **Ports, not features.** Cross-cutting concerns go through the ports in `core/ports/`
-    (`PermissionService`, `IdentityProvider`, `TenantRouter`, `VectorStore`, `ModelProvider`,
-    `JobQueue`, `BlobStore`, `Encryptor`, `ModerationProvider`) with trivial v1
-    implementations in `packages/adapters/`. Call `PermissionService.check(principal, action,
+    — `PermissionService`, `IdentityProvider`, `TenantRouter`, `VectorStore`,
+    `ModelProvider`, `JobQueue`, `BlobStore`, `Encryptor`, `ModerationProvider`, and since
+    then `EmbeddingProvider`, `Reranker`, `ExecEnvProvider`, `McpTransport`, `Notifier`,
+    `PreviewProvider` — with trivial v1 implementations in `packages/adapters/`. Read
+    `core/ports/` rather than this list; it is the set, this is a summary. Call `PermissionService.check(principal, action,
     resource)` at call sites; never inline role logic.
 
 ## Stack

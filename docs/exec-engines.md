@@ -4,7 +4,7 @@ Delegated work runs in an isolated environment per (session, repo). The engine t
 provides those environments is pluggable behind `core/ports/exec_env.py`'s
 `ExecEnvProvider`, and the **operator declares** which engines a deployment offers;
 **tenants pick one** of the declared keys (Repos page → "Agent environments run on";
-`tenant.settings.exec_engine`; API `GET/PUT /repos/exec-engines`).
+`tenant.settings.exec_engine`; API `GET /repos/exec-engines`, `PUT /repos/exec-engines/current`).
 
 ## The contract every engine must meet
 

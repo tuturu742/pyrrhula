@@ -21,7 +21,7 @@ no separate SKU (Q1).
 The organizing principle of the architecture (§4.1):
 
 > **There is exactly one code path that decides what text reaches a model, and it takes a
-> principal as a required argument.** (`ContextAssembler.assemble(viewer, phase, ...)`)
+> principal as a required argument.** (`assemble(viewer, phase, ...)`)
 
 Everything else protects that invariant.
 
@@ -43,7 +43,7 @@ Everything else protects that invariant.
 | D12 | The **leak-eval harness ships before the malice slider**. High-stakes behavioral axes are gated on measured results per provider. |
 | D13 | Pack seed content lives in a read-only **library tenant**; the knowledge RLS policy has exactly one named exception for it. Tenants fork-on-edit. |
 | D14 | **Per-tenant egress policy keyed on `purpose`**, enforced inside the `ModelProvider` port. |
-| D15 | **Software development is the third use case, as "pack + MCP delegation"** (§14.5): `packs/swdev/` + `swdev_v1` overlay; repos ingest as knowledge (pinned to a commit SHA, docs-first); engineering side effects are MCP `EffectfulAction`s; code execution is **delegated** to external coding agents whose brief comes from `ContextAssembler.assemble()` under the dispatching principal's visibility. **No native code runtime, ever** — Pyrrhula never runs, edits, or hosts code. |
+| D15 | **Software development is the third use case, as "pack + MCP delegation"** (§14.5): the swdev workflow plugin (`.plugins/`) + `swdev_v1` overlay; repos ingest as knowledge (pinned to a commit SHA, docs-first); engineering side effects are MCP `EffectfulAction`s; code execution is **delegated** to external coding agents whose brief comes from `core.assembler.context_assembler.assemble()` under the dispatching principal's visibility. **No native code runtime, ever** — Pyrrhula never runs, edits, or hosts code. |
 
 Resolved product questions (Q1–Q6): one product; **no pack marketplace** (out-of-band `.pyr`
 sharing + import-time injection scan); **no cross-tenant knowledge sharing** (within-tenant
@@ -56,7 +56,7 @@ multi-human workspaces** and all enterprise tenants.
 
 | ID | Invariant | Enforcement |
 |---|---|---|
-| INV-1 | No stored text reaches a model except through `ContextAssembler.assemble()` | import-graph lint: only `core/assembler/` and `core/overseer/` may import knowledge/secrets repos |
+| INV-1 | No stored text reaches a model except through `core.assembler.context_assembler.assemble()` | import-graph lint: only `core/assembler/` and `core/overseer/` may import knowledge/secrets repos |
 | INV-2 | `assemble()` requires `Principal` and `phase` — no defaults | type signature |
 | INV-3 | Tenant filtering happens in the database | RLS `FORCE` + filter-omission negative tests |
 | INV-4 | Every vector query carries a required `scope_key` filter, pushed down | defaultless port parameter + pushdown test |
@@ -89,12 +89,23 @@ Core code and schemas use the left column and emit `label_key`s; UIs resolve lab
 
 **Forbidden words in core code, schemas, table names, and API paths:** `game_master`, `gm`,
 `dice`, `campaign`, `character`, `player`, `spell`, `npc`, and any other RPG term — plus,
-since v1.2, swdev terms: `sprint`, `standup`, `engineer`, `pull_request`, `commit`,
-`branch`, `repo`. They exist only in `packs/` content and overlay label data. ("Sprint
-Planning"/"Standup"/"Triage" are process-template names shipped by the swdev pack;
-`pull_request` and `build` are pack entity *schemas*, not core nouns. "Embargoed Info"
-covers undisclosed vulns/incidents/plans — never tool credentials, which stay
+since v1.2, swdev terms: `sprint`, `standup`, `engineer`, `pull_request`. They exist only
+in workflow-plugin content (`.plugins/`, pinned in `deploy/plugins.json`) and overlay label
+data. ("Sprint Planning"/"Standup"/"Triage" are process-template names shipped by the swdev
+pack; `pull_request` and `build` are pack entity *schemas*, not core nouns. "Embargoed
+Info" covers undisclosed vulns/incidents/plans — never tool credentials, which stay
 `credential_ref`s.)
+
+**`repo`, `git`, `commit` and `branch` are core vocabulary, not forbidden.** They were on
+the banned list and the code has long since disagreed: `repo` and `session_repo` are core
+tables, `/repos` and `/git` are core API prefixes, and a hosted git store is a core
+capability rather than a domain metaphor. A repository is what it is in every domain this
+platform serves — there is no neutral synonym to reach for, which is the test a forbidden
+word has to fail.
+
+Note that no lint enforces this list on the core side: `tests/architecture/` checks the
+*frontend* for RPG display strings and bans pack-name literals in core, but the vocabulary
+rule above is a convention you are expected to hold, not a gate that will catch you.
 
 ## 5. Architecture map
 
@@ -251,7 +262,7 @@ no UPDATE/DELETE grant.
 - **Reports** filter the input event stream by the target principal's visibility *before*
   the model sees it — never scrub after.
 - **Delegated coding-agent work (D15):** the delegation brief comes from
-  `ContextAssembler.assemble(<dispatching engineer principal>, phase)` — a second, ad-hoc
+  `assemble(<dispatching engineer principal>, phase)` — a second, ad-hoc
   brief-assembly path is an INV-1/INV-8 violation across the delegation boundary. The
   external agent is not a principal; it inherits the dispatcher's visibility. Everything it
   returns (summary, PR body, diff excerpts) is untrusted input: enveloped, never
