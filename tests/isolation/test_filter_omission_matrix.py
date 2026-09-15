@@ -612,8 +612,7 @@ async def test_persona_git_credential_filter_omission(
             repo_id = (
                 await session.execute(
                     text(
-                        "INSERT INTO repo (tenant_id, key, name) "
-                        "VALUES (:t, 'r', 'r') RETURNING id"
+                        "INSERT INTO repo (tenant_id, key, name) VALUES (:t, 'r', 'r') RETURNING id"
                     ).bindparams(t=t)
                 )
             ).scalar_one()
@@ -633,8 +632,6 @@ async def test_persona_git_credential_filter_omission(
             )
 
     async with tenant_scope(tenant_a) as session:
-        rows = (
-            await session.execute(text("SELECT tenant_id FROM persona_git_credential"))
-        ).all()
+        rows = (await session.execute(text("SELECT tenant_id FROM persona_git_credential"))).all()
 
     assert tenant_b not in {row[0] for row in rows}

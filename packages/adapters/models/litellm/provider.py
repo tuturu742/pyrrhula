@@ -261,6 +261,13 @@ def _rejects_tools_with_reasoning(exc: Exception) -> bool:
     return "reasoning_effort" in text and "tool" in text
 
 
+# How the empty-generation retry enlarges a starved budget. Not settings and not
+# environment variables: a tenant has no reason to want a different multiplier for "the
+# model reasoned past its allowance", and something nobody should vary is a constant.
+_EMPTY_RETRY_TOKEN_FACTOR = 4
+_REASONING_MIN_COMPLETION_TOKENS = 2048
+
+
 def _repair_call(
     call: dict[str, Any], exc: Exception, req: GenerationRequest
 ) -> dict[str, Any] | None:
@@ -340,6 +347,7 @@ class LiteLLMModelProvider:
             stream_options={"include_usage": True},
             **kwargs,
         )
+
         async def _attempt(this_call: dict[str, Any]) -> AsyncIterator[tuple[Chunk, bool]]:
             """Stream one acompletion, tagging each yielded Chunk with whether it carried
             real output (text or tool calls). The caller uses the tag to decide whether an
@@ -389,12 +397,15 @@ class LiteLLMModelProvider:
                         )
                         for index, slot in sorted(pending_calls.items())
                     )
-                    yield Chunk(
-                        text=text,
-                        finish_reason="tool_calls",
-                        tool_calls=tool_calls,
-                        cached_tokens=cached_tokens,
-                    ), True
+                    yield (
+                        Chunk(
+                            text=text,
+                            finish_reason="tool_calls",
+                            tool_calls=tool_calls,
+                            cached_tokens=cached_tokens,
+                        ),
+                        True,
+                    )
                 elif text or finish_reason:
                     yield (
                         Chunk(text=text, finish_reason=finish_reason, cached_tokens=cached_tokens),
@@ -421,9 +432,9 @@ class LiteLLMModelProvider:
             # would dodge the raise.
             budget = call.get("max_tokens")
             if isinstance(budget, int) and budget > 0:
-                factor = int(os.environ.get("PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR", "4"))
-                floor = int(os.environ.get("PYRRHULA_REASONING_MIN_COMPLETION_TOKENS", "2048"))
-                retry["max_tokens"] = max(budget * factor, floor)
+                retry["max_tokens"] = max(
+                    budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
+                )
                 async for chunk, _had in _attempt(retry):
                     yield chunk
             elif not requested_effort:

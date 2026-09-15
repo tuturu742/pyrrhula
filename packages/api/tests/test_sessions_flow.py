@@ -435,9 +435,7 @@ async def test_advance_continues_until_the_interpreter_really_stops(monkeypatch)
         async def _run(*_a, **_k):  # noqa: ANN002, ANN003, ANN202
             status = statuses[len(seen)]
             seen.append(status)
-            return AdvanceResult(
-                status=status, steps_taken=200, final_phase="talk", flags=()
-            )
+            return AdvanceResult(status=status, steps_taken=200, final_phase="talk", flags=())
 
         return _run
 
@@ -447,9 +445,7 @@ async def test_advance_continues_until_the_interpreter_really_stops(monkeypatch)
         "run_process_definition_session",
         _runner(["active", "active", "active", "terminal"]),
     )
-    await sessions_module._run_process_definition_advance(
-        uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    )
+    await sessions_module._run_process_definition_advance(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
     assert seen == ["active", "active", "active", "terminal"]
 
     # A blocking status stops immediately -- re-entering would fight the human.
@@ -457,7 +453,5 @@ async def test_advance_continues_until_the_interpreter_really_stops(monkeypatch)
     monkeypatch.setattr(
         sessions_module, "run_process_definition_session", _runner(["awaiting_human"])
     )
-    await sessions_module._run_process_definition_advance(
-        uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    )
+    await sessions_module._run_process_definition_advance(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
     assert seen == ["awaiting_human"], "a real stop must not be re-entered"

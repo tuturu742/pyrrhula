@@ -37,36 +37,48 @@ argument` on every turn for the one tenant whose hardware justified setting it.
 
 ## Subtasks
 
-- [ ] **CFG.1 — the resolver.** `core/settings/resolve.py`:
+- [x] **CFG.1 — the resolver.** `core/settings/resolve.py`:
       `resolved_setting(tenant_id, workspace_id, key, default)` reading
       `workspace.settings` → `tenant.settings` → the passed default, plus a typed
       accessor per group below. One implementation; no call site re-derives the chain.
       Unit tests for each layer winning, and for a workspace value of `""`/`0`/`false`
       counting as *set* rather than falling through.
-- [ ] **CFG.2 — model selection.** `gate_model`/`gate_api_base`,
-      `moderation_model`/`moderation_api_base`, `assistant_model`/`assistant_api_base`,
-      `reranker_enabled`/`reranker_model` resolve through CFG.1. Env values stay as the
-      system default. Call sites: `core/secrets/gate.py`, the moderation provider factory,
-      `api/routes/assist*`, the reranker factory.
+- [~] **CFG.2 — model selection.** Narrowed by inspection, most of it already correct:
+      - *gate* — already a **tenant** choice (`core/secrets/gate_config.py`) naming one of
+        the tenant's own connections, with the env as the system default beneath it.
+        Correct as it stands. Nearly deleted as "dead" because the factory reads it via
+        `getattr(settings, "gate_model", "")`, which a grep for `settings.gate_model`
+        misses and which degrades *silently* — `scripts/check_env_docs.py` caught it.
+      - *embedding / reranker* — deployment-level on purpose and already admin-console
+        editable (`core/deployment_settings.py`): one vector column of one width, and the
+        providers hold a loaded model in memory.
+      - *assistant* — a cold-start seed only; the profile it creates is ordinary editable
+        tenant data afterwards. Correct as it stands.
+      - [ ] *moderation* — the one real gap, and blocked on a decision:
+        `ModerationProvider.check()` takes no tenant, so making it per-tenant is a **port
+        signature change** (CLAUDE.md rule 12). Worth doing deliberately, not slipping in.
 - [ ] **CFG.3 — budget knobs onto the connection.** `PYRRHULA_HISTORY_CHAR_BUDGET` and
       `PYRRHULA_CODEGEN_MAX_TOKENS` become connection params (`max_tokens` already
       merges; history budget needs a named key), env value demoted to system default.
       Both are justified in code comments by *which model on what hardware* — the
       definition of per-connection.
-- [ ] **CFG.4 — `PYRRHULA_MAX_REVIEW_ROUNDS` → workspace setting.** How many times a
+- [x] **CFG.4 — `PYRRHULA_MAX_REVIEW_ROUNDS` → workspace setting.** How many times a
       reviewer may send work back is workflow policy, the same kind of decision as how
       many rounds an interrogation runs. Keep a deployment ceiling as the system default
       so a workspace cannot set it unbounded.
 - [ ] **CFG.5 — web search onto the registration.** `PYRRHULA_WEB_SEARCH_ENGINES` belongs
       on the `web_search` MCP server row, next to its URL, not in the environment.
-- [ ] **CFG.6 — demote non-settings to constants.** `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR`
+- [x] **CFG.6 — demote non-settings to constants.** `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR`
       and `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` are repair heuristics no tenant
       should need to differ on. If they are not settings they are not env vars either:
       make them module constants.
 - [ ] **CFG.7 — UI.** A workspace settings panel for CFG.2/CFG.4 (the MCP card already
       covers its own fields). Empty input = inherit, shown as the inherited value in
       placeholder text so "unset" is never mistaken for "zero".
-- [ ] **CFG.8 — docs.** `docs/configuration.md` updated as each group lands; the
+- [x] **CFG.8 — docs + a CI guard.** `scripts/check_env_docs.py` runs in the lint job:
+      every variable the code reads has a table row, and every row is still read. Prose
+      may name a retired variable as history without it counting as live.
+- [ ] **CFG.8b — remaining docs.** `docs/configuration.md` updated as each group lands; the
       coverage cross-check re-run so no variable is documented that no longer exists.
 
 ## Acceptance criteria

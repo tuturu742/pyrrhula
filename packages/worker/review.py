@@ -4,8 +4,8 @@ After a delegation lands a PR, this job has the session's supervisor persona rea
 branch diff and give a structured verdict. Approve drives the work item's ``approve``
 transition; request-changes drives ``request_changes`` and enqueues the existing
 ``rework_work_item`` job with the review comments — whose completion re-submits the item
-for review and chains the next round, bounded by ``PYRRHULA_MAX_REVIEW_ROUNDS``
-(default 2). Every verdict is posted into the session transcript, so the whole loop is
+for review and chains the next round, bounded by the workspace's ``max_review_rounds``
+setting (default 2, under the deployment's ``PYRRHULA_REVIEW_ROUNDS_CEILING``). Every verdict is posted into the session transcript, so the whole loop is
 visible where the humans are looking.
 
 A model failure degrades to a transcript note ("manual review needed") with the item left
@@ -66,8 +66,27 @@ _MERGE_ORDER_SYSTEM = (
 )
 
 
-def max_review_rounds() -> int:
-    return int(os.environ.get("PYRRHULA_MAX_REVIEW_ROUNDS", "2"))
+# The deployment's default, and its ceiling. How many times a reviewer may send work
+# back is workflow policy -- the same kind of decision as how many rounds an interrogation
+# runs -- so a workspace or tenant sets its own. The ceiling stays with the deployment
+# because an unbounded review loop spends a tenant's API budget in a cycle nobody watched.
+_DEFAULT_REVIEW_ROUNDS = 2
+_MAX_REVIEW_ROUNDS_CEILING = int(os.environ.get("PYRRHULA_REVIEW_ROUNDS_CEILING", "10"))
+REVIEW_ROUNDS_KEY = "max_review_rounds"
+
+
+async def max_review_rounds(tenant_id: uuid.UUID, workspace_id: uuid.UUID | None = None) -> int:
+    """Rounds this workspace allows, clamped to the deployment's ceiling."""
+    from core.settings.resolve import resolved_setting
+
+    chosen = await resolved_setting(
+        tenant_id, workspace_id, REVIEW_ROUNDS_KEY, _DEFAULT_REVIEW_ROUNDS
+    )
+    try:
+        rounds = int(chosen)
+    except (TypeError, ValueError):
+        rounds = _DEFAULT_REVIEW_ROUNDS
+    return max(0, min(rounds, _MAX_REVIEW_ROUNDS_CEILING))
 
 
 class ReviewVerdict(BaseModel):
@@ -241,7 +260,8 @@ async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
                 "role": "user",
                 "content": (
                     f"Work item: {title}\n{description}\n\n"
-                    f"Review round {review_round} of {max_review_rounds()}.\n\n"
+                    f"Review round {review_round} of "
+                    f"{await max_review_rounds(tenant_id, workspace_id)}.\n\n"
                     f"Diff of branch {branch}:\n```diff\n{diff or '(empty diff)'}\n```"
                 ),
             },

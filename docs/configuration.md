@@ -56,8 +56,8 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_EMBEDDING_DIMENSION` | `1024` | Vector width. Must match the model **and** the existing index — changing it needs a re-embed. |
 | `PYRRHULA_RERANKER_ENABLED` | `true` | Whether retrieved chunks are reranked. |
 | `PYRRHULA_RERANKER_MODEL` | `local/BAAI/bge-reranker-v2-m3` | The reranker. |
-| `PYRRHULA_GATE_MODEL` / `PYRRHULA_GATE_API_BASE` | unset | Model for the secret-disclosure gate. Unset means the workspace's own connection. |
-| `PYRRHULA_MODERATION_MODEL` / `PYRRHULA_MODERATION_API_BASE` | unset | Model for the moderation provider. |
+| `PYRRHULA_GATE_MODEL` / `PYRRHULA_GATE_API_BASE` | unset | Deployment-wide **default** model for the secret-disclosure gate. A tenant that picks one of its own connections (Admin → gate model) overrides this; unset and unchosen means the gate runs on the acting persona's model. |
+| `PYRRHULA_MODERATION_MODEL` / `PYRRHULA_MODERATION_API_BASE` | unset | Model for the moderation provider. ⚠️ deployment-wide — see "Still open". |
 | `PYRRHULA_ASSISTANT_MODEL` / `PYRRHULA_ASSISTANT_API_BASE` | unset | Model for the workspace assistant. **Leave unset on a clean install** — the deployment should assume nothing about what models a user has. |
 | `PYRRHULA_WEB_SEARCH_URL` | unset | SearXNG endpoint backing the `web_search` MCP preset. |
 | `PYRRHULA_WEB_SEARCH_ENGINES` | `bing` | Which engines that SearXNG instance should query. |
@@ -103,23 +103,31 @@ to set them. Defaults are the supported configuration.
 | Variable | Default | What it does |
 |---|---|---|
 | `PYRRHULA_OLLAMA_NUM_CTX` | `16384` | Per-request context window for Ollama. Its default of 4096 makes real prompts return **empty generations silently**, which is why this is forced. |
-| `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR` | `4` | When a reasoning model burns its whole budget and returns nothing, the retry multiplies `max_tokens` by this — keeping the caller's reasoning level. |
-| `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` | `2048` | Floor for that retry. |
 | `PYRRHULA_HISTORY_CHAR_BUDGET` | `24000` | Ceiling on transcript characters fed to a turn, above the flow's own budget. |
 | `PYRRHULA_CODEGEN_MAX_TOKENS` | `12000` | Completion budget for the codegen tool, which writes whole files. |
-| `PYRRHULA_MAX_REVIEW_ROUNDS` | `2` | How many review→rework cycles a delegated work item may chain before stopping. ⚠️ **Audit flag** — see below. |
+| `PYRRHULA_REVIEW_ROUNDS_CEILING` | `10` | Hard ceiling on review→rework cycles. The *number of rounds* is a workspace setting (`max_review_rounds`); this is only the bound a workspace cannot exceed, because an unbounded review loop spends a tenant's API budget in a cycle nobody watched. |
 
-### Still flagged
+### Resolved since the audit
 
-**`PYRRHULA_MAX_REVIEW_ROUNDS` is workflow policy.** How many times a reviewer may send
-work back is the same kind of decision as how many rounds an interrogation runs — and that
-one lives in the flow, as declared state and a gate. Two tenants doing different work
-would want different values, so by the rule above it should be a workspace or flow
-setting, not an environment variable.
+- `PYRRHULA_REMOTE_MCP_TIMEOUT_S`, `PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS` → fields on the
+  MCP server's registration, beside `calls/session`.
+- `PYRRHULA_MAX_REVIEW_ROUNDS` → `max_review_rounds`, a workspace setting resolved through
+  the chain; only the ceiling stays in the environment.
+- `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR`, `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` →
+  plain constants. No tenant has a reason to want a different multiplier for "the model
+  reasoned past its allowance", and something nobody should vary is not configuration.
+- `PYRRHULA_GATE_MODEL`, `PYRRHULA_GATE_API_BASE` → **kept, and correctly layered.** They
+  looked dead (the gate has run on a tenant-chosen connection for some time) and were
+  briefly deleted; `scripts/check_env_docs.py` caught it. They are read through
+  `getattr(settings, "gate_model", "")`, so removing them degrades silently instead of
+  raising — a deployment's gate would quietly fall back to each persona's own model. They
+  are the system default at the bottom of the chain, which is exactly where they belong.
 
-*(`PYRRHULA_REMOTE_MCP_TIMEOUT_S` and `PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS` were also
-flagged here and have since been **removed**: both are now fields on the MCP server's
-registration, alongside `calls/session`.)*
+### Still open
+
+`PYRRHULA_MODERATION_MODEL` is deployment-wide because `ModerationProvider.check()` takes
+no tenant — giving it one is a port change (CLAUDE.md rule 12) and deserves its own
+decision rather than being slipped in. Tracked in `tasks/config-as-settings.md`.
 
 ## Container image
 
@@ -172,3 +180,4 @@ These were considered and put somewhere a user will actually find them:
   workspace and the flow.
 - **How secrets are handled** — `secret_mode` on the workspace; it also travels in a `.pyr`.
 - **How many rounds a discussion runs** — the flow's own state and gates.
+- **How many times work goes back for rework** — `max_review_rounds` on the workspace.

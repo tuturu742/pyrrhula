@@ -312,9 +312,7 @@ async def list_holders_endpoint(
             unresolved = principal_ids - set(holder_names)
             if unresolved:
                 for pid, name in await session.execute(
-                    select(Principal.id, Principal.display_name).where(
-                        Principal.id.in_(unresolved)
-                    )
+                    select(Principal.id, Principal.display_name).where(Principal.id.in_(unresolved))
                 ):
                     holder_names.setdefault(pid, name)
     return [

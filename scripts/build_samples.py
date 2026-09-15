@@ -1360,9 +1360,7 @@ def _write_evidence_server(out_dir: pathlib.Path) -> None:
 
     from eval.scenarios.hagnaryd_case import REFEREE_LAB_RESULTS
 
-    results = _json.dumps(
-        dict(sorted(REFEREE_LAB_RESULTS.items())), indent=2, ensure_ascii=False
-    )
+    results = _json.dumps(dict(sorted(REFEREE_LAB_RESULTS.items())), indent=2, ensure_ascii=False)
     body = _EVIDENCE_SERVER_TEMPLATE.replace("__RESULTS__", results)
     target = out_dir / "evidence-server.py"
     target.write_text(body)

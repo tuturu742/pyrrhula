@@ -428,7 +428,8 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001
             log.warning("rework.note_failed", branch=branch, error=str(exc))
         # Chain the next review round (auto-review path only), bounded.
-        if 0 < review_round < max_review_rounds():
+        rounds_allowed = await max_review_rounds(tenant_id, workspace_id)
+        if 0 < review_round < rounds_allowed:
             await get_job_queue().enqueue(
                 tenant_id,
                 "facilitator_review",
@@ -444,13 +445,13 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                     "review_round": review_round + 1,
                 },
             )
-        elif review_round >= max_review_rounds():
+        elif review_round >= rounds_allowed:
             await post_note(
                 tenant_id,
                 uuid.UUID(str(session_id)),
                 viewer_principal_id,
                 f"⏸️ **{entity.name}**: review round limit reached "
-                f"({max_review_rounds()}) — leaving in review for a human decision.",
+                f"({rounds_allowed}) — leaving in review for a human decision.",
             )
 
     return {

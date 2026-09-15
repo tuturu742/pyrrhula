@@ -593,16 +593,12 @@ async def get_workspace_visibility(
 
         scope_rows = list(
             (
-                await session.execute(
-                    select(ScopeRow).where(ScopeRow.workspace_id == workspace_id)
-                )
+                await session.execute(select(ScopeRow).where(ScopeRow.workspace_id == workspace_id))
             ).scalars()
         )
         persona_rows = list(
             (
-                await session.execute(
-                    select(Persona).where(Persona.workspace_id == workspace_id)
-                )
+                await session.execute(select(Persona).where(Persona.workspace_id == workspace_id))
             ).scalars()
         )
         knowledge_rows = (

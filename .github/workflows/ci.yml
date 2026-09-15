@@ -23,6 +23,10 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      # Every environment variable the code reads has a row in docs/configuration.md,
+      # and every documented row is still read. A knob nobody can find is a knob nobody
+      # sets; a documented knob that no longer exists is a lie about the deployment.
+      - run: uv run python scripts/check_env_docs.py
 
   typecheck:
     runs-on: ubuntu-latest

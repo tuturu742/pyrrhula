@@ -121,12 +121,8 @@ async def test_behavior_profile_versions_are_append_only(
     persona_id = await seed_dev_agent(tenant_a, workspace_id)
     await _seed_rpg_axes(tenant_a)
 
-    v1 = await create_behavior_profile(
-        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 40}
-    )
-    v2 = await create_behavior_profile(
-        tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 70}
-    )
+    v1 = await create_behavior_profile(tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 40})
+    v2 = await create_behavior_profile(tenant_a, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 70})
     assert v1.version == 1
     assert v2.version == 2
 
@@ -163,9 +159,7 @@ async def test_behavior_profile_filter_omission(two_tenants: tuple[uuid.UUID, uu
             ).scalar_one()
         persona_id = await seed_dev_agent(tenant_id, workspace_id)
         await _seed_rpg_axes(tenant_id)
-        await create_behavior_profile(
-            tenant_id, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 50}
-        )
+        await create_behavior_profile(tenant_id, persona_id, RPG_AXIS_PACK_ID, {"chattiness": 50})
 
     async with tenant_scope(tenant_a) as session:
         rows = (await session.execute(text("SELECT tenant_id FROM behavior_profile"))).all()

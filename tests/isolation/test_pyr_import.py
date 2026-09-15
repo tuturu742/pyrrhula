@@ -519,9 +519,7 @@ async def test_scope_bands_survive_the_round_trip_and_still_gate_retrieval(
     await seed_default_scopes(tenant_a, workspace_a)
     exporter = await _facilitator(tenant_a, workspace_a)
 
-    conn = await create_agent(
-        tenant_a, "conn", "echo", "echo-model", encryptor=_ENCRYPTOR
-    )
+    conn = await create_agent(tenant_a, "conn", "echo", "echo-model", encryptor=_ENCRYPTOR)
     insider = await create_persona(
         tenant_a, workspace_a, "insider", "Insider", conn.id, persona_type="participant"
     )
@@ -583,9 +581,7 @@ async def test_scope_bands_survive_the_round_trip_and_still_gate_retrieval(
         personas = {
             row.key: row
             for row in (
-                await session.execute(
-                    select(Persona).where(Persona.workspace_id == workspace_b)
-                )
+                await session.execute(select(Persona).where(Persona.workspace_id == workspace_b))
             ).scalars()
         }
 

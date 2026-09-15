@@ -59,14 +59,14 @@ class Settings(BaseSettings):
     web_search_url: str = ""
     # Model-backed moderation (S3/G4.14): full "provider/model" string; empty = the
     # allow-all provider (moderation effectively off beyond per-tenant keyword policy).
-    moderation_model: str = ""
-    moderation_api_base: str = ""
-    # Disclosure-gate model override (S1 rework): "provider/model"; empty = the gate
-    # runs on the acting persona's own connection. A small, fast, schema-disciplined
-    # model is the right tool -- the gate sees gists only, so a cloud model here is
-    # egress-compatible even for local-generation tenants (D14).
+    # Deployment-wide DEFAULT gate model, for tenants that have not chosen one of their
+    # own connections (core.secrets.gate_config holds that choice, and it wins). Read via
+    # getattr in secrets_gate_factory, so deleting these fields degrades silently rather
+    # than loudly -- which is exactly how they nearly got removed as "dead".
     gate_model: str = ""
     gate_api_base: str = ""
+    moderation_model: str = ""
+    moderation_api_base: str = ""
 
     # The workspace assistant's default model connection ("provider/model" + api_base),
     # used only when a workspace has no assistant yet and one is lazily created --

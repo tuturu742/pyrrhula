@@ -894,7 +894,6 @@ def _read_jsonl(files: dict[str, bytes], path: str) -> list[dict[str, Any]]:
 # pile of knowledge entries with no way to run them.
 
 
-
 async def _import_scopes(
     files: dict[str, bytes],
     tenant_id: uuid.UUID,

@@ -74,9 +74,7 @@ class SessionCallCapError(Exception):
     def __init__(self, server_key: str, cap: int) -> None:
         self.server_key = server_key
         self.cap = cap
-        super().__init__(
-            f"this session has used all {cap} of its allowed calls to {server_key!r}"
-        )
+        super().__init__(f"this session has used all {cap} of its allowed calls to {server_key!r}")
 
 
 class ConfirmationRequiredError(Exception):

@@ -713,9 +713,7 @@ async def _behavior_axes(tenant_id: uuid.UUID, pack_id: str) -> list[AxisOut]:
             range_min=a.range_min,
             range_max=a.range_max,
             default=(
-                a.default_value
-                if a.default_value is not None
-                else (a.range_min + a.range_max) // 2
+                a.default_value if a.default_value is not None else (a.range_min + a.range_max) // 2
             ),
             stakes=a.stakes,
             semantics_md=a.semantics_md,

@@ -429,9 +429,7 @@ class McpCallRecord(Base):
     __table_args__ = (Index("ix_mcp_call_record_session_server", "session_id", "server_key"),)
 
 
-async def count_session_calls(
-    tenant_id: uuid.UUID, session_id: uuid.UUID, server_key: str
-) -> int:
+async def count_session_calls(tenant_id: uuid.UUID, session_id: uuid.UUID, server_key: str) -> int:
     """Calls this session has already spent against one server. Refusals are not counted
     -- a refused call reached nobody, and counting it would let a capped-out session
     burn its own error messages."""

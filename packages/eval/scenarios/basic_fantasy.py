@@ -145,7 +145,10 @@ Speak briefly, in your own voice. Declare what Pip tries; the Referee rolls.""",
 # ── the rulebook (class: rules, scope: common to the whole table) ──────────────────
 # Abridged from Basic Fantasy RPG r142, CC BY-SA 4.0. See the module docstring.
 RULES: tuple[tuple[str, str, str], ...] = (
- ("abilities", "Ability Scores and Bonuses", """\
+    (
+        "abilities",
+        "Ability Scores and Bonuses",
+        """\
 Every character has six abilities scored 3–18. One table converts a score into the
 bonus that modifies rolls:
 
@@ -167,9 +170,12 @@ bonus that modifies rolls:
 - **Constitution** — added to every hit die rolled, never below 1 point per die.
 - **Charisma** — reaction rolls, and the number and loyalty of retainers.
 
-A class's prime requisite must be at least 9 to join that class."""),
-
- ("attack", "Attack Rolls", """\
+A class's prime requisite must be at least 9 to join that class.""",
+    ),
+    (
+        "attack",
+        "Attack Rolls",
+        """\
 To attack, roll **1d20** and add:
 
 - the attacker's **Attack Bonus** for class and level,
@@ -185,9 +191,12 @@ and damage is rolled.
 - Attacking **from behind** grants +2 (this does not stack with the Thief's Sneak Attack).
 
 Missile range modifies the roll: **+1** at short range, **+0** at medium, **-2** at long,
-and **-5** when firing at a foe engaged within 5 feet."""),
-
- ("initiative", "Initiative and the Combat Round", """\
+and **-5** when firing at a foe engaged within 5 feet.""",
+    ),
+    (
+        "initiative",
+        "Initiative and the Combat Round",
+        """\
 Each round, every character and monster rolls **1d6** for Initiative, adjusted by the
 **Dexterity** bonus. **High numbers act first**; equal numbers act simultaneously. The
 GM may roll once for a group of identical monsters.
@@ -198,9 +207,12 @@ deliberately wait and act on a later number.
 
 Opponents more than 5 feet apart move freely; within 5 feet they are **engaged**.
 A character with a long-reach weapon such as a spear may attack a closing opponent on
-that opponent's number, even after losing initiative."""),
-
- ("saves", "Saving Throws", """\
+that opponent's number, even after losing initiative.""",
+    ),
+    (
+        "saves",
+        "Saving Throws",
+        """\
 A saving throw resists a special attack: roll **d20 against a target number** set by
 class and level, and **meet or exceed it**. A natural 20 always succeeds; a natural 1
 always fails.
@@ -212,9 +224,12 @@ ordinary dungeon hazards.
 Saves are normally *not* adjusted by ability bonuses. The exceptions:
 - **Poison** saves use the Constitution modifier.
 - **Illusion** saves use the Intelligence modifier.
-- **Charm** and mind-control saves use the Wisdom modifier."""),
-
- ("hitpoints", "Hit Points, Damage and Death", """\
+- **Charm** and mind-control saves use the Wisdom modifier.""",
+    ),
+    (
+        "hitpoints",
+        "Hit Points, Damage and Death",
+        """\
 A first-level character rolls a single hit die of the type given by their class, adds
 the **Constitution** bonus, and has at least 1 hit point. Each new level rolls another
 die and adds Constitution again, minimum 1. After 9th level, classes gain a fixed
@@ -222,9 +237,12 @@ number of hit points per level and no longer add Constitution.
 
 Damage reduces the **current** total, never the rolled maximum; healing restores up to
 that maximum. At **0 hit points** the character may be dead — the rules are deliberate
-that this "may not be the end for the character.\""""),
-
- ("classes", "The Four Classes", """\
+that this "may not be the end for the character.\"""",
+    ),
+    (
+        "classes",
+        "The Four Classes",
+        """\
 - **Fighter** — the best attack progression and d8 hit dice. Prime requisite Strength.
 - **Cleric** — fights about as well as a Thief, hardier at low levels, d6 hit dice.
   Casts divine spells from **2nd level**, and can **Turn the Undead**. Prime requisite
@@ -236,9 +254,12 @@ that this "may not be the end for the character.\""""),
 
 Humans may also take combination classes: a **Fighter/Magic-User** may cast while
 wearing armour and rolls d6 hit dice; a **Magic-User/Thief** may cast in leather and
-rolls d4."""),
-
- ("races", "Character Races", """\
+rolls d4.""",
+    ),
+    (
+        "races",
+        "Character Races",
+        """\
 - **Dwarves** — save at **+4** vs. Death Ray or Poison, Magic Wands, Paralysis or
   Petrify, and Spells, and **+3** vs. Dragon Breath. Their stocky build lets them use
   Medium weapons one-handed; Large weapons over four feet (two-handed swords, polearms,
@@ -251,7 +272,8 @@ rolls d4."""),
   bonus** and may take combination classes.
 
 Every non-Human race speaks its own language and Common. A character with Intelligence
-13+ learns additional languages equal to their Intelligence bonus."""),
+13+ learns additional languages equal to their Intelligence bonus.""",
+    ),
 )
 
 
@@ -263,34 +285,50 @@ Every non-Human race speaks its own language and Common. A character with Intell
 # Band 1: common talk. Anyone at the table may retrieve this -- it is what you would
 # learn in a week at the inn.
 COMMON_LORE: tuple[tuple[str, str, str], ...] = (
-    ("karsh_vale", "Karsh Vale", """\
+    (
+        "karsh_vale",
+        "Karsh Vale",
+        """\
 A high valley three days east of the Marches, ringed by limestone crags and reached by
 one switchback road. Six hundred people, most of them herders, in the town of Ashmere and
 four hamlets below it. The Vale is known for three things: hard cheese, harder winters,
-and the ruin on the northern shoulder that everyone calls the Hollow Crown."""),
-    ("hollow_crown", "The Hollow Crown", """\
+and the ruin on the northern shoulder that everyone calls the Hollow Crown.""",
+    ),
+    (
+        "hollow_crown",
+        "The Hollow Crown",
+        """\
 The ruin above Ashmere: a ring of nine limestone towers, seven of them fallen, joined by
 a curtain wall that has been quarried for barn stone since anyone can remember. It is
 called hollow because the hill beneath it is -- the locals say a dropped stone in the
 well takes a slow count of four to strike bottom.
 
 Children dare each other to the gatehouse. Nobody grazes stock there. Nobody can tell you
-why not, except that nobody does."""),
-    ("the_disappearances", "What Brought You Here", """\
+why not, except that nobody does.""",
+    ),
+    (
+        "the_disappearances",
+        "What Brought You Here",
+        """\
 Since the turn of the season, eleven sheep, two dogs and -- eight days ago -- Marta
 Fenn's son Aldo have gone missing from the upper pastures, always on a night with no
 moon. There is no blood and no trail. The reeve of Ashmere has posted forty gold pieces
 and the use of a cottage for the winter to anyone who ends it.
 
 The only thing anyone agrees on: the losses are all from pastures within sight of the
-Hollow Crown."""),
-    ("tallowmen_rumour", "The Tallowmen (as told in the taproom)", """\
+Hollow Crown.""",
+    ),
+    (
+        "tallowmen_rumour",
+        "The Tallowmen (as told in the taproom)",
+        """\
 Ask in the Ram and Candle after the second cup and someone will tell you about the
 tallowmen: figures the colour of old candle fat that come down from the Crown on dark
 nights and walk without sound. They are said to be drawn to light, to be unable to cross
 running water, and to be nothing at all -- a story to keep children off the crags.
 
-Accounts differ on every detail except one: everyone agrees they leave no footprints."""),
+Accounts differ on every detail except one: everyone agrees they leave no footprints.""",
+    ),
 )
 
 # Band 2: guild knowledge. Filed under `guild_lore`, whose members are the Referee, Bram
@@ -298,7 +336,10 @@ Accounts differ on every detail except one: everyone agrees they leave no footpr
 # party learns what the mason's marks mean, it is because a character who plausibly could
 # know told the others, in the fiction.
 GUILD_LORE: tuple[tuple[str, str, str], ...] = (
-    ("masons_marks", "Reading the Masons' Marks", """\
+    (
+        "masons_marks",
+        "Reading the Masons' Marks",
+        """\
 The Crown's stonework is not one build but three. The lowest courses are dry-laid
 limestone, unmarked, older than any guild. Above them sits careful ashlar carrying the
 wedge-and-bar mark of the Karsh lodge, which dissolved four centuries ago. The topmost
@@ -306,8 +347,12 @@ work is crude infill, mortared in haste, and it is *inward*-facing -- the good f
 into the hill rather than out at an enemy.
 
 A mason reads that immediately: the last builders were not fortifying against the valley.
-They were sealing something in, and they did it quickly."""),
-    ("binding_scripts", "Binding Scripts and Ward-Cant", """\
+They were sealing something in, and they did it quickly.""",
+    ),
+    (
+        "binding_scripts",
+        "Binding Scripts and Ward-Cant",
+        """\
 The college teaches that a binding inscription is distinguishable from a decorative one
 by repetition: a ward repeats its operative phrase at every aperture, because a ward is
 only as strong as the opening it is written across. Look for the same clause carved at
@@ -315,13 +360,17 @@ every door, window and drain of a structure.
 
 Ward-cant of the middle period favoured a closing formula meaning *let the account stay
 balanced* -- a bookkeeping metaphor, because the school understood binding as a debt held
-open rather than a wall held shut. A debt, unlike a wall, can be paid."""),
+open rather than a wall held shut. A debt, unlike a wall, can be paid.""",
+    ),
 )
 
 # Band 3: the referee's own history. Filed under `referee_lore` with exactly one member,
 # so no player character can retrieve a word of it. This is what the session is *for*.
 REFEREE_LORE: tuple[tuple[str, str, str], ...] = (
-    ("truth_of_the_crown", "The Truth of the Hollow Crown", """\
+    (
+        "truth_of_the_crown",
+        "The Truth of the Hollow Crown",
+        """\
 **Referee only.**
 
 The Crown is not a fortress. It is a lid.
@@ -349,13 +398,17 @@ in Aldo's place. A single lamb will not do; the debt is four centuries deep. Wha
 players devise is the adventure. There is no correct answer written here on purpose.
 
 If the party simply climbs down and hauls the boy out with no settlement, the taking
-resumes the following moonless night, and the Vale will know exactly whom to blame."""),
+resumes the following moonless night, and the Vale will know exactly whom to blame.""",
+    ),
 )
 
 
 # ── miscellany: the texture a rules-and-plot budget leaves out ───────────────────────
 MISCELLANY: tuple[tuple[str, str, str], ...] = (
-    ("counting_rhyme", "The Ashmere Counting Rhyme", """\
+    (
+        "counting_rhyme",
+        "The Ashmere Counting Rhyme",
+        """\
 Children in the Vale skip to this. Nobody thinks about the words.
 
 > *One for the wall and two for the well,*
@@ -364,8 +417,12 @@ Children in the Vale skip to this. Nobody thinks about the words.
 > *who pays the ram? The ram pays still.*
 
 There are two more verses. Nobody remembers them, and the adults change the subject
-pleasantly if asked."""),
-    ("ram_and_candle", "The Ram and the Candle", """\
+pleasantly if asked.""",
+    ),
+    (
+        "ram_and_candle",
+        "The Ram and the Candle",
+        """\
 The inn's sign shows a ram with a lit candle balanced between its horns, and the story
 told to travellers is that an innkeeper's ram once walked home through a blizzard with a
 candle still burning on its head. The innkeeper, Sorrel Hake, tells it well and charges
@@ -373,20 +430,29 @@ for the second telling.
 
 House custom: the last candle of the evening is never blown out. It is carried outside
 and left to burn down on the step. Sorrel will say this is to welcome late travellers.
-Her grandmother said it differently and Sorrel does not repeat it."""),
-    ("cheese_joke", "The Cheese", """\
+Her grandmother said it differently and Sorrel does not repeat it.""",
+    ),
+    (
+        "cheese_joke",
+        "The Cheese",
+        """\
 Karsh Vale cheese is famously, aggressively hard. The standing joke in the Marches is
 that a Karsh round stopped a crossbow bolt at Coldwater Ford, and the joke in Karsh Vale
 is that the bolt was fine but the cheese was ruined.
 
 Anyone who orders it at the Ram and Candle will be handed a small hammer with it,
-straight-faced, and the entire taproom will watch."""),
-    ("marta_fenn", "Marta Fenn Sets Two Places", """\
+straight-faced, and the entire taproom will watch.""",
+    ),
+    (
+        "marta_fenn",
+        "Marta Fenn Sets Two Places",
+        """\
 Since Aldo vanished, his mother has set his place at every meal -- bowl, spoon, and the
 heel of the loaf, which was his. She does not talk about it and takes badly to being
 consoled.
 
 Her neighbours have stopped mentioning it. They have also, without discussing it, started
 leaving small things on her step: a twist of salt, a mended stocking, a jar of the good
-honey. The Vale grieves by delivery."""),
+honey. The Vale grieves by delivery.""",
+    ),
 )

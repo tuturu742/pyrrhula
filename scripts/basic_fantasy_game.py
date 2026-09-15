@@ -332,8 +332,6 @@ is bad; a scholar knows the mechanism, the name, and the countdown.
 """
 
 
-
-
 def bonus(score):
     return (
         -3
@@ -413,7 +411,7 @@ async def main():
         ws_row.settings = {
             **(ws_row.settings or {}),
             "conduct_rules": (
-                'Everyone speaks in the FIRST PERSON, in character, present tense: '
+                "Everyone speaks in the FIRST PERSON, in character, present tense: "
                 '"I draw my axe", never "Bram draws his axe", and never narrate yourself '
                 "from the outside or describe your own appearance in the third person. Do "
                 "not prefix your line with your own name. Players: keep it to a few "
@@ -574,8 +572,12 @@ async def main():
             )
         )
     sch = await create_source(
-        tenant_id, "gallowfen_deep", "The Sundering and the Bell", "lore",
-        owner_principal_id=owner_id, visibility="tenant"
+        tenant_id,
+        "gallowfen_deep",
+        "The Sundering and the Bell",
+        "lore",
+        owner_principal_id=owner_id,
+        visibility="tenant",
     )
     blob_key = f"knowledge/{tenant_id}/{sch.id}/{uuid.uuid4()}-scholarly.md"
     await get_blob_store().put(blob_key, SCHOLARLY_MD.encode(), content_type="text/markdown")
@@ -708,7 +710,7 @@ async def main():
         async with tenant_scope(tenant_id) as sdb:
             await sdb.execute(
                 text(
-                    "UPDATE entity SET fsm_states = '{\"health\": \"healthy\"}'::jsonb "
+                    'UPDATE entity SET fsm_states = \'{"health": "healthy"}\'::jsonb '
                     "WHERE id = CAST(:e AS uuid)"
                 ).bindparams(e=ent["entity_id"])
             )
@@ -945,8 +947,12 @@ async def main():
 
         # 3) the monster's attack roll vs the PC's own Armour Class
         atk = await roll_total(
-            play, res_seq, "attack_roll", "1d20",
-            {"attack_bonus": enc["mon_atk"], "strength": 10}, defender["ac"],
+            play,
+            res_seq,
+            "attack_roll",
+            "1d20",
+            {"attack_bonus": enc["mon_atk"], "strength": 10},
+            defender["ac"],
         )
         res_seq += 1
         hit = atk.outcome == "success"
@@ -971,12 +977,24 @@ async def main():
         new_hp = max(0, cur_hp - dmg)
         defender["fields"]["hit_points"] = new_hp
         res = await resolve_and_apply(
-            tenant_id=tenant_id, workspace_id=workspace_id, principal_id=gm.principal_id,
-            session_id=play, event_seq=res_seq + 1, tool_key="bfrpg_dice",
-            actor_entity_id=defender["id"], expression="1d4", check_type="constitution_check",
-            machine_key="health", trigger="damage_taken", set_fields={"hit_points": new_hp},
-            rule_system=rs, rule_system_id=rs_id, legal_check_types=rs.check_types,
-            permission_service=PERM, actor_fields={}, target=1,
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            principal_id=gm.principal_id,
+            session_id=play,
+            event_seq=res_seq + 1,
+            tool_key="bfrpg_dice",
+            actor_entity_id=defender["id"],
+            expression="1d4",
+            check_type="constitution_check",
+            machine_key="health",
+            trigger="damage_taken",
+            set_fields={"hit_points": new_hp},
+            rule_system=rs,
+            rule_system_id=rs_id,
+            legal_check_types=rs.check_types,
+            permission_service=PERM,
+            actor_fields={},
+            target=1,
         )
         res_seq += 2
         state = res["new_state"]
