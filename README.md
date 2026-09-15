@@ -205,6 +205,7 @@ Running one:
 | [`docs/mcp.md`](docs/mcp.md) | Attaching external tools, and the per-server limits |
 | [`docs/exec-engines.md`](docs/exec-engines.md) | Where delegated coding work builds and tests |
 | [`docs/previews.md`](docs/previews.md) | Running a build where a human can open it |
+| [`docs/portability.md`](docs/portability.md) | `.pyr` bundles: what travels, the export modes, and what import will not overwrite |
 | [`docs/deploy-verification.md`](docs/deploy-verification.md) | The runbook for proving a deployment works |
 
 Where this README or any task file disagrees with the development plan, **the plan wins**.
