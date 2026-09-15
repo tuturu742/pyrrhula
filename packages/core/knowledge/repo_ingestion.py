@@ -32,7 +32,6 @@ a reader infer a guarantee.
 from __future__ import annotations
 
 import fnmatch
-import hashlib
 import io
 import tarfile
 import uuid
@@ -140,19 +139,6 @@ def read_tarball(data: bytes) -> list[RepoFile]:
                 # Binary. A repository is full of them and none is knowledge.
                 continue
     return sorted(files, key=lambda f: f.path)
-
-
-def snapshot_hash(files: list[RepoFile]) -> str:
-    """Content hash of the whole snapshot, over sorted paths. Used only for the
-    unchanged-SHA fast path's *assertion*; the real no-op check is the SHA itself, since
-    two ingests of one commit are the same commit by definition."""
-    digest = hashlib.sha256()
-    for f in files:
-        digest.update(f.path.encode())
-        digest.update(b"\0")
-        digest.update(f.content.encode())
-        digest.update(b"\0")
-    return digest.hexdigest()
 
 
 def entry_key_for(path: str) -> str:

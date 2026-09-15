@@ -65,15 +65,6 @@ async def list_workflows_for_tenant(tenant_id: uuid.UUID) -> list[WorkflowRow]:
         return list(rows)
 
 
-async def get_workflow(key: str) -> WorkflowRow | None:
-    """Global lookup (admin path)."""
-    async with unscoped_session() as session:
-        row: WorkflowRow | None = await session.scalar(
-            select(WorkflowRow).where(WorkflowRow.key == key)
-        )
-        return row
-
-
 async def get_workflow_for_tenant(tenant_id: uuid.UUID, key: str) -> WorkflowRow | None:
     """Tenant-aware lookup: the tenant's own row shadows a same-keyed system template."""
     async with tenant_scope(tenant_id) as session:

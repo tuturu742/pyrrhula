@@ -13,7 +13,7 @@ import os
 from typing import Any
 
 from adapters.preview.docker_socket import DockerSocketPreviewProvider
-from core.exec_engines import declared_engines, engine_by_key
+from core.exec_engines import engine_by_key
 from core.ports.preview import NullPreviewProvider, PreviewProvider
 
 
@@ -42,7 +42,3 @@ def get_preview_provider(engine_key: str | None = None) -> PreviewProvider:
     if engine is None:
         return NullPreviewProvider()
     return _build(engine)
-
-
-def previews_enabled() -> bool:
-    return bool(declared_engines())

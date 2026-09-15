@@ -5,7 +5,8 @@ branch diff and give a structured verdict. Approve drives the work item's ``appr
 transition; request-changes drives ``request_changes`` and enqueues the existing
 ``rework_work_item`` job with the review comments — whose completion re-submits the item
 for review and chains the next round, bounded by the workspace's ``max_review_rounds``
-setting (default 2, under the deployment's ``PYRRHULA_REVIEW_ROUNDS_CEILING``). Every verdict is posted into the session transcript, so the whole loop is
+setting (default 2, under the deployment's ``PYRRHULA_REVIEW_ROUNDS_CEILING``). Every
+verdict is posted into the session transcript, so the whole loop is
 visible where the humans are looking.
 
 A model failure degrades to a transcript note ("manual review needed") with the item left

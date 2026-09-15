@@ -179,9 +179,16 @@ def verify_bundle(reader: BundleReader) -> list[str]:
 
 
 def _canonical_json(payload: Any) -> str:
-    """Sorted keys, no incidental whitespace -- the same canonicalisation the hash-chained
-    tables use, and for the same reason: a hash over JSON is only meaningful if the JSON is
-    produced one way."""
+    """Sorted keys, no incidental whitespace: a hash over JSON is only meaningful if the
+    JSON is produced one way.
+
+    Deliberately NOT ``core.audit.canonical.canonical_json``, despite the shared purpose.
+    That one rejects floats outright, because a hash chain that drifts with float
+    repr is worse than no chain -- but a bundle carries flow definitions, and a phase
+    budget is literally ``{"rules": 0.2, "lore": 0.55}``. Routing bundles through the
+    strict version would refuse to export any workspace with a budget ratio. The looser
+    rule here is the price of hashing author-supplied content rather than rows we
+    control; do not "consolidate" these two."""
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
 
 

@@ -29,7 +29,6 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import (
@@ -456,22 +455,6 @@ async def regenerate_fact_frame(
     )
     fact_step = next(s for s in template.pipeline if s.kind == "fact_frame")
     return build_fact_frame(facts, fact_step.fact_kinds)
-
-
-def report_to_json(row: ReportRow) -> dict[str, Any]:
-    return {
-        "id": str(row.id),
-        "session_id": str(row.session_id),
-        "template_key": row.template_key,
-        "audience_mode": row.audience_mode,
-        "generated_for_principal_id": str(row.generated_for_principal_id),
-        "source_event_range": [row.source_event_from, row.source_event_to],
-        "source_manifest_ids": [str(m) for m in row.source_manifest_ids],
-        "redactions": row.redactions,
-        "artifacts": row.artifacts,
-        "fact_frame_hash": row.fact_frame_hash,
-        "reviewed_by": str(row.reviewed_by) if row.reviewed_by else None,
-    }
 
 
 async def list_reports_for_session(tenant_id: uuid.UUID, session_id: uuid.UUID) -> list[ReportRow]:

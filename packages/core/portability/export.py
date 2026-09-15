@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 from sqlalchemy import func, select
@@ -938,7 +937,3 @@ async def _add_sessions(
                 for r in resolutions
             ],
         )
-
-
-def exported_at_now() -> datetime:
-    return datetime.now(UTC)

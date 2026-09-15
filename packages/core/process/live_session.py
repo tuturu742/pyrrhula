@@ -32,6 +32,7 @@ from core.ports.mcp import McpTransport
 from core.ports.model_provider import GenerationRequest, ModelProvider, ToolSpec
 from core.ports.moderation import ModerationProvider
 from core.ports.permission import PermissionService
+from core.ports.reranker import Reranker
 from core.process.awaits import make_await_hook
 from core.process.checkpoints import make_checkpoint_hook
 from core.process.dsl.schema import ProcessDefinitionDSL
@@ -201,6 +202,7 @@ async def run_one_persona_turn(
     event_seq: int,
     model_provider_factory: ModelProviderFactory,
     embedding_provider: EmbeddingProvider,
+    reranker: Reranker | None = None,
     rule_system: RuleSystemDefinition,
     rule_system_id: uuid.UUID,
     encryptor: Encryptor | None = None,
@@ -406,6 +408,7 @@ async def run_one_persona_turn(
         disclosing_principal_id=principal_id,
         event_seq=event_seq,
         history_summary=history_summary,
+        reranker=reranker,
     )
     manifest_row = await write_context_manifest(
         tenant_id,
@@ -758,6 +761,7 @@ def _make_execute_turn(
     workspace_id: uuid.UUID,
     model_provider_factory: ModelProviderFactory,
     embedding_provider: EmbeddingProvider,
+    reranker: Reranker | None = None,
     rule_system: RuleSystemDefinition,
     rule_system_id: uuid.UUID,
     on_chunk: OnChunk | None,
@@ -798,6 +802,7 @@ def _make_execute_turn(
             event_seq=ctx.event_seq,
             model_provider_factory=model_provider_factory,
             embedding_provider=embedding_provider,
+            reranker=reranker,
             rule_system=rule_system,
             rule_system_id=rule_system_id,
             encryptor=encryptor,
@@ -852,6 +857,7 @@ async def run_process_definition_session(
     *,
     model_provider_factory: ModelProviderFactory,
     embedding_provider: EmbeddingProvider,
+    reranker: Reranker | None = None,
     on_chunk: OnChunk | None = None,
     on_event: OnEvent | None = None,
     encryptor: Encryptor | None = None,
@@ -885,6 +891,7 @@ async def run_process_definition_session(
         workspace_id=workspace_id,
         model_provider_factory=model_provider_factory,
         embedding_provider=embedding_provider,
+        reranker=reranker,
         rule_system=rule_system,
         rule_system_id=rule_system_row.id,
         encryptor=encryptor,
@@ -924,6 +931,7 @@ async def run_directed_persona_turn(
     *,
     model_provider_factory: ModelProviderFactory,
     embedding_provider: EmbeddingProvider,
+    reranker: Reranker | None = None,
     on_chunk: OnChunk | None = None,
     on_event: OnEvent | None = None,
     encryptor: Encryptor | None = None,
@@ -981,6 +989,7 @@ async def run_directed_persona_turn(
         event_seq=event_seq,
         model_provider_factory=model_provider_factory,
         embedding_provider=embedding_provider,
+        reranker=reranker,
         rule_system=rule_system,
         rule_system_id=rule_system_row.id,
         encryptor=encryptor,

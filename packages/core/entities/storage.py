@@ -136,8 +136,16 @@ async def drop_indexed_field_column(schema_id: uuid.UUID, field_key: str) -> Non
 
 
 async def sync_indexed_columns(schema_id: uuid.UUID, definition: EntitySchemaDefinition) -> None:
-    """Reconciles every field's ``indexed`` flag against the generated-column state:
-    called whenever a schema version is activated. Not itself schema-version-aware
+    """Reconciles every field's ``indexed`` flag against the generated-column state.
+
+    **Nothing calls this yet**, which means an ``indexed: true`` field on an entity schema
+    is currently authored and then ignored -- no generated column, no index. Wiring it
+    needs runtime DDL from the app role at schema-activation time, which is a decision
+    rather than an oversight to quietly fix. Kept because the mechanism is right and the
+    per-field helpers below are tested; the docstring used to claim it was "called
+    whenever a schema version is activated", which was the misleading part.
+
+    Not itself schema-version-aware
     beyond ``schema_id`` -- each version gets its own generated columns (its own
     ``schema_id``), so an older version's columns are simply left in place (harmless,
     inert once nothing references that version) rather than torn down."""

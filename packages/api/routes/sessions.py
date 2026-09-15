@@ -29,6 +29,7 @@ from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_ten
 from api.model_provider_factory import get_model_provider
 from api.moderation_provider_factory import moderation_provider_for
 from api.permission_service_factory import get_permission_service
+from api.reranker_factory import get_reranker
 from api.streaming.pubsub import publish_chunk, publish_event
 from api.streaming.sse import sse_stream
 from core.agents.authoring import get_persona, resolve_connection_api_key
@@ -478,6 +479,7 @@ async def _run_directed_turn(
             dsl,
             model_provider_factory=get_model_provider,
             embedding_provider=get_embedding_provider(),
+            reranker=get_reranker(),
             on_chunk=on_chunk,
             on_event=on_event,
             encryptor=get_encryptor(),
@@ -1302,6 +1304,7 @@ async def _run_process_definition_advance(
             dsl,
             model_provider_factory=get_model_provider,
             embedding_provider=get_embedding_provider(),
+            reranker=get_reranker(),
             on_chunk=on_chunk,
             on_event=on_event,
             encryptor=get_encryptor(),

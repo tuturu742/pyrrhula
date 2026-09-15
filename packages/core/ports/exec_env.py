@@ -4,7 +4,7 @@ Agents edit code and run the tests they write *somewhere* -- this port is that s
 An environment is provisioned per (session, repo) from a curated runtime image, holds a
 working clone of the repo, and executes shell commands (build/test) reporting exit code +
 output. The v1 adapter drives sibling containers through the host's container-engine
-socket (``adapters/exec_env/podman_socket``); a hosted deployment swaps in a real
+socket (``adapters/exec_env/docker_socket``); a hosted deployment swaps in a real
 orchestrator behind the same three calls. ``NullExecEnvProvider`` is the disabled state --
 callers treat ``ExecEnvUnavailableError`` as "work without an environment" (the delegation
 transport falls back to its direct-store path), never as a fault.

@@ -14,7 +14,7 @@ import os
 from typing import Any
 
 from adapters.exec_env.docker_socket import DockerSocketExecEnvProvider
-from core.exec_engines import declared_engines, engine_by_key
+from core.exec_engines import engine_by_key
 from core.ports.exec_env import ExecEnvProvider, NullExecEnvProvider
 
 
@@ -43,7 +43,3 @@ def get_exec_env_provider(engine_key: str | None = None) -> ExecEnvProvider:
     if engine is None:
         return NullExecEnvProvider()
     return _build(engine)
-
-
-def exec_envs_enabled() -> bool:
-    return bool(declared_engines())
