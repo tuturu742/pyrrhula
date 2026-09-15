@@ -323,6 +323,13 @@ class LiteLLMModelProvider:
             },
             req.params,
         )
+        # Platform defaults (num_ctx) are the LOWEST precedence: a connection or persona
+        # that names one of these keys means it. Splatting the two dicts side by side
+        # into the call instead made a connection that set num_ctx raise `dict() got
+        # multiple values for keyword argument` -- every turn, for exactly the tenant
+        # whose hardware justified setting it.
+        for key, value in extra.items():
+            kwargs.setdefault(key, value)
         call = dict(
             model=_dispatch_model(req.model, bool(tools)),
             messages=messages,
@@ -331,7 +338,6 @@ class LiteLLMModelProvider:
             api_key=req.api_key,
             stream=True,
             stream_options={"include_usage": True},
-            **extra,
             **kwargs,
         )
         async def _attempt(this_call: dict[str, Any]) -> AsyncIterator[tuple[Chunk, bool]]:
@@ -455,10 +461,13 @@ class LiteLLMModelProvider:
                 "model": model,
                 "api_base": req.api_base,
                 "api_key": req.api_key,
-                **extra,
             },
             req.params,
         )
+        # Lowest precedence, as above -- here the platform default silently won instead
+        # of colliding, so a connection's num_ctx was accepted and then ignored.
+        for key, value in extra.items():
+            common.setdefault(key, value)
         try:
             response = await litellm.acompletion(
                 messages=messages, response_format=schema, **common

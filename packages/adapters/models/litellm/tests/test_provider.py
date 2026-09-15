@@ -787,3 +787,53 @@ async def test_an_unrepairable_refusal_does_not_loop(monkeypatch: pytest.MonkeyP
     with pytest.raises(Exception, match="RateLimitError"):
         [c async for c in provider.generate(req)]
     assert len(calls) == 1
+
+
+async def test_a_connection_overrides_the_platform_default_context_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """num_ctx is a property of the tenant's model and hardware, so a connection that
+    sets it must win over the platform default. It used to do neither: the streaming path
+    splatted both into one dict and raised `got multiple values for keyword argument`
+    every turn, and the structured path accepted the value and silently ignored it."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="ok", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+
+    big = GenerationRequest(
+        model="ollama/qwen3.8:27b",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        params={"num_ctx": 32768},
+    )
+    text = "".join([c.text async for c in provider.generate(big)])
+    assert text == "ok"
+    assert calls[0]["num_ctx"] == 32768, "the connection's window must win"
+
+    # And a connection with no opinion still gets the default that keeps Ollama from
+    # silently returning nothing.
+    calls.clear()
+    plain = GenerationRequest(
+        model="ollama/qwen3.8:27b",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+    [c async for c in provider.generate(plain)]
+    assert calls[0]["num_ctx"] == 16384
