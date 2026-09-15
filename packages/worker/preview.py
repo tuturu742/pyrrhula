@@ -60,7 +60,12 @@ async def handle_start_preview(payload: dict[str, Any]) -> dict[str, Any]:
         return {"preview_id": str(preview_id), "outcome": "not_found"}
 
     provider = get_preview_provider(row.engine_key)
-    command = build_serve_command(port=PREVIEW_PORT)
+    # The recipe the API resolved (repo overrides over pyrrhula-preview.json over the
+    # static default). Absent for a job enqueued before this existed, which is exactly
+    # the old behaviour.
+    port = int(payload.get("port") or PREVIEW_PORT)
+    serve_cmd = str(payload.get("serve_cmd") or "")
+    command = build_serve_command(port=port, serve_cmd=serve_cmd)
     env = {
         "PYR_ARTIFACT_URL": _artifact_url(store_key, row.artifact_name, row.engine_key),
         # Read-only, one artifact, expires with the preview (plus slack for a restart).
@@ -70,13 +75,17 @@ async def handle_start_preview(payload: dict[str, Any]) -> dict[str, Any]:
             ttl_seconds=get_settings().preview_max_ttl_seconds + 600,
         ),
     }
+    # Recipe env is applied UNDER the platform's: the artifact URL and token decide which
+    # build this container can read, so a recipe must not be able to reaim them.
+    env = {**{str(k): str(v) for k, v in (payload.get("env") or {}).items()}, **env}
+
     try:
         handle = await provider.start(
             row.name,
             row.image,
             command,
             env=env,
-            port=PREVIEW_PORT,
+            port=port,
             ttl_seconds=int(payload.get("ttl_seconds") or 0) or None,
         )
     except PreviewUnavailableError as exc:

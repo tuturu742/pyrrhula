@@ -84,6 +84,10 @@ def _response(row: RepoRow, *, import_status: str | None = None) -> RepoResponse
         test_cmd=row.test_cmd,
         build_cmd=row.build_cmd,
         artifact_name=row.artifact_name,
+        preview_image=row.preview_image,
+        preview_cmd=row.preview_cmd,
+        preview_port=row.preview_port,
+        preview_env={str(k): str(v) for k, v in (row.preview_env or {}).items()},
         created_at=row.created_at,
         import_status=import_status,
     )
@@ -240,6 +244,12 @@ class CreateRepoRequest(BaseModel):
     test_cmd: str | None = None
     build_cmd: str | None = None
     artifact_name: str | None = None
+    # Preview recipe overrides; unset means the repo's pyrrhula-preview.json decides, and
+    # failing that the platform's static-site server.
+    preview_image: str | None = None
+    preview_cmd: str | None = None
+    preview_port: int | None = None
+    preview_env: dict[str, str] = {}
 
 
 async def _seal_registry_credentials(
@@ -341,6 +351,11 @@ class UpdateRepoRequest(BaseModel):
     build_cmd: str | None = None
     artifact_name: str | None = None
     clear_build: bool = False
+    preview_image: str | None = None
+    preview_cmd: str | None = None
+    preview_port: int | None = None
+    preview_env: dict[str, str] | None = None
+    clear_preview: bool = False
 
 
 @router.patch("/{repo_id}")
@@ -411,6 +426,37 @@ async def update_repo_endpoint(
                 live.build_cmd = body.build_cmd or None
             if body.artifact_name is not None:
                 live.artifact_name = body.artifact_name or None
+        if body.clear_preview:
+            live.preview_image = None
+            live.preview_cmd = None
+            live.preview_port = None
+            live.preview_env = {}
+        else:
+            if body.preview_image is not None:
+                live.preview_image = body.preview_image.strip() or None
+            if body.preview_cmd is not None:
+                live.preview_cmd = body.preview_cmd.strip() or None
+            if body.preview_port is not None:
+                live.preview_port = body.preview_port or None
+            if body.preview_env is not None:
+                live.preview_env = {str(k): str(v) for k, v in body.preview_env.items()}
+        # Validate the override now rather than at launch: a preview that refuses to
+        # start is a worse place to learn the port was 99999.
+        from core.config import get_settings
+        from core.previews.recipe import PreviewRecipeError, resolve_recipe
+
+        try:
+            resolve_recipe(
+                default_image=get_settings().preview_image,
+                repo_overrides={
+                    "image": live.preview_image,
+                    "cmd": live.preview_cmd,
+                    "port": live.preview_port,
+                    "env": dict(live.preview_env or {}),
+                },
+            )
+        except PreviewRecipeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         await session.flush()
         await session.refresh(live)
         return _response(live)

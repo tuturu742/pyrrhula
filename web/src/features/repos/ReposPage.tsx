@@ -627,12 +627,19 @@ function RepoForm({
           .map((s) => s.trim())
           .filter(Boolean),
         test_cmd: testCmd.trim() === "" ? null : testCmd.trim(),
+        // Preview recipe: left alone by this form. Sending {} would wipe an operator
+        // override, so the edit path explicitly does not clear it either.
+        preview_env: {},
       };
       if (existing) {
         const { data, error } = await apiClient.PATCH("/repos/{repo_id}", {
           params: { path: { repo_id: existing.id } },
-          body: { ...shared, clear_build: false,
-          clear_test_cmd: testCmd.trim() === "" },
+          body: {
+            ...shared,
+            clear_build: false,
+            clear_preview: false,
+            clear_test_cmd: testCmd.trim() === "",
+          },
         });
         if (error) throw error;
         return data;

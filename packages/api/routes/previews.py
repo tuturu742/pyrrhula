@@ -136,6 +136,27 @@ async def create_preview_endpoint(
 
     engine_key = await get_tenant_engine_key(ctx.tenant_id)
     name = preview_name(body.repo_id)
+    # What this preview runs: the repo's own manifest, under the operator's overrides,
+    # over the platform's static-site default (core/previews/recipe.py).
+    from core.previews.recipe import PreviewRecipeError, read_repo_manifest, resolve_recipe
+
+    try:
+        manifest = await read_repo_manifest(store_key(repo.key))
+        recipe = resolve_recipe(
+            default_image=settings.preview_image,
+            repo_overrides={
+                "image": repo.preview_image,
+                "cmd": repo.preview_cmd,
+                "port": repo.preview_port,
+                "env": dict(repo.preview_env or {}),
+            },
+            manifest=manifest,
+        )
+    except PreviewRecipeError as exc:
+        # Refuse rather than quietly serving static files: an author who wrote a recipe
+        # and got a directory listing has no way to tell that their manifest was ignored.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     preview_id = await create_preview(
         ctx.tenant_id,
         name=name,
@@ -144,7 +165,7 @@ async def create_preview_endpoint(
         session_id=body.session_id,
         artifact_name=repo.artifact_name,
         engine_key=engine_key,
-        image=settings.preview_image,
+        image=recipe.image,
         ttl_seconds=ttl,
         created_by_principal_id=ctx.principal_id,
     )
@@ -170,6 +191,11 @@ async def create_preview_endpoint(
             "store_key": store_key(ctx.tenant_id, repo.key),
             "share_token": share_token,
             "ttl_seconds": ttl,
+            # Resolved once, here, and carried: re-resolving in the worker would read the
+            # repo again and could disagree with the image already recorded on the row.
+            "serve_cmd": recipe.serve_cmd,
+            "port": recipe.port,
+            "env": recipe.env,
         },
     )
     row = await get_preview(ctx.tenant_id, preview_id)

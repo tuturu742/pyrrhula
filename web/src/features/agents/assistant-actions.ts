@@ -151,6 +151,7 @@ export async function applyAssistantAction(
           test_cmd: args.test_cmd ? s(args.test_cmd) : null,
           clear_test_cmd: false,
           clear_build: false,
+          clear_preview: false,
         },
       });
       return result(error, "Repo updated.");

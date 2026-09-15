@@ -17,7 +17,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,6 +82,16 @@ class RepoRow(Base):
     # GET /repos/{id}/artifacts/latest. Both unset = no build step.
     build_cmd: Mapped[str | None] = mapped_column(String(511), nullable=True)
     artifact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Preview recipe overrides. NULL/empty means "whatever pyrrhula-preview.json in the
+    # repo says", and failing that the platform's static-site server -- see
+    # core/previews/recipe.py for the precedence and why the artifact fetch is not part
+    # of what a recipe may replace.
+    preview_image: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    preview_cmd: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    preview_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    preview_env: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

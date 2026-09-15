@@ -43,6 +43,15 @@ with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
     tar.extractall(root, filter="data")
 
 os.chdir(root)
+
+serve_cmd = __SERVE_CMD__
+if serve_cmd:
+    # A recipe took over: the platform's job ended when the artifact landed here safely.
+    # exec (not spawn) so the container's lifetime is the served process's lifetime and
+    # the engine's restart/teardown semantics keep working unchanged.
+    print("serving via recipe", flush=True)
+    os.execv("/bin/sh", ["/bin/sh", "-lc", serve_cmd])
+
 if not os.path.exists("index.html"):
     # A build that produced no entry point should fail loudly, not serve a file listing.
     sys.exit("no index.html in artifact")
@@ -83,15 +92,26 @@ def preview_name(repo_id: uuid.UUID) -> str:
     return f"pyr-prev-{str(repo_id)[:8]}"
 
 
-def build_serve_command(*, port: int) -> str:
+def build_serve_command(*, port: int, serve_cmd: str = "") -> str:
     """The container's whole lifetime as one shell command.
 
     The program is carried base64-encoded: it contains quotes, newlines and braces that
     would not survive interpolation into ``sh -lc``, and the encoding is alphanumeric so
-    it needs no escaping itself."""
+    it needs no escaping itself.
+
+    ``serve_cmd`` replaces only the *serving* half. Fetching the artifact with its scoped
+    token and extracting it under PEP 706's ``filter="data"`` guard stays here whatever the
+    recipe says: those are the parts that hold a credential and decide where bytes land,
+    and handing them to repo-supplied configuration would buy nothing. An empty
+    ``serve_cmd`` is the original static-site server, so every existing preview is
+    byte-for-byte unchanged."""
     import base64 as _b64
 
-    program = _SERVE_PROGRAM.replace("__WEBROOT__", _WEBROOT).replace("__PORT__", str(port))
+    program = (
+        _SERVE_PROGRAM.replace("__WEBROOT__", _WEBROOT)
+        .replace("__PORT__", str(port))
+        .replace("__SERVE_CMD__", repr(serve_cmd))
+    )
     encoded = _b64.b64encode(program.encode()).decode()
     return f"exec python3 -c \"import base64;exec(base64.b64decode('{encoded}').decode())\""
 

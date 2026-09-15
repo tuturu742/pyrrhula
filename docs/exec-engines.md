@@ -1,5 +1,8 @@
 # Exec engines — where delegated coding agents build and test
 
+> Building is half of it; [previews.md](previews.md) covers running the result where a
+> human can open it, and how to configure what that runs.
+
 Delegated work runs in an isolated environment per (session, repo). The engine that
 provides those environments is pluggable behind `core/ports/exec_env.py`'s
 `ExecEnvProvider`, and the **operator declares** which engines a deployment offers;

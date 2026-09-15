@@ -4142,6 +4142,19 @@ export interface components {
             build_cmd?: string | null;
             /** Artifact Name */
             artifact_name?: string | null;
+            /** Preview Image */
+            preview_image?: string | null;
+            /** Preview Cmd */
+            preview_cmd?: string | null;
+            /** Preview Port */
+            preview_port?: number | null;
+            /**
+             * Preview Env
+             * @default {}
+             */
+            preview_env: {
+                [key: string]: string;
+            };
         };
         /** CreateSchemaRequest */
         CreateSchemaRequest: {
@@ -6179,6 +6192,21 @@ export interface components {
              * @default false
              */
             clear_build: boolean;
+            /** Preview Image */
+            preview_image?: string | null;
+            /** Preview Cmd */
+            preview_cmd?: string | null;
+            /** Preview Port */
+            preview_port?: number | null;
+            /** Preview Env */
+            preview_env?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Clear Preview
+             * @default false
+             */
+            clear_preview: boolean;
         };
         /** UpdateSecretRequest */
         UpdateSecretRequest: {
