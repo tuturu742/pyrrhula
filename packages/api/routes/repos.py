@@ -252,6 +252,19 @@ class CreateRepoRequest(BaseModel):
     preview_env: dict[str, str] = {}
 
 
+def _checked_image(value: str | None, *, field: str) -> str | None:
+    """Refuse an unusable image reference here, rather than at pull time inside a job.
+
+    A registry web page pasted from the address bar is the common case and looks
+    plausible in the form; the engine's failure for it surfaces far from this field."""
+    from core.repos.image_ref import ImageRefError, normalise_image_ref
+
+    try:
+        return normalise_image_ref(value)
+    except ImageRefError as exc:
+        raise HTTPException(status_code=422, detail=f"{field}: {exc}") from exc
+
+
 async def _seal_registry_credentials(
     tenant_id: uuid.UUID, username: str | None, token: str | None
 ) -> uuid.UUID | None:
@@ -291,7 +304,7 @@ async def create_repo_endpoint(
             provider=body.provider,
             credential_ref=credential_ref,
             runtime=body.runtime,
-            runtime_image=body.runtime_image,
+            runtime_image=_checked_image(body.runtime_image, field="runtime_image"),
             registry_credential_ref=registry_credential_ref,
             setup_cmds=body.setup_cmds,
             test_cmd=body.test_cmd,
@@ -411,7 +424,7 @@ async def update_repo_endpoint(
         if body.runtime is not None:
             live.runtime = body.runtime
         if body.runtime_image is not None:
-            live.runtime_image = body.runtime_image.strip() or None
+            live.runtime_image = _checked_image(body.runtime_image, field="runtime_image")
         if body.setup_cmds is not None:
             live.setup_cmds = list(body.setup_cmds)
         if body.clear_test_cmd:
@@ -433,7 +446,7 @@ async def update_repo_endpoint(
             live.preview_env = {}
         else:
             if body.preview_image is not None:
-                live.preview_image = body.preview_image.strip() or None
+                live.preview_image = _checked_image(body.preview_image, field="preview_image")
             if body.preview_cmd is not None:
                 live.preview_cmd = body.preview_cmd.strip() or None
             if body.preview_port is not None:
