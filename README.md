@@ -191,6 +191,21 @@ Ahead:
 | `CLAUDE.md` | Ground rules for coding agents working in this repo |
 | `docs/agent-guide.md` | Detailed definitions, conventions, and architecture reference for implementers |
 | `tasks/` | The build backlog — one file per task with acceptance criteria and dependencies |
+| `CHANGELOG.md` | What changed, release by release |
+
+Running one:
+
+| Document | What it covers |
+|---|---|
+| [`docs/install.md`](docs/install.md) | Getting a deployment up, and the retrieval models |
+| [`docs/self-host.md`](docs/self-host.md) | The manual compose path, TLS, the admin account and assistant |
+| [`docs/configuration.md`](docs/configuration.md) | Every environment variable, how a setting resolves, and what deliberately is not an env var |
+| [`docs/models.md`](docs/models.md) | Model connections, per-persona sampling, and what happens when a provider refuses something |
+| [`docs/knowledge-classes.md`](docs/knowledge-classes.md) | Knowledge classes, scopes, and retrieval budgets |
+| [`docs/mcp.md`](docs/mcp.md) | Attaching external tools, and the per-server limits |
+| [`docs/exec-engines.md`](docs/exec-engines.md) | Where delegated coding work builds and tests |
+| [`docs/previews.md`](docs/previews.md) | Running a build where a human can open it |
+| [`docs/deploy-verification.md`](docs/deploy-verification.md) | The runbook for proving a deployment works |
 
 Where this README or any task file disagrees with the development plan, **the plan wins**.
 

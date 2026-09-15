@@ -4,6 +4,68 @@ Notable changes to Pyrrhula. Format follows [Keep a Changelog](https://keepachan
 versioning is [SemVer](https://semver.org/) with a `0.x` promise level: minor versions may
 break APIs, the database always migrates forward.
 
+## [Unreleased]
+
+Everything since rc1. The through-line: several features were configurable in one place
+and hardcoded in another, and this closes those gaps rather than adding new surface.
+
+### Added
+
+- **Per-persona and per-connection generation settings.** `temperature`, `seed`,
+  `presence_penalty`, `reasoning_effort`, `num_ctx`, `max_tokens` and friends on a
+  connection, overridable per persona. Precedence: request → persona → connection →
+  platform default. This is what stops a cast sharing one model from converging into one
+  voice. Travels in `.pyr`. See [docs/models.md](docs/models.md).
+- **Per-server MCP limits.** `max_calls_per_session`, `timeout_seconds`,
+  `max_result_chars` and a transport `options` bag, all on the registration — a timeout is
+  a property of one server, and an external server cannot budget per session because it is
+  never told which session is calling.
+- **Scope bands travel in a bundle.** "Levels of lore" now export and import, with members
+  carried as persona keys. Previously the knowledge arrived and the band did not, so a
+  restricted source landed unreachable by everyone.
+- **Configurable previews.** A preview runs what the project says it runs — a
+  `pyrrhula-preview.json` in the repo or overrides on the repo row — instead of only ever
+  serving a static site. See [docs/previews.md](docs/previews.md).
+- **Retrieval models without the installer.** `PYRRHULA_SKIP_MODEL_DOWNLOAD=1`, plus
+  Admin → Retrieval models: download from Hugging Face on demand, or upload a cache
+  tarball for an air-gapped box.
+- **An admin-console assistant.** Asks about the deployment and proposes config changes;
+  it never applies them — you click Apply and it runs as you.
+- **A settings resolution chain** (workspace → tenant → deployment default) behind
+  `max_review_rounds` and `moderation_model`.
+- **Reactive turn order** and a `chattiness` behaviour axis that actually schedules who
+  speaks, rather than only styling how much they say.
+- **Per-persona hosted-git identity**, so review and merge act as distinct bots.
+
+### Fixed
+
+- **Autonomous sessions ran to the step guard and stopped.** The interpreter reports
+  "more to do" at its runaway-loop bound; the background task called it once and returned,
+  leaving sessions `active` with nothing running and no fault shown. Resuming a session
+  likewise did not restart its interpreter.
+- **Every character rolled identical dice.** Actor stats came from a fixed stub that
+  outlived the entity system by two phases, so the sheet a player was handed changed
+  nothing.
+- **The reranker was downloaded by every installer and never used** — configured,
+  toggleable in the admin console, and connected to nothing.
+- **Model-endpoint refusals.** Unsupported sampling parameters are dropped and retried,
+  reasoning-vs-tools refusals are repaired, empty generations retry with a larger budget
+  at the same reasoning level, and repairs chain when one refusal hides the next.
+- **A connection setting `num_ctx` crashed every turn** on the streaming path and was
+  silently ignored on the structured one.
+- **Imports** adopt the bundle's `secret_mode` and conduct rules, heal secrets a first
+  pass refused, and no longer duplicate personas on re-import.
+- **AWS deployments could not produce a platform admin at all**, and baked in an assistant
+  model with no credential.
+
+### Changed
+
+- Eight environment variables became settings, connection params or registration fields.
+  `docs/configuration.md` is the reference, and CI now checks both that every variable is
+  documented and that every documented default matches the code.
+- Installers no longer require GitHub credentials, and a clean install assumes nothing
+  about local models.
+
 ## [0.1.0-rc1] — 2026-09-11
 
 First public release candidate. Everything below is new, because everything is.

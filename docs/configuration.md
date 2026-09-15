@@ -171,6 +171,32 @@ Never read by the running product.
 
 ---
 
+## How a setting resolves
+
+Values that two tenants might reasonably disagree about are settings, not environment
+variables, and they resolve through one chain:
+
+```
+workspace.settings  ->  tenant.settings  ->  the deployment default (below)
+```
+
+**Absent means inherit; present means chosen.** A key that is not in a settings dict falls
+through; a key that is there is used exactly as stored, *including* `0`, `false` and `""`.
+That distinction is load-bearing: a workspace has to be able to turn something off
+deliberately, so "off" and "not set here" cannot be spelled the same way.
+
+Consequently, **clearing an override means removing the key, not saving an empty value.**
+In the UI a blank field inherits, and saving it blank deletes the override rather than
+storing a zero the resolver would honour. The placeholder shows the value being inherited,
+so an empty box is never ambiguous.
+
+The same shape the vocabulary overlay has always used
+(`core/vocabulary/service.py`), implemented once in `core/settings/resolve.py` so no call
+site re-derives it and quietly disagrees about which layer wins.
+
+Settings that use it today: `secret_mode`, `conduct_rules`, `allow_automerge`,
+`max_review_rounds`, `moderation_model`.
+
 ## What is deliberately *not* an environment variable
 
 These were considered and put somewhere a user will actually find them:
@@ -180,6 +206,7 @@ These were considered and put somewhere a user will actually find them:
   `max_calls_per_session`, all fields on the server's registration. An env var would be global, and the external
   server cannot enforce it per session at all (it is never told which session is calling).
 - **Sampling parameters** (`temperature`, `seed`, `presence_penalty`, `reasoning_effort`) —
+  documented in [models.md](models.md); in short:
   on the connection, and per persona in the persona editor. One connection serves models
   with different knobs.
 - **Which knowledge a persona may retrieve** — scope bands and knowledge classes, in the
