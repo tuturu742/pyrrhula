@@ -31,6 +31,7 @@ import { AgentBeliefsPage } from "@/features/director-view/AgentBeliefsPage";
 import { AdminTenantsPage } from "@/features/admin/AdminTenantsPage";
 import { AdminPluginReposPage } from "@/features/admin/AdminPluginReposPage";
 import { AdminRetrievalModelsPage } from "@/features/admin/AdminRetrievalModelsPage";
+import { AdminAssistantPage } from "@/features/admin/AdminAssistantPage";
 
 export function App() {
   return (
@@ -79,6 +80,7 @@ export function App() {
               <Route path="/admin/tenants" element={<AdminTenantsPage />} />
               <Route path="/admin/plugins" element={<AdminPluginReposPage />} />
               <Route path="/admin/retrieval" element={<AdminRetrievalModelsPage />} />
+              <Route path="/admin/assistant" element={<AdminAssistantPage />} />
               {/* In-shell 404 for signed-in users; the bare one below covers signed-out. */}
               <Route path="*" element={<NotFoundPage />} />
             </Route>

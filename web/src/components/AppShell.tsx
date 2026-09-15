@@ -30,6 +30,7 @@ export function AppShell() {
         { to: "/admin/tenants", label: "Tenants" },
         { to: "/admin/plugins", label: "Plugin repositories" },
         { to: "/admin/retrieval", label: "Retrieval models" },
+        { to: "/admin/assistant", label: "Assistant" },
       ]
     : [
         { to: "/", label: `${t("entity.workspace")}s`, end: true },

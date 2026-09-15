@@ -15,11 +15,14 @@ CLI's job, never a button here.
 
 from __future__ import annotations
 
+import json
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 from fastapi import APIRouter, Cookie, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 
@@ -302,6 +305,96 @@ async def get_retrieval_models_endpoint() -> RetrievalModelsResponse:
 
     effective = await get_retrieval_models()
     return RetrievalModelsResponse(**effective, embedded_chunks=await embedded_chunk_count())
+
+
+class AdminAssistantModelBody(BaseModel):
+    provider: str = ""
+    model: str = ""
+    api_base: str | None = None
+    # Write-only: never returned, and an empty value keeps the stored key.
+    api_key: str | None = None
+
+
+@router.get("/assistant/model")
+async def get_admin_assistant_model_endpoint() -> AdminAssistantModelBody:
+    """Which connection the admin assistant runs on. The key is never returned."""
+    from core.admin.assistant import get_admin_connection
+
+    row = await get_admin_connection()
+    if row is None:
+        return AdminAssistantModelBody()
+    return AdminAssistantModelBody(provider=row.provider, model=row.model, api_base=row.api_base)
+
+
+@router.put("/assistant/model")
+async def set_admin_assistant_model_endpoint(
+    body: AdminAssistantModelBody,
+) -> AdminAssistantModelBody:
+    """Point the admin assistant at a model.
+
+    A connection on the reserved admin tenant rather than a new deployment setting, so it
+    reuses the encrypted-credential storage and egress policy the rest of the product has
+    instead of inventing a thinner second way to hold a provider key."""
+    from api.encryptor_factory import get_encryptor
+    from core.admin.assistant import set_admin_connection
+
+    if not body.provider.strip() or not body.model.strip():
+        raise HTTPException(status_code=422, detail="provider and model are both required")
+    row = await set_admin_connection(
+        provider=body.provider.strip(),
+        model=body.model.strip(),
+        api_base=(body.api_base or "").strip() or None,
+        api_key=(body.api_key or "").strip() or None,
+        encryptor=get_encryptor(),
+    )
+    return AdminAssistantModelBody(provider=row.provider, model=row.model, api_base=row.api_base)
+
+
+class AdminAssistantChatRequest(BaseModel):
+    messages: list[dict[str, str]] = []
+
+
+@router.post("/assistant/chat")
+async def admin_assistant_chat_endpoint(body: AdminAssistantChatRequest) -> StreamingResponse:
+    """The admin console's assistant: the same NDJSON event stream the workspace widget
+    speaks, over deployment state rather than workspace knowledge.
+
+    It proposes and never applies: a proposal streams back as a card, and the operator's
+    Apply click calls the ordinary admin endpoint from their own session. The assistant
+    holds no privilege of its own -- which, on the one screen where a mistake is
+    deployment-wide, is the reason it can exist at all."""
+    from api.encryptor_factory import get_encryptor
+    from api.model_provider_factory import get_model_provider
+    from core.admin.assistant import admin_chat, get_admin_connection
+    from core.agents.authoring import resolve_connection_api_key
+    from core.tenancy.admin import ADMIN_TENANT_ID
+
+    connection = await get_admin_connection()
+    if connection is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "no admin assistant model configured -- set one under Assistant on this page first"
+            ),
+        )
+    api_key = (
+        await resolve_connection_api_key(
+            ADMIN_TENANT_ID, str(connection.credential_ref), encryptor=get_encryptor()
+        )
+        if connection.credential_ref
+        else None
+    )
+
+    async def _ndjson() -> AsyncIterator[str]:
+        async for event in admin_chat(
+            body.messages,
+            provider_factory=get_model_provider,
+            connection=connection,
+            api_key=api_key,
+        ):
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(_ndjson(), media_type="application/x-ndjson")
 
 
 @router.get("/retrieval-models/cache")

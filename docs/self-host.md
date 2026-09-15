@@ -125,3 +125,17 @@ phone app.
   prints a fresh password once.
 - **Health**: `curl localhost:8000/health`; per-deploy verification lives in
   `docs/deploy-verification.md`; exec-engine options in `docs/exec-engines.md`.
+
+## The admin assistant
+
+The admin console has an **Assistant** page. Point it at a model (provider, model, API key
+— a connection on the reserved admin organization, so no tenant's budget pays for console
+questions), then ask about the deployment: whether the retrieval models are downloaded,
+which plugin repositories are registered, how many tenants exist.
+
+It can also prepare changes — switching the embedding model, queueing a model download,
+registering a plugin repository. **It proposes; it never applies.** A proposal arrives as
+a card with an Apply button, and that click calls the ordinary admin endpoint from your
+own browser session. The assistant holds no privilege of its own, so it cannot change this
+deployment any more than you can, and what it does lands in the same audit trail as if you
+had clicked it yourself.

@@ -3298,6 +3298,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/assistant/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Admin Assistant Model Endpoint
+         * @description Which connection the admin assistant runs on. The key is never returned.
+         */
+        get: operations["get_admin_assistant_model_endpoint_admin_assistant_model_get"];
+        /**
+         * Set Admin Assistant Model Endpoint
+         * @description Point the admin assistant at a model.
+         *
+         *     A connection on the reserved admin tenant rather than a new deployment setting, so it
+         *     reuses the encrypted-credential storage and egress policy the rest of the product has
+         *     instead of inventing a thinner second way to hold a provider key.
+         */
+        put: operations["set_admin_assistant_model_endpoint_admin_assistant_model_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assistant/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Assistant Chat Endpoint
+         * @description The admin console's assistant: the same NDJSON event stream the workspace widget
+         *     speaks, over deployment state rather than workspace knowledge.
+         *
+         *     It proposes and never applies: a proposal streams back as a card, and the operator's
+         *     Apply click calls the ordinary admin endpoint from their own session. The assistant
+         *     holds no privilege of its own -- which, on the one screen where a mistake is
+         *     deployment-wide, is the reason it can exist at all.
+         */
+        post: operations["admin_assistant_chat_endpoint_admin_assistant_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/retrieval-models/cache": {
         parameters: {
             query?: never;
@@ -3675,6 +3729,33 @@ export interface components {
              * @default participant
              */
             role: string;
+        };
+        /** AdminAssistantChatRequest */
+        AdminAssistantChatRequest: {
+            /**
+             * Messages
+             * @default []
+             */
+            messages: {
+                [key: string]: string;
+            }[];
+        };
+        /** AdminAssistantModelBody */
+        AdminAssistantModelBody: {
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Api Base */
+            api_base?: string | null;
+            /** Api Key */
+            api_key?: string | null;
         };
         /** AdvanceClockRequest */
         AdvanceClockRequest: {
@@ -14125,6 +14206,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetrievalModelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_admin_assistant_model_endpoint_admin_assistant_model_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssistantModelBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_admin_assistant_model_endpoint_admin_assistant_model_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAssistantModelBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssistantModelBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_assistant_chat_endpoint_admin_assistant_chat_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAssistantChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
