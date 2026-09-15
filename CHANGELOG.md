@@ -27,7 +27,7 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   `pyrrhula-preview.json` in the repo or overrides on the repo row — instead of only ever
   serving a static site. See [docs/previews.md](docs/previews.md).
 - **Retrieval models without the installer.** `PYRRHULA_SKIP_MODEL_DOWNLOAD=1`, plus
-  Admin → Retrieval models: download from Hugging Face on demand, or upload a cache
+  Admin → Models: download from Hugging Face on demand, or upload a cache
   tarball for an air-gapped box.
 - **An admin-console assistant.** Asks about the deployment and proposes config changes;
   it never applies them — you click Apply and it runs as you.

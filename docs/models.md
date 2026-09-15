@@ -87,4 +87,4 @@ Not everything uses a persona's connection:
 - **The admin assistant** uses a connection on the reserved admin organization, so console
   questions are not billed to a tenant.
 - **Embedding and reranking** are deployment-wide by necessity: every tenant's vectors sit
-  in one column of one width. Admin → Retrieval models.
+  in one column of one width. Admin → Models.

@@ -37,7 +37,7 @@ required.** Skip it with:
 PYRRHULA_SKIP_MODEL_DOWNLOAD=1 ./install.sh compose   # or: k8s
 ```
 
-Then get them whenever you like, from **Admin → Retrieval models**:
+Then get them whenever you like, from **Admin → Models**:
 
 - **Download from Hugging Face** — a background job; the sizes on that page grow as it
   runs. Safe to press twice.

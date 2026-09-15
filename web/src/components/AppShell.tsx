@@ -29,7 +29,7 @@ export function AppShell() {
     ? [
         { to: "/admin/tenants", label: "Tenants" },
         { to: "/admin/plugins", label: "Plugin repositories" },
-        { to: "/admin/retrieval", label: "Retrieval models" },
+        { to: "/admin/models", label: "Models" },
         { to: "/admin/assistant", label: "Assistant" },
       ]
     : [

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { NotFoundPage } from "@/components/NotFoundPage";
@@ -30,8 +30,28 @@ import { DisclosureTimelinePage } from "@/features/director-view/DisclosureTimel
 import { AgentBeliefsPage } from "@/features/director-view/AgentBeliefsPage";
 import { AdminTenantsPage } from "@/features/admin/AdminTenantsPage";
 import { AdminPluginReposPage } from "@/features/admin/AdminPluginReposPage";
-import { AdminRetrievalModelsPage } from "@/features/admin/AdminRetrievalModelsPage";
+import { AdminModelsPage } from "@/features/admin/AdminModelsPage";
 import { AdminAssistantPage } from "@/features/admin/AdminAssistantPage";
+import { useMe } from "@/features/admin/useMe";
+
+/**
+ * Where "/" goes.
+ *
+ * The platform admin's organization is reserved: it has no campaigns to run, so the
+ * workspace product at "/" is meaningless there — and landing on it invited an operator
+ * into onboarding (create a world, add personas, write hidden motives) that does not
+ * apply to them. Login already routes admins to the console; this covers every other way
+ * of arriving at the root, which is how they got there.
+ */
+function HomeRoute() {
+  const me = useMe();
+  if (me.isLoading) return null;
+  return me.data?.platform_admin === true ? (
+    <Navigate to="/admin/tenants" replace />
+  ) : (
+    <WorkspaceListPage />
+  );
+}
 
 export function App() {
   return (
@@ -43,7 +63,7 @@ export function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
-              <Route path="/" element={<WorkspaceListPage />} />
+              <Route path="/" element={<HomeRoute />} />
               <Route path="/workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
               <Route path="/workspaces/:workspaceId/repo-graph" element={<RepoGraphPage />} />
               <Route path="/workspaces/:workspaceId/agents" element={<AgentManagementPage />} />
@@ -79,7 +99,13 @@ export function App() {
               <Route path="/schemas/:schemaId" element={<SchemaEditorPage />} />
               <Route path="/admin/tenants" element={<AdminTenantsPage />} />
               <Route path="/admin/plugins" element={<AdminPluginReposPage />} />
-              <Route path="/admin/retrieval" element={<AdminRetrievalModelsPage />} />
+              <Route path="/admin/models" element={<AdminModelsPage />} />
+              {/* The page was "Retrieval models" before it also held the assistant's
+                  connection; keep old links working rather than 404 a bookmark. */}
+              <Route
+                path="/admin/retrieval"
+                element={<Navigate to="/admin/models" replace />}
+              />
               <Route path="/admin/assistant" element={<AdminAssistantPage />} />
               {/* In-shell 404 for signed-in users; the bare one below covers signed-out. */}
               <Route path="*" element={<NotFoundPage />} />

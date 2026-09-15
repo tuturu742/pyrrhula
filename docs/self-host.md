@@ -128,9 +128,9 @@ phone app.
 
 ## The admin assistant
 
-The admin console has an **Assistant** page. Point it at a model (provider, model, API key
-— a connection on the reserved admin organization, so no tenant's budget pays for console
-questions), then ask about the deployment: whether the retrieval models are downloaded,
+The admin console has an **Assistant** page. Point it at a model under **Models**
+(provider, model, API key — a connection on the reserved admin organization, so no
+tenant's budget pays for console questions), then ask about the deployment: whether the retrieval models are downloaded,
 which plugin repositories are registered, how many tenants exist.
 
 It can also prepare changes — switching the embedding model, queueing a model download,
