@@ -97,7 +97,38 @@ export function PhaseBanner({ sessionId, events }: PhaseBannerProps) {
 
   const [showFork, setShowFork] = useState(false);
 
+  // Two different mechanisms park a session on a person, and neither said so. An open
+  // await sets status "awaiting"; a free-mode actor leaves status "active" while the
+  // interpreter reports awaiting_human, which the session row now records. Both mean the
+  // same thing to whoever is reading the page — it is your move — so both say it.
+  const pending = pendingAwaits.data ?? [];
+  const waitingOnYou = session?.status === "awaiting" || session?.awaiting === "human";
+
   return (
+    <div className="flex flex-col gap-2">
+      {waitingOnYou ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-sm">
+          <span className="font-medium text-amber-700 dark:text-amber-400">
+            Waiting for you
+          </span>
+          <span className="text-muted-foreground">
+            {pending.length > 0
+              ? "This phase is blocked until someone confirms it is done."
+              : "This phase takes a written turn rather than a generated one — post a message to continue."}
+          </span>
+          {pending.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => satisfy.mutate(a.id)}
+              disabled={satisfy.isPending}
+              className="rounded-md border border-amber-500/60 bg-background px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-400"
+            >
+              {satisfy.isPending ? "Continuing…" : "Done — continue"}
+            </button>
+          ))}
+        </div>
+      ) : null}
     <div className="relative flex items-center justify-between rounded-md border border-border px-3 py-2">
       <div className="flex items-center gap-3 text-sm">
         <span className="rounded-full bg-secondary px-2 py-0.5 font-medium text-secondary-foreground">
@@ -144,21 +175,9 @@ export function PhaseBanner({ sessionId, events }: PhaseBannerProps) {
         >
           Fork…
         </button>
-        {session?.status === "awaiting" &&
-          (pendingAwaits.data ?? []).map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => satisfy.mutate(a.id)}
-              disabled={satisfy.isPending}
-              className="rounded-md border border-amber-500/60 px-2 py-1 text-xs text-amber-600 hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-400"
-              title={`Blocked on ${a.await_kind} since ${new Date(a.created_at).toLocaleString()}`}
-            >
-              Mark {a.await_kind} satisfied
-            </button>
-          ))}
       </div>
       {showFork && <ForkPanel sessionId={sessionId} onClose={() => setShowFork(false)} />}
+    </div>
     </div>
   );
 }

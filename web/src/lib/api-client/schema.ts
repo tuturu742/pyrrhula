@@ -6087,6 +6087,8 @@ export interface components {
              * @default waiting
              */
             activity: string;
+            /** Awaiting */
+            awaiting?: string | null;
         };
         /** SetAgendaRequest */
         SetAgendaRequest: {

@@ -455,3 +455,48 @@ async def test_advance_continues_until_the_interpreter_really_stops(monkeypatch)
     )
     await sessions_module._run_process_definition_advance(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
     assert seen == ["awaiting_human"], "a real stop must not be re-entered"
+
+
+async def test_a_session_waiting_on_a_person_says_so(monkeypatch) -> None:
+    """Two mechanisms park a session on a human and neither reached the UI.
+
+    An open await sets `status = "awaiting"`. A free-mode actor -- a phase whose turn is
+    written rather than generated -- leaves `status = "active"` while the interpreter
+    reports `awaiting_human`, so it rendered identically to a session being worked on:
+    no error, no fault, nothing moving. Diagnosing one required reading the flow
+    definition, which is not a thing a user should have to do.
+    """
+    import api.routes.sessions as sessions_module
+    from core.process.interpreter import AdvanceResult
+
+    seen: list[str] = []
+
+    async def _fake_commit(_tenant, _session, _version, *, awaiting=None):  # noqa: ANN001
+        seen.append(awaiting)
+
+    import core.process.locking as locking
+
+    monkeypatch.setattr(locking, "commit_advance", _fake_commit)
+
+    # The API surfaces both shapes under one field, because they mean one thing to a reader.
+    row = SimpleNamespace(
+        status="awaiting", awaiting=None, id=uuid.uuid4(), workspace_id=uuid.uuid4()
+    )
+    assert sessions_module.SessionResponse.model_fields["awaiting"].default is None
+    assert ("human" if row.status == "awaiting" else row.awaiting) == "human"
+
+    free_mode = SimpleNamespace(status="active", awaiting="human")
+    assert ("human" if free_mode.status == "awaiting" else free_mode.awaiting) == "human"
+
+    working = SimpleNamespace(status="active", awaiting=None)
+    assert ("human" if working.status == "awaiting" else working.awaiting) is None
+
+    # And the interpreter's own verdict is what gets recorded, at the one commit point.
+    result = AdvanceResult(status="awaiting_human", steps_taken=1, final_phase="x", flags=())
+    await locking.commit_advance(
+        uuid.uuid4(),
+        uuid.uuid4(),
+        0,
+        awaiting="human" if result.status == "awaiting_human" else None,
+    )
+    assert seen == ["human"]

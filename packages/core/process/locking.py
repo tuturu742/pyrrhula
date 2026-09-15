@@ -107,8 +107,15 @@ async def claim_session(
         yield observed_version
 
 
+_KEEP = object()
+
+
 async def commit_advance(
-    tenant_id: uuid.UUID, session_id: uuid.UUID, expected_version: int
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    expected_version: int,
+    *,
+    awaiting: str | None | object = _KEEP,
 ) -> None:
     """Re-acquires a fresh, brief lock; raises ``SessionConflictError`` if ``version``
     moved since the claim (someone else committed in between -- shouldn't happen given
@@ -128,6 +135,8 @@ async def commit_advance(
         row.version = expected_version + 1
         row.claimed_at = None
         row.claimed_by = None
+        if awaiting is not _KEEP:
+            row.awaiting = awaiting
 
 
 async def release_claim(tenant_id: uuid.UUID, session_id: uuid.UUID) -> None:
@@ -206,5 +215,12 @@ async def advance_session_locked(
             await release_claim(tenant_id, session_id)
             raise
 
-    await commit_advance(tenant_id, session_id, observed_version)
+    # Every advance commits here, so this is the one place that can record what the
+    # session is now waiting for without a second writer drifting out of step with it.
+    await commit_advance(
+        tenant_id,
+        session_id,
+        observed_version,
+        awaiting="human" if result.status == "awaiting_human" else None,
+    )
     return result

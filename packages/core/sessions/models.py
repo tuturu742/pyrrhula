@@ -56,6 +56,11 @@ class SessionRow(Base):
     # process_definition phase-key lengths (B1.2 migration 9a4e7c2f1b63).
     current_phase: Mapped[str] = mapped_column(String(63), nullable=False, default="prompt")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    # What the last advance said this session is waiting for: "human" when the next actor
+    # is free-mode and nobody has submitted, NULL otherwise. `status` cannot carry this --
+    # an awaiting session is genuinely still active, not paused -- but without it the UI
+    # renders "your move" and "being worked on" identically.
+    awaiting: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Soft-delete (migration c4f2a7e1b9d3): NULL = live, a timestamp = archived (hidden from
     # session lists). Distinct from `status` (active/paused) -- an archived session is
     # removed from view, not paused; its messages/manifests/resolutions stay append-only.

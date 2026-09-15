@@ -37,7 +37,8 @@ from core.tenancy.scope import tenant_scope
 
 _DEFAULT_K = 64
 
-# Exposed (not just inlined) so the pushdown test (packages/core/knowledge/retrieval/tests/test_dense.py) can run this
+# Exposed (not just inlined) so the pushdown test
+# (packages/core/knowledge/retrieval/tests/test_dense.py) can run this
 # exact text through EXPLAIN -- proving the *actual query issued* filters in SQL,
 # not a hand-copied approximation of it that could silently drift from the real one.
 DENSE_SEARCH_SQL = (

@@ -146,6 +146,11 @@ class SessionResponse(BaseModel):
     # Derived traffic-light for the list view: 'running' (something is happening now),
     # 'waiting' (paused / awaiting / idle), 'stopped' (flow reached its terminal phase).
     activity: str = "waiting"
+    # "human" when the session is parked on a person: either an open await, or a
+    # free-mode actor whose turn has to be submitted rather than generated. Both look
+    # identical to `status` alone -- one is `awaiting`, the other stays `active` -- which
+    # is how a session waiting on its owner reads as a session being worked on.
+    awaiting: str | None = None
 
 
 _RECENT = timedelta(minutes=2)
@@ -181,6 +186,7 @@ def _session_response(sess: Any, last_event_at: datetime | None = None) -> Sessi
         created_at=sess.created_at,
         last_event_at=last_event_at,
         activity=_activity(sess, last_event_at),
+        awaiting=("human" if sess.status == "awaiting" else getattr(sess, "awaiting", None)),
     )
 
 
