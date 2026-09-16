@@ -32,7 +32,6 @@ a reader infer a guarantee.
 from __future__ import annotations
 
 import fnmatch
-import hashlib
 import io
 import tarfile
 import uuid
@@ -48,8 +47,8 @@ from core.knowledge.authoring import (
     publish_version,
     upsert_draft_entry,
 )
-from core.knowledge.ingestion.chunking import chunk_text
 from core.knowledge.models import KnowledgeSource, KnowledgeSourceVersion
+from core.knowledge.publish_chunks import chunk_published_entries
 from core.knowledge.secret_patterns import quarantine_reason as secret_reason
 from core.knowledge.secret_patterns import scan_for_secrets
 from core.portability.injection_scan import quarantine_reason as injection_reason
@@ -258,60 +257,9 @@ async def _chunk_published(
     """Chunking stays naive-by-design for source files (docs-first, §15.9: code-aware
     chunking is a retrieval-research project with its own eval, and these entries carry
     `experimental: true` so that eval can find them). What is *not* a scoping decision is
-    chunk **size**: whole-file chunks are unbounded in the one dimension that costs memory
-    downstream, and a real source tree produced chunks ~9x larger than any prose corpus
-    (avg 4.0k chars, max 15.6k vs ~600) -- enough that embedding them OOM-killed the worker.
-    So reuse A1.2's paragraph-aware `chunk_text` for the bound only; no code-awareness is
-    claimed or added.
-
-    `count_tokens` is injected there because tokenizer choice is an adapter concern, and
-    this path has no model provider to borrow one from. Source code is punctuation-dense,
-    where whitespace-splitting *under*-counts badly, so estimate conservatively: the larger
-    of the word count and one token per 4 characters. Over-estimating costs a smaller
-    chunk; under-estimating costs the bound.
+    chunk **size** -- see `core.knowledge.publish_chunks`, which owns the bound.
     """
-
-    def count_tokens(value: str) -> int:
-        return max(len(value.split()), len(value) // 4)
-
-    async with tenant_scope(tenant_id) as session:
-        entries = (
-            await session.execute(
-                text(
-                    "SELECT id, body_md, class, scope_key FROM knowledge_entry "
-                    "WHERE knowledge_source_id = :s AND version_id = :v "
-                    "  AND length(trim(body_md)) > 0"
-                ),
-                {"s": source_id, "v": version_id},
-            )
-        ).all()
-
-        for entry_id, body_md, class_, scope_key in entries:
-            for chunk in chunk_text(body_md, count_tokens):
-                await session.execute(
-                    text(
-                        "INSERT INTO knowledge_chunk "
-                        "(tenant_id, entry_id, version_id, ordinal, text, token_count, "
-                        " class, scope_key, embedding, content_hash) "
-                        "VALUES (:tenant_id, :entry_id, :version_id, :ordinal, :text, "
-                        " :token_count, :class_, :scope_key, NULL, :content_hash)"
-                    ),
-                    {
-                        "tenant_id": tenant_id,
-                        "entry_id": entry_id,
-                        "version_id": version_id,
-                        "ordinal": chunk.ordinal,
-                        "text": chunk.text,
-                        "token_count": chunk.token_count,
-                        "class_": class_,
-                        "scope_key": scope_key,
-                        # sha256, matching A1.2's pipeline rather than this path's previous
-                        # md5: the embedding cache is keyed on content_hash, so agreeing on
-                        # the digest is what lets boilerplate shared between a repo and a
-                        # prose corpus be embedded once instead of once per path.
-                        "content_hash": hashlib.sha256(chunk.text.encode()).hexdigest(),
-                    },
-                )
+    await chunk_published_entries(tenant_id, source_id, version_id)
 
 
 async def _apply_quarantine(

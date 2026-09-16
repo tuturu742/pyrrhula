@@ -407,3 +407,87 @@ async def test_source_files_chunk_into_bounded_pieces(
     source_chunks = [r for r in rows if r[0].endswith("handlers.rs")]
     assert len(source_chunks) > 1, "a 24k-char source file must split into several chunks"
     assert {r[1] for r in source_chunks} == set(range(len(source_chunks))), "ordinals must be 0..n"
+
+
+async def test_the_repo_overview_and_graph_are_chunked_into_retrieval(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Regression: `save_repo_overview` published its three entries and stopped there. The
+    assembler reads `knowledge_chunk`, never `knowledge_entry`, so the cross-repo overview,
+    the per-repo summaries and the graph were visible on the graph page and to nothing else
+    -- while the module docstring claimed agents got them "through the normal retrieval
+    path". Publishing is only half of being retrievable.
+    """
+    from core.knowledge.repo_overview import GraphEdge, GraphNode, RepoGraph, save_repo_overview
+
+    tenant_id, _tenant_b = two_tenants
+    workspace_id = await _workspace_of(tenant_id)
+    await seed_default_scopes(tenant_id, workspace_id)
+
+    _source_id, version_id = await save_repo_overview(
+        tenant_id,
+        workspace_id,
+        overview_md="These repositories together implement a terminal music client.",
+        graph=RepoGraph(
+            nodes=[GraphNode(id="loxia", label="loxia", summary="Rust TUI client")],
+            edges=[GraphEdge(source="loxia", target="emby", label="talks to")],
+        ),
+        repo_summaries={"loxia": "A Rust workspace of six crates built on ratatui."},
+        change_note="analysis",
+    )
+
+    async with tenant_scope(tenant_id) as session:
+        rows = list(
+            (
+                await session.execute(
+                    text(
+                        "SELECT e.entry_key, c.text FROM knowledge_chunk c "
+                        "JOIN knowledge_entry e ON e.id = c.entry_id "
+                        "WHERE c.version_id = :v"
+                    ),
+                    {"v": version_id},
+                )
+            ).all()
+        )
+
+    assert {key for key, _text in rows} == {"overview", "repo-loxia", "graph"}
+    assert any("ratatui" in body for _key, body in rows), "the repo summary never reached a chunk"
+
+
+async def test_re_chunking_a_version_replaces_rather_than_duplicates(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Chunking is written to converge: a caller that re-runs it (a repair pass over an
+    already-published version) must not leave two copies of every chunk, which retrieval
+    would happily return as two independent hits."""
+    from core.knowledge.publish_chunks import chunk_published_entries
+    from core.knowledge.repo_overview import RepoGraph, save_repo_overview
+
+    tenant_id, _tenant_b = two_tenants
+    workspace_id = await _workspace_of(tenant_id)
+    await seed_default_scopes(tenant_id, workspace_id)
+
+    source_id, version_id = await save_repo_overview(
+        tenant_id,
+        workspace_id,
+        overview_md="One paragraph of overview.",
+        graph=RepoGraph(nodes=[], edges=[]),
+        repo_summaries={},
+        change_note="analysis",
+    )
+
+    async def chunk_count() -> int:
+        async with tenant_scope(tenant_id) as session:
+            return int(
+                (
+                    await session.execute(
+                        text("SELECT count(*) FROM knowledge_chunk WHERE version_id = :v"),
+                        {"v": version_id},
+                    )
+                ).scalar_one()
+            )
+
+    before = await chunk_count()
+    assert before > 0
+    await chunk_published_entries(tenant_id, source_id, version_id)
+    assert await chunk_count() == before
