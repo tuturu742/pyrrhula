@@ -14,12 +14,36 @@ from typing import Any
 
 from core.ports.embedding import EmbedRequest, check_egress
 
+# Peak memory of a transformer forward pass scales with batch_size * seq_len^2 (attention
+# is quadratic in sequence length). bge-m3 is an XLM-R-large with a *default*
+# max_seq_length of 8192, so handing `.encode()` an unbounded list of unbounded texts lets
+# a single call size itself off the caller's data -- which OOM-killed the worker container
+# (exit 137, 8Gi limit) the first time a real source-code corpus was ingested, taking every
+# other tenant's queued job down with it, since the worker claims across tenants. Both
+# bounds are therefore adapter-level resource safety, not tuning knobs: they are deliberately
+# not settings, because no tenant benefits from a *different* value -- they benefit from the
+# worker staying alive.
+_DEFAULT_ENCODE_BATCH_SIZE = 8
+# Comfortably above the ingestion chunker's ~400-token target, so bounded chunks are never
+# truncated; for anything oversized that predates that bound, truncation is the intended
+# failsafe -- a degraded vector beats a dead worker.
+_DEFAULT_MAX_SEQ_LENGTH = 1024
+
 
 class SentenceTransformersEmbeddingProvider:
-    def __init__(self, model: str = "BAAI/bge-m3", *, dimension: int = 1024) -> None:
+    def __init__(
+        self,
+        model: str = "BAAI/bge-m3",
+        *,
+        dimension: int = 1024,
+        batch_size: int = _DEFAULT_ENCODE_BATCH_SIZE,
+        max_seq_length: int = _DEFAULT_MAX_SEQ_LENGTH,
+    ) -> None:
         self._model_name = f"local/{model}"
         self._hf_model_name = model
         self._dimension = dimension
+        self._batch_size = batch_size
+        self._max_seq_length = max_seq_length
         self._model: Any | None = None
 
     @property
@@ -34,11 +58,21 @@ class SentenceTransformersEmbeddingProvider:
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self._hf_model_name)
+            model = SentenceTransformer(self._hf_model_name)
+            # Capped rather than left at the checkpoint's default: see the module constants.
+            model.max_seq_length = min(
+                self._max_seq_length, getattr(model, "max_seq_length", self._max_seq_length)
+            )
+            self._model = model
         return self._model
 
     async def embed(self, req: EmbedRequest) -> list[list[float]]:
         check_egress(req.purpose, req.model, req.egress_policy)
         model = self._load()
-        vectors = await asyncio.to_thread(model.encode, list(req.texts), normalize_embeddings=True)
+        vectors = await asyncio.to_thread(
+            model.encode,
+            list(req.texts),
+            normalize_embeddings=True,
+            batch_size=self._batch_size,
+        )
         return [vector.tolist() for vector in vectors]

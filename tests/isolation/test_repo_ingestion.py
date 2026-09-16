@@ -347,3 +347,63 @@ async def test_repo_readme_injection_content_is_quarantined(
     assert entry_key_for("CLAUDE.md") in retrievable
 
     assert DEFAULT_CLASS_MAP[0] == ("docs/adr/**", "rules")
+
+
+async def test_source_files_chunk_into_bounded_pieces(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Regression (worker OOM): repo entries were written as one chunk per *file*, so chunk
+    size was bounded only by file size. A real Rust workspace produced chunks averaging 4.0k
+    chars and peaking at 15.6k -- ~9x any prose corpus -- and embedding them OOM-killed the
+    worker container (exit 137 against an 8Gi limit), which takes other tenants' queued jobs
+    with it because the worker claims across tenants.
+
+    The bound is what is asserted, not a chunk count: paragraph-aware splitting makes the
+    exact count an implementation detail, while "no single chunk is huge" is the property
+    the embedding step actually depends on.
+    """
+    tenant_id, _tenant_b = two_tenants
+    workspace_id = await _workspace_of(tenant_id)
+    await seed_default_scopes(tenant_id, workspace_id)
+
+    # ~24k chars of plausible source: long lines, few blank lines -- the shape that defeats
+    # a naive paragraph splitter and is exactly what a real code file looks like.
+    big_source = "\n".join(
+        f"pub fn handler_{i}(state: &mut PlayerState, event: Event) -> Result<(), Error> "
+        f'{{ state.apply(event)?; tracing::debug!("handled {i}"); Ok(()) }}'
+        for i in range(160)
+    )
+    files = [
+        RepoFile(path="README.md", content="# Big repo\n\nIt has a large source file."),
+        RepoFile(path="src/handlers.rs", content=big_source),
+    ]
+
+    report = await ingest_repo_snapshot(
+        tenant_id,
+        workspace_id,
+        repo_ref="bigrepo",
+        commit_sha="c" * 40,
+        files=read_tarball(_tarball(files)),
+    )
+    assert report.entries == 2
+
+    async with tenant_scope(tenant_id) as session:
+        rows = list(
+            (
+                await session.execute(
+                    text(
+                        "SELECT e.entry_key, c.ordinal, length(c.text) "
+                        "FROM knowledge_chunk c JOIN knowledge_entry e ON e.id = c.entry_id "
+                        "WHERE e.version_id IS NOT NULL"
+                    )
+                )
+            ).all()
+        )
+
+    assert rows, "the ingest published no chunks at all"
+    longest = max(length for _key, _ordinal, length in rows)
+    assert longest < 4000, f"unbounded repo chunk: {longest} chars"
+
+    source_chunks = [r for r in rows if r[0].endswith("handlers.rs")]
+    assert len(source_chunks) > 1, "a 24k-char source file must split into several chunks"
+    assert {r[1] for r in source_chunks} == set(range(len(source_chunks))), "ordinals must be 0..n"
