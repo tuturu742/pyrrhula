@@ -68,3 +68,45 @@ async def test_get_reflects_status_result_and_error(db_available: None) -> None:
 async def test_get_returns_none_for_unknown_job(db_available: None) -> None:
     queue: JobQueue = PostgresJobQueue()
     assert await queue.get(uuid.uuid4()) is None
+
+
+async def test_a_job_stranded_by_a_dead_worker_is_reclaimed(db_available: None) -> None:
+    """Regression: `claim_one` only ever looked at `status = 'pending'`, so a row left in
+    `claimed` by a worker that died mid-job (here: an OOM kill) was never retried, never
+    failed and never surfaced -- the work silently did not happen while the queue looked
+    healthy. `lease_seconds=0` makes any claim immediately stale, standing in for elapsed
+    time without sleeping."""
+    kind = f"embed_chunks_{uuid.uuid4().hex[:8]}"
+    tenant_id = uuid.uuid4()
+
+    crashed: JobQueue = PostgresJobQueue()
+    job_id = await crashed.enqueue(tenant_id, kind, {"source": "repo"})
+    claimed = await crashed.claim_one(kinds=[kind])
+    assert claimed is not None and claimed.attempts == 1
+    # ...and now the worker dies: no complete(), no fail(), the row stays `claimed`.
+
+    recovered = await PostgresJobQueue(lease_seconds=0).claim_one(kinds=[kind])
+    assert recovered is not None, "a stranded job was never picked back up"
+    assert recovered.id == job_id
+    assert recovered.attempts == 2
+
+
+async def test_a_job_that_keeps_killing_its_worker_is_retired(db_available: None) -> None:
+    """The other half of the lease: reclaiming forever would let one poison job crash-loop
+    the worker, which takes every *other* tenant's queued work with it because the worker
+    claims across tenants. After max_attempts the row is failed and left alone."""
+    kind = f"embed_chunks_{uuid.uuid4().hex[:8]}"
+    queue = PostgresJobQueue(lease_seconds=0, max_attempts=2)
+    job_id = await queue.enqueue(uuid.uuid4(), kind, {})
+
+    for expected_attempts in (1, 2):
+        claimed = await queue.claim_one(kinds=[kind])
+        assert claimed is not None
+        assert claimed.attempts == expected_attempts
+
+    assert await queue.claim_one(kinds=[kind]) is None, "poison job was handed out again"
+
+    retired = await queue.get(job_id)
+    assert retired is not None
+    assert retired.status == "failed"
+    assert "abandoned" in (retired.error or "")
