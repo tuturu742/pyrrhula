@@ -837,3 +837,65 @@ async def test_a_connection_overrides_the_platform_default_context_window(
     )
     [c async for c in provider.generate(plain)]
     assert calls[0]["num_ctx"] == 16384
+
+
+async def test_a_refused_parameter_value_is_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: the repair matched only "does not support parameters: [...]". Reasoning
+    models refuse a *value* instead -- they accept `temperature`, but only at their default
+    -- and that wording matched nothing, so the call failed outright. In delegation that
+    surfaced as every coding agent silently shipping its placeholder scaffold, because
+    codegen sends temperature=0.2 and treats a failed generation as "no file blocks"."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "temperature" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.BadRequestError: OpenAIException - Unsupported value: "
+                "'temperature' does not support 0.2 with this model. Only the default (1) "
+                "value is supported."
+            )
+
+        async def gen():  # noqa: ANN202
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="### FILE: README.md", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-5.6-luna",
+        messages=[{"role": "user", "content": "write the readme"}],
+        purpose="delegation",
+        temperature=0.2,
+        params={"max_tokens": 4000},
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "### FILE: README.md"
+    assert len(calls) == 2
+    assert "temperature" not in calls[1], "the refused value's parameter was not dropped"
+    assert calls[1]["max_tokens"] == 4000, "an unrelated parameter must survive the retry"
+
+
+def test_a_value_refusal_only_drops_the_parameter_it_names() -> None:
+    """The same honesty rule the parameter-refusal repair follows: never drop a key the
+    endpoint did not name, and never act on a message that named nothing."""
+    from adapters.models.litellm.provider import _unsupported_value_param
+
+    named = _unsupported_value_param(
+        Exception(
+            "Unsupported value: 'temperature' does not support 0.2 with this model. "
+            "Only the default (1) value is supported."
+        )
+    )
+    assert named == "temperature"
+    assert _unsupported_value_param(Exception("AuthenticationError: invalid api key")) is None

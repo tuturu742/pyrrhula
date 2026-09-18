@@ -248,6 +248,22 @@ def _unsupported_params(exc: Exception) -> list[str]:
     return [name.strip().strip("'\"") for name in match.group(1).split(",") if name.strip()]
 
 
+# A refusal of one *value* of a parameter rather than of the parameter itself: the
+# endpoint accepts `temperature`, but only at its default. Observed from OpenAI reasoning
+# models as "Unsupported value: 'temperature' does not support 0.2 with this model. Only
+# the default (1) value is supported." Matched on the shape -- a quoted parameter name
+# introduced as an unsupported value -- not on one vendor's sentence.
+_UNSUPPORTED_VALUE_RE = re.compile(
+    r"unsupported value:\s*'([^']+)'.*?does not support", re.I | re.S
+)
+
+
+def _unsupported_value_param(exc: Exception) -> str | None:
+    """The single parameter whose *value* an endpoint just refused, if it named one."""
+    match = _UNSUPPORTED_VALUE_RE.search(str(exc))
+    return match.group(1).strip() if match else None
+
+
 def _rejects_tools_with_reasoning(exc: Exception) -> bool:
     """Some chat-completions endpoints (observed: gpt-5.6-luna, gpt-5.6-terra) refuse
     function tools while a reasoning_effort is in play and say to set it to 'none'.
@@ -284,6 +300,15 @@ def _repair_call(
     dropped = [key for key in _unsupported_params(exc) if key in call]
     if dropped:
         return {key: value for key, value in call.items() if key not in dropped}
+
+    # A parameter whose *value* was refused, where the endpoint accepts the parameter but
+    # only at its own default. Dropping the key is what "use the default" means on the
+    # wire, and it is the same honesty rule as above: only ever the key the endpoint named.
+    # Without this, a codegen call carrying temperature=0.2 failed outright against a
+    # reasoning model, and delegation silently shipped its placeholder scaffold instead.
+    refused_value = _unsupported_value_param(exc)
+    if refused_value and refused_value in call:
+        return {key: value for key, value in call.items() if key != refused_value}
 
     # Endpoints that refuse function tools while a reasoning effort is in play tell the
     # caller to set it to 'none'. Do that once, and never over an effort the caller chose
