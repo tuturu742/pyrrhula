@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 
+from adapters.exec_env.shell import shell_command
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
 
 _API = "http://d/v1.40"
@@ -141,7 +142,7 @@ class DockerSocketExecEnvProvider:
 
     async def exec(self, env_ref: str, cmd: str, *, cwd: str | None = None) -> ExecResult:
         body: dict[str, Any] = {
-            "Cmd": ["sh", "-lc", cmd],
+            "Cmd": shell_command(cmd),
             "AttachStdout": True,
             "AttachStderr": True,
         }

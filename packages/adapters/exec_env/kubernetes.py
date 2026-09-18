@@ -30,6 +30,7 @@ from typing import Any
 
 import httpx
 
+from adapters.exec_env.shell import shell_command
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
 
 _SA_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
@@ -120,7 +121,7 @@ class KubernetesExecEnvProvider:
                             {
                                 "name": "work",
                                 "image": image,
-                                "command": ["sh", "-lc", script],
+                                "command": shell_command(script),
                             }
                         ],
                         **(

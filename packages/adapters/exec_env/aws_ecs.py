@@ -33,6 +33,7 @@ import hashlib
 import time
 from typing import Any
 
+from adapters.exec_env.shell import shell_command
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
 
 _FAMILY_PREFIX = "pyrrhula-env-"
@@ -138,7 +139,7 @@ class AwsEcsExecEnvProvider:
                 }
             },
             overrides={
-                "containerOverrides": [{"name": _CONTAINER, "command": ["sh", "-lc", script]}]
+                "containerOverrides": [{"name": _CONTAINER, "command": shell_command(script)}]
             },
         )
         failures = started.get("failures") or []

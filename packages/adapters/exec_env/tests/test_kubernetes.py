@@ -34,7 +34,10 @@ async def test_run_script_happy_path() -> None:
         if path == "/apis/batch/v1/namespaces/envs/jobs" and request.method == "POST":
             body = json.loads(request.content)
             state["created"] = body
-            assert body["spec"]["template"]["spec"]["containers"][0]["command"][2] == "echo hi"
+            command = body["spec"]["template"]["spec"]["containers"][0]["command"]
+            # Prefixed by exec_env.shell's PATH prelude; the requested command is the tail.
+            assert command[:2] == ["sh", "-c"]
+            assert command[2].endswith("echo hi")
             return httpx.Response(201, json={})
         if path == "/api/v1/namespaces/envs/pods":
             job_name = state["created"]["metadata"]["name"]

@@ -99,7 +99,12 @@ async def test_run_script_registers_and_runs() -> None:
     )
     run = ecs.run_calls[0]
     assert run["startedBy"] == "pyr-env-abcd1234-r1"
-    assert run["overrides"]["containerOverrides"][0]["command"] == ["sh", "-lc", "echo hi"]
+    command = run["overrides"]["containerOverrides"][0]["command"]
+    assert command[:2] == ["sh", "-c"]
+    # Not a login shell: /etc/profile assigns PATH and would discard the image's own,
+    # which is where official toolchain images put their toolchain. See exec_env.shell.
+    assert command[2].endswith("echo hi")
+    assert "/etc/profile" in command[2]
     assert run["networkConfiguration"]["awsvpcConfiguration"]["subnets"] == ["subnet-1"]
 
 
@@ -133,3 +138,23 @@ async def test_teardown_matching_stops_by_started_by_prefix() -> None:
     assert await _provider(ecs).teardown_matching("pyr-env-abcd1234-") == 1
     assert ecs.stopped
     assert await _provider(ecs).teardown_matching("pyr-env-zzzz") == 0
+
+
+def test_the_images_path_survives_profile_sourcing() -> None:
+    """Regression: every adapter ran `sh -lc`, so /etc/profile's PATH assignment discarded
+    the image's. `rust:*-bookworm` exports its toolchain at /usr/local/cargo/bin and nowhere
+    else, so `rustup component add rustfmt clippy` failed with `rustup: not found` against a
+    perfectly good image. The image's PATH must come back in front after profile runs."""
+    from adapters.exec_env.shell import shell_command
+
+    argv = shell_command("cargo test")
+    assert argv[0] == "sh"
+    assert argv[1] == "-c", "a login shell re-assigns PATH and loses the image's"
+    script = argv[2]
+    assert script.index('_pyr_path="$PATH"') < script.index("/etc/profile"), (
+        "the image's PATH must be captured before /etc/profile can overwrite it"
+    )
+    assert script.index("/etc/profile") < script.index('PATH="$_pyr_path'), (
+        "the image's PATH must be restored after profile sourcing, not before"
+    )
+    assert script.endswith("cargo test")
