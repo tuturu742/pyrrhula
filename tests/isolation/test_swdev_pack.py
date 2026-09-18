@@ -28,7 +28,7 @@ from core.entities.tags import widget_for
 from core.packs.loader import load_pack
 from core.process.authoring import get_definition
 from core.process.dsl.schema import ProcessDefinitionDSL
-from core.process.interpreter import start_session
+from core.process.interpreter import evaluate_gates, start_session
 from core.process.skeleton import create_session
 from core.resolution.rule_system import RuleSystemDefinition, get_rule_system
 from core.resolution.service import render_resolution_fact, resolve
@@ -290,11 +290,13 @@ async def test_work_item_renders_via_the_same_resource_widget_as_other_packs(
 async def test_plan_implement_review_merge_smoke_session_runs_with_zero_core_diffs(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """The delegation await ships before delegation exists (G4.16 fills it later): the
-    ``implement`` phase declares an ``await`` using the only await primitive
-    ``AwaitSpec`` supports today (``human_input``) as its placeholder shape. This proves
-    the process still validates and boots through the unmodified interpreter -- zero
-    branches in ``packages/core`` know this pack exists."""
+    """The process validates and boots through the unmodified interpreter -- zero branches
+    in ``packages/core`` know this pack exists.
+
+    ``implement`` used to declare an ``await`` as a placeholder for delegation that did not
+    exist yet. Delegation is real now (G4.16 landed as the delegate endpoint and its worker
+    jobs), so the placeholder is gone: it parked the flow with nothing in the product to
+    satisfy it, on the phase where the engineers were meant to act."""
     tenant_a, _tenant_b = two_tenants
     workspace_id = await _workspace_id(tenant_a)
     loaded = await load_pack(_PACK_DIR, tenant_a, workspace_id)
@@ -311,15 +313,16 @@ async def test_plan_implement_review_merge_smoke_session_runs_with_zero_core_dif
     sess = await create_session(tenant_a, workspace_id, persona_id)
     await start_session(tenant_a, sess.id, definition, definition_row.id, definition_row.version)
 
+    # Walk the flow the way the interpreter does once a phase's actors are exhausted --
+    # `on_complete` for most phases, but `review` transitions on gates, and reading only
+    # `on_complete` is what hid `merge` being unreachable while this chain looked correct.
     phase_chain = [definition.initial_phase]
-    current = definition.phases[definition.initial_phase]
-    while current.on_complete is not None and current.on_complete not in phase_chain:
-        phase_chain.append(current.on_complete)
-        current = definition.phases[current.on_complete]
-    assert phase_chain == ["plan", "implement", "review"]
-    implement = definition.phases["implement"]
-    assert implement.await_field is not None
-    assert implement.await_field.type == "human_input"  # the delegation-await placeholder
+    phase_key = evaluate_gates(definition.phases[definition.initial_phase], {})
+    while phase_key is not None and phase_key not in phase_chain:
+        phase_chain.append(phase_key)
+        phase_key = evaluate_gates(definition.phases[phase_key], {})
+    assert phase_chain == ["plan", "implement", "review", "merge"]
+    assert definition.phases["implement"].await_field is None
 
 
 async def test_swdev_pack_has_zero_core_imports() -> None:
