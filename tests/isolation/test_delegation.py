@@ -298,12 +298,18 @@ async def test_fsm_and_ui_driven_by_outcome_record_not_summary_prose(
         session_id,
         2,
         engineer,
+        # This file declares its own minimal lifecycle (`_work_item_schema`), whose only
+        # dispatch trigger is `start_review` from `in_progress`. Naming it here is the
+        # point: the shipped default used to be that same word, which matched this fixture
+        # and nothing else -- the real work_item schema has no `start_review` at all, so
+        # every actual delegation refused silently while this test stayed green.
         _phase(),
         work_item_id,
         server_key=_SERVER,
         transport=transport,
         permission_service=_PERMISSIONS,
         agent_id=profile_id,
+        on_dispatch_triggers=("start_review",),
     )
 
     assert result.outcome is not None

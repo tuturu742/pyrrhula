@@ -341,7 +341,7 @@ async def test_pilot_work_item_lifecycle_is_record_driven(
         transport=transport,
         permission_service=_PERMISSIONS,
         agent_id=pilot.agent_id,
-        on_dispatch_trigger="submit_for_review",
+        on_dispatch_triggers=("submit_for_review",),
     )
     assert result.dispatched is True
     assert result.transitions == ["in_review"]
@@ -415,7 +415,7 @@ async def test_pilot_restart_left_single_branch_pr_and_action_record(
             transport=transport,
             permission_service=_PERMISSIONS,
             agent_id=pilot.agent_id,
-            on_dispatch_trigger="submit_for_review",
+            on_dispatch_triggers=("submit_for_review",),
         )
 
     # The forced restart: the record is dispatched-but-unresolved, exactly as a crash
@@ -442,7 +442,7 @@ async def test_pilot_restart_left_single_branch_pr_and_action_record(
         transport=transport,
         permission_service=_PERMISSIONS,
         agent_id=pilot.agent_id,
-        on_dispatch_trigger="submit_for_review",
+        on_dispatch_triggers=("submit_for_review",),
     )
 
     assert resumed.reconciled is True

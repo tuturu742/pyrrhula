@@ -5,6 +5,10 @@ import { apiClient } from "@/lib/api-client/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+/** Terminal states of the swdev `work_item` lifecycle: nothing follows them, so an item
+ * here is done being worked and only clutters the list it is still offered in. */
+const FINISHED_STATES = new Set(["merged", "done"]);
+
 /** D15's human half, finally on screen: the session's work items with their FSM
  * status, delegate selected ones to coding agents, and approve / request changes on
  * items that came back for review. The endpoints existed with zero UI — the whole
@@ -27,6 +31,7 @@ export function WorkPanel({
   const hasRepos = Boolean(currentWorkflow?.workflow?.repo_access);
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showCompleted, setShowCompleted] = useState(false);
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [reviewBranch, setReviewBranch] = useState("");
   const [reviewComment, setReviewComment] = useState("Please address review feedback.");
@@ -87,23 +92,49 @@ export function WorkPanel({
   const workItems = items.data ?? [];
   if (items.isSuccess && workItems.length === 0) return null;
 
+  // The machine is keyed `lifecycle`; this used to look up `status`, which no schema
+  // declares, and fell through to whatever happened to be first. Read the real key, keep
+  // the old guess as a fallback for a schema that names its machine differently, and only
+  // then give up. An item that has never transitioned has no stored state at all, so the
+  // machine's own starting point is what to show rather than an em dash.
   const status = (fsm: Record<string, string>) =>
-    fsm["status"] ?? Object.values(fsm)[0] ?? "—";
+    fsm["lifecycle"] ?? fsm["status"] ?? Object.values(fsm)[0] ?? "backlog";
+
+  // Work items belong to the workspace, not to one session -- a backlog is shared, and a
+  // standup, a triage and a planning session all legitimately look at the same one. What
+  // makes that unreadable is finished work never leaving the list, so hide it by default
+  // and let the panel say how much it is hiding.
+  const isFinished = (item: { fsm_states: Record<string, string> }) =>
+    FINISHED_STATES.has(status(item.fsm_states));
+  const finishedCount = workItems.filter(isFinished).length;
+  const visibleItems = showCompleted ? workItems : workItems.filter((i) => !isFinished(i));
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Work items</h2>
-        <Button
+        <span className="flex items-center gap-2">
+          {finishedCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showCompleted}
+                onChange={(e) => setShowCompleted(e.target.checked)}
+              />
+              Show completed ({finishedCount})
+            </label>
+          )}
+          <Button
           size="sm"
           disabled={selected.size === 0 || delegate.isPending}
           onClick={() => delegate.mutate()}
         >
-          Delegate {selected.size > 0 ? `(${selected.size})` : ""}
-        </Button>
+            Delegate {selected.size > 0 ? `(${selected.size})` : ""}
+          </Button>
+        </span>
       </div>
       <ul className="flex flex-col gap-1.5">
-        {workItems.map((item) => (
+        {visibleItems.map((item) => (
           <li key={item.id} className="flex flex-col gap-1.5 text-sm">
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-center gap-2">

@@ -46,6 +46,18 @@ async def _workspace_id(tenant_id: uuid.UUID) -> uuid.UUID:
         ).scalar_one()
 
 
+async def _lifecycle_state(tenant_id: uuid.UUID, entity_id: uuid.UUID) -> str:
+    async with tenant_scope(tenant_id) as session:
+        return str(
+            (
+                await session.execute(
+                    text("SELECT fsm_states ->> 'lifecycle' FROM entity WHERE id = :id"),
+                    {"id": entity_id},
+                )
+            ).scalar_one()
+        )
+
+
 async def _authorized_principal_id(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> uuid.UUID:
     """Any existing principal in this tenant, granted a role whose permission set
     includes ``entity:mutate`` -- mirrors ``test_entity_mutation.py``'s own
@@ -328,3 +340,81 @@ async def test_plan_implement_review_merge_smoke_session_runs_with_zero_core_dif
 async def test_swdev_pack_has_zero_core_imports() -> None:
     py_files = list(_PACK_DIR.rglob("*.py"))
     assert py_files == []
+
+
+async def test_dispatch_walks_a_new_work_item_out_of_the_backlog(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Regression: dispatch fired `submit_for_review` alone.
+
+    That transition is declared `from: in_progress`, while a freshly created work item has
+    no stored state and resolves to the machine's initial one, `backlog`. Nothing matched,
+    the mutation service correctly reported `transitioned: False`, and the item stayed in
+    `backlog` through every delegation, branch, pull request and review run against it --
+    so every session kept offering the same finished work, with the panel showing no state
+    to explain why.
+
+    The walk is the fix and it has to be idempotent: a second dispatch of an item already
+    in review must not push it further or back.
+    """
+    from core.actions.delegation import DelegationResult, _drive_fsm
+    from core.tenancy.models import Principal
+
+    tenant_a, _tenant_b = two_tenants
+    workspace_id = await _workspace_id(tenant_a)
+    loaded = await load_pack(_PACK_DIR, tenant_a, workspace_id)
+    principal_id = await _authorized_principal_id(tenant_a, workspace_id)
+
+    schema = await get_schema(tenant_a, loaded.schema_ids["work_item"])
+    assert schema is not None
+    item = await create_entity(
+        tenant_a,
+        workspace_id,
+        schema.id,
+        schema.to_definition(),
+        key=f"wi-{uuid.uuid4().hex[:8]}",
+        name="Write the README",
+        scope_key="workspace_public",
+        data={"title": "Write the README", "labels": []},
+    )
+    assert item.fsm_states == {}, "precondition: a new item has no stored state"
+
+    async with tenant_scope(tenant_a) as session:
+        viewer = await session.get(Principal, principal_id)
+        assert viewer is not None
+        session.expunge(viewer)
+
+    walk = ("refine", "start", "submit_for_review")
+
+    result = DelegationResult(action_key="a1", branch="pyr/test-1")
+    await _drive_fsm(
+        tenant_a,
+        workspace_id,
+        viewer,
+        item.id,
+        f"act-{uuid.uuid4().hex[:8]}",
+        "lifecycle",
+        walk,
+        _PERMISSIONS,
+        result,
+    )
+
+    assert result.transitions == ["ready", "in_progress", "in_review"]
+    assert await _lifecycle_state(tenant_a, item.id) == "in_review"
+
+    # Dispatching the same item again applies nothing: every trigger in the walk is
+    # illegal from in_review, which is exactly the no-op the guard should produce.
+    again = DelegationResult(action_key="a2", branch="pyr/test-1")
+    await _drive_fsm(
+        tenant_a,
+        workspace_id,
+        viewer,
+        item.id,
+        f"act-{uuid.uuid4().hex[:8]}",
+        "lifecycle",
+        walk,
+        _PERMISSIONS,
+        again,
+    )
+    assert again.transitions == []
+    assert await _lifecycle_state(tenant_a, item.id) == "in_review"

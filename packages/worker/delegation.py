@@ -262,7 +262,11 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
         server_key=str(payload["server_key"]),
         transport=get_mcp_transport(),
         permission_service=get_permission_service(),
-        on_dispatch_trigger=str(payload.get("on_dispatch_trigger", "submit_for_review")),
+        # A caller may still name the walk explicitly; the default is the one the
+        # work_item lifecycle actually declares, from wherever the item currently sits.
+        on_dispatch_triggers=tuple(
+            payload.get("on_dispatch_triggers") or ("refine", "start", "submit_for_review")
+        ),
         extra_arguments=extra or None,
     )
     outcome = result.outcome

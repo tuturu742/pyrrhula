@@ -276,7 +276,14 @@ async def delegate_work_item(
     model_name: str = "coding-agent",
     query_embedding: list[float] | None = None,
     machine_key: str = "lifecycle",
-    on_dispatch_trigger: str = "start_review",
+    # An ordered walk, not one trigger. Dispatching used to fire `submit_for_review` alone,
+    # which the work_item lifecycle declares `from: in_progress` -- while a freshly created
+    # item resolves to the machine's initial state, `backlog`. Nothing matched, the mutation
+    # service correctly reported `transitioned: False`, and the item stayed in backlog
+    # through every delegation, branch, pull request and review anyone ever ran against it.
+    # Each trigger that is legal from wherever the item actually sits is applied in turn, so
+    # this both walks a new item up to `in_review` and is a no-op for one already there.
+    on_dispatch_triggers: tuple[str, ...] = ("refine", "start", "submit_for_review"),
     extra_arguments: dict[str, Any] | None = None,
 ) -> DelegationResult:
     """Dispatch, or discover that it already happened.
@@ -337,7 +344,7 @@ async def delegate_work_item(
                 work_item_id,
                 action.key,
                 machine_key,
-                on_dispatch_trigger,
+                on_dispatch_triggers,
                 permission_service,
                 result,
             )
@@ -365,7 +372,7 @@ async def delegate_work_item(
         work_item_id,
         action.key,
         machine_key,
-        on_dispatch_trigger,
+        on_dispatch_triggers,
         permission_service,
         result,
     )
@@ -379,7 +386,7 @@ async def _drive_fsm(
     work_item_id: uuid.UUID,
     action_key: str,
     machine_key: str,
-    trigger: str,
+    triggers: tuple[str, ...],
     permission_service: PermissionService,
     result: DelegationResult,
 ) -> None:
@@ -388,8 +395,39 @@ async def _drive_fsm(
     record, and the idempotency, and a delegation that wrote state itself would be a second
     writer with none of them.
 
-    The trigger is fixed by the caller, never read from the outcome's prose. A returned
+    The triggers are fixed by the caller, never read from the outcome's prose. A returned
     summary claiming "and I also merged it" moves nothing."""
+    for trigger in triggers:
+        await _try_transition(
+            tenant_id,
+            workspace_id,
+            viewer,
+            work_item_id,
+            action_key,
+            machine_key,
+            trigger,
+            permission_service,
+            result,
+        )
+
+
+async def _try_transition(
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    viewer: Principal,
+    work_item_id: uuid.UUID,
+    action_key: str,
+    machine_key: str,
+    trigger: str,
+    permission_service: PermissionService,
+    result: DelegationResult,
+) -> None:
+    """One trigger. A trigger that does not apply from the item's current state is normal
+    here -- the caller offers a walk and most steps are no-ops on any given call -- but it
+    is never silent: a refusal that nobody can see is how a work item sat in `backlog`
+    through six pull requests with `transitions: []` in the job record and no other trace."""
+    import structlog
+
     try:
         outcome = await transition(
             viewer.id,
@@ -403,7 +441,15 @@ async def _drive_fsm(
             cause="agent",
             cause_ref=f"action:{action_key}",
         )
-    except Exception:  # noqa: BLE001 -- a guard that refuses is information, not a failure
+    except Exception as exc:  # noqa: BLE001 -- a guard that refuses is information
+        structlog.get_logger().warning(
+            "delegation.transition_failed",
+            work_item_id=str(work_item_id),
+            machine_key=machine_key,
+            trigger=trigger,
+            action_key=action_key,
+            error=str(exc)[:200],
+        )
         return
     # F3.5 returns `transitioned` plus `new_state`; a guard that refused reports
     # `transitioned: False` with the state unchanged. Recording only real transitions
@@ -411,6 +457,14 @@ async def _drive_fsm(
     # that were attempted.
     if outcome.get("transitioned"):
         result.transitions.append(str(outcome.get("new_state")))
+    else:
+        structlog.get_logger().info(
+            "delegation.transition_not_applicable",
+            work_item_id=str(work_item_id),
+            machine_key=machine_key,
+            trigger=trigger,
+            state=str(outcome.get("new_state")),
+        )
 
 
 async def _meter(
