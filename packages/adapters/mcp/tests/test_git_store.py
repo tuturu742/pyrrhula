@@ -68,3 +68,32 @@ async def test_merge_conflict_aborts_rather_than_committing_markers(tmp_path) ->
     tree = await store.read_tree("proj")
     assert "<<<<<<<" not in tree["a.txt"], "conflict markers were committed"
     assert tree["a.txt"] == "from x\n"
+
+
+def test_a_failed_git_command_never_echoes_the_token() -> None:
+    """Regression (credential disclosure): `authed_url` puts a live token in a URL's
+    userinfo because that is the only way to hand git a credential without persisting one.
+    git redacts credentials from its own stderr, which made this look safe -- but the error
+    raised here composes the argv *we* passed, and the token is in the argv. A push to a
+    repository the token could not write logged the whole PAT in plaintext, at warning
+    level, where it reached the worker's stdout and anything aggregating it."""
+    from adapters.mcp.git_store import authed_url, redact_credentials
+
+    token = "github_pat_11EXAMPLEONLY_notarealtoken"  # noqa: S105
+    url = authed_url("https://github.com/acme/widget", token)
+    assert token in url, "precondition: the token really is in the URL git is handed"
+
+    message = redact_credentials(f"git push -q {url} main:main failed: remote: Permission denied")
+
+    assert token not in message
+    assert "x-access-token" not in message
+    assert "https://***@github.com/acme/widget" in message
+    assert "Permission denied" in message, "the diagnosis must survive the redaction"
+
+
+def test_redaction_leaves_ordinary_urls_alone() -> None:
+    """Redaction must not mangle the messages it has no reason to touch."""
+    from adapters.mcp.git_store import redact_credentials
+
+    message = "clone failed: repository 'https://github.com/acme/widget' not found"
+    assert redact_credentials(message) == message

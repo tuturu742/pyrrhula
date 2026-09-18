@@ -19,6 +19,7 @@ import contextlib
 import json
 import os
 import pathlib
+import re
 import shutil
 from collections import defaultdict
 from collections.abc import Mapping
@@ -63,6 +64,21 @@ def authed_url(url: str, token: str | None, userinfo: str | None = None) -> str:
     return urlunsplit(parts._replace(netloc=f"{info}@{parts.netloc}"))
 
 
+_CREDENTIALED_URL_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]+@")
+
+
+def redact_credentials(text: str) -> str:
+    """Strip userinfo from any URL in ``text``.
+
+    ``authed_url`` puts a live token in the userinfo slot because that is the only way to
+    hand git a credential without persisting one. git redacts credentials from its *own*
+    stderr, which is what made this look safe -- but a failure message composed here
+    echoes the argv we passed, and the token is in the argv. A push to a repository the
+    token could not write logged the whole PAT in plaintext.
+    """
+    return _CREDENTIALED_URL_RE.sub(r"\g<scheme>***@", text)
+
+
 class GitStoreError(Exception):
     pass
 
@@ -93,7 +109,9 @@ class GitStore:
         )
         out, err = await proc.communicate()
         if proc.returncode != 0:
-            raise GitStoreError(f"git {' '.join(args)} failed: {err.decode()[:300]}")
+            raise GitStoreError(
+                redact_credentials(f"git {' '.join(args)} failed: {err.decode()[:300]}")
+            )
         return out.decode()
 
     def _sweep_broken_refs(self, repo_key: str) -> None:
@@ -170,7 +188,7 @@ class GitStore:
             _, err = await proc.communicate()
             if proc.returncode != 0:
                 shutil.rmtree(work, ignore_errors=True)
-                raise GitStoreError(f"clone failed: {err.decode()[:300]}")
+                raise GitStoreError(redact_credentials(f"clone failed: {err.decode()[:300]}"))
             # Normalize the primary branch name so branch/PR conventions hold store-wide.
             head = await self._git(repo_key, "rev-parse", "--abbrev-ref", "HEAD")
             if head.strip() != "main":
