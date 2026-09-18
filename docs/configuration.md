@@ -195,7 +195,23 @@ The same shape the vocabulary overlay has always used
 site re-derives it and quietly disagrees about which layer wins.
 
 Settings that use it today: `secret_mode`, `conduct_rules`, `allow_automerge`,
-`max_review_rounds`, `moderation_model`.
+`max_review_rounds`, `moderation_model`, `assistant_context_max_tokens`.
+
+`assistant_context_max_tokens` is how many tokens of retrieved workspace knowledge the
+assistant may put in front of the model on one question, across `/assist` and the chat
+widget alike. It defaults to **6000**.
+
+The default matters more than it looks. The budget is split across knowledge classes
+(`rules` 0.35, `lore` 0.40, `misc` 0.25) and *every source file a repository ingest
+produces lands in `misc`* — so the class holding the most material gets the smallest
+share. At the old 2400 the `misc` bucket was 600 tokens, about two chunks, and a question
+about how code fits together was answered from a single chunk of one file. Unused budget
+does spill between classes, but it spills in tokens, and a leftover smaller than one chunk
+buys nothing.
+
+Raise it for a workspace with a codebase attached; lower it for a model with a genuinely
+small context window. It is a workspace-level property, not a platform one: a six-crate
+repository and a one-page handbook do not want the same number.
 
 ## What is deliberately *not* an environment variable
 

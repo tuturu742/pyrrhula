@@ -29,7 +29,12 @@ from typing import Any
 
 import structlog
 
-from core.agents.assistant import _workspace_context, ensure_workspace_assistant
+from core.agents.assistant import (
+    _CONTEXT_MAX_TOKENS_SETTING,
+    _DEFAULT_CONTEXT_MAX_TOKENS,
+    _workspace_context,
+    ensure_workspace_assistant,
+)
 from core.agents.authoring import (
     list_agents,
     list_personas,
@@ -49,6 +54,7 @@ from core.ports.model_provider import (
 )
 from core.repos.service import list_repos
 from core.sessions.lifecycle import list_sessions
+from core.settings.resolve import resolved_setting
 from core.tenancy.egress import load_egress_policy
 from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
@@ -496,8 +502,23 @@ async def _chat_inner(
         if m.get("role") in ("user", "assistant", "system") and m.get("content")
     ]
     last_user = str(next((m["content"] for m in reversed(history) if m["role"] == "user"), ""))
+    # Same budget the one-shot assist path resolves: the chat widget and /assist are the
+    # same assistant reading the same workspace, and a budget that applied to one of them
+    # would be a setting the user could only half-see the effect of.
     context, entry_keys = await _workspace_context(
-        tenant_id, workspace_id, viewer, last_user, embedder
+        tenant_id,
+        workspace_id,
+        viewer,
+        last_user,
+        embedder,
+        int(
+            await resolved_setting(
+                tenant_id,
+                workspace_id,
+                _CONTEXT_MAX_TOKENS_SETTING,
+                _DEFAULT_CONTEXT_MAX_TOKENS,
+            )
+        ),
     )
 
     state = _ChatState()

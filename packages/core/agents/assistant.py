@@ -32,6 +32,7 @@ from core.knowledge.retrieval.assemble import search_and_budget
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
 from core.ports.embedding import EmbeddingProvider, EmbedRequest
 from core.ports.model_provider import GenerationRequest, ModelProvider
+from core.settings.resolve import resolved_setting
 from core.tenancy.egress import load_egress_policy
 from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
@@ -47,9 +48,21 @@ _ASSISTANT_PERSONA_MD = (
     "workspace knowledge when any is given."
 )
 
-# Retrieval budget for one assist call: enough grounding to matter, small enough that a
-# local model's context survives alongside the instruction and the draft.
-_CONTEXT_MAX_TOKENS = 2400
+# Retrieval budget for one assist call, in tokens, when nothing overrides it.
+#
+# This was 2400, chosen when a local Ollama model ran at the 4096-token default context and
+# the block had to leave room for the instruction and the draft. That floor is gone -- the
+# provider now sets num_ctx itself, well above this -- and 2400 was measurably too small
+# for a workspace with a repository in it: `misc` (which is where every source file lands)
+# takes the smallest share of the split, so a question about how code fits together was
+# answered from a single chunk of one file.
+#
+# It is a *default*, not a constant, because the right value is a property of the workspace
+# rather than of the platform: a six-crate codebase and a one-page handbook do not want the
+# same budget, and the model behind the assistant differs per connection. Workspaces and
+# tenants override it through the ordinary settings chain.
+_CONTEXT_MAX_TOKENS_SETTING = "assistant_context_max_tokens"
+_DEFAULT_CONTEXT_MAX_TOKENS = 6000
 _CLASS_RATIOS = {"rules": 0.35, "lore": 0.40, "misc": 0.25}
 
 _TASK_SYSTEM_PROMPTS = {
@@ -160,6 +173,7 @@ async def _workspace_context(
     viewer: Principal,
     query_text: str,
     embedder: EmbeddingProvider,
+    max_tokens: int,
 ) -> tuple[str, list[str]]:
     """Viewer-entitled knowledge chunks rendered as one context block. EXPORT visibility
     = "every scope this viewer is entitled to in this workspace" -- the assistant has no
@@ -177,7 +191,7 @@ async def _workspace_context(
         query_embedding=embedding,
         query_text=query_text,
         class_ratios=_CLASS_RATIOS,
-        max_tokens=_CONTEXT_MAX_TOKENS,
+        max_tokens=max_tokens,
     )
     if not chunks:
         return "", []
@@ -222,8 +236,13 @@ async def assist(
     )
 
     query_text = f"{subject}\n{instruction}".strip()
+    max_tokens = int(
+        await resolved_setting(
+            tenant_id, workspace_id, _CONTEXT_MAX_TOKENS_SETTING, _DEFAULT_CONTEXT_MAX_TOKENS
+        )
+    )
     context, entry_keys = await _workspace_context(
-        tenant_id, workspace_id, viewer, query_text, embedder
+        tenant_id, workspace_id, viewer, query_text, embedder, max_tokens
     )
 
     user_parts: list[str] = []

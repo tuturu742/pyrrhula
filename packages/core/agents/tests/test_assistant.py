@@ -136,3 +136,70 @@ async def test_assist_rejects_unknown_task(db_available: None) -> None:
             provider=_ScriptedAssistProvider(text="", seen_purposes=[]),
             embedder=StubEmbeddingProvider(dimension=1024),
         )
+
+
+async def test_the_context_budget_is_a_workspace_setting(
+    db_available: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The assistant's retrieval budget was a module constant at 2400 tokens, chosen when a
+    local Ollama model ran at a 4096-token context. That floor is gone, and 2400 was
+    measurably too small once a repository was in the workspace: `misc` is where every
+    source file lands and takes the smallest share of the class split, so "how does this
+    code fit together" was answered from one chunk of one file.
+
+    The right value is a property of the workspace -- a six-crate codebase and a one-page
+    handbook do not want the same budget -- so it resolves through the settings chain, and
+    a workspace that sets it must win over the platform default.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from core.agents import assistant as assistant_module
+    from core.tenancy.models import Workspace
+
+    tenant_id, owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"assist-budget-{uuid.uuid4().hex[:8]}"
+    )
+    persona = await ensure_workspace_assistant(tenant_id, workspace_id)
+    profile = await get_agent(tenant_id, persona.agent_id)
+    assert profile is not None
+
+    async with tenant_scope(tenant_id) as session:
+        viewer = await session.get(Principal, owner_id)
+        assert viewer is not None
+        session.expunge(viewer)
+
+    seen: list[int] = []
+    real_context = assistant_module._workspace_context
+
+    async def _spy(*args: object, **kwargs: object):  # noqa: ANN202
+        seen.append(int(args[5] if len(args) > 5 else kwargs["max_tokens"]))  # type: ignore[arg-type]
+        return await real_context(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(assistant_module, "_workspace_context", _spy)
+
+    async def _run() -> None:
+        await assist(
+            tenant_id,
+            workspace_id,
+            viewer,
+            task="ask",
+            subject="loxia",
+            instruction="which crate talks to the server?",
+            profile=profile,
+            provider=_ScriptedAssistProvider(text="ok", seen_purposes=[]),
+            embedder=StubEmbeddingProvider(dimension=1024),
+        )
+
+    await _run()
+    assert seen == [assistant_module._DEFAULT_CONTEXT_MAX_TOKENS]
+
+    async with tenant_scope(tenant_id) as session:
+        workspace = await session.get(Workspace, workspace_id)
+        assert workspace is not None
+        workspace.settings = {
+            **(workspace.settings or {}),
+            assistant_module._CONTEXT_MAX_TOKENS_SETTING: 12000,
+        }
+        flag_modified(workspace, "settings")
+    await _run()
+    assert seen[-1] == 12000, "a workspace's own budget must beat the platform default"
