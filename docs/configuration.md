@@ -195,7 +195,8 @@ The same shape the vocabulary overlay has always used
 site re-derives it and quietly disagrees about which layer wins.
 
 Settings that use it today: `secret_mode`, `conduct_rules`, `allow_automerge`,
-`max_review_rounds`, `moderation_model`, `assistant_context_max_tokens`.
+`max_review_rounds`, `moderation_model`, `assistant_context_max_tokens`,
+`assistant_class_ratios`.
 
 `assistant_context_max_tokens` is how many tokens of retrieved workspace knowledge the
 assistant may put in front of the model on one question, across `/assist` and the chat
@@ -212,6 +213,22 @@ buys nothing.
 Raise it for a workspace with a codebase attached; lower it for a model with a genuinely
 small context window. It is a workspace-level property, not a platform one: a six-crate
 repository and a one-page handbook do not want the same number.
+
+`assistant_class_ratios` is that split itself, as a map (default
+`{"rules": 0.35, "lore": 0.40, "misc": 0.25}`). Ratios need not sum to 1; they are
+normalised. A workspace whose knowledge is mostly code wants something like
+`{"rules": 0.2, "lore": 0.2, "misc": 0.6}`. A setting that is not a usable map, or whose
+values total zero, is ignored in favour of the default -- a zero total would give every
+class a zero budget, which reads as "the assistant stopped finding anything" rather than as
+a bad setting.
+
+**This is not the same lever as `priority_weight`,** and the difference decides which one
+to reach for. `workspace_knowledge_attachment.priority_weight` scales an attached *source*,
+so it says "this handbook matters more here than that one". It cannot say "code matters
+more than prose", because a repository is a single source whose entries span all three
+classes -- weighting it raises every class equally, and a uniform weight normalises away to
+no change at all. Use `priority_weight` to rank sources against each other, and
+`assistant_class_ratios` to change what a class is worth.
 
 ## What is deliberately *not* an environment variable
 

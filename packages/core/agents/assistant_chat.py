@@ -32,6 +32,7 @@ import structlog
 from core.agents.assistant import (
     _CONTEXT_MAX_TOKENS_SETTING,
     _DEFAULT_CONTEXT_MAX_TOKENS,
+    _class_ratios,
     _workspace_context,
     ensure_workspace_assistant,
 )
@@ -519,6 +520,7 @@ async def _chat_inner(
                 _DEFAULT_CONTEXT_MAX_TOKENS,
             )
         ),
+        await _class_ratios(tenant_id, workspace_id),
     )
 
     state = _ChatState()

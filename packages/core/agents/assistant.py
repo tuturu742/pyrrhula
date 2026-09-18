@@ -29,6 +29,7 @@ from core.assembler.visibility import EXPORT, scopes_for
 from core.audit.models import UsageRecordRow
 from core.config import get_settings
 from core.knowledge.retrieval.assemble import search_and_budget
+from core.knowledge.retrieval.priority import class_priority_weights
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
 from core.ports.embedding import EmbeddingProvider, EmbedRequest
 from core.ports.model_provider import GenerationRequest, ModelProvider
@@ -63,7 +64,16 @@ _ASSISTANT_PERSONA_MD = (
 # tenants override it through the ordinary settings chain.
 _CONTEXT_MAX_TOKENS_SETTING = "assistant_context_max_tokens"
 _DEFAULT_CONTEXT_MAX_TOKENS = 6000
-_CLASS_RATIOS = {"rules": 0.35, "lore": 0.40, "misc": 0.25}
+
+# How the budget divides between knowledge classes. Also a default rather than a constant,
+# and for a reason `priority_weight` cannot cover: that weight is per attached *source*, so
+# a workspace whose knowledge is one repository carries the same weight into all three
+# classes, and a uniform weight normalises away to no change at all. It expresses "this
+# source matters more than that one", never "code matters more than prose here" -- and the
+# second is exactly what a workspace with a codebase in it needs to be able to say, since
+# every source file lands in `misc` and the shipped split gives `misc` the smallest share.
+_CLASS_RATIOS_SETTING = "assistant_class_ratios"
+_DEFAULT_CLASS_RATIOS = {"rules": 0.35, "lore": 0.40, "misc": 0.25}
 
 _TASK_SYSTEM_PROMPTS = {
     "draft_persona": (
@@ -174,6 +184,7 @@ async def _workspace_context(
     query_text: str,
     embedder: EmbeddingProvider,
     max_tokens: int,
+    class_ratios: dict[str, float],
 ) -> tuple[str, list[str]]:
     """Viewer-entitled knowledge chunks rendered as one context block. EXPORT visibility
     = "every scope this viewer is entitled to in this workspace" -- the assistant has no
@@ -190,8 +201,12 @@ async def _workspace_context(
         scope_keys=scope_set,
         query_embedding=embedding,
         query_text=query_text,
-        class_ratios=_CLASS_RATIOS,
+        class_ratios=class_ratios,
         max_tokens=max_tokens,
+        # What a workspace said its attached sources are worth. Without this the budget
+        # split is the same everywhere, which is wrong in the direction that hurts most:
+        # a repository puts every source file in `misc`, the class with the smallest share.
+        priority_weights=await class_priority_weights(tenant_id, workspace_id),
     )
     if not chunks:
         return "", []
@@ -207,6 +222,23 @@ async def _workspace_context(
         if chunk.entry_key not in entry_keys:
             entry_keys.append(chunk.entry_key)
     return "\n\n".join(blocks), entry_keys
+
+
+async def _class_ratios(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> dict[str, float]:
+    """The workspace's class split, falling back to the shipped one. Values are coerced to
+    float and a non-positive total is ignored rather than propagated: `split_budget` would
+    hand every class a zero budget, which reads in the UI as "the assistant stopped finding
+    anything" rather than as a bad setting."""
+    raw = await resolved_setting(
+        tenant_id, workspace_id, _CLASS_RATIOS_SETTING, _DEFAULT_CLASS_RATIOS
+    )
+    if not isinstance(raw, dict) or not raw:
+        return dict(_DEFAULT_CLASS_RATIOS)
+    try:
+        ratios = {str(k): float(v) for k, v in raw.items()}
+    except (TypeError, ValueError):
+        return dict(_DEFAULT_CLASS_RATIOS)
+    return ratios if sum(ratios.values()) > 0 else dict(_DEFAULT_CLASS_RATIOS)
 
 
 async def assist(
@@ -242,7 +274,13 @@ async def assist(
         )
     )
     context, entry_keys = await _workspace_context(
-        tenant_id, workspace_id, viewer, query_text, embedder, max_tokens
+        tenant_id,
+        workspace_id,
+        viewer,
+        query_text,
+        embedder,
+        max_tokens,
+        await _class_ratios(tenant_id, workspace_id),
     )
 
     user_parts: list[str] = []

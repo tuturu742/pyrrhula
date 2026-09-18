@@ -203,3 +203,64 @@ async def test_the_context_budget_is_a_workspace_setting(
         flag_modified(workspace, "settings")
     await _run()
     assert seen[-1] == 12000, "a workspace's own budget must beat the platform default"
+
+
+async def test_a_workspace_can_reweight_the_class_split(db_available: None) -> None:
+    """`priority_weight` cannot express this, which is why the ratios are settable too.
+
+    That weight is per attached *source*. A workspace whose knowledge is one repository
+    carries the same weight into all three classes, and a uniform weight normalises away to
+    no change whatsoever -- it says "this source matters more than that one", never "code
+    matters more than prose here". The second is what a workspace with a codebase needs:
+    every source file lands in `misc`, and the shipped split gives `misc` the least.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from core.agents import assistant as assistant_module
+    from core.knowledge.retrieval.budget import split_budget
+    from core.tenancy.models import Workspace
+
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"assist-ratio-{uuid.uuid4().hex[:8]}"
+    )
+
+    shipped = await assistant_module._class_ratios(tenant_id, workspace_id)
+    assert shipped == assistant_module._DEFAULT_CLASS_RATIOS
+
+    async with tenant_scope(tenant_id) as session:
+        workspace = await session.get(Workspace, workspace_id)
+        assert workspace is not None
+        workspace.settings = {
+            **(workspace.settings or {}),
+            assistant_module._CLASS_RATIOS_SETTING: {"rules": 0.2, "lore": 0.2, "misc": 0.6},
+        }
+        flag_modified(workspace, "settings")
+
+    code_heavy = await assistant_module._class_ratios(tenant_id, workspace_id)
+    assert split_budget(code_heavy, 6000)["misc"] == 3600
+    assert split_budget(shipped, 6000)["misc"] == 1500
+
+
+async def test_an_unusable_ratio_setting_falls_back_instead_of_starving_retrieval(
+    db_available: None,
+) -> None:
+    """A total of zero would hand every class a zero budget, which surfaces as "the
+    assistant stopped finding anything" rather than as a bad setting -- so it is ignored."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from core.agents import assistant as assistant_module
+    from core.tenancy.models import Workspace
+
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"assist-bad-{uuid.uuid4().hex[:8]}"
+    )
+    for broken in ({"rules": 0, "lore": 0, "misc": 0}, {"rules": "lots"}, {}):
+        async with tenant_scope(tenant_id) as session:
+            workspace = await session.get(Workspace, workspace_id)
+            assert workspace is not None
+            workspace.settings = {assistant_module._CLASS_RATIOS_SETTING: broken}
+            flag_modified(workspace, "settings")
+        assert (
+            await assistant_module._class_ratios(tenant_id, workspace_id)
+            == assistant_module._DEFAULT_CLASS_RATIOS
+        ), f"{broken!r} should have fallen back"

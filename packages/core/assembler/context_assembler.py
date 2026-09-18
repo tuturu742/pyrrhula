@@ -78,6 +78,7 @@ from core.knowledge.activation import ActivatedEntry, EntryActivationState, acti
 from core.knowledge.retrieval.assemble import search_and_budget
 from core.knowledge.retrieval.budget import BudgetedChunk
 from core.knowledge.retrieval.cache import RetrievalCache
+from core.knowledge.retrieval.priority import class_priority_weights
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
 from core.observability.otel import get_tracer
 from core.ports.reranker import Reranker
@@ -544,6 +545,10 @@ async def assemble(
                     class_ratios=phase.budget.ratio,
                     max_tokens=phase.budget.max_tokens - history_reserved_tokens,
                     activated_entries_by_class=activated_entries_by_class,
+                    # The phase's ratio says what this *kind of turn* wants; the weights say
+                    # what this *workspace* attached and how much it is worth here. Both
+                    # matter, and only the first was ever applied.
+                    priority_weights=await class_priority_weights(tenant_id, workspace_id),
                     spill=phase.budget.spill,
                     reranker=reranker,
                     cache=cache,
