@@ -61,6 +61,12 @@ class PreviewEnvironmentRow(Base):
     artifact_name: Mapped[str] = mapped_column(
         String(120), nullable=False, default="", server_default=""
     )
+    # The git ref this preview was built from. Distinct from ``ref`` above, which is the
+    # engine's own handle for the container -- an unfortunate collision of a short word,
+    # and the reason this one is spelled out.
+    git_ref: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default=""
+    )
     created_by_principal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )

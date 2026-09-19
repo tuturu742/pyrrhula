@@ -27,7 +27,11 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from adapters.mcp.git_store import _GIT_ENV, default_git_root
-from core.repos.service import verify_artifact_read_token, verify_git_job_token
+from core.repos.service import (
+    artifact_blob_key,
+    verify_artifact_read_token,
+    verify_git_job_token,
+)
 
 router = APIRouter(prefix="/git", tags=["git-http"])
 
@@ -137,11 +141,15 @@ _ARTIFACT_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
 @router.post("/{store_key}/artifact", status_code=201)
 async def upload_artifact(
-    store_key: str, request: Request, name: str = Query(...)
+    store_key: str, request: Request, name: str = Query(...), ref: str = Query("")
 ) -> dict[str, str]:
     """A delegation environment POSTs the built artifact here with the same short-lived
-    job token it cloned with (curl handles the userinfo-in-URL form). Stored under a
-    deterministic blob key -- 'latest' semantics, each green build replaces the last."""
+    job token it cloned with (curl handles the userinfo-in-URL form).
+
+    ``ref`` is the branch the build came from. Without it the key was one slot per
+    repository -- `artifact_name` is fixed in the repo's config, so every branch wrote to
+    the same place and two delegations running at once overwrote each other silently. It
+    stays optional so an artifact uploaded before this existed is still addressable."""
     _require_token(request, store_key)
     _repo_path(store_key)  # 404 before reading the body when the repo doesn't exist
     if not _ARTIFACT_NAME_RE.fullmatch(name):
@@ -153,12 +161,14 @@ async def upload_artifact(
         raise HTTPException(status_code=413, detail="artifact too large")
     from api.blob_store_factory import get_blob_store
 
-    blob_key = f"artifacts/{store_key}/{name}"
+    blob_key = artifact_blob_key(store_key, name, ref)
     await get_blob_store().put(blob_key, body)
     return {"blob_key": blob_key, "bytes": str(len(body))}
 
 
-def _require_artifact_read_token(request: Request, store_key: str, name: str) -> None:
+def _require_artifact_read_token(
+    request: Request, store_key: str, name: str, ref: str = ""
+) -> None:
     """Read-only counterpart to ``_require_token``, scoped to one artifact.
 
     Kept separate on purpose: a push-capable git token must never be what unlocks the
@@ -173,7 +183,7 @@ def _require_artifact_read_token(request: Request, store_key: str, name: str) ->
             token = ""
     elif header.lower().startswith("bearer "):
         token = header[7:].strip()
-    if not token or not verify_artifact_read_token(token, store_key, name):
+    if not token or not verify_artifact_read_token(token, store_key, name, ref):
         raise HTTPException(
             status_code=401,
             detail="artifact read token required",
@@ -182,18 +192,27 @@ def _require_artifact_read_token(request: Request, store_key: str, name: str) ->
 
 
 @router.get("/{store_key}/artifact")
-async def download_artifact(store_key: str, request: Request, name: str = Query(...)) -> Response:
+async def download_artifact(
+    store_key: str, request: Request, name: str = Query(...), ref: str = Query("")
+) -> Response:
     """A preview container fetches the built artifact here on startup. Same blob key the
     intake writes; a token that can do nothing else."""
     if not _ARTIFACT_NAME_RE.fullmatch(name):
         raise HTTPException(status_code=400, detail="invalid artifact name")
-    _require_artifact_read_token(request, store_key, name)
+    _require_artifact_read_token(request, store_key, name, ref)
     _repo_path(store_key)
     from api.blob_store_factory import get_blob_store
     from core.ports.blob_store import BlobNotFoundError
 
     try:
-        body = await get_blob_store().get(f"artifacts/{store_key}/{name}")
-    except BlobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="no such artifact") from exc
+        body = await get_blob_store().get(artifact_blob_key(store_key, name, ref))
+    except BlobNotFoundError:
+        # A ref-scoped miss falls back to the pre-ref key so a preview configured before
+        # artifacts were keyed by branch keeps serving instead of 404ing on upgrade.
+        if not ref:
+            raise HTTPException(status_code=404, detail="no such artifact") from None
+        try:
+            body = await get_blob_store().get(artifact_blob_key(store_key, name))
+        except BlobNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="no such artifact") from exc
     return Response(content=body, media_type="application/octet-stream")

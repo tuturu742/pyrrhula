@@ -8,6 +8,7 @@ setup. Users never supply raw images -- the catalog is the allowlist.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from datetime import UTC, datetime
@@ -172,7 +173,43 @@ def verify_git_job_token(token: str, store_key_value: str) -> bool:
     return claims.get("use") == "git" and claims.get("sk") == store_key_value
 
 
-def mint_artifact_read_token(store_key_value: str, artifact_name: str, *, ttl_seconds: int) -> str:
+# Artifacts used to be addressed as ``artifacts/<store>/<name>`` with "latest" semantics
+# -- each green build replaced the last. `artifact_name` comes from the repo's own config,
+# so it is one fixed string per repository and every branch wrote to the same key: two
+# delegations running at once silently overwrote each other, and whatever finished last was
+# what a preview served, with nothing anywhere recording that it had happened. A ref segment
+# is what gives concurrent branches somewhere separate to land.
+_REF_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def artifact_ref_slug(git_ref: str) -> str:
+    """A filesystem- and hostname-safe stand-in for a git ref.
+
+    Suffixed with a digest of the original because slugging is lossy: `feat/login` and
+    `feat-login` flatten to the same characters and must not end up sharing a blob key or a
+    container name. The readable half is kept short so the whole thing still fits a DNS
+    label once a preview name is built around it.
+    """
+    cleaned = _REF_SLUG_RE.sub("-", git_ref.strip().lower()).strip("-")
+    digest = hashlib.sha256(git_ref.encode()).hexdigest()[:8]
+    return f"{cleaned[:24].strip('-')}-{digest}" if cleaned else digest
+
+
+def artifact_blob_key(store_key_value: str, artifact_name: str, git_ref: str = "") -> str:
+    """Where one build's artifact lives.
+
+    An empty ``git_ref`` keeps the pre-ref layout, so artifacts uploaded before this
+    existed stay readable and a caller that genuinely has no ref in hand still works. Every
+    caller that knows its branch supplies it, which is what stops the overwrite.
+    """
+    if not git_ref:
+        return f"artifacts/{store_key_value}/{artifact_name}"
+    return f"artifacts/{store_key_value}/refs/{artifact_ref_slug(git_ref)}/{artifact_name}"
+
+
+def mint_artifact_read_token(
+    store_key_value: str, artifact_name: str, *, ttl_seconds: int, git_ref: str = ""
+) -> str:
     """Read one named build artifact, and nothing else.
 
     Deliberately NOT ``mint_git_job_token``: that token authorizes ``git-receive-pack``,
@@ -192,6 +229,9 @@ def mint_artifact_read_token(store_key_value: str, artifact_name: str, *, ttl_se
             "use": "artifact",
             "sk": store_key_value,
             "n": artifact_name,
+            # Scoped to the ref as well as the name: a preview of one branch must not be
+            # able to read another branch's build just by asking for it.
+            "r": git_ref,
             "exp": int(_time.time()) + ttl_seconds,
         },
         settings.jwt_secret,
@@ -199,7 +239,9 @@ def mint_artifact_read_token(store_key_value: str, artifact_name: str, *, ttl_se
     )
 
 
-def verify_artifact_read_token(token: str, store_key_value: str, artifact_name: str) -> bool:
+def verify_artifact_read_token(
+    token: str, store_key_value: str, artifact_name: str, git_ref: str = ""
+) -> bool:
     import jwt as _jwt
 
     from core.config import get_settings
@@ -213,6 +255,7 @@ def verify_artifact_read_token(token: str, store_key_value: str, artifact_name: 
         claims.get("use") == "artifact"
         and claims.get("sk") == store_key_value
         and claims.get("n") == artifact_name
+        and claims.get("r", "") == git_ref
     )
 
 

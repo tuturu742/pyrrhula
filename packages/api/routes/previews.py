@@ -11,12 +11,14 @@ path, which carries the tenant id -- so the handler still opens a normal
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from starlette.responses import RedirectResponse, Response, StreamingResponse
@@ -84,6 +86,10 @@ class CreatePreviewRequest(BaseModel):
     workspace_id: uuid.UUID | None = None
     session_id: uuid.UUID | None = None
     ttl_seconds: int | None = None
+    # Which branch to preview. Empty means the pre-ref behaviour: whatever is at the
+    # repository's single artifact slot. Two branches with a ref are two previews; two
+    # branches without one are the same preview, which is what this exists to end.
+    git_ref: str = ""
 
 
 @router.get("")
@@ -135,7 +141,7 @@ async def create_preview_endpoint(
     from core.exec_engines import get_tenant_engine_key
 
     engine_key = await get_tenant_engine_key(ctx.tenant_id)
-    name = preview_name(body.repo_id)
+    name = preview_name(body.repo_id, body.git_ref)
     # What this preview runs: the repo's own manifest, under the operator's overrides,
     # over the platform's static-site default (core/previews/recipe.py).
     from core.previews.recipe import PreviewRecipeError, read_repo_manifest, resolve_recipe
@@ -167,6 +173,7 @@ async def create_preview_endpoint(
         engine_key=engine_key,
         image=recipe.image,
         ttl_seconds=ttl,
+        git_ref=body.git_ref,
         created_by_principal_id=ctx.principal_id,
     )
     # The share token outlives nothing: it expires with the preview it names.
@@ -180,7 +187,12 @@ async def create_preview_endpoint(
         action="preview.create",
         resource_type="preview_environment",
         resource_id=preview_id,
-        query={"repo_id": str(body.repo_id), "artifact": repo.artifact_name, "ttl": ttl},
+        query={
+            "repo_id": str(body.repo_id),
+            "artifact": repo.artifact_name,
+            "git_ref": body.git_ref,
+            "ttl": ttl,
+        },
     )
     await get_job_queue().enqueue(
         ctx.tenant_id,
@@ -395,3 +407,94 @@ async def preview_file(token: str, path: str, request: Request) -> Response:
         headers=headers,
         background=BackgroundTask(_close),
     )
+
+
+# A preview's page and its socket are the same origin as far as the browser is concerned,
+# so the socket goes through this router too. Without it a preview can only ever be a
+# static site: the tools that put a *running* program in a browser -- ttyd for a terminal,
+# noVNC for a desktop -- serve their page over HTTP and then do all the actual work over a
+# WebSocket on the same port. The recipe could already start either of them; nothing could
+# reach them.
+_WS_QUEUE_LIMIT = 32
+
+
+@public_router.websocket("/{token}/{path:path}")
+async def preview_socket(websocket: WebSocket, token: str, path: str) -> None:
+    import websockets
+
+    try:
+        _, row = await _resolve(token)
+    except HTTPException:
+        # A websocket has no status codes before accept; closing with 1008 is the whole
+        # vocabulary available for "no".
+        await websocket.close(code=1008)
+        return
+
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    try:
+        await check_rate_limit(f"preview-ws:{client_ip}:{token[-16:]}", limit=_PREVIEW_RATE_LIMIT)
+    except RateLimitExceededError:
+        await websocket.close(code=1013)
+        return
+
+    # ttyd speaks the `tty` subprotocol and refuses the connection without it; noVNC
+    # negotiates `binary`. Echo back the first one the browser offered rather than
+    # guessing, and offer none when it offered none.
+    offered = [
+        p.strip()
+        for p in websocket.headers.get("sec-websocket-protocol", "").split(",")
+        if p.strip()
+    ]
+    target = f"{row.internal_url.rstrip('/').replace('http://', 'ws://', 1)}/{path.lstrip('/')}"
+
+    try:
+        upstream = await websockets.connect(
+            target,
+            subprotocols=offered or None,  # type: ignore[arg-type]
+            open_timeout=10,
+            max_size=None,  # a framebuffer or a big paste is not an attack
+            ping_interval=20,
+        )
+    except Exception as exc:  # noqa: BLE001 -- any failure to reach it is the same to a browser
+        log.warning("preview.ws_connect_failed", name=row.name, path=path, error=str(exc)[:200])
+        await websocket.close(code=1011)
+        return
+
+    await websocket.accept(subprotocol=upstream.subprotocol)
+
+    async def browser_to_container() -> None:
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+            if (data := message.get("bytes")) is not None:
+                await upstream.send(data)
+            elif (text := message.get("text")) is not None:
+                await upstream.send(text)
+
+    async def container_to_browser() -> None:
+        async for frame in upstream:
+            if isinstance(frame, bytes):
+                await websocket.send_bytes(frame)
+            else:
+                await websocket.send_text(frame)
+
+    # Either direction ending ends the session: a half-open proxy leaks a container-side
+    # socket per abandoned browser tab, and these are long-lived by nature.
+    pumps = [
+        asyncio.create_task(browser_to_container()),
+        asyncio.create_task(container_to_browser()),
+    ]
+    try:
+        done, pending = await asyncio.wait(pumps, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        for task in done:
+            if (exc := task.exception()) is not None and not isinstance(
+                exc, websockets.exceptions.ConnectionClosed
+            ):
+                log.info("preview.ws_closed", name=row.name, error=str(exc)[:200])
+    finally:
+        await upstream.close()
+        with suppress(RuntimeError):
+            await websocket.close()

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
+from urllib.parse import quote
 
 import structlog
 
@@ -32,7 +33,9 @@ from worker.preview_factory import get_preview_provider
 log = structlog.get_logger()
 
 
-def _artifact_url(store_key: str, artifact_name: str, engine_key: str | None) -> str:
+def _artifact_url(
+    store_key: str, artifact_name: str, engine_key: str | None, git_ref: str = ""
+) -> str:
     """The in-network address the preview container fetches from -- git_http_base, not
     public_base_url: this hop never leaves the container network.
 
@@ -44,7 +47,10 @@ def _artifact_url(store_key: str, artifact_name: str, engine_key: str | None) ->
 
     engine = engine_by_key(engine_key) or {}
     base = str(engine.get("git_http_base") or get_settings().git_http_base).rstrip("/")
-    return f"{base}/git/{store_key}/artifact?name={artifact_name}"
+    url = f"{base}/git/{store_key}/artifact?name={artifact_name}"
+    # The ref names which branch's build to fetch. Omitted when the preview predates
+    # ref-keyed artifacts, where the download path still resolves the old blob key.
+    return f"{url}&ref={quote(git_ref, safe='')}" if git_ref else url
 
 
 async def handle_start_preview(payload: dict[str, Any]) -> dict[str, Any]:
@@ -67,11 +73,14 @@ async def handle_start_preview(payload: dict[str, Any]) -> dict[str, Any]:
     serve_cmd = str(payload.get("serve_cmd") or "")
     command = build_serve_command(port=port, serve_cmd=serve_cmd)
     env = {
-        "PYR_ARTIFACT_URL": _artifact_url(store_key, row.artifact_name, row.engine_key),
+        "PYR_ARTIFACT_URL": _artifact_url(
+            store_key, row.artifact_name, row.engine_key, row.git_ref
+        ),
         # Read-only, one artifact, expires with the preview (plus slack for a restart).
         "PYR_ARTIFACT_TOKEN": mint_artifact_read_token(
             store_key,
             row.artifact_name,
+            git_ref=row.git_ref,
             ttl_seconds=get_settings().preview_max_ttl_seconds + 600,
         ),
     }

@@ -27,6 +27,12 @@ _SERVE_PROGRAM = """
 import base64, io, os, sys, tarfile, urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+_PATH_PRELUDE = (
+    '_pyr_path="$PATH"; '
+    'if [ -r /etc/profile ]; then . /etc/profile >/dev/null 2>&1 || true; fi; '
+    'PATH="$_pyr_path${PATH:+:$PATH}"; export PATH; unset _pyr_path; '
+)
+
 url, token = os.environ["PYR_ARTIFACT_URL"], os.environ["PYR_ARTIFACT_TOKEN"]
 root = "__WEBROOT__"
 os.makedirs(root, exist_ok=True)
@@ -50,7 +56,11 @@ if serve_cmd:
     # exec (not spawn) so the container's lifetime is the served process's lifetime and
     # the engine's restart/teardown semantics keep working unchanged.
     print("serving via recipe", flush=True)
-    os.execv("/bin/sh", ["/bin/sh", "-lc", serve_cmd])
+    # `sh -c`, not `-lc`: a login shell sources /etc/profile, which *assigns* PATH and
+    # discards whatever the image set. Official toolchain images put their toolchain there
+    # and nowhere else, so a recipe on a rust/go/node image lost it -- the same defect the
+    # exec-env adapters had, fixed there and missed here.
+    os.execv("/bin/sh", ["/bin/sh", "-c", _PATH_PRELUDE + serve_cmd])
 
 if not os.path.exists("index.html"):
     # A build that produced no entry point should fail loudly, not serve a file listing.
@@ -85,11 +95,21 @@ def preview_share_url(token: str) -> str:
     return f"{base}/api/p/{token}/" if base else f"/api/p/{token}/"
 
 
-def preview_name(repo_id: uuid.UUID) -> str:
+def preview_name(repo_id: uuid.UUID, git_ref: str = "") -> str:
     """Deterministic, and therefore the idempotency key: starting a preview twice for one
-    repo converges on a single container instead of leaking a second. Also the container's
-    DNS alias on socket engines, so it must stay a valid hostname label."""
-    return f"pyr-prev-{str(repo_id)[:8]}"
+    repo and ref converges on a single container instead of leaking a second. Also the
+    container's DNS alias on socket engines, so it must stay a valid hostname label.
+
+    The ref is part of the identity because it is part of what is being previewed. Keyed on
+    the repo alone, two branches of one repository were the *same* preview: starting one
+    tore the other down, and the name could not say which branch you were looking at. An
+    empty ref keeps the old name exactly, so previews that predate this keep their
+    container and their share link."""
+    if not git_ref:
+        return f"pyr-prev-{str(repo_id)[:8]}"
+    from core.repos.service import artifact_ref_slug
+
+    return f"pyr-prev-{str(repo_id)[:8]}-{artifact_ref_slug(git_ref)}"[:63]
 
 
 def build_serve_command(*, port: int, serve_cmd: str = "") -> str:
@@ -127,6 +147,7 @@ async def create_preview(
     engine_key: str | None,
     image: str,
     ttl_seconds: int,
+    git_ref: str = "",
     created_by_principal_id: uuid.UUID | None = None,
     created_by_label: str = "",
 ) -> uuid.UUID:
@@ -147,6 +168,7 @@ async def create_preview(
         row.workspace_id = workspace_id
         row.session_id = session_id
         row.artifact_name = artifact_name[:120]
+        row.git_ref = git_ref[:255]
         row.engine_key = engine_key
         row.image = image[:255]
         row.status = "starting"

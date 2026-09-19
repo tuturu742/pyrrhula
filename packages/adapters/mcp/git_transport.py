@@ -19,7 +19,7 @@ import contextlib
 import re
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from adapters.gitremote.registry import resolve_remote
 from adapters.mcp.git_store import GitStore, GitStoreError
@@ -553,7 +553,10 @@ class GitMcpTransport:
                 parts._replace(
                     netloc=f"job:{token}@{parts.netloc}",
                     path=parts.path + "/artifact",
-                    query=f"name={artifact_name}",
+                    # The branch travels with the upload: `artifact_name` is fixed per
+                    # repository, so without a ref every branch wrote the same blob key
+                    # and parallel delegations overwrote one another silently.
+                    query=f"name={artifact_name}&ref={quote(branch, safe='')}",
                 )
             )
             lines += [
