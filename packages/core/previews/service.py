@@ -274,6 +274,7 @@ async def list_previews(
                 "engine_key": row.engine_key,
                 "image": row.image,
                 "repo_id": row.repo_id,
+                "git_ref": row.git_ref,
                 "workspace_id": row.workspace_id,
                 "session_id": row.session_id,
                 "artifact_name": row.artifact_name,

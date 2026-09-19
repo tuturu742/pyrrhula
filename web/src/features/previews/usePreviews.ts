@@ -45,9 +45,16 @@ export function usePreviewActions(setNotice: (text: string) => void) {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["previews"] });
 
   const deploy = useMutation({
-    mutationFn: async (vars: { repoId: string; sessionId?: string }) => {
+    mutationFn: async (vars: { repoId: string; sessionId?: string; gitRef?: string }) => {
       const { data, error } = await apiClient.POST("/previews", {
-        body: { repo_id: vars.repoId, ...(vars.sessionId ? { session_id: vars.sessionId } : {}) },
+        body: {
+          repo_id: vars.repoId,
+          ...(vars.sessionId ? { session_id: vars.sessionId } : {}),
+          // Empty means the repository's default artifact slot; a branch means that
+          // branch's own build, which is what makes two pull requests two previews
+          // rather than one that keeps replacing itself.
+          git_ref: vars.gitRef ?? "",
+        },
       });
       if (error) throw error;
       return data;
@@ -104,4 +111,22 @@ export function absoluteUrl(url: string): string {
   } catch {
     return url;
   }
+}
+
+
+/** The pull requests a repo's delegations opened, for picking which one to preview. */
+export function useRepoPullRequests(repoId: string | undefined) {
+  return useQuery({
+    queryKey: ["repo-pull-requests", repoId],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/repos/{repo_id}/pull-requests", {
+        params: { path: { repo_id: repoId! } },
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: Boolean(repoId),
+    // A delegation's build lands a little after its branch does.
+    refetchInterval: 20000,
+  });
 }

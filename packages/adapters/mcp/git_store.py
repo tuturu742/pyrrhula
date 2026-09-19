@@ -366,6 +366,18 @@ class GitStore:
         async with self._locks[repo_key]:
             return self._load_prs(repo_key).get(branch)
 
+    async def list_prs(self, repo_key: str) -> list[dict[str, Any]]:
+        """Every recorded pull request, newest number first, each carrying its branch.
+
+        The sidecar is keyed by branch and the branch is what a preview needs to name, so
+        it is folded into the record rather than left as a key the caller has to zip back
+        together."""
+        async with self._locks[repo_key]:
+            prs = self._load_prs(repo_key)
+        records = [{**record, "branch": branch} for branch, record in prs.items()]
+        records.sort(key=lambda r: int(r.get("number") or 0), reverse=True)
+        return records
+
     async def next_pr_number(self, repo_key: str) -> int:
         async with self._locks[repo_key]:
             return len(self._load_prs(repo_key)) + 1

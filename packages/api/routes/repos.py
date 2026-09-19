@@ -559,6 +559,67 @@ async def unbind_persona_credential_endpoint(
 
 
 # ── QA build artifact (M-E) ──────────────────────────────────────────────────────────
+class PullRequestOut(BaseModel):
+    branch: str
+    pr_ref: str = ""
+    title: str = ""
+    status: str = ""
+    ci_status: str = ""
+    commits: int = 0
+    # Whether this branch has a build to preview. A pull request whose branch has been
+    # deleted, or which never produced an artifact, still has a record in the sidecar --
+    # offering it as previewable would deploy straight to a 404.
+    previewable: bool = False
+
+
+@router.get("/{repo_id}/pull-requests")
+async def list_repo_pull_requests(
+    repo_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
+) -> list[PullRequestOut]:
+    """The pull requests a session's delegations opened, so a human can pick one.
+
+    Multi-pull-request sessions are the normal case -- one work item each, in parallel --
+    and until artifacts were keyed by ref there was nothing to pick *between*: every
+    branch wrote one artifact slot per repository. Now each branch has its own build, and
+    this is the list of what can be previewed.
+    """
+    from adapters.mcp.git_store import GitStore, default_git_root
+    from api.blob_store_factory import get_blob_store
+    from core.ports.blob_store import BlobNotFoundError
+    from core.repos.service import artifact_blob_key, get_repo, store_key
+
+    repo = await get_repo(ctx.tenant_id, repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="no such repo")
+    key = store_key(ctx.tenant_id, repo.key)
+    store = GitStore(default_git_root())
+
+    out: list[PullRequestOut] = []
+    for record in await store.list_prs(key):
+        branch = str(record.get("branch") or "")
+        if not branch or not await store.branch_exists(key, branch):
+            continue
+        previewable = False
+        if repo.artifact_name:
+            try:
+                await get_blob_store().get(artifact_blob_key(key, repo.artifact_name, branch))
+                previewable = True
+            except BlobNotFoundError:
+                previewable = False
+        out.append(
+            PullRequestOut(
+                branch=branch,
+                pr_ref=str(record.get("pr_ref") or ""),
+                title=str(record.get("title") or ""),
+                status=str(record.get("status") or ""),
+                ci_status=str(record.get("ci_status") or ""),
+                commits=int(record.get("commits") or 0),
+                previewable=previewable,
+            )
+        )
+    return out
+
+
 @router.get("/{repo_id}/artifacts/latest")
 async def download_latest_artifact(
     repo_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)

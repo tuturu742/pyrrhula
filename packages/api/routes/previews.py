@@ -73,6 +73,9 @@ class PreviewResponse(BaseModel):
     workspace_id: uuid.UUID | None = None
     session_id: uuid.UUID | None = None
     artifact_name: str = ""
+    # Which branch this preview is of. Two refs of one repository are two previews, so a
+    # caller matching by repo_id alone would pick whichever it found first.
+    git_ref: str = ""
     created_by_label: str = ""
     last_error: str = ""
     expires_at: datetime | None = None
@@ -222,6 +225,7 @@ async def create_preview_endpoint(
         workspace_id=row.workspace_id,
         session_id=row.session_id,
         artifact_name=row.artifact_name,
+        git_ref=row.git_ref,
         created_by_label=row.created_by_label,
         last_error=row.last_error,
         expires_at=row.expires_at,

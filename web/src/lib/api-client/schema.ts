@@ -2148,6 +2148,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{repo_id}/pull-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Repo Pull Requests
+         * @description The pull requests a session's delegations opened, so a human can pick one.
+         *
+         *     Multi-pull-request sessions are the normal case -- one work item each, in parallel --
+         *     and until artifacts were keyed by ref there was nothing to pick *between*: every
+         *     branch wrote one artifact slot per repository. Now each branch has its own build, and
+         *     this is the list of what can be previewed.
+         */
+        get: operations["list_repo_pull_requests_repos__repo_id__pull_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo_id}/artifacts/latest": {
         parameters: {
             query?: never;
@@ -2372,8 +2397,12 @@ export interface paths {
         /**
          * Upload Artifact
          * @description A delegation environment POSTs the built artifact here with the same short-lived
-         *     job token it cloned with (curl handles the userinfo-in-URL form). Stored under a
-         *     deterministic blob key -- 'latest' semantics, each green build replaces the last.
+         *     job token it cloned with (curl handles the userinfo-in-URL form).
+         *
+         *     ``ref`` is the branch the build came from. Without it the key was one slot per
+         *     repository -- `artifact_name` is fixed in the repo's config, so every branch wrote to
+         *     the same place and two delegations running at once overwrote each other silently. It
+         *     stays optional so an artifact uploaded before this existed is still addressable.
          */
         post: operations["upload_artifact_git__store_key__artifact_post"];
         delete?: never;
@@ -4259,6 +4288,11 @@ export interface components {
             session_id?: string | null;
             /** Ttl Seconds */
             ttl_seconds?: number | null;
+            /**
+             * Git Ref
+             * @default
+             */
+            git_ref: string;
         };
         /** CreateRepoRequest */
         CreateRepoRequest: {
@@ -5483,6 +5517,11 @@ export interface components {
              */
             artifact_name: string;
             /**
+             * Git Ref
+             * @default
+             */
+            git_ref: string;
+            /**
              * Created By Label
              * @default
              */
@@ -5544,6 +5583,41 @@ export interface components {
         PublishRequest: {
             /** Change Note */
             change_note?: string | null;
+        };
+        /** PullRequestOut */
+        PullRequestOut: {
+            /** Branch */
+            branch: string;
+            /**
+             * Pr Ref
+             * @default
+             */
+            pr_ref: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /**
+             * Ci Status
+             * @default
+             */
+            ci_status: string;
+            /**
+             * Commits
+             * @default 0
+             */
+            commits: number;
+            /**
+             * Previewable
+             * @default false
+             */
+            previewable: boolean;
         };
         /** PutBehaviorProfileRequest */
         PutBehaviorProfileRequest: {
@@ -11759,6 +11833,42 @@ export interface operations {
             };
         };
     };
+    list_repo_pull_requests_repos__repo_id__pull_requests_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                repo_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequestOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_latest_artifact_repos__repo_id__artifacts_latest_get: {
         parameters: {
             query?: never;
@@ -12186,6 +12296,7 @@ export interface operations {
         parameters: {
             query: {
                 name: string;
+                ref?: string;
             };
             header?: never;
             path: {
@@ -12219,6 +12330,7 @@ export interface operations {
         parameters: {
             query: {
                 name: string;
+                ref?: string;
             };
             header?: never;
             path: {

@@ -22,6 +22,7 @@ import {
   absoluteUrl,
   usePreviewActions,
   usePreviews,
+  useRepoPullRequests,
 } from "@/features/previews/usePreviews";
 
 /** How a turn came to happen -- shown as a small chip so a reader can tell an
@@ -1149,13 +1150,10 @@ function SessionPreviewPanel({
   repos: Array<{ id: string; key: string; name: string; artifact_name?: string | null }>;
 }) {
   const [notice, setNotice] = useState<string | null>(null);
-  const { deploy, share, stop } = usePreviewActions(setNotice);
   // Only a web-build tarball is servable; anything else would deploy to a 404.
   const deployable = repos.filter((r) => (r.artifact_name ?? "").match(/\.(tar\.gz|tgz)$/));
   const { data: previews } = usePreviews({ enabled: deployable.length > 0 });
   if (deployable.length === 0) return null;
-
-  const byRepo = new Map((previews ?? []).map((p) => [p.repo_id ?? "", p]));
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-4">
@@ -1166,67 +1164,129 @@ function SessionPreviewPanel({
         </span>
       </div>
       {notice && <p className="break-all rounded bg-secondary px-2 py-1 text-xs">{notice}</p>}
-      {deployable.map((repo) => {
-        const preview = byRepo.get(repo.id);
-        const running = preview?.status === "running";
-        return (
-          <div key={repo.id} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium">{repo.name}</span>
-            {preview && (
-              <span
-                className={
-                  running
-                    ? "rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-600 dark:text-emerald-400"
-                    : "rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground"
-                }
-                title={preview.last_error || undefined}
-              >
-                {preview.status}
-              </span>
-            )}
-            {running && preview?.expires_at && (
-              <span className="text-xs text-muted-foreground">
-                until {new Date(preview.expires_at).toLocaleTimeString()}
-              </span>
-            )}
-            <span className="grow" />
-            {running && preview && (
-              <button
-                type="button"
-                onClick={() => share.mutate(preview.id)}
-                disabled={share.isPending}
-                className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
-              >
-                Copy link
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => deploy.mutate({ repoId: repo.id, sessionId })}
-              disabled={deploy.isPending}
-              className="rounded-md border border-border px-2 py-1 text-xs"
-            >
-              {preview ? "Redeploy" : "Deploy"}
+      {deployable.map((repo) => (
+        <RepoPreviewRow
+          key={repo.id}
+          repo={repo}
+          sessionId={sessionId}
+          previews={previews ?? []}
+          setNotice={setNotice}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One repository's preview controls, including which branch is being previewed.
+ *
+ * A session that delegates six work items opens six pull requests, and each one now has
+ * its own build. Picking between them is the whole point of this row: previews are keyed
+ * by repo *and* ref, so two branches are two previews rather than one that keeps
+ * replacing itself.
+ */
+function RepoPreviewRow({
+  repo,
+  sessionId,
+  previews,
+  setNotice,
+}: {
+  repo: { id: string; key: string; name: string; artifact_name?: string | null };
+  sessionId: string;
+  previews: Array<{
+    id: string;
+    repo_id?: string | null;
+    git_ref?: string | null;
+    status?: string | null;
+    expires_at?: string | null;
+    last_error?: string | null;
+  }>;
+  setNotice: (text: string) => void;
+}) {
+  const { deploy, share, stop } = usePreviewActions(setNotice);
+  const { data: pullRequests } = useRepoPullRequests(repo.id);
+  const [gitRef, setGitRef] = useState("");
+
+  // Only offer what has a build behind it: a pull request whose branch never produced an
+  // artifact would deploy straight to a 404, which reads as the preview being broken.
+  const choices = (pullRequests ?? []).filter((pr) => pr.previewable);
+  const preview = previews.find(
+    (p) => p.repo_id === repo.id && (p.git_ref ?? "") === gitRef,
+  );
+  const running = preview?.status === "running";
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-2 first:border-t-0 first:pt-0">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium">{repo.name}</span>
+        {preview && (
+          <span
+            className={
+              running
+                ? "rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-600 dark:text-emerald-400"
+                : "rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground"
+            }
+            title={preview.last_error || undefined}
+          >
+            {preview.status}
+          </span>
+        )}
+        {running && preview?.expires_at && (
+          <span className="text-xs text-muted-foreground">
+            until {new Date(preview.expires_at).toLocaleTimeString()}
+          </span>
+        )}
+        <span className="grow" />
+        {running && preview && (
+          <button
+            type="button"
+            onClick={() => share.mutate(preview.id)}
+            disabled={share.isPending}
+            className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
+          >
+            Copy link
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => deploy.mutate({ repoId: repo.id, sessionId, gitRef })}
+          disabled={deploy.isPending}
+          className="rounded-md border border-border px-2 py-1 text-xs"
+        >
+          {preview ? "Redeploy" : "Deploy"}
+        </button>
+        {running && preview && (
+          <ConfirmButton
+            title="Stop this preview?"
+            description="The container is torn down and the shared link stops working. You can deploy it again from the latest build."
+            confirmLabel="Stop"
+            destructive
+            onConfirm={() => stop.mutate(preview.id)}
+          >
+            <button type="button" className="rounded-md border border-border px-2 py-1 text-xs">
+              Stop
             </button>
-            {running && preview && (
-              <ConfirmButton
-                title="Stop this preview?"
-                description="The container is torn down and the shared link stops working. You can deploy it again from the latest build."
-                confirmLabel="Stop"
-                destructive
-                onConfirm={() => stop.mutate(preview.id)}
-              >
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2 py-1 text-xs"
-                >
-                  Stop
-                </button>
-              </ConfirmButton>
-            )}
-          </div>
-        );
-      })}
+          </ConfirmButton>
+        )}
+      </div>
+      {choices.length > 0 && (
+        <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          Preview
+          <select
+            value={gitRef}
+            onChange={(e) => setGitRef(e.target.value)}
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+          >
+            <option value="">the latest build</option>
+            {choices.map((pr) => (
+              <option key={pr.branch} value={pr.branch}>
+                {pr.pr_ref || pr.branch} — {pr.title || pr.branch}
+              </option>
+            ))}
+          </select>
+          {gitRef && !preview && <span>not deployed yet</span>}
+        </label>
+      )}
     </div>
   );
 }
