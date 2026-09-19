@@ -96,8 +96,40 @@ artifact or use an image that has them:
 { "image": "docker.io/library/python:3.12-slim", "cmd": "python -m app", "port": 8000 }
 ```
 
+**A terminal application**, through `ttyd` — the TUI itself, in a browser tab:
+
+```json
+{ "image": "docker.io/tsl0922/ttyd:latest", "cmd": "ttyd -p 8080 -W ./my-tui", "port": 8080 }
+```
+
+**A desktop application**, through Xvfb and noVNC on one port:
+
+```json
+{ "image": "example/xvfb-novnc", "cmd": "/usr/bin/start-vnc.sh ./my-app", "port": 6080 }
+```
+
+Both of these work because the preview link carries WebSockets as well as HTTP: they serve
+an ordinary page and then do all the real work over a socket on the same port. Nothing else
+about them is special to Pyrrhula — if a tool can put itself on one HTTP port, it can be a
+preview.
+
 **A game with a backend** is not yet one preview: a recipe starts one container. Run the
 backend as its own repo and preview, and point the client at it.
+
+## Which branch is being previewed
+
+A preview names a `git_ref`. Artifacts are stored per ref
+(`artifacts/<store>/refs/<ref>/<name>`), and the preview's container name carries the ref
+too, so two branches of one repository are two previews that can run side by side.
+
+This used to be one slot per repository. `artifact_name` is a single fixed string in the
+repo's configuration, so every branch wrote the same key: two delegations running at once
+overwrote each other's artifact, and a preview served whichever finished last with nothing
+recording that it had happened. Requesting six pull requests in parallel — an ordinary
+thing to ask a session for — was enough to hit it.
+
+Omitting `git_ref` keeps the old single-slot behaviour and still reads artifacts written
+before this existed.
 
 ## Lifetime
 

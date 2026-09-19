@@ -1,3 +1,13 @@
+# A WebSocket needs `Connection: upgrade` forwarded, and the api block below deliberately
+# sends `Connection: ""` to keep upstream connections alive. This map keeps both: a request
+# carrying an Upgrade header gets `upgrade`, and every ordinary request gets the empty value
+# it got before. Without it a preview can serve a page but never a socket, which is the
+# whole of what ttyd (terminal) and noVNC (desktop) need.
+map $http_upgrade $pyr_connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
 server {
     listen 80;
     root /usr/share/nginx/html;
@@ -20,7 +30,8 @@ server {
         proxy_pass http://$api_upstream/$1$is_args$args;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header Connection "";
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $pyr_connection_upgrade;
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 3600s;

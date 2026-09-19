@@ -117,3 +117,24 @@ def test_serve_program_binds_the_requested_port(port: int) -> None:
         re.search(r"b64decode\('([^']+)'\)", build_serve_command(port=port)).group(1)  # type: ignore[union-attr]
     ).decode()
     assert f'("0.0.0.0", {port})' in decoded
+
+
+def test_a_recipe_command_keeps_the_images_path() -> None:
+    """Same defect the exec-env adapters had: `sh -lc` sources /etc/profile, which assigns
+    PATH and discards what the image set. Official toolchain images put their toolchain
+    there and nowhere else, so a recipe on a rust/go/node image lost it. Fixed in the
+    adapters, missed here."""
+    import base64
+    import re
+
+    from core.previews.service import build_serve_command
+
+    command = build_serve_command(port=8080, serve_cmd="ttyd -p 8080 bash")
+    joined = command if isinstance(command, str) else " ".join(command)
+    program = base64.b64decode(re.search(r"b64decode\('([^']+)'\)", joined).group(1)).decode()
+
+    compile(program, "<serve>", "exec")
+    assert '"-lc"' not in program, "a login shell re-assigns PATH and loses the image's"
+    assert program.index('_pyr_path="$PATH"') < program.index("/etc/profile"), (
+        "the image's PATH must be captured before /etc/profile can overwrite it"
+    )
