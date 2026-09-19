@@ -196,3 +196,91 @@ async def test_creating_a_preview_over_http_reaches_the_queue() -> None:
     # The ref is part of the container's identity, so two branches are two previews.
     assert body["name"].startswith("pyr-prev-")
     assert body["name"] != f"pyr-prev-{str(repo.id)[:8]}"
+
+
+@pytest.mark.asyncio
+async def test_a_repos_preview_recipe_reads_back_after_it_is_set() -> None:
+    """Regression: setting a preview image or command succeeded and then read back as if
+    nothing had been set.
+
+    `_response` passed `preview_image`, `preview_cmd`, `preview_port` and `preview_env`;
+    `RepoResponse` declared none of them, and Pydantic drops unknown keyword arguments
+    without complaint. The write reached the database and the read never showed it, so the
+    UI could not display what a repository was configured to preview -- and an operator
+    setting a recipe had no way to confirm it had taken.
+    """
+    from core.repos.service import create_repo
+
+    tenant_id, owner_id, _workspace_id = await seed_dev_tenant(
+        slug=f"recipe-{uuid.uuid4().hex[:8]}"
+    )
+    repo = await create_repo(
+        tenant_id, key=f"tui{uuid.uuid4().hex[:6]}", name="Terminal app", created_by=owner_id
+    )
+    token = issue_token(principal_id=owner_id, tenant_id=tenant_id)
+
+    with TestClient(app) as client:
+        patched = client.patch(
+            f"/repos/{repo.id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "preview_image": "docker.io/library/debian:bookworm-slim",
+                "preview_cmd": "ttyd -p 8080 -W ./app",
+                "preview_port": 8080,
+                "preview_env": {"TERM": "xterm-256color"},
+            },
+        )
+        assert patched.status_code == 200, patched.text
+        # Read back through the list endpoint: there is no single-repo GET, and the point
+        # is that a later read shows the recipe, not just the response to the write.
+        listed = client.get("/repos", headers={"Authorization": f"Bearer {token}"})
+        assert listed.status_code == 200, listed.text
+        fetched = next(r for r in listed.json() if r["id"] == str(repo.id))
+
+    for body in (patched.json(), fetched):
+        assert body["preview_image"] == "docker.io/library/debian:bookworm-slim"
+        assert body["preview_cmd"] == "ttyd -p 8080 -W ./app"
+        assert body["preview_port"] == 8080
+        assert body["preview_env"] == {"TERM": "xterm-256color"}
+
+
+@pytest.mark.asyncio
+async def test_a_compressed_page_survives_the_proxy(echo_server: int) -> None:
+    """Regression: `content-encoding` was dropped while the body was forwarded raw.
+
+    `aiter_raw` does not decompress, so stripping the header handed a browser gzip bytes
+    labelled as HTML. The preview bootstrap's own static server never compresses, so this
+    only appeared once a recipe ran a real server -- ttyd gzips its page, and the share
+    link rendered as binary noise while the terminal behind it worked perfectly.
+    """
+    import gzip
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    body = gzip.compress(b"<html><body>hello</body></html>")
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        token = await _running_preview(server.server_port)
+        with TestClient(app) as client:
+            response = client.get(f"/p/{token}/page", follow_redirects=True)
+    finally:
+        server.shutdown()
+
+    assert response.status_code == 200
+    assert response.headers.get("content-encoding") == "gzip"
+    # httpx decodes using that header; without it this is gzip bytes, not markup.
+    assert response.text == "<html><body>hello</body></html>"

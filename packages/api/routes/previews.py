@@ -329,12 +329,16 @@ async def stop_preview_endpoint(
 _PREVIEW_RATE_LIMIT = 600
 _PROXY_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 # Hop-by-hop headers must not be forwarded; Content-Length is recomputed by Starlette.
+# Hop-by-hop headers, plus the two the proxy necessarily restates. `content-encoding` is
+# deliberately NOT here: the body is streamed with `aiter_raw`, which does not decompress,
+# so dropping the header hands a browser gzip bytes labelled as HTML. The built-in static
+# server never compresses, so this only ever surfaced once a recipe ran a real server --
+# ttyd gzips its page, and the share link rendered as binary noise.
 _DROP_HEADERS = {
     "transfer-encoding",
     "connection",
     "keep-alive",
     "content-length",
-    "content-encoding",
     "server",
     "date",
 }
@@ -356,8 +360,15 @@ async def _resolve(token: str) -> tuple[uuid.UUID, PreviewEnvironmentRow]:
 
 @public_router.get("/{token}")
 async def preview_index(token: str) -> RedirectResponse:
+    """Redirect to the trailing slash, not to `index.html`.
+
+    The slash is what makes a page's relative asset paths resolve under this preview
+    instead of one level up, which is why a redirect is here at all. Naming `index.html`
+    did that too, but it also assumed the thing being previewed is a static site: ttyd
+    serves its page at `/` and has no `index.html`, so a terminal preview's share link
+    opened to a 404 while the terminal behind it was running perfectly."""
     await _resolve(token)
-    return RedirectResponse(url=f"/api/p/{token}/index.html")
+    return RedirectResponse(url=f"/api/p/{token}/")
 
 
 @public_router.get("/{token}/{path:path}")
@@ -373,8 +384,6 @@ async def preview_file(token: str, path: str, request: Request) -> Response:
         ) from exc
 
     _, row = await _resolve(token)
-    if not path:
-        return RedirectResponse(url=f"/api/p/{token}/index.html")
 
     target = f"{row.internal_url.rstrip('/')}/{path.lstrip('/')}"
     client = httpx.AsyncClient(timeout=_PROXY_TIMEOUT)
@@ -398,6 +407,7 @@ async def preview_file(token: str, path: str, request: Request) -> Response:
         await upstream.aclose()
         await client.aclose()
 
+    upstream_type = upstream.headers.get("content-type")
     headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _DROP_HEADERS}
     # Content type from the path, and the isolation headers stamped rather than
     # forwarded -- the container's static server is not trusted to get either right,
@@ -407,7 +417,7 @@ async def preview_file(token: str, path: str, request: Request) -> Response:
     return StreamingResponse(
         upstream.aiter_raw(),
         status_code=upstream.status_code,
-        media_type=content_type_for(path),
+        media_type=content_type_for(path, upstream_type),
         headers=headers,
         background=BackgroundTask(_close),
     )

@@ -64,6 +64,14 @@ class RepoResponse(BaseModel):
     test_cmd: str | None = None
     build_cmd: str | None = None
     artifact_name: str | None = None
+    # The operator's half of the preview recipe. `_response` has always passed these and
+    # the model has never declared them, so Pydantic dropped all four silently: setting a
+    # preview image or command succeeded and then read back as if nothing had been set,
+    # which leaves the UI unable to show what a repo is configured to do.
+    preview_image: str | None = None
+    preview_cmd: str | None = None
+    preview_port: int | None = None
+    preview_env: dict[str, str] = {}
     created_at: datetime
     import_status: str | None = None
 

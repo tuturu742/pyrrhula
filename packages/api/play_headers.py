@@ -39,7 +39,21 @@ PLAY_HEADERS = {
 }
 
 
-def content_type_for(path: str) -> str:
+def content_type_for(path: str, upstream: str | None = None) -> str:
+    """The type to serve a preview path as.
+
+    A known asset extension wins over whatever the container claimed: the static server in
+    the preview bootstrap guesses from the same filename and gets `.wasm` and `.pck` wrong,
+    and those two are what Godot needs right.
+
+    Anything else defers to the container, because the platform cannot know: a recipe that
+    runs a real server -- ttyd's page at `/`, a JSON route with no extension -- knows its
+    own content types, and answering `application/octet-stream` for all of them turns a
+    page into a download. Falling back to octet-stream only when nobody said anything.
+    """
     from pathlib import Path
 
-    return PLAY_TYPES.get(Path(path).suffix.lower(), "application/octet-stream")
+    known = PLAY_TYPES.get(Path(path).suffix.lower())
+    if known is not None:
+        return known
+    return upstream or "application/octet-stream"

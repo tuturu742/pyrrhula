@@ -78,6 +78,23 @@ container at a different one.
 Your command is still ordinary tenant-authored code in a container, exactly like
 `build_cmd` already is, under the same network policy.
 
+### What your image must have
+
+Because that fetch-and-unpack step runs *inside your image*, the image is not entirely
+free. It needs:
+
+- **`python3`, version 3.12 or newer** (3.11.4+ also works). The bootstrap is a Python
+  program, and it extracts with `filter="data"` — PEP 706, the guard that refuses absolute
+  paths and traversal — which only exists from those versions. Debian bookworm's own
+  `python3` is 3.11.2 and fails at extraction.
+- **The full standard library**, not `python3-minimal`: the bootstrap imports `tarfile`
+  and `urllib.request`.
+
+An image missing these fails before your command is ever reached, with `exec: python3:
+not found` or a `ModuleNotFoundError` in the preview's logs. Basing on `python:3.12-slim`
+and adding what your program needs is the shortest path; the platform's own default image
+is from the same line.
+
 ## Examples
 
 **A static web build** (the default — no manifest needed). Produce an artifact with
@@ -99,14 +116,25 @@ artifact or use an image that has them:
 **A terminal application**, through `ttyd` — the TUI itself, in a browser tab:
 
 ```json
-{ "image": "docker.io/tsl0922/ttyd:latest", "cmd": "ttyd -p 8080 -W ./my-tui", "port": 8080 }
+{ "image": "registry/my-tui-preview:1", "cmd": "chmod +x ./my-tui && ttyd -p 8080 -W ./my-tui", "port": 8080 }
 ```
 
-**A desktop application**, through Xvfb and noVNC on one port:
+The image is one you build, because of the requirements above and because `ttyd`'s own
+published image is Alpine with no Python. A working one is small:
 
-```json
-{ "image": "example/xvfb-novnc", "cmd": "/usr/bin/start-vnc.sh ./my-app", "port": 6080 }
+```dockerfile
+FROM docker.io/library/python:3.12-slim-bookworm
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+      ca-certificates ncurses-term && rm -rf /var/lib/apt/lists/*
+ADD https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 /usr/local/bin/ttyd
+RUN chmod +x /usr/local/bin/ttyd
+ENV TERM=xterm-256color
 ```
+
+Add whatever your binary links against — for a player built on libmpv, `libmpv2`.
+
+**A desktop application**, through Xvfb and noVNC on one port, is the same shape: one
+image carrying the X stack and the VNC bridge, one command, one port.
 
 Both of these work because the preview link carries WebSockets as well as HTTP: they serve
 an ordinary page and then do all the real work over a socket on the same port. Nothing else
