@@ -1207,9 +1207,12 @@ function RepoPreviewRow({
   const { data: pullRequests } = useRepoPullRequests(repo.id);
   const [gitRef, setGitRef] = useState("");
 
-  // Only offer what has a build behind it: a pull request whose branch never produced an
-  // artifact would deploy straight to a 404, which reads as the preview being broken.
-  const choices = (pullRequests ?? []).filter((pr) => pr.previewable);
+  // Every pull request is listed, but only one with a build behind it can be chosen:
+  // deploying a branch that never produced an artifact lands on a 404 that reads as the
+  // preview being broken. Hiding the un-buildable ones instead would be worse -- a session
+  // with six pull requests and no builds yet would show no selector at all, which reads as
+  // the feature being missing rather than as the builds not having run.
+  const choices = pullRequests ?? [];
   const preview = previews.find(
     (p) => p.repo_id === repo.id && (p.git_ref ?? "") === gitRef,
   );
@@ -1279,8 +1282,9 @@ function RepoPreviewRow({
           >
             <option value="">the latest build</option>
             {choices.map((pr) => (
-              <option key={pr.branch} value={pr.branch}>
+              <option key={pr.branch} value={pr.branch} disabled={!pr.previewable}>
                 {pr.pr_ref || pr.branch} — {pr.title || pr.branch}
+                {pr.previewable ? "" : "  (no build yet)"}
               </option>
             ))}
           </select>

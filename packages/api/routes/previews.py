@@ -150,7 +150,7 @@ async def create_preview_endpoint(
     from core.previews.recipe import PreviewRecipeError, read_repo_manifest, resolve_recipe
 
     try:
-        manifest = await read_repo_manifest(store_key(repo.key))
+        manifest = await read_repo_manifest(store_key(ctx.tenant_id, repo.key))
         recipe = resolve_recipe(
             default_image=settings.preview_image,
             repo_overrides={

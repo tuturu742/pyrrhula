@@ -18,6 +18,7 @@ import pytest_asyncio
 import websockets
 from fastapi.testclient import TestClient
 
+from api.auth.tokens import issue_token
 from api.main import app
 from api.redis_client import get_redis
 from core.previews.service import create_preview, mark_running, preview_name
@@ -151,3 +152,47 @@ async def test_a_dead_container_closes_the_socket_instead_of_hanging(echo_server
     ):
         await asyncio.sleep(0)
         pytest.fail("a socket to a dead container was accepted")
+
+
+@pytest.mark.asyncio
+async def test_creating_a_preview_over_http_reaches_the_queue() -> None:
+    """Regression: `POST /previews` raised on every single call.
+
+    Resolving the repo's `pyrrhula-preview.json` passed `store_key(repo.key)` where that
+    helper takes `(tenant_id, repo_key)` -- tenant-prefixed, because repo keys are unique
+    per tenant and a bare key would collide across them. So the configurable-preview
+    feature shipped unable to start a preview at all, and nothing noticed because no test
+    went through the endpoint: the pieces were covered, the call was not.
+    """
+    from core.repos.service import create_repo
+
+    tenant_id, owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"prevpost-{uuid.uuid4().hex[:8]}"
+    )
+    repo = await create_repo(
+        tenant_id,
+        key=f"game{uuid.uuid4().hex[:6]}",
+        name="Game",
+        created_by=owner_id,
+        artifact_name="web.tgz",
+    )
+
+    token = issue_token(principal_id=owner_id, tenant_id=tenant_id)
+    with TestClient(app) as client:
+        response = client.post(
+            "/previews",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "repo_id": str(repo.id),
+                "workspace_id": str(workspace_id),
+                "git_ref": "pyr/some-branch",
+                "ttl_seconds": 300,
+            },
+        )
+
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["git_ref"] == "pyr/some-branch"
+    # The ref is part of the container's identity, so two branches are two previews.
+    assert body["name"].startswith("pyr-prev-")
+    assert body["name"] != f"pyr-prev-{str(repo.id)[:8]}"
