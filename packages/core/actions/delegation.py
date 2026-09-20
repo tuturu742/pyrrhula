@@ -67,7 +67,7 @@ _PURPOSE = "delegation"
 # cannot accidentally reach for a mutating one -- looking up whether work happened must
 # never be able to make it happen.
 LOOKUP_BRANCH_TOOL = "get_branch"
-LOOKUP_PR_TOOL = "get_pull_request"
+LOOKUP_PR_TOOL = "get_pull_request"  # vocab-ok: the remote server names it, not us
 
 
 class DelegationNotAllowedError(Exception):

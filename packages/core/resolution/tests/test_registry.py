@@ -8,7 +8,7 @@ import pydantic
 import pytest
 
 from core.resolution.registry import (
-    DICE_ROLLER_DEFINITION,
+    RANDOMIZER_DEFINITION,
     ToolDefinitionSchema,
     get_tool_definition,
     register_tool_definition,
@@ -20,12 +20,12 @@ async def test_register_and_get_tool_definition_round_trips(db_available: None) 
     tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(
         slug=f"tooldef-{uuid.uuid4().hex[:8]}"
     )
-    row = await register_tool_definition(tenant_id, DICE_ROLLER_DEFINITION)
-    assert row.key == "dice_roller"
+    row = await register_tool_definition(tenant_id, RANDOMIZER_DEFINITION)
+    assert row.key == "randomizer"
     assert row.kind == "deterministic"
     assert row.determinism == "seeded_random"
 
-    fetched = await get_tool_definition(tenant_id, "dice_roller")
+    fetched = await get_tool_definition(tenant_id, "randomizer")
     assert fetched is not None
     assert fetched.id == row.id
 
@@ -34,8 +34,8 @@ async def test_register_tool_definition_is_an_upsert_by_key(db_available: None) 
     tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(
         slug=f"tooldef-upsert-{uuid.uuid4().hex[:8]}"
     )
-    first = await register_tool_definition(tenant_id, DICE_ROLLER_DEFINITION)
-    updated = DICE_ROLLER_DEFINITION.model_copy(update={"validation_ref": "mvp_d20"})
+    first = await register_tool_definition(tenant_id, RANDOMIZER_DEFINITION)
+    updated = RANDOMIZER_DEFINITION.model_copy(update={"validation_ref": "mvp_d20"})
     second = await register_tool_definition(tenant_id, updated)
 
     assert first.id == second.id

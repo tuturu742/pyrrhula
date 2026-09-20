@@ -67,16 +67,16 @@ def _stub_embedding_provider():  # noqa: ANN201
     return StubEmbeddingProvider(dimension=1024)
 
 
-def _flow_with_dice_roller_on_resolve() -> dict[str, object]:
-    """MINIMAL_MVP_FLOW, plus a dice_roller tool on the resolve phase -- the shipped
+def _flow_with_randomizer_on_resolve() -> dict[str, object]:
+    """MINIMAL_MVP_FLOW, plus a randomizer tool on the resolve phase -- the shipped
     fixture itself declares no tools, but the exit gate's own slice wants a live
-    dice_roller call proven through this exact flow shape."""
+    randomizer call proven through this exact flow shape."""
     flow = deepcopy(MINIMAL_MVP_FLOW)
     phases = flow["phases"]
     assert isinstance(phases, dict)
     resolve_phase = phases["resolve"]
     assert isinstance(resolve_phase, dict)
-    resolve_phase["tools"] = ["dice_roller"]
+    resolve_phase["tools"] = ["randomizer"]
     return flow
 
 
@@ -107,7 +107,7 @@ async def test_minimal_mvp_flow_runs_two_rounds_through_the_real_interpreter_and
 
     sess = await create_session(tenant_id, workspace_id, persona_id)
 
-    flow = _flow_with_dice_roller_on_resolve()
+    flow = _flow_with_randomizer_on_resolve()
     definition_row = await create_definition(tenant_id, "mvp-live", "MVP Live", flow)
     dsl, issues = validate_raw(flow)
     assert dsl is not None and not issues, issues
@@ -122,7 +122,7 @@ async def test_minimal_mvp_flow_runs_two_rounds_through_the_real_interpreter_and
                 tool_calls=(
                     ToolCall(
                         id="call_1",
-                        name="dice_roller",
+                        name="randomizer",
                         arguments={"expression": "1d20+2", "check_type": "stealth", "target": 10},
                     ),
                 ),
@@ -212,7 +212,7 @@ async def test_minimal_mvp_flow_runs_two_rounds_through_the_real_interpreter_and
     assert final_session_row.state["round"] == 1
     assert final_session_row.current_phase == "player_act"
 
-    # dice_roller, reached through the real tool loop (not a direct resolve() call),
+    # randomizer, reached through the real tool loop (not a direct resolve() call),
     # wrote a real ResolutionRecord, and the resolve-phase reply is correlated to it.
     resolve_message = messages[2]
     assert len(resolve_message.resolution_record_ids) == 1

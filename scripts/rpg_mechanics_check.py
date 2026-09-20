@@ -153,7 +153,7 @@ async def main(slug: str) -> None:
     transport = ResolutionMcpTransport(permission_service=RolePermissionService())
     ref = McpServerRef(key="resolution", url=f"pyrrhula://resolution/{tid}")
     mcp_tools = {t.name for t in await transport.list_tools(ref)}
-    if "coin_flip" not in mcp_tools or "dice_roller" not in mcp_tools:
+    if "randomizer" not in mcp_tools:
         raise SystemExit(f"resolution MCP surface incomplete: {sorted(mcp_tools)}")
 
     async with tenant_scope(tid) as db:
@@ -187,15 +187,26 @@ async def main(slug: str) -> None:
             "principal_id": str(acting_principal),
         }
 
+    # There is no separate coin tool: a coin is the `coin_flip` rule *system*, named on
+    # the call, resolved by the one randomizer. This is the check that it really works.
     flip = await transport.call_tool(
-        ref, "coin_flip", {"reason": "initiative", "_context": _mcp_context(900)}
+        ref,
+        "randomizer",
+        {
+            "expression": "1d2",
+            "check_type": "call",
+            "rule_system": "coin_flip",
+            "reason": "initiative",
+            "_context": _mcp_context(900),
+        },
     )
-    assert flip.structured and flip.structured.get("resolution_id"), flip.content
-    print(f"mcp coin_flip: {flip.content}")
+    assert flip.structured and flip.structured.get("resolution_record_id"), flip.content
+    assert flip.structured.get("outcome") in ("heads", "tails"), flip.content
+    print(f"mcp coin flip: {flip.content}")
 
     fright = await transport.call_tool(
         ref,
-        "dice_roller",
+        "randomizer",
         {
             "expression": "1d20",
             "target": 10,

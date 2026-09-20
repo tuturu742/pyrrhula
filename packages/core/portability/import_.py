@@ -12,7 +12,7 @@ Warn-and-ingest would be theatre -- the entry is in the context either way.
 **Verify before trusting, and say *where*.** Integrity hashes are checked file by file and
 the resolution hash chain is recomputed record by record, both before a single row is
 written. A broken chain reports the exact ``(session, event_seq)`` where the recomputed
-hash diverges: "your dice history was edited" is only actionable if it comes with a place
+hash diverges: "your resolution history was edited" is only actionable if it comes with a place
 to look.
 
 **Nothing existing is ever overwritten.** Colliding keys fork -- the incoming object takes
@@ -62,7 +62,7 @@ from core.tenancy.scope import tenant_scope
 
 
 class ResolutionChainBrokenError(Exception):
-    """The imported dice history does not hash to what it claims. Carries the exact
+    """The imported resolution history does not hash to what it claims. Carries the exact
     location so the message is actionable rather than merely alarming."""
 
     def __init__(self, session_ref: str, event_seq: int, detail: str) -> None:
@@ -1024,7 +1024,7 @@ async def _import_rules(
     the forking policy exists to avoid.
 
     That trade is safe in a way the content sections are not: mechanics are arithmetic --
-    dice grammar, check types, modifier expressions -- with no authored prose to lose and
+    expression grammar, check types, modifier expressions -- with no authored prose to lose and
     nothing scope-bearing to leak. Re-importing a sample updates its mechanics in place,
     which is what someone re-importing a sample means.
 

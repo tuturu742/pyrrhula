@@ -11,7 +11,7 @@ Format decisions, all from §11.2 and all load-bearing:
   branches on it, because "which app wrote this" is a support question and "what shape is
   this" is a compatibility question, and conflating them is how format handling rots.
 * **Integrity is per file, plus the resolution hash chain on top.** The per-file hashes
-  catch a tampered bundle; the chain (verified at import, G4.6) catches a tampered *dice
+  catch a tampered bundle; the chain (verified at import, G4.6) catches a tampered *resolution
   history* specifically, so an archived session can prove nobody edited the rolls.
 * **Omissions are stubs, not silence.** Everything the exporter's visibility excluded lands
   in `manifest.redactions[]` as `{type, id, reason}`. A recipient can always tell the

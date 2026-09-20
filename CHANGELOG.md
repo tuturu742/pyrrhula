@@ -65,6 +65,24 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   documented and that every documented default matches the code.
 - Installers no longer require GitHub credentials, and a clean install assumes nothing
   about local models.
+- **One randomizer instead of a tool per kind of randomness.** The `dice_roller` and
+  `coin_flip` tools were the same handler over the same builtin, differing only in which
+  rule system validated the roll — so there is now one tool, `randomizer`, and a call may
+  name the system it resolves in. A coin is a `1d2` grammar with two outcome bands; an
+  ungraded number is the stock `generic` system, which has a permissive grammar and no
+  bands. Both are rule systems, which is where they always belonged. The MCP surface
+  honours the same selection, which it previously did not: a bundle binding the tool to
+  its own ruleset had its remote rolls validated against the stock d20 system instead.
+- **The MCP deterministic-tool list is registry-driven, as documented.** It was keyed on
+  one hardcoded tool name, so a pack registering a second deterministic tool got a
+  surface that silently omitted it. It is keyed on the builtin now, and each tool
+  resolves in the rule system its own definition names.
+- **Domain words out of the core, and a lint that says so.** `dice_roller`,
+  `dice_grammar`, `max_dice_count` and a `campaign_recap` report template had been sitting
+  in `packages/core` against the project's own first rule, because the vocabulary check
+  only ever scanned frontend display strings. They are now `randomizer`,
+  `expression_grammar`, `max_term_count` and `narrative_recap`, and the check scans the
+  backend too. Migrates forward; bundles and packs carry the new names.
 
 ## [0.1.0-rc1] — 2026-09-11
 

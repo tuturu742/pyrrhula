@@ -163,7 +163,7 @@ export function PhaseInspector({
         />
       </Field>
 
-      <Field label="Tools (comma-separated)" hint='e.g. "dice_roller", "stat_calculator"'>
+      <Field label="Tools (comma-separated)" hint='e.g. "randomizer", "stat_calculator"'>
         <input
           className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
           value={(phase.tools ?? []).join(", ")}

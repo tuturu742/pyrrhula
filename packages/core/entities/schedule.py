@@ -11,7 +11,7 @@ or the wall-clock ticking over. This is the difference between "the world state 
 because the facilitator advanced the timeline" and "the world state changed because
 somebody opened a page", and only the first is something a session can be resumed against.
 It is also why the clock is an integer rather than a timestamp: the unit is whatever the
-workspace's overlay says (a day, a sprint, a review cycle), and core has no business
+workspace's overlay says (a day, an iteration, a review cycle), and core has no business
 deciding that a fictional month is 30 real days.
 
 **Schedules are declarative data, not code** (CLAUDE.md rule 10). An ``entity_schedule``

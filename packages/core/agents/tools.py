@@ -1,6 +1,6 @@
 """Internal tool registry (B1.7): the seam the future Resolution Service (C1.6) plugs
 real tools into. Deliberately empty by default -- no tools are hardcoded here, since
-C1.6 (the first real tool, ``dice_roller``/``stat_calculator``-style deterministic
+C1.6 (the first real tool, ``randomizer``/``stat_calculator``-style deterministic
 resolution) doesn't exist yet. A caller (a test, or eventually the composition root that
 wires C1.6 in) registers whatever handlers it has; the runtime (``core.agents.runtime``)
 only ever sees the registry's own ``specs()``/``dispatch()`` interface, never a hardcoded

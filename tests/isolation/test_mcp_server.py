@@ -1,4 +1,4 @@
-"""G4.13 acceptance criteria for the MCP server surface: a `dice_roller` call over MCP and
+"""G4.13 acceptance criteria for the MCP server surface: a `randomizer` call over MCP and
 over the service produce equivalent records, `knowledge.query` returns exactly the token
 principal's visible slice, `entity.mutate` requires and honours an idempotency key, and no
 handler imports a repo module (that last one is `tests/architecture/
@@ -30,8 +30,13 @@ from core.knowledge.authoring import (
 )
 from core.process.skeleton import create_session
 from core.resolution.records import ResolutionRecordRow
-from core.resolution.registry import DICE_ROLLER_DEFINITION, register_tool_definition
-from core.resolution.rule_system import RuleSystemDefinition, get_or_create_default_rule_system
+from core.resolution.registry import RANDOMIZER_DEFINITION, register_tool_definition
+from core.resolution.rule_system import (
+    COIN_FLIP_SYSTEM,
+    RuleSystemDefinition,
+    create_rule_system,
+    get_or_create_default_rule_system,
+)
 from core.resolution.service import resolve
 from core.tenancy.models import Principal, Workspace, WorkspaceMembership
 from core.tenancy.scope import tenant_scope
@@ -114,10 +119,10 @@ async def test_mcp_and_http_tool_calls_produce_equivalent_resolution_records(
     caller = await _member(tenant_id, workspace_id, "facilitator")
     persona_id = await seed_dev_agent(tenant_id, workspace_id)
     sess = await create_session(tenant_id, workspace_id, persona_id)
-    await register_tool_definition(tenant_id, DICE_ROLLER_DEFINITION)
+    await register_tool_definition(tenant_id, RANDOMIZER_DEFINITION)
 
     server = await build_server(tenant_id)
-    assert "dice_roller" in {t["name"] for t in server.list_tools()}, (
+    assert "randomizer" in {t["name"] for t in server.list_tools()}, (
         "the deterministic tool list is registry-driven; a registered tool must appear"
     )
 
@@ -130,7 +135,7 @@ async def test_mcp_and_http_tool_calls_produce_equivalent_resolution_records(
         "target": 12,
     }
     over_mcp = await server.dispatch(
-        _token(tenant_id, workspace_id, caller), "dice_roller", arguments
+        _token(tenant_id, workspace_id, caller), "randomizer", arguments
     )
 
     rule_row = await get_or_create_default_rule_system(tenant_id)
@@ -138,7 +143,7 @@ async def test_mcp_and_http_tool_calls_produce_equivalent_resolution_records(
         tenant_id=tenant_id,
         session_id=sess.id,
         event_seq=4,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20",
         check_type="stealth",
@@ -166,7 +171,7 @@ async def test_mcp_and_http_tool_calls_produce_equivalent_resolution_records(
     with pytest.raises(UnknownMcpToolError):
         await server.dispatch(_token(tenant_id, workspace_id, caller), "no_such_tool", {})
     with pytest.raises(InvalidMcpTokenError):
-        await server.dispatch("not-a-token", "dice_roller", arguments)
+        await server.dispatch("not-a-token", "randomizer", arguments)
 
 
 async def test_mcp_knowledge_query_is_scope_filtered_by_token_principal(
@@ -274,3 +279,46 @@ async def test_mcp_entity_mutate_requires_and_honors_idempotency_key(
 
     with pytest.raises(EntityNotVisibleError):
         await server.dispatch(token, "entity.read", {"entity_id": str(uuid.uuid4())})
+
+
+async def test_every_builtin_backed_tool_reaches_the_mcp_surface(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The list is keyed on `impl_ref`, not on one hardcoded name.
+
+    It used to be a one-entry dict keyed on the tool *key*, so a pack registering a
+    second deterministic tool -- the same builtin bound to its own rule system, which
+    is what every one of them is -- got a surface that silently omitted it. The tool
+    also resolves in the system *its own* definition names, not the tenant default."""
+    tenant_id, _tenant_b = two_tenants
+    workspace_id = await _workspace_of(tenant_id)
+    await seed_default_scopes(tenant_id, workspace_id)
+    caller = await _member(tenant_id, workspace_id, "facilitator")
+    persona_id = await seed_dev_agent(tenant_id, workspace_id)
+    sess = await create_session(tenant_id, workspace_id, persona_id)
+
+    await create_rule_system(tenant_id, COIN_FLIP_SYSTEM)
+    await register_tool_definition(
+        tenant_id,
+        RANDOMIZER_DEFINITION.model_copy(
+            update={"key": "table_toss", "validation_ref": "coin_flip"}
+        ),
+    )
+
+    server = await build_server(tenant_id)
+    assert "table_toss" in {t["name"] for t in server.list_tools()}
+
+    result = await server.dispatch(
+        _token(tenant_id, workspace_id, caller),
+        "table_toss",
+        {
+            "session_id": str(sess.id),
+            "event_seq": 7,
+            "expression": "1d2",
+            "check_type": "call",
+            "actor_fields": {},
+        },
+    )
+    # `1d2` is illegal in the tenant default (a d20 system); landing an outcome at all
+    # proves the binding, and the banded outcome proves *which* system answered.
+    assert result["outcome"] in ("heads", "tails"), result

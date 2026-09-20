@@ -104,7 +104,7 @@ EXPORT_SECTIONS = frozenset(
         "sessions",
         "connections",
         # Rule systems + the tool definitions that bind them. Mechanics travel with the
-        # game: without this a bundle's dice resolve against whatever the importing tenant
+        # game: without this a bundle's rolls resolve against whatever the importing tenant
         # happened to have.
         "rules",
     }
@@ -631,7 +631,7 @@ async def _add_process(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id:
 
 
 async def _add_rules(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> None:
-    """The mechanics a bundle needs to resolve its own dice: the tool definitions this
+    """The mechanics a bundle needs to resolve its own rolls: the tool definitions this
     workspace's flows name, and the rule systems those tools validate against.
 
     Without this a sample could carry a setting, a cast and a flow, and then resolve every
@@ -693,7 +693,7 @@ async def _add_rules(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: u
             {
                 "key": row.key,
                 "name": row.name,
-                "dice_grammar": row.dice_grammar,
+                "expression_grammar": row.expression_grammar,
                 "check_types": row.check_types,
                 "outcome_bands": row.outcome_bands,
                 "modifier_resolver": row.modifier_resolver,

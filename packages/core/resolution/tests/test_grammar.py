@@ -1,4 +1,4 @@
-"""C1.5 acceptance criteria for the dice-expression grammar/parser."""
+"""C1.5 acceptance criteria for the randomizer-expression grammar/parser."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def test_keeping_more_than_rolled_rejected() -> None:
 
 
 def test_garbage_input_raises_grammar_error_not_something_else() -> None:
-    for bad in ("", "not a dice roll", "1d20++5", "d20", "1d", "1d20+", "1d20*5"):
+    for bad in ("", "not an expression", "1d20++5", "d20", "1d", "1d20+", "1d20*5"):
         with pytest.raises(GrammarError):
             parse_expression(bad)
 

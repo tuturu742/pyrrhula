@@ -37,7 +37,7 @@ def test_symbolic_modifier_has_nothing_to_cross_check_but_still_resolves() -> No
     returned, just not compared against anything."""
     d20_with_symbolic_check = RuleSystemDefinition(
         key="mvp_d20",
-        dice_grammar={"allowed_sides": [6], "max_dice_count": 4, "allow_keep_drop": False},
+        expression_grammar={"allowed_sides": [6], "max_term_count": 4, "allow_keep_drop": False},
         check_types=frozenset({"strength_check"}),
         modifier_resolver={"strength_check": "(fields.strength - 10) / 2"},
     )
@@ -55,14 +55,14 @@ def test_symbolic_modifier_has_nothing_to_cross_check_but_still_resolves() -> No
 # ── legality checks ──────────────────────────────────────────────────────────────────
 
 
-def test_illegal_dice_sides_rejected() -> None:
+def test_illegal_sides_rejected() -> None:
     result = validate("1d13+0", "stealth", {"dexterity": 10}, _D20, legal_check_types=None)
     assert result.ok is False
     assert result.error is not None
     assert result.error.code == "illegal_expression"
 
 
-def test_too_many_dice_rejected() -> None:
+def test_too_many_terms_rejected() -> None:
     result = validate("10d6", "stealth", {"dexterity": 10}, _D20, legal_check_types=None)
     assert result.ok is False
     assert result.error is not None
@@ -104,7 +104,7 @@ def test_check_legal_in_phase_is_accepted() -> None:
 
 
 def test_garbage_expression_never_crashes_always_typed_error() -> None:
-    result = validate("not a dice roll", "stealth", {}, _D20, legal_check_types=None)
+    result = validate("not an expression", "stealth", {}, _D20, legal_check_types=None)
     assert result.ok is False
     assert result.error is not None
     assert result.error.code == "illegal_expression"
@@ -136,7 +136,7 @@ def test_coin_flip_wrong_sides_rejected_by_its_own_grammar() -> None:
 def test_custom_validator_predicate_can_reject_an_otherwise_legal_expression() -> None:
     rule_system = RuleSystemDefinition(
         key="strict",
-        dice_grammar={"allowed_sides": [20], "max_dice_count": 1, "allow_keep_drop": False},
+        expression_grammar={"allowed_sides": [20], "max_term_count": 1, "allow_keep_drop": False},
         check_types=frozenset({"stealth"}),
         modifier_resolver={"stealth": "(fields.dexterity - 10) / 2"},
         validators=("fields.dexterity <= 20",),

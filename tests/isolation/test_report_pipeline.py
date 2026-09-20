@@ -141,7 +141,7 @@ def test_a_template_without_a_fact_frame_step_is_rejected() -> None:
             audience_mode="participant",
             pipeline=[Step(kind="reduce"), Step(kind="fact_frame")],
         )
-    assert set(BUILT_IN_TEMPLATES) == {"campaign_recap", "session_log", "decision_summary"}
+    assert set(BUILT_IN_TEMPLATES) == {"narrative_recap", "session_log", "decision_summary"}
 
 
 # ── acceptance criteria ─────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ async def test_report_facts_come_from_records_not_prose(
         tenant_id=tenant_id,
         session_id=sess.id,
         event_seq=2,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20",
         check_type="stealth",
@@ -224,7 +224,7 @@ async def test_report_facts_come_from_records_not_prose(
         sess.id,
         viewer,
         _phase(["workspace_public"]),
-        get_template("campaign_recap"),
+        get_template("narrative_recap"),
         from_event_seq=0,
         to_event_seq=10,
         agent=profile,
@@ -411,7 +411,7 @@ async def test_decision_summary_selects_only_decision_shaped_facts(
         tenant_id=tenant_id,
         session_id=sess.id,
         event_seq=1,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20",
         check_type="stealth",

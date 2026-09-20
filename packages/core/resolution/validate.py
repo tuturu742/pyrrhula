@@ -78,28 +78,28 @@ def validate(
     except GrammarError as exc:
         return ValidationResult(ok=False, error=ValidationError("illegal_expression", str(exc)))
 
-    allowed_sides = rule_system.dice_grammar.get("allowed_sides")
+    allowed_sides = rule_system.expression_grammar.get("allowed_sides")
     if allowed_sides is not None and parsed.sides not in allowed_sides:  # type: ignore[operator]
         return ValidationResult(
             ok=False,
             parsed=parsed,
             error=ValidationError(
                 "illegal_expression",
-                f"{parsed.sides}-sided dice are not legal in {rule_system.key!r}",
+                f"{parsed.sides}-sided terms are not legal in {rule_system.key!r}",
             ),
         )
 
-    max_dice = rule_system.dice_grammar.get("max_dice_count")
-    if max_dice is not None and parsed.count > max_dice:  # type: ignore[operator]
+    max_terms = rule_system.expression_grammar.get("max_term_count")
+    if max_terms is not None and parsed.count > max_terms:  # type: ignore[operator]
         return ValidationResult(
             ok=False,
             parsed=parsed,
             error=ValidationError(
-                "illegal_expression", f"{parsed.count} dice exceeds the {max_dice} maximum"
+                "illegal_expression", f"{parsed.count} terms exceeds the {max_terms} maximum"
             ),
         )
 
-    if parsed.keep is not None and not rule_system.dice_grammar.get("allow_keep_drop", False):
+    if parsed.keep is not None and not rule_system.expression_grammar.get("allow_keep_drop", False):
         return ValidationResult(
             ok=False,
             parsed=parsed,

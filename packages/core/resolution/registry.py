@@ -57,8 +57,8 @@ class ToolDefinitionSchema(BaseModel):
     determinism: str
 
 
-DICE_ROLLER_DEFINITION = ToolDefinitionSchema(
-    key="dice_roller",
+RANDOMIZER_DEFINITION = ToolDefinitionSchema(
+    key="randomizer",
     kind="deterministic",
     input_schema={
         "type": "object",
@@ -68,6 +68,7 @@ DICE_ROLLER_DEFINITION = ToolDefinitionSchema(
             "actor_entity_id": {"type": "string"},
             "target": {"type": "integer"},
             "reason": {"type": "string"},
+            "rule_system": {"type": "string"},
         },
         "required": ["expression", "check_type"],
     },
@@ -80,8 +81,9 @@ DICE_ROLLER_DEFINITION = ToolDefinitionSchema(
         },
         "required": ["resolution_id", "total", "outcome"],
     },
-    impl_ref="builtin:dice_roller",
+    impl_ref="builtin:randomizer",
     validation_ref=None,  # set per-workspace to whichever rule_system.key governs it
+    # by default; a single call may still select another registered system by key.
     determinism="seeded_random",
 )
 
@@ -125,7 +127,7 @@ async def ensure_tool_definition(
     tenant_id: uuid.UUID, definition: ToolDefinitionSchema
 ) -> ToolDefinitionRow:
     """Insert-if-missing -- never overwrites an existing row. The runtime's baseline
-    registration (e.g. the builtin dice roller ensured on every turn) must not clobber
+    registration (e.g. the builtin randomizer ensured on every turn) must not clobber
     a richer pack-loaded definition, whose ``validation_ref`` binds the tool to its
     rule system; ``register_tool_definition``'s upsert is for content loads only."""
     async with tenant_scope(tenant_id) as session:

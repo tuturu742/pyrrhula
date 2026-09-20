@@ -148,7 +148,7 @@ async def test_write_tool_proposes_and_does_not_execute(db_available: None) -> N
                     ToolCall(
                         id="c1",
                         name="rename_session",
-                        arguments={"session_id": str(sess.id), "name": "Sprint kickoff"},
+                        arguments={"session_id": str(sess.id), "name": "Quarter kickoff"},
                     ),
                 ),
             ),
@@ -161,7 +161,7 @@ async def test_write_tool_proposes_and_does_not_execute(db_available: None) -> N
             tenant_id,
             workspace_id,
             viewer,
-            [{"role": "user", "content": "rename that session to Sprint kickoff"}],
+            [{"role": "user", "content": "rename that session to Quarter kickoff"}],
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: provider,
             encryptor=IdentityEncryptor(),
@@ -171,7 +171,7 @@ async def test_write_tool_proposes_and_does_not_execute(db_available: None) -> N
     proposals = [e for e in events if e["type"] == "proposal"]
     assert len(proposals) == 1
     assert proposals[0]["action"] == "rename_session"
-    assert proposals[0]["args"]["name"] == "Sprint kickoff"
+    assert proposals[0]["args"]["name"] == "Quarter kickoff"
     # NOT executed server-side: the session's name is untouched.
     row = await get_session(tenant_id, sess.id)
     assert row is not None and row.name is None

@@ -39,7 +39,7 @@ const SECTION_LABEL: Record<string, string> = {
   personas: "Personas",
   scopes: "Scope bands",
   flows: "Flows",
-  rules: "Rule systems and dice tools",
+  rules: "Rule systems and their tools",
   vocabulary: "Vocabulary overlays",
   secrets: "Secrets",
 };

@@ -110,9 +110,9 @@ class SessionRow(Base):
     # for a timeout-aware re-claim to recognise as abandoned.
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # C1.6: HMAC key for this session's seeded dice rolls (plan §9.2 step 3) -- generated
+    # C1.6: HMAC key for this session's seeded randomizer results (plan §9.2 step 3) -- generated
     # lazily on first resolution, not at session creation, so every pre-existing session
-    # (and every session that never rolls dice) never needs one. Server-side only until
+    # (and every session that never rolls a randomizer call) never needs one. Server-side only until
     # deliberately revealed to players post-session for roll verification -- revealing it
     # is a UI/API decision outside this column's own concern.
     roll_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -218,7 +218,7 @@ class MessageRow(Base):
     # D1.3: every ResolutionRecord (C1.6) produced by a tool call during this turn --
     # written by core.agents.runtime._commit_turn regardless of whether a contradiction
     # was found, so the session view's resolution widget (INV-7) can render a turn's
-    # dice results straight from the record even when the narration matched perfectly.
+    # mechanical results straight from the record even when the narration matched perfectly.
     # `moderation_flags["contradiction"]` (C1.7) is the subset of these ids the narration
     # actually conflicted with, not a separate id space.
     resolution_record_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)

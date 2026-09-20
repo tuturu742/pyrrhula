@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 
 import pytest
@@ -11,12 +12,24 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from core.agents.seed import seed_dev_agent
+from core.agents.tools import ToolContext
 from core.config import get_settings
 from core.process.skeleton import create_session
 from core.resolution.grammar import parse_expression
-from core.resolution.records import ResolutionRecordRow, roll_dice, verify_resolution_chain
-from core.resolution.rule_system import MINIMAL_D20_SYSTEM, RuleSystemDefinition, create_rule_system
-from core.resolution.service import InvalidResolutionError, render_resolution_fact, resolve
+from core.resolution.records import ResolutionRecordRow, roll_expression, verify_resolution_chain
+from core.resolution.registry import RANDOMIZER_DEFINITION, register_tool_definition
+from core.resolution.rule_system import (
+    COIN_FLIP_SYSTEM,
+    MINIMAL_D20_SYSTEM,
+    RuleSystemDefinition,
+    create_rule_system,
+)
+from core.resolution.service import (
+    InvalidResolutionError,
+    make_randomizer_handler,
+    render_resolution_fact,
+    resolve,
+)
 from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
 
@@ -44,7 +57,7 @@ async def test_invalid_resolution_raises_and_writes_no_record(db_available: None
             tenant_id=tenant_id,
             session_id=session_id,
             event_seq=0,
-            tool_key="dice_roller",
+            tool_key="randomizer",
             actor_entity_id=None,
             expression="1d20+5",
             check_type="stealth",
@@ -79,7 +92,7 @@ async def test_valid_resolution_writes_a_record_with_the_computed_outcome(
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=0,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20+3",
         check_type="stealth",
@@ -105,7 +118,7 @@ async def test_seed_disclosure_reproduces_the_recorded_rolls_exactly(db_availabl
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=0,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20+3",
         check_type="stealth",
@@ -121,7 +134,7 @@ async def test_seed_disclosure_reproduces_the_recorded_rolls_exactly(db_availabl
     parsed = parse_expression(record.expression)
     modifier = record.modifiers["total"]
     assert isinstance(modifier, int)
-    recomputed = roll_dice(parsed, modifier, bytes.fromhex(record.seed))
+    recomputed = roll_expression(parsed, modifier, bytes.fromhex(record.seed))
 
     assert list(recomputed.rolls) == record.rolls
     assert recomputed.total == record.total
@@ -137,7 +150,7 @@ async def test_hash_chain_verifier_detects_a_tampered_record(db_available: None)
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=0,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20+3",
         check_type="stealth",
@@ -151,7 +164,7 @@ async def test_hash_chain_verifier_detects_a_tampered_record(db_available: None)
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=1,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20+3",
         check_type="stealth",
@@ -198,7 +211,7 @@ async def test_app_role_cannot_update_or_delete_resolution_record(db_available: 
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=0,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20+3",
         check_type="stealth",
@@ -229,7 +242,7 @@ async def test_retry_storm_produces_exactly_one_record_per_logical_roll(
             tenant_id=tenant_id,
             session_id=session_id,
             event_seq=0,  # same event_seq every attempt -- the same "logical roll"
-            tool_key="dice_roller",
+            tool_key="randomizer",
             actor_entity_id=None,
             expression="1d20+3",
             check_type="stealth",
@@ -271,7 +284,7 @@ async def test_render_resolution_fact_is_authoritative_and_instructs_no_contradi
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=0,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20+3",
         check_type="stealth",
@@ -289,3 +302,116 @@ async def test_render_resolution_fact_is_authoritative_and_instructs_no_contradi
     assert str(record.total) in fact
     assert record.outcome.upper() in fact
     assert "may not contradict" in fact
+
+
+# ── one tool, many rule systems (the collapse of the separate coin-flip tool) ──────
+
+
+async def _coin_system(tenant_id: uuid.UUID) -> uuid.UUID:
+    row = await create_rule_system(tenant_id, COIN_FLIP_SYSTEM)
+    return row.id
+
+
+async def _run(handler, args: dict[str, object], tenant_id: uuid.UUID, session_id: uuid.UUID):
+    ctx = ToolContext(tenant_id=tenant_id, persona_id=uuid.uuid4(), session_id=session_id)
+    result = await handler(args, ctx)
+    return json.loads(result.content)
+
+
+async def test_one_call_selects_the_coin_system_and_another_the_default(
+    db_available: None,
+) -> None:
+    """The reason a separate `coin_flip` *tool* was deleted: both were the same handler
+    over the same builtin, differing only in which rule system validated the roll. A
+    caller names the system per call instead, so one turn can do both."""
+    tenant_id, session_id, rule_system, rule_system_id = await _setup("selector-both")
+    await _coin_system(tenant_id)
+
+    handler = make_randomizer_handler(
+        rule_system=rule_system,
+        rule_system_id=rule_system_id,
+        legal_check_types=rule_system.check_types,
+        actor_fields_resolver=_fixed_fields,
+    )
+
+    flip = await _run(
+        handler,
+        {"expression": "1d2", "check_type": "call", "rule_system": "coin_flip"},
+        tenant_id,
+        session_id,
+    )
+    assert flip["outcome"] in ("heads", "tails"), flip
+
+    check = await _run(
+        handler,
+        {"expression": "1d20", "check_type": "strength_check", "target": 10},
+        tenant_id,
+        session_id,
+    )
+    assert check["outcome"] in ("success", "failure"), check
+
+
+async def test_a_coin_expression_is_refused_by_the_default_system(db_available: None) -> None:
+    """Selection is load-bearing, not decorative: without it the d20 grammar rejects
+    `1d2`, which is exactly why resolving a coin in the session default would be wrong
+    rather than merely untidy."""
+    tenant_id, session_id, rule_system, rule_system_id = await _setup("selector-refused")
+    handler = make_randomizer_handler(
+        rule_system=rule_system,
+        rule_system_id=rule_system_id,
+        legal_check_types=rule_system.check_types,
+        actor_fields_resolver=_fixed_fields,
+    )
+
+    out = await _run(
+        handler, {"expression": "1d2", "check_type": "strength_check"}, tenant_id, session_id
+    )
+    assert out["error"] == "illegal_expression", out
+
+
+async def test_an_unregistered_rule_system_is_an_error_not_a_silent_fallback(
+    db_available: None,
+) -> None:
+    """Falling back to the default would write a plausible record for a roll nobody
+    asked for -- the failure mode INV-7 exists to prevent."""
+    tenant_id, session_id, rule_system, rule_system_id = await _setup("selector-unknown")
+    handler = make_randomizer_handler(
+        rule_system=rule_system,
+        rule_system_id=rule_system_id,
+        legal_check_types=rule_system.check_types,
+        actor_fields_resolver=_fixed_fields,
+    )
+
+    out = await _run(
+        handler,
+        {"expression": "1d20", "check_type": "strength_check", "rule_system": "no_such_system"},
+        tenant_id,
+        session_id,
+    )
+    assert out["error"] == "unknown_rule_system", out
+
+
+async def test_the_tool_definitions_validation_ref_binds_when_no_selector_is_given(
+    db_available: None,
+) -> None:
+    """A pack that wants its randomizer to always resolve in one system says so with
+    `validation_ref`, and does not have to repeat itself on every call."""
+    tenant_id, session_id, rule_system, rule_system_id = await _setup("selector-bound")
+    await _coin_system(tenant_id)
+    await register_tool_definition(
+        tenant_id, RANDOMIZER_DEFINITION.model_copy(update={"validation_ref": "coin_flip"})
+    )
+
+    handler = make_randomizer_handler(
+        rule_system=rule_system,
+        rule_system_id=rule_system_id,
+        legal_check_types=rule_system.check_types,
+        actor_fields_resolver=_fixed_fields,
+    )
+
+    out = await _run(handler, {"expression": "1d2", "check_type": "call"}, tenant_id, session_id)
+    assert out["outcome"] in ("heads", "tails"), out
+
+
+async def _fixed_fields(_actor_entity_id: uuid.UUID | None) -> dict[str, object]:
+    return {"strength": 16, "dexterity": 14}

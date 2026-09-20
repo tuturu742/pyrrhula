@@ -67,7 +67,7 @@ STANDARD_SESSION_FLOW: dict[str, object] = {
             },
             "budget": {"ratio": {"rules": 0.75, "lore": 0.25}, "max_tokens": 5000},
             "flags": ["mechanical"],
-            "tools": ["dice_roller", "stat_calculator"],
+            "tools": ["randomizer", "stat_calculator"],
             "on_complete": "resolution",
         },
         "resolution": {

@@ -31,7 +31,7 @@ from core.process.dsl.fixtures import MINIMAL_MVP_FLOW, STANDARD_SESSION_FLOW
 from core.process.dsl.schema import ProcessDefinitionDSL
 from core.process.interpreter import start_session
 from core.process.skeleton import create_session
-from core.resolution.registry import DICE_ROLLER_DEFINITION, register_tool_definition
+from core.resolution.registry import RANDOMIZER_DEFINITION, register_tool_definition
 from core.resolution.rule_system import (
     MINIMAL_D20_SYSTEM,
     RuleSystemDefinition,
@@ -336,7 +336,7 @@ async def test_tool_definition_filter_omission(two_tenants: tuple[uuid.UUID, uui
     tenant_a, tenant_b = two_tenants
 
     for tenant_id in (tenant_a, tenant_b):
-        await register_tool_definition(tenant_id, DICE_ROLLER_DEFINITION)
+        await register_tool_definition(tenant_id, RANDOMIZER_DEFINITION)
 
     async with tenant_scope(tenant_a) as session:
         rows = (await session.execute(text("SELECT tenant_id FROM tool_definition"))).all()
@@ -359,7 +359,7 @@ async def test_resolution_record_filter_omission(two_tenants: tuple[uuid.UUID, u
             tenant_id=tenant_id,
             session_id=sess.id,
             event_seq=0,
-            tool_key="dice_roller",
+            tool_key="randomizer",
             actor_entity_id=None,
             expression="1d20+0",
             check_type="stealth",

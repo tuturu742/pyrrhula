@@ -182,8 +182,8 @@ class Workspace(Base):
     # deliberate `core.entities.schedule.advance_clock` call. Explicitly NOT wall-clock --
     # process/fictional time and real time are different things, and a value that moved
     # itself on read would make "what changed between sessions" unanswerable. The unit is
-    # whatever the workspace's overlay says it is (a day, a sprint, a review cycle); core
-    # only knows it is a monotonically-advanced integer.
+    # whatever the workspace's overlay says it is (a day, an iteration, a review cycle);
+    # core only knows it is a monotonically-advanced integer.
     clock_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     clock_advanced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

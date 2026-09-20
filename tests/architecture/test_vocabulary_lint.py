@@ -76,3 +76,68 @@ def test_the_scan_actually_finds_something_when_present(tmp_path: pathlib.Path) 
 
     offenders = [p for p in [planted] if "Arbiter" in p.read_text()]
     assert offenders == [planted]
+
+
+# ── The backend half of the same rule ──────────────────────────────────────────────
+#
+# CLAUDE.md rule 1 bans domain words in `packages/core`, and until now nothing checked
+# it: the scan above only ever looked at `web/src` display strings, so `dice_roller`,
+# `dice_grammar` and `max_dice_count` sat in a core table, a core tool key and a core
+# handler name for four phases without anything noticing. The words below are the
+# unambiguous ones -- a core module has no honest reason to say "dice" or "campaign",
+# whereas "player" appears inside "multiplayer" and "character" inside "characters of a
+# string", so those two are matched as whole words only and still carry exemptions.
+
+CORE = ROOT / "packages" / "core"
+
+_BANNED_CORE_WORDS = (
+    "dice",
+    "game_master",
+    "campaign",
+    "dungeon",
+    "sprint",
+    "standup",
+    "pull_request",
+)
+
+# `packages/core/process/dsl/` ships example/fixture process definitions, which are pack
+# *content* shaped like code -- the same exemption `.plugins/` content gets.
+_CORE_EXEMPT_DIRS = (CORE / "process" / "dsl",)
+
+
+def _core_files() -> list[pathlib.Path]:
+    return [
+        p for p in CORE.rglob("*.py") if not any(p.is_relative_to(d) for d in _CORE_EXEMPT_DIRS)
+    ]
+
+
+def test_no_domain_words_in_core() -> None:
+    """CLAUDE.md rule 1, enforced rather than asserted. A domain word here is not a
+    style nit: it is the thing that makes `packages/core` unusable for the next
+    vertical, which is the entire premise of the overlay design.
+
+    A line may carry a `vocab-ok:` marker with a reason. There are exactly two honest
+    ones: prose that *names* overlay values in order to explain this very rule, and a
+    foreign key we call rather than coin (an MCP server's own tool name). Anything
+    else wanting the marker is a design smell, not a lint problem."""
+    offenders: list[str] = []
+    for path in _core_files():
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            if "vocab-ok" in line:
+                continue
+            lowered = line.lower()
+            for word in _BANNED_CORE_WORDS:
+                if word in lowered:
+                    offenders.append(f"{path.relative_to(ROOT)}:{lineno}: {word!r}")
+
+    assert not offenders, (
+        "domain word(s) in packages/core -- CLAUDE.md rule 1. Core speaks in "
+        "domain-neutral terms and emits label_keys; the domain word belongs in pack "
+        "content or a vocabulary overlay:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_core_scan_actually_finds_something_when_present(tmp_path: pathlib.Path) -> None:
+    planted = tmp_path / "planted.py"
+    planted.write_text("DICE_GRAMMAR = {}\n")
+    assert [w for w in _BANNED_CORE_WORDS if w in planted.read_text().lower()] == ["dice"]

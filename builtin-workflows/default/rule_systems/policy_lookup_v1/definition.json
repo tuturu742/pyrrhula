@@ -1,9 +1,9 @@
 {
   "key": "policy_lookup_v1",
   "name": "Policy Lookup",
-  "dice_grammar": {
+  "expression_grammar": {
     "allowed_sides": [1],
-    "max_dice_count": 1,
+    "max_term_count": 1,
     "allow_keep_drop": false
   },
   "check_types": ["expense_approval"],

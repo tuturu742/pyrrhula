@@ -19,7 +19,7 @@ from core.ports.model_provider import Capabilities, Chunk, GenerationRequest, To
 from core.process.skeleton import create_session
 from core.resolution.records import ResolutionRecordRow
 from core.resolution.rule_system import MINIMAL_D20_SYSTEM, RuleSystemDefinition, create_rule_system
-from core.resolution.service import make_dice_roller_handler
+from core.resolution.service import make_randomizer_handler
 from core.sessions.models import MessageRow
 from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
@@ -68,14 +68,14 @@ async def test_model_claiming_a_false_modifier_is_rejected_through_the_real_tool
     async def actor_fields_resolver(actor_entity_id: uuid.UUID | None) -> dict[str, object]:
         return {"dexterity": 16}  # true modifier is +3, not the +5 the model will claim
 
-    handler = make_dice_roller_handler(
+    handler = make_randomizer_handler(
         rule_system=rule_system,
         rule_system_id=rule_system_row.id,
         legal_check_types=None,
         actor_fields_resolver=actor_fields_resolver,
     )
     registry = ToolRegistry()
-    registry.register(ToolSpec(name="dice_roller", description="Roll dice", parameters={}), handler)
+    registry.register(ToolSpec(name="randomizer", description="Roll", parameters={}), handler)
 
     provider = _ScriptedProvider(
         turns=[
@@ -84,7 +84,7 @@ async def test_model_claiming_a_false_modifier_is_rejected_through_the_real_tool
                 tool_calls=(
                     ToolCall(
                         id="call_1",
-                        name="dice_roller",
+                        name="randomizer",
                         arguments={"expression": "1d20+5", "check_type": "stealth"},
                     ),
                 ),
@@ -135,14 +135,14 @@ async def test_valid_roll_through_the_real_tool_loop_writes_exactly_one_record(
     async def actor_fields_resolver(actor_entity_id: uuid.UUID | None) -> dict[str, object]:
         return {"dexterity": 16}
 
-    handler = make_dice_roller_handler(
+    handler = make_randomizer_handler(
         rule_system=rule_system,
         rule_system_id=rule_system_row.id,
         legal_check_types=None,
         actor_fields_resolver=actor_fields_resolver,
     )
     registry = ToolRegistry()
-    registry.register(ToolSpec(name="dice_roller", description="Roll dice", parameters={}), handler)
+    registry.register(ToolSpec(name="randomizer", description="Roll", parameters={}), handler)
 
     provider = _ScriptedProvider(
         turns=[
@@ -151,7 +151,7 @@ async def test_valid_roll_through_the_real_tool_loop_writes_exactly_one_record(
                 tool_calls=(
                     ToolCall(
                         id="call_1",
-                        name="dice_roller",
+                        name="randomizer",
                         arguments={"expression": "1d20+3", "check_type": "stealth", "target": 10},
                     ),
                 ),
@@ -215,14 +215,14 @@ async def test_contradicting_narration_still_shows_the_records_truth_through_the
     async def actor_fields_resolver(actor_entity_id: uuid.UUID | None) -> dict[str, object]:
         return {"dexterity": 16}
 
-    handler = make_dice_roller_handler(
+    handler = make_randomizer_handler(
         rule_system=rule_system,
         rule_system_id=rule_system_row.id,
         legal_check_types=None,
         actor_fields_resolver=actor_fields_resolver,
     )
     registry = ToolRegistry()
-    registry.register(ToolSpec(name="dice_roller", description="Roll dice", parameters={}), handler)
+    registry.register(ToolSpec(name="randomizer", description="Roll", parameters={}), handler)
 
     provider = _ScriptedProvider(
         turns=[
@@ -231,7 +231,7 @@ async def test_contradicting_narration_still_shows_the_records_truth_through_the
                 tool_calls=(
                     ToolCall(
                         id="call_1",
-                        name="dice_roller",
+                        name="randomizer",
                         arguments={
                             "expression": "1d20+3",
                             "check_type": "stealth",

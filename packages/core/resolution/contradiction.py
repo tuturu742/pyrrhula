@@ -1,6 +1,6 @@
 """Contradiction check (C1.7, plan §9.2 step 7/§16.4, Q4 resolved 2026-07-16): best-effort
 scan of a reply against its turn's resolution records. Flags for a UI correction badge --
-**no regeneration, ever**. The dice widget already renders the truth straight from
+**no regeneration, ever**. The resolution widget already renders the truth straight from
 ``ResolutionRecord`` (INV-7); a contradicting narration is cosmetic and self-correcting --
 the reader sees the badge and the real number sits right there. That is a strictly
 different, much lower-stakes failure mode than §8.7's secret-leak check (which *does*

@@ -21,7 +21,7 @@
     },
     "required": ["resolution_id", "total", "outcome"]
   },
-  "impl_ref": "builtin:dice_roller",
+  "impl_ref": "builtin:randomizer",
   "validation_ref": "policy_lookup_v1",
   "determinism": "pure"
 }

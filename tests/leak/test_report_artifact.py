@@ -184,7 +184,7 @@ async def test_participant_report_contains_no_unheld_secret_content(
         sess.id,
         participant,
         _phase(),
-        get_template("campaign_recap"),
+        get_template("narrative_recap"),
         from_event_seq=0,
         to_event_seq=10,
         agent=profile,

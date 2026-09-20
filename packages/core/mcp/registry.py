@@ -43,7 +43,7 @@ from core.ports.mcp import McpServerRef, McpToolSpec
 from core.tenancy.models import Base
 from core.tenancy.scope import tenant_scope
 
-# The platform's own in-process tooling is addressed with this scheme: dice resolution,
+# The platform's own in-process tooling is addressed with this scheme: randomizer resolution,
 # git delegation. Nothing leaves the process, no third party is involved, and no operator
 # approval is meaningful. Anything else -- http(s), ws, stdio -- is an external endpoint.
 INTERNAL_MCP_SCHEME = "pyrrhula://"

@@ -18,7 +18,7 @@ from core.agents.tools import ToolRegistry
 from core.ports.model_provider import ToolCall, ToolSpec
 from core.process.skeleton import create_session
 from core.resolution.rule_system import MINIMAL_D20_SYSTEM, RuleSystemDefinition, create_rule_system
-from core.resolution.service import make_dice_roller_handler
+from core.resolution.service import make_randomizer_handler
 from core.resolution.tests.test_tool_loop_integration import _ScriptedProvider, _ScriptedTurn
 from core.tenancy.seed import seed_dev_tenant
 
@@ -59,14 +59,14 @@ async def test_message_resolutions_endpoint_shows_the_record_and_the_contradicti
     async def actor_fields_resolver(actor_entity_id: uuid.UUID | None) -> dict[str, object]:
         return {"dexterity": 16}
 
-    handler = make_dice_roller_handler(
+    handler = make_randomizer_handler(
         rule_system=rule_system,
         rule_system_id=rule_system_row.id,
         legal_check_types=None,
         actor_fields_resolver=actor_fields_resolver,
     )
     registry = ToolRegistry()
-    registry.register(ToolSpec(name="dice_roller", description="Roll dice", parameters={}), handler)
+    registry.register(ToolSpec(name="randomizer", description="Roll", parameters={}), handler)
 
     provider = _ScriptedProvider(
         turns=[
@@ -75,7 +75,7 @@ async def test_message_resolutions_endpoint_shows_the_record_and_the_contradicti
                 tool_calls=(
                     ToolCall(
                         id="call_1",
-                        name="dice_roller",
+                        name="randomizer",
                         arguments={"expression": "1d20+3", "check_type": "stealth", "target": 100},
                     ),
                 ),

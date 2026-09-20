@@ -7,8 +7,8 @@ from core.process.session_resolution_tools import _resolution_phase
 
 
 def test_resolution_phase_is_a_valid_phase_spec() -> None:
-    phase = _resolution_phase(["dice_roller", "coin_flip"])
-    assert phase.tools == ["dice_roller", "coin_flip"]
+    phase = _resolution_phase(["randomizer", "checklist_eval"])
+    assert phase.tools == ["randomizer", "checklist_eval"]
     assert phase.visibility.entity_fields == []
     assert phase.visibility.secrets == "none"
 

@@ -130,7 +130,7 @@ async def test_summary_takes_mechanical_facts_from_records_not_prose(
         tenant_id=tenant_id,
         session_id=sess.id,
         event_seq=2,
-        tool_key="dice_roller",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression="1d20",
         check_type="stealth",

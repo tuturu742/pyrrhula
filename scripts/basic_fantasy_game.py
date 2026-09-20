@@ -383,7 +383,7 @@ async def one_roll(tenant_id, rs, rs_id, session_id, seq, check_type, expr, fiel
         tenant_id=tenant_id,
         session_id=session_id,
         event_seq=seq,
-        tool_key="bfrpg_dice",
+        tool_key="randomizer",
         actor_entity_id=None,
         expression=expr,
         check_type=check_type,
@@ -397,7 +397,7 @@ async def one_roll(tenant_id, rs, rs_id, session_id, seq, check_type, expr, fiel
 
 
 async def main():
-    # 1. tenant + rpg workflow (materializes basic_fantasy + bfrpg_dice for this tenant)
+    # 1. tenant + rpg workflow (materializes basic_fantasy + the randomizer for this tenant)
     tenant_id, owner_id, workspace_id = await seed_dev_tenant(
         slug=SLUG, tenant_name="Basic Fantasy Table", owner_display_name="Referee"
     )
@@ -888,7 +888,7 @@ async def main():
             tenant_id=tenant_id,
             session_id=sess_id,
             event_seq=seq,
-            tool_key="bfrpg_dice",
+            tool_key="randomizer",
             actor_entity_id=None,
             expression=expr,
             check_type=ct,
@@ -982,7 +982,7 @@ async def main():
             principal_id=gm.principal_id,
             session_id=play,
             event_seq=res_seq + 1,
-            tool_key="bfrpg_dice",
+            tool_key="randomizer",
             actor_entity_id=defender["id"],
             expression="1d4",
             check_type="constitution_check",

@@ -8,7 +8,7 @@ now extended across a whole tool loop instead of one call.
 **Idempotency is scoped to tool dispatch, not the provider call itself.** Retrying a
 *failed* provider call is what retry-with-backoff means -- there's no "duplicate side
 effect" to protect against there. A tool call that already *succeeded*, however, is a real
-side effect (later: dice rolls, entity mutations, MCP calls) that must never run twice if
+side effect (later: randomizer calls, entity mutations, MCP calls) that must never run twice if
 the surrounding turn is retried/resumed after a crash -- so only ``_dispatch_tool``
 is wrapped in T0.7's ``@idempotent``, keyed on ``(idempotency_key, tool_call.id)``. This
 mirrors B1.2's own scoping decision (idempotency around the external call, not around
@@ -72,9 +72,9 @@ class EmptyGenerationError(Exception):
 
 
 def _extract_resolution_id(tool_result_content: str) -> str | None:
-    """D1.3: ``make_dice_roller_handler`` (C1.6) reports its result as
+    """D1.3: ``make_randomizer_handler`` (C1.6) reports its result as
     ``{"resolution_id": ..., "total": ..., "outcome": ...}`` JSON -- the same shape any
-    future resolve()-backed tool would emit, so this isn't specific to ``dice_roller`` by
+    future resolve()-backed tool would emit, so this isn't specific to ``randomizer`` by
     name. A tool result that isn't that shape (a non-resolution tool, or a resolution
     error response with no ``resolution_id`` key) simply contributes nothing, not an
     error -- most tool calls in a turn aren't resolutions at all."""

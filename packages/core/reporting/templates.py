@@ -97,8 +97,8 @@ class ReportTemplate(BaseModel):
         return value
 
 
-CAMPAIGN_RECAP = ReportTemplate(
-    key="campaign_recap",
+NARRATIVE_RECAP = ReportTemplate(
+    key="narrative_recap",
     label_key="report.recap",
     audience_mode="participant",
     pipeline=[
@@ -123,7 +123,7 @@ DECISION_SUMMARY = ReportTemplate(
     label_key="report.decision_summary",
     audience_mode="overseer",
     # Disclosures only: a decision log is about what was *decided and disclosed*, and
-    # padding it with every dice roll in the session would bury the thing it exists for.
+    # padding it with every randomizer call in the session would bury the thing it exists for.
     pipeline=[
         Step(kind="fact_frame", fact_kinds=["disclosure", "entity_change"]),
         Step(kind="reduce", max_tokens=600),
@@ -134,7 +134,7 @@ DECISION_SUMMARY = ReportTemplate(
 )
 
 BUILT_IN_TEMPLATES: dict[str, ReportTemplate] = {
-    t.key: t for t in (CAMPAIGN_RECAP, SESSION_LOG, DECISION_SUMMARY)
+    t.key: t for t in (NARRATIVE_RECAP, SESSION_LOG, DECISION_SUMMARY)
 }
 
 

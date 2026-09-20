@@ -109,7 +109,7 @@ def test_definition_schema_forbids_unknown_fields() -> None:
         RuleSystemDefinitionSchema(
             key="x",
             name="X",
-            dice_grammar={},
+            expression_grammar={},
             check_types=[],
             modifier_resolver={},
             not_a_real_field="oops",  # type: ignore[call-arg]

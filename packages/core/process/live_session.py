@@ -56,9 +56,9 @@ from core.process.session_web_tools import (
     make_web_search_handler,
     workspace_has_web_search,
 )
-from core.resolution.registry import DICE_ROLLER_DEFINITION, ensure_tool_definition
+from core.resolution.registry import RANDOMIZER_DEFINITION, ensure_tool_definition
 from core.resolution.rule_system import RuleSystemDefinition, get_or_create_default_rule_system
-from core.resolution.service import ActorFieldsResolver, make_dice_roller_handler
+from core.resolution.service import ActorFieldsResolver, make_randomizer_handler
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionPersonaRow, SessionRow
 from core.tenancy.models import Principal, Workspace
@@ -80,7 +80,7 @@ def _make_actor_fields_resolver(tenant_id: uuid.UUID) -> ActorFieldsResolver:
 
     This used to be a fixed ``{dexterity: 14, strength: 14}`` stub on the grounds that no
     entity system existed yet. One has existed since F3.6, and the stub outliving it meant
-    every character in every session rolled with identical stats: a dice tool that
+    every actor in every session rolled with identical stats: a randomizer that
     validates ``1d20+STR`` against a constant is theatre, and the sheet the player was
     handed was fiction.
 
@@ -426,8 +426,8 @@ async def run_one_persona_turn(
     # for everything a normal deployment offers.
     for spec, handler in extra_tools or ():
         tool_registry.register(spec, handler)
-    if "dice_roller" in phase.tools:
-        handler = make_dice_roller_handler(
+    if "randomizer" in phase.tools:
+        handler = make_randomizer_handler(
             rule_system=rule_system,
             rule_system_id=rule_system_id,
             legal_check_types=rule_system.check_types,
@@ -435,9 +435,13 @@ async def run_one_persona_turn(
         )
         tool_registry.register(
             ToolSpec(
-                name="dice_roller",
-                description="Roll dice against the workspace's rule system.",
-                parameters=DICE_ROLLER_DEFINITION.input_schema,
+                name="randomizer",
+                description=(
+                    "Resolve an expression against a rule system and record the result. "
+                    "Defaults to this workspace's rule system; pass `rule_system` to "
+                    "resolve in another one it has registered (e.g. a coin flip)."
+                ),
+                parameters=RANDOMIZER_DEFINITION.input_schema,
             ),
             handler,
         )
@@ -498,7 +502,7 @@ async def run_one_persona_turn(
                         },
                         "expression": {
                             "type": "string",
-                            "description": "dice expression for the check, default '1d2'",
+                            "description": "randomizer expression for the check, default '1d2'",
                         },
                     },
                     "required": ["actor_entity_id", "machine_key", "trigger"],
@@ -712,7 +716,7 @@ async def run_one_persona_turn(
             tool_registry=tool_registry,
             # The persona is part of the key: two personas conducted concurrently peek the
             # same next_event_seq, and a persona-less key made the second turn's TOOL
-            # dispatches dedupe into the first's cached results (wrong actor's dice).
+            # dispatches dedupe into the first's cached results (wrong actor's roll).
             idempotency_key=f"turn:{session_id}:{event_seq}:{persona_id}",
             encryptor=encryptor,
             context_manifest_id=manifest_row.id,
@@ -875,7 +879,7 @@ async def run_process_definition_session(
 
     rule_system_row = await get_or_create_default_rule_system(tenant_id)
     rule_system = RuleSystemDefinition.from_row(rule_system_row)
-    await ensure_tool_definition(tenant_id, DICE_ROLLER_DEFINITION)
+    await ensure_tool_definition(tenant_id, RANDOMIZER_DEFINITION)
 
     next_actor_fn = _make_conduct_gated_scheduler(
         make_scheduler(
@@ -972,7 +976,7 @@ async def run_directed_persona_turn(
 
     rule_system_row = await get_or_create_default_rule_system(tenant_id)
     rule_system = RuleSystemDefinition.from_row(rule_system_row)
-    await ensure_tool_definition(tenant_id, DICE_ROLLER_DEFINITION)
+    await ensure_tool_definition(tenant_id, RANDOMIZER_DEFINITION)
 
     result = await run_one_persona_turn(
         # A person picked this persona and asked for the turn -- that is what the

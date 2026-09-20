@@ -96,6 +96,14 @@ pack; `pull_request` and `build` are pack entity *schemas*, not core nouns. "Emb
 Info" covers undisclosed vulns/incidents/plans — never tool credentials, which stay
 `credential_ref`s.)
 
+`tests/architecture/test_vocabulary_lint.py` enforces this on both halves: the RPG
+overlay's display strings in `web/src`, and the unambiguous forbidden words in
+`packages/core`. It scanned only the frontend until the backend scan found four real
+violations that had been shipping since Phase 1 — `dice_roller`, `dice_grammar`,
+`max_dice_count`, `campaign_recap`. A line may carry a `vocab-ok:` marker with a reason,
+and there is exactly one honest use: a foreign key we call rather than coin (an MCP
+server's own tool name). Prose that wants the marker should be reworded instead.
+
 **`repo`, `git`, `commit` and `branch` are core vocabulary, not forbidden.** They were on
 the banned list and the code has long since disagreed: `repo` and `session_repo` are core
 tables, `/repos` and `/git` are core API prefixes, and a hosted git store is a core

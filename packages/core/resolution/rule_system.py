@@ -44,7 +44,7 @@ class RuleSystemRow(Base):
     )
     key: Mapped[str] = mapped_column(String(63), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    dice_grammar: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    expression_grammar: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     check_types: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     outcome_bands: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, default=list
@@ -65,7 +65,7 @@ class RuleSystemDefinitionSchema(BaseModel):
 
     key: str
     name: str
-    dice_grammar: dict[str, object]
+    expression_grammar: dict[str, object]
     check_types: list[str]
     outcome_bands: list[dict[str, object]] = []
     modifier_resolver: dict[str, str]
@@ -79,7 +79,7 @@ class RuleSystemDefinition:
     project's established storage/spec separation."""
 
     key: str
-    dice_grammar: dict[str, object]
+    expression_grammar: dict[str, object]
     check_types: frozenset[str]
     outcome_bands: tuple[dict[str, object], ...] = field(default_factory=tuple)
     modifier_resolver: dict[str, str] = field(default_factory=dict)
@@ -89,7 +89,7 @@ class RuleSystemDefinition:
     def from_row(cls, row: RuleSystemRow) -> RuleSystemDefinition:
         return cls(
             key=row.key,
-            dice_grammar=row.dice_grammar,
+            expression_grammar=row.expression_grammar,
             check_types=frozenset(row.check_types),
             outcome_bands=tuple(row.outcome_bands),
             modifier_resolver=row.modifier_resolver,
@@ -100,7 +100,7 @@ class RuleSystemDefinition:
     def from_schema(cls, schema: RuleSystemDefinitionSchema) -> RuleSystemDefinition:
         return cls(
             key=schema.key,
-            dice_grammar=schema.dice_grammar,
+            expression_grammar=schema.expression_grammar,
             check_types=frozenset(schema.check_types),
             outcome_bands=tuple(schema.outcome_bands),
             modifier_resolver=schema.modifier_resolver,
@@ -173,7 +173,7 @@ async def create_rule_system(
         )
         if existing is not None:
             existing.name = definition.name
-            existing.dice_grammar = definition.dice_grammar
+            existing.expression_grammar = definition.expression_grammar
             existing.check_types = definition.check_types
             existing.outcome_bands = definition.outcome_bands
             existing.modifier_resolver = definition.modifier_resolver
@@ -185,7 +185,7 @@ async def create_rule_system(
             tenant_id=tenant_id,
             key=definition.key,
             name=definition.name,
-            dice_grammar=definition.dice_grammar,
+            expression_grammar=definition.expression_grammar,
             check_types=definition.check_types,
             outcome_bands=definition.outcome_bands,
             modifier_resolver=definition.modifier_resolver,
@@ -197,7 +197,7 @@ async def create_rule_system(
 
 
 async def get_or_create_default_rule_system(tenant_id: uuid.UUID) -> RuleSystemRow:
-    """B1.8: a live turn's ``dice_roller`` tool needs *some* ``RuleSystemDefinition`` to
+    """B1.8: a live turn's ``randomizer`` tool needs *some* ``RuleSystemDefinition`` to
     validate against, and nothing seeds one per-tenant today. One tenant-wide default is
     enough for the exit gate's slice -- no per-ProcessDefinition rule-system link exists
     in the schema, and Phase 1 doesn't need one. ``create_rule_system`` is already an
@@ -225,9 +225,9 @@ async def get_rule_system(tenant_id: uuid.UUID, key: str) -> RuleSystemRow | Non
 MINIMAL_D20_SYSTEM = RuleSystemDefinitionSchema(
     key="mvp_d20",
     name="MVP d20 System",
-    dice_grammar={
+    expression_grammar={
         "allowed_sides": [4, 6, 8, 10, 12, 20],
-        "max_dice_count": 4,
+        "max_term_count": 4,
         "allow_keep_drop": False,
     },
     check_types=["stealth", "strength_check"],
@@ -242,7 +242,7 @@ MINIMAL_D20_SYSTEM = RuleSystemDefinitionSchema(
 COIN_FLIP_SYSTEM = RuleSystemDefinitionSchema(
     key="coin_flip",
     name="Coin Flip",
-    dice_grammar={"allowed_sides": [2], "max_dice_count": 1, "allow_keep_drop": False},
+    expression_grammar={"allowed_sides": [2], "max_term_count": 1, "allow_keep_drop": False},
     check_types=["call"],
     outcome_bands=[
         {"min": 1, "max": 1, "outcome": "tails"},

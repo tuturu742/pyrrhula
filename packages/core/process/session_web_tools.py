@@ -58,7 +58,7 @@ def make_web_search_handler(*, workspace_id: uuid.UUID, transport: McpTransport)
         if ctx.session_id is None:
             return ToolResult(content=json.dumps({"error": "no_session"}))
 
-        # A per-call event_seq reservation (same pattern as the dice roller). Search is
+        # A per-call event_seq reservation (same pattern as the the randomizer). Search is
         # read-only, so core.mcp.client's effectful ledger doesn't record it -- the turn's
         # tool_calls_made counter and the enveloped output in context are its trace.
         async with tenant_scope(ctx.tenant_id) as session:

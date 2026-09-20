@@ -231,7 +231,7 @@ class DeclaredServerOut(BaseModel):
     key: str
     url: str
     enabled_tools: list[str]
-    # A `pyrrhula://` url is the platform's own in-process tooling (dice, git delegation),
+    # A `pyrrhula://` url is the platform's own in-process tooling (the randomizer, git delegation),
     # reached over no network and exposed to nobody. Only a real transport -- http(s), ws,
     # stdio -- is a third party the operator is actually approving. Conflating the two made
     # a clean install look like it had attached external MCP servers when it had not.

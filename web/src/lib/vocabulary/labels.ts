@@ -40,7 +40,7 @@ export const DEFAULT_LABELS: Record<string, string> = {
   "entity.entity": "Character / NPC",
   "entity.entity_schema": "Character Sheet Template",
   "entity.state_machine": "Status Track",
-  "entity.deterministic_tool": "Dice Roller / Coin Flip / Stat Calculator",
+  "entity.deterministic_tool": "Dice Roller / Randomizer",
   "entity.effectful_action": "Table Action",
   "entity.resolution_record": "Roll Result",
   "entity.rule_system": "Game System",

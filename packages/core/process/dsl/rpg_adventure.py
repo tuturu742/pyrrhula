@@ -63,7 +63,7 @@ RPG_ADVENTURE_FLOW: dict[str, object] = {
                 "secrets": "none",
             },
             "budget": {"ratio": {"rules": 0.6, "lore": 0.4}, "max_tokens": 3000},
-            "tools": ["dice_roller", "resolve_and_apply"],
+            "tools": ["randomizer", "resolve_and_apply"],
             "on_complete": "synthesis",
         },
         "synthesis": {

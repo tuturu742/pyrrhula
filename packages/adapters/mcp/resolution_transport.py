@@ -78,15 +78,25 @@ class ResolutionMcpTransport:
         tool = await get_tool_definition(tenant_id, name)
         if tool is None:
             raise McpTransportError(f"no tool definition {name!r} in this tenant")
-        rule_system_row = await get_rule_system(tenant_id, str(tool.validation_ref))
-        if rule_system_row is None:
+        # A call may name the rule system it resolves in; the tool's `validation_ref` is
+        # the default, not the only option. This is what makes one randomizer enough:
+        # a coin flip is the `coin_flip` system, not a second tool with a second handler.
+        requested = arguments.get("rule_system")
+        system_key = str(requested) if requested else tool.validation_ref
+        if not system_key:
             raise McpTransportError(
-                f"tool {name!r}: rule system {tool.validation_ref!r} is not loaded"
+                f"tool {name!r} names no rule system and the call selected none"
             )
+        rule_system_row = await get_rule_system(tenant_id, str(system_key))
+        if rule_system_row is None:
+            raise McpTransportError(f"tool {name!r}: rule system {system_key!r} is not loaded")
         rule_system = RuleSystemDefinition.from_row(rule_system_row)
 
         expression = str(arguments.get("expression") or "1d2")
-        check_type = str(arguments.get("check_type") or next(iter(rule_system.check_types), "call"))
+        # `next(iter(...))` over a frozenset picks an arbitrary member, so the same call
+        # could resolve as a different check between processes. Sorted, it cannot.
+        default_check = (sorted(rule_system.check_types) or ["call"])[0]
+        check_type = str(arguments.get("check_type") or default_check)
         raw_target = arguments.get("target")
         target = int(str(raw_target)) if raw_target is not None else None
         actor_entity_id: uuid.UUID | None = None

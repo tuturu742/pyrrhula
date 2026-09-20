@@ -27,8 +27,14 @@ from sqlalchemy import select, text
 
 from core.agents.tools import ToolContext, ToolHandler, ToolResult
 from core.audit.hashing import compute_row_hash
-from core.resolution.records import ResolutionRecordRow, compute_seed, resolution_payload, roll_dice
-from core.resolution.rule_system import RuleSystemDefinition, resolve_outcome
+from core.resolution.records import (
+    ResolutionRecordRow,
+    compute_seed,
+    resolution_payload,
+    roll_expression,
+)
+from core.resolution.registry import get_tool_definition
+from core.resolution.rule_system import RuleSystemDefinition, get_rule_system, resolve_outcome
 from core.resolution.validate import ValidationError, validate
 from core.sessions.models import SessionRow
 from core.tenancy.scope import tenant_scope
@@ -93,7 +99,7 @@ async def resolve(
         secret = session_row.roll_secret
 
         seed = compute_seed(secret, session_id, event_seq, expression)
-        roll_result = roll_dice(validation.parsed, validation.computed_modifier, seed)
+        roll_result = roll_expression(validation.parsed, validation.computed_modifier, seed)
         outcome = resolve_outcome(roll_result.total, target, rule_system.outcome_bands)
 
         prev_hash = await session.scalar(
@@ -169,27 +175,83 @@ def render_resolution_fact(record: ResolutionRecordRow, *, check_type: str) -> s
 ActorFieldsResolver = Callable[[uuid.UUID | None], Awaitable[dict[str, object]]]
 
 
-def make_dice_roller_handler(
+class UnknownRuleSystemError(Exception):
+    """A call named a ``rule_system`` this tenant has not registered. Deliberately an
+    error rather than a silent fall-back to the default: resolving a coin flip's ``1d2``
+    in a d20 system produces a wrong-but-plausible record, which is exactly the class of
+    result INV-7 exists to prevent."""
+
+
+async def effective_rule_system(
+    tenant_id: uuid.UUID,
+    requested_key: str | None,
+    default: RuleSystemDefinition,
+    default_id: uuid.UUID,
+    *,
+    tool_key: str = "randomizer",
+) -> tuple[RuleSystemDefinition, uuid.UUID]:
+    """Resolve which rule system governs one call: the call's own selector, then the
+    tool definition's ``validation_ref``, then the injected default.
+
+    ``tool_key`` is which definition to read that binding from. It is a parameter
+    because a pack may register the one builtin under a domain-appropriate name --
+    ``policy_lookup`` over an approval-band system is the same handler as a coin flip
+    over a two-band one -- and each of those carries its own ``validation_ref``."""
+    if requested_key is not None and requested_key != default.key:
+        row = await get_rule_system(tenant_id, requested_key)
+        if row is None:
+            raise UnknownRuleSystemError(f"no rule system {requested_key!r} in this workspace")
+        return RuleSystemDefinition.from_row(row), row.id
+
+    if requested_key is None:
+        tool_def = await get_tool_definition(tenant_id, tool_key)
+        bound = str(tool_def.validation_ref) if tool_def and tool_def.validation_ref else None
+        if bound is not None and bound != default.key:
+            row = await get_rule_system(tenant_id, bound)
+            if row is not None:
+                return RuleSystemDefinition.from_row(row), row.id
+
+    return default, default_id
+
+
+def make_randomizer_handler(
     *,
     rule_system: RuleSystemDefinition,
     rule_system_id: uuid.UUID,
     legal_check_types: frozenset[str] | None,
     actor_fields_resolver: ActorFieldsResolver,
 ) -> ToolHandler:
-    """The real ``dice_roller`` tool handler (§9.1's internal-function-calling path),
+    """The real ``randomizer`` tool handler (§9.1's internal-function-calling path),
     wired into a ``core.agents.tools.ToolRegistry`` at the composition root. Trusted
     actor state comes from the injected ``actor_fields_resolver`` -- never from the tool
     call's own arguments, which the model controls and could lie in (that would just move
     the hallucination vector from "claimed modifier" to "claimed stats", defeating the
-    entire point). No Entity system exists until F3.6 (Phase 3); the resolver is today's
-    injection seam for that, matching every other C1.x "not yet real" source.
+    entire point).
+
+    **One tool, many rule systems.** There is no second randomizer for coin flips and no
+    third for ungraded numbers: a coin flip is a rule system whose grammar allows ``1d2``
+    and whose two outcome bands read "heads"/"tails", and a raw number is a rule system
+    with a permissive grammar and no bands at all. Which system governs a given call is
+    decided here, most-specific first:
+
+    1. the call's own ``rule_system`` argument, if it names one this tenant has
+       registered -- this is what lets a single turn flip a coin *and* roll a check;
+    2. the tool definition's ``validation_ref``, the binding a pack authors when its
+       tool should always resolve in one system (the same precedence
+       ``resolve_and_apply`` applies);
+    3. the injected session default.
+
+    The argument is a *selector*, not an escape hatch: it can only name an already-stored
+    ``rule_system`` row, whose grammar then validates the expression and whose CEL
+    resolves the modifier from trusted actor fields. A model naming a system that does
+    not exist gets an error, never an unvalidated roll.
     """
 
     async def handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
         if ctx.session_id is None:
             return ToolResult(
                 content=json.dumps(
-                    {"error": "no_session", "message": "dice_roller requires a session"}
+                    {"error": "no_session", "message": "randomizer requires a session"}
                 )
             )
 
@@ -199,6 +261,22 @@ def make_dice_roller_handler(
             uuid.UUID(str(args["actor_entity_id"])) if args.get("actor_entity_id") else None
         )
         target = int(str(args["target"])) if args.get("target") is not None else None
+
+        requested_key = str(args["rule_system"]) if args.get("rule_system") else None
+        try:
+            effective, effective_id = await effective_rule_system(
+                ctx.tenant_id, requested_key, rule_system, rule_system_id
+            )
+        except UnknownRuleSystemError as exc:
+            return ToolResult(
+                content=json.dumps({"error": "unknown_rule_system", "message": str(exc)})
+            )
+        # The phase's declared allowlist still applies to the session's own system; a
+        # deliberately selected one is governed by its own check types instead, which is
+        # the whole point of selecting it.
+        effective_checks = (
+            legal_check_types if effective.key == rule_system.key else effective.check_types
+        )
 
         actor_fields = await actor_fields_resolver(actor_entity_id)
 
@@ -213,15 +291,15 @@ def make_dice_roller_handler(
                 tenant_id=ctx.tenant_id,
                 session_id=ctx.session_id,
                 event_seq=event_seq,
-                tool_key="dice_roller",
+                tool_key="randomizer",
                 actor_entity_id=actor_entity_id,
                 expression=expression,
                 check_type=check_type,
                 actor_fields=actor_fields,
                 target=target,
-                rule_system=rule_system,
-                rule_system_id=rule_system_id,
-                legal_check_types=legal_check_types,
+                rule_system=effective,
+                rule_system_id=effective_id,
+                legal_check_types=effective_checks,
             )
         except InvalidResolutionError as exc:
             return ToolResult(

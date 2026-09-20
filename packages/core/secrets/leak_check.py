@@ -7,7 +7,7 @@ directive, an author-written directive that gives the game away.
 
 **Q4's badge decision explicitly does not apply here.** Contradicted *narration*
 (`core.resolution.contradiction`, C1.7) gets a UI badge and no regeneration -- a wrong
-dice-total claim is cosmetic and self-correcting (the widget renders the truth straight
+roll-total claim is cosmetic and self-correcting (the widget renders the truth straight
 from `ResolutionRecord`, INV-7). A *leak* is not cosmetic and does not self-correct: once
 a fact is in a delivered reply, it's disclosed, irreversibly. The loss profiles differ
 (style bug vs. irreversible disclosure), so the response differs: regenerate once, then

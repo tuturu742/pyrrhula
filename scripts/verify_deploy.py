@@ -413,8 +413,6 @@ def scenario_exec() -> None:
     print(f"  ✅ exec PASS — synthesis {len(synthesis)} chars, structure terms {hits}, 0 failed")
 
 
-
-
 def _ingest_knowledge(
     tenant: str, token: str, workspace: str, key: str, klass: str, files: list[str]
 ) -> None:
@@ -511,9 +509,12 @@ def scenario_rpg() -> None:
         "join tenant t on t.id=c.tenant_id "
         "where t.slug='rpg' and c.field_path like 'fsm_states.%'"
     )
+    # There is one randomizer; which system it resolved in is the rule_system_id, not
+    # the tool key. A coin flip is a two-band outcome, so that is what identifies one.
     coin_records = _psql(
         "select count(*) from resolution_record r join session x on x.id=r.session_id "
-        "join tenant t on t.id=x.tenant_id where t.slug='rpg' and r.tool_key='coin_flip'"
+        "join tenant t on t.id=x.tenant_id where t.slug='rpg' "
+        "and r.tool_key='randomizer' and r.outcome in ('heads','tails')"
     )
     assert int(characters) >= 2, f"rpg: expected >=2 character entities, got {characters}"
     assert int(resolutions) >= 1, f"rpg: expected >=1 ResolutionRecord, got {resolutions}"
@@ -523,7 +524,7 @@ def scenario_rpg() -> None:
     # M3: the MCP resolution surface -- an honest server-side coin flip persisted a
     # record, and check outcomes drove at least two DIFFERENT state machines.
     assert int(coin_records) >= 1, (
-        f"rpg: expected >=1 coin_flip ResolutionRecord, got {coin_records}"
+        f"rpg: expected >=1 coin-flip ResolutionRecord, got {coin_records}"
     )
     assert int(machines) >= 2, (
         f"rpg: expected >=2 distinct state machines driven by resolutions, got {machines}"

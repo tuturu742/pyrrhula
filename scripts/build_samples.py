@@ -546,11 +546,11 @@ def _karsh_vale_flow() -> dict:
                     "max_tokens": 3000,
                     "history_ratio": 0.3,
                 },
-                "tools": ["dice_roller"],
-                "remote_tools": ["dice_roller", "bfrpg_dice"],
+                "tools": ["randomizer"],
+                "remote_tools": ["randomizer"],
                 "prompt": (
                     "Resolve what the players just attempted. Name the rule you are "
-                    "invoking and the target number, CALL THE DICE TOOL rather than "
+                    "invoking and the target number, CALL THE RANDOMIZER rather than "
                     "imagining a number, and narrate the outcome the roll actually gave "
                     "you -- including when it goes badly. Then hand the scene back."
                 ),
@@ -1095,15 +1095,15 @@ _DOGFOOD = SampleSpec(
 # sample needing a specific ruleset should not require installing one separately to be
 # playable.
 #
-# Mechanics only -- check types, dice grammar, the ability-modifier table as CEL. No
+# Mechanics only -- check types, expression grammar, the ability-modifier table as CEL. No
 # rulebook prose, which is what keeps this a conversion of a system rather than a copy of
 # a text. Attribution travels with it, in the bundle and in the sample's README.
 _BFRPG_RULE_SYSTEM = {
     "key": "basic_fantasy",
     "name": "Basic Fantasy RPG",
-    "dice_grammar": {
+    "expression_grammar": {
         "allowed_sides": [4, 6, 8, 10, 12, 20, 100],
-        "max_dice_count": 10,
+        "max_term_count": 10,
         "allow_keep_drop": True,
     },
     "check_types": [
@@ -1173,8 +1173,10 @@ _BFRPG_RULE_SYSTEM = {
     "validators": [],
 }
 
-_BFRPG_DICE_TOOL = {
-    "key": "bfrpg_dice",
+# The platform ships exactly one randomizer; a ruleset does not bring a second one,
+# it brings the *system* the randomizer resolves in and binds the tool to it.
+_BFRPG_RANDOMIZER_BINDING = {
+    "key": "randomizer",
     "kind": "deterministic",
     "input_schema": {
         "type": "object",
@@ -1196,7 +1198,7 @@ _BFRPG_DICE_TOOL = {
         },
         "required": ["resolution_id", "total", "outcome"],
     },
-    "impl_ref": "builtin:dice_roller",
+    "impl_ref": "builtin:randomizer",
     "validation_ref": "basic_fantasy",
     "determinism": "seeded_random",
 }
@@ -1299,11 +1301,11 @@ def _karsh_vale_sample() -> SampleSpec:
         ),
         flow_key="karsh-vale",
         flow=_karsh_vale_flow(),
-        # The mechanics ride along. `bfrpg_dice` is what the flow names, and its
-        # validation_ref is what selects the system -- so the pair has to travel together
-        # or the tool resolves against whatever the importing tenant happens to have.
+        # The mechanics ride along. The tool binding is what points the one shipped
+        # randomizer at this ruleset -- so the pair has to travel together, or rolls
+        # resolve against whatever system the importing tenant happens to have.
         rule_systems=(_BFRPG_RULE_SYSTEM,),
-        tools=(_BFRPG_DICE_TOOL,),
+        tools=(_BFRPG_RANDOMIZER_BINDING,),
         conduct_rules=(
             "The referee frames and resolves; the players declare. No player character "
             "rolls their own dice or narrates their own success, and no one -- referee "
