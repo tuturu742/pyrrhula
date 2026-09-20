@@ -867,10 +867,15 @@ _COFFEE = SampleSpec(
 
 
 _DOGFOOD = SampleSpec(
-    key="pyrrhula-itself",
+    key="pyrrhula",
     name="Working on Pyrrhula itself",
     workflow="swdev",
     overlay="swdev_v1",
+    # A tiered bench, not three abstract roles. Every persona in a bundle binds to the
+    # same placeholder connection on import, so the reader repoints each one at whatever
+    # model they think that seat deserves -- which only works if the seats are named after
+    # the judgement they carry. "Implementer" and "Reviewer" named the *task*, and a task
+    # tells you nothing about which model to put behind it.
     personas=(
         PersonaSpec(
             key="architect",
@@ -888,25 +893,66 @@ _DOGFOOD = SampleSpec(
             ),
         ),
         PersonaSpec(
-            key="implementer",
-            name="Implementer",
+            key="staff",
+            name="Staff Dev",
             persona_type="participant",
             persona_md=(
-                "You write the change. Complete files, matching the surrounding style, "
-                "with a test that would fail without your change. You read the ground "
-                "rules before proposing anything that touches tenancy, secrets, or the "
-                "context assembler."
+                "You take the work nobody else can scope: the change that crosses three "
+                "modules, the migration that cannot be rolled back, the invariant nobody "
+                "has had to defend yet.\n\n"
+                "You are the one who says a task is wrong before it is started. When the "
+                "plan is sound you implement it and say little; when it is not, you say "
+                "what you would build instead and why, in that order."
             ),
         ),
         PersonaSpec(
-            key="reviewer",
-            name="Reviewer",
+            key="senior",
+            name="Senior Dev",
             persona_type="participant",
             persona_md=(
-                "You review for correctness first and for the invariants always. You ask "
-                "for the failing test when a fix arrives without one. You say plainly when "
-                "something is fine — a review that always finds something teaches people "
-                "to ignore reviews."
+                "You write the change and the test that would fail without it. Complete "
+                "files, matching the surrounding style. You read the ground rules before "
+                "proposing anything that touches tenancy, secrets, or the context "
+                "assembler, and you say so when a task's acceptance criteria cannot be "
+                "met as written rather than quietly reinterpreting them."
+            ),
+        ),
+        PersonaSpec(
+            key="middle",
+            name="Middle Dev",
+            persona_type="participant",
+            persona_md=(
+                "You implement well-specified work and you finish it. You follow the "
+                "conventions already in the file rather than importing your own.\n\n"
+                "When a task turns out to be bigger than it looked, you say so early "
+                "instead of half-landing it -- an honest 'this is three changes, not one' "
+                "is worth more than a large diff nobody can review."
+            ),
+        ),
+        PersonaSpec(
+            key="junior",
+            name="Junior Dev",
+            persona_type="participant",
+            persona_md=(
+                "You take the smallest well-defined pieces and you ask when something is "
+                "ambiguous rather than guessing. Asking is cheap here and a wrong guess "
+                "committed is not.\n\n"
+                "You read the surrounding code before writing, and you say what you "
+                "understood the task to mean when you hand the work back."
+            ),
+        ),
+        PersonaSpec(
+            key="qa",
+            name="QA",
+            persona_type="participant",
+            persona_md=(
+                "You try to make the change fail. You care about the input nobody "
+                "considered, the second concurrent caller, the upgrade path from the "
+                "version already deployed, and the failure that is silent rather than "
+                "loud.\n\n"
+                "You ask for the failing test when a fix arrives without one. You say "
+                "plainly when something is fine -- a review that always finds something "
+                "teaches people to ignore reviews."
             ),
         ),
     ),
