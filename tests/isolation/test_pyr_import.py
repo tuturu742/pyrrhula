@@ -720,3 +720,92 @@ async def test_a_second_import_can_leave_resident_knowledge_alone(
     # And the default is still everything, which is what forks the duplicate.
     await import_bundle(bundle.data, tenant_b, workspace_b, bundle_ref="third")
     assert f"{source_key}-imported" in await source_keys()
+
+
+async def test_a_bundle_carries_the_mechanics_its_flow_resolves_against(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """A sample used to travel without its rules.
+
+    Knowledge, cast and flow all crossed the boundary; the rule system its dice validate
+    against did not, because rule systems and tool definitions lived only in workflow
+    packs. So "import this one-shot and play" meant "install the right pack first" -- and
+    if the importing tenant had a different system under the same name, the rolls quietly
+    resolved against someone else's mechanics.
+
+    The tool is the edge that makes this findable: a flow names tools, and a tool names
+    its rule system through `validation_ref`.
+    """
+    import copy
+
+    from core.process.authoring import create_definition
+    from core.process.dsl.fixtures import MINIMAL_MVP_FLOW
+    from core.resolution.registry import ToolDefinitionSchema, register_tool_definition
+    from core.resolution.rule_system import (
+        RuleSystemDefinitionSchema,
+        create_rule_system,
+        get_rule_system,
+    )
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a = await _workspace_of(tenant_a)
+    await seed_default_scopes(tenant_a, workspace_a)
+    exporter = await _facilitator(tenant_a, workspace_a)
+    await seed_dev_agent(tenant_a, workspace_a)
+
+    system_key = f"sys{uuid.uuid4().hex[:8]}"
+    tool_key = f"tool{uuid.uuid4().hex[:8]}"
+    await create_rule_system(
+        tenant_a,
+        RuleSystemDefinitionSchema(
+            key=system_key,
+            name="Travelling System",
+            dice_grammar={"allowed_sides": [20], "max_dice_count": 1, "allow_keep_drop": False},
+            check_types=["stealth"],
+            outcome_bands=[],
+            modifier_resolver={"stealth": "(fields.dexterity - 10) / 2"},
+            validators=[],
+        ),
+    )
+    await register_tool_definition(
+        tenant_a,
+        ToolDefinitionSchema(
+            key=tool_key,
+            kind="deterministic",
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            impl_ref="builtin:dice_roller",
+            validation_ref=system_key,
+            determinism="seeded_random",
+        ),
+    )
+
+    # A flow that names the tool -- the only reason the exporter knows this workspace
+    # cares about that rule system.
+    flow = copy.deepcopy(MINIMAL_MVP_FLOW)
+    first = next(iter(flow["phases"].values()))  # type: ignore[union-attr,index]
+    first["tools"] = [tool_key]  # type: ignore[index]
+    await create_definition(
+        tenant_a,
+        f"flow{uuid.uuid4().hex[:6]}",
+        "Mechanics carrier",
+        flow,
+        workspace_id=workspace_a,
+    )
+
+    bundle = await export_workspace(
+        exporter, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    assert await get_rule_system(tenant_b, system_key) is None, "precondition: not there yet"
+
+    await import_bundle(bundle.data, tenant_b, workspace_b, bundle_ref="mechanics")
+
+    landed = await get_rule_system(tenant_b, system_key)
+    assert landed is not None, "the flow's rule system did not travel with the bundle"
+    assert landed.check_types == ["stealth"]
+    # Upserted, not forked: a `-imported` rule system is one no validation_ref can reach,
+    # which would validate against whatever else holds the original name.
+    assert await get_rule_system(tenant_b, f"{system_key}-imported") is None

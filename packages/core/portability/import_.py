@@ -339,6 +339,10 @@ async def import_bundle(
         await _import_scopes(files, tenant_id, workspace_id, report)
     if _do("flows"):
         await _import_process(files, tenant_id, workspace_id, report)
+    # Mechanics after flows, for the same reason they export after them: a flow names the
+    # tools, and a tool names its rule system.
+    if _do("rules"):
+        await _import_rules(files, tenant_id, workspace_id, report)
     if _do("vocabulary"):
         await _import_vocabulary(files, tenant_id, workspace_id, report)
     # Last, and deliberately: a secret is attached to a persona or an entity and held by
@@ -1001,6 +1005,61 @@ async def _import_scopes(
             )
             existing.add(key)
             report.imported.append(f"scope:{key} ({len(principal_ids)} member(s))")
+
+
+async def _import_rules(
+    files: dict[str, bytes],
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    report: ImportReport,
+) -> None:
+    """Rule systems and the tool definitions that bind them.
+
+    Both are upserts by ``(tenant_id, key)`` rather than forks, and that is a deliberate
+    departure from everything else in this module. A forked ruleset is not a second
+    opinion, it is a broken one: a tool names its rule system by ``validation_ref``, a
+    string key, so a `basic_fantasy-imported` row would be a system nothing can reach
+    while the tool that meant to reach it silently validates against whatever holds the
+    original name. Forking here would produce exactly the quiet wrong answer the rest of
+    the forking policy exists to avoid.
+
+    That trade is safe in a way the content sections are not: mechanics are arithmetic --
+    dice grammar, check types, modifier expressions -- with no authored prose to lose and
+    nothing scope-bearing to leak. Re-importing a sample updates its mechanics in place,
+    which is what someone re-importing a sample means.
+
+    ``impl_ref`` is carried but never resolved to anything: core.resolution.registry is
+    explicit that it is descriptive, and dispatch is by tool key against handlers the
+    composition root registered. A bundle cannot introduce behaviour here, only name
+    behaviour that already exists -- which is what makes it safe for a .pyr to carry a
+    tool at all.
+    """
+    from core.resolution.registry import ToolDefinitionSchema, register_tool_definition
+    from core.resolution.rule_system import RuleSystemDefinitionSchema, create_rule_system
+
+    for path in sorted(files):
+        if not path.startswith("rules/rule_system_") or not path.endswith(".json"):
+            continue
+        try:
+            definition = RuleSystemDefinitionSchema.model_validate(_json(files[path]))
+        except Exception as exc:  # noqa: BLE001 -- a bad ruleset is content, not tampering
+            report.skipped.append(f"rule system {path}: {str(exc)[:160]}")
+            continue
+        await create_rule_system(tenant_id, definition)
+        report.imported.append(f"rule system: {definition.key}")
+
+    # Tools after rule systems: a tool's validation_ref names one, and landing the tool
+    # first would leave a window where it points at nothing.
+    for path in sorted(files):
+        if not path.startswith("rules/tool_") or not path.endswith(".json"):
+            continue
+        try:
+            tool = ToolDefinitionSchema.model_validate(_json(files[path]))
+        except Exception as exc:  # noqa: BLE001
+            report.skipped.append(f"tool {path}: {str(exc)[:160]}")
+            continue
+        await register_tool_definition(tenant_id, tool)
+        report.imported.append(f"tool: {tool.key}")
 
 
 async def _import_process(

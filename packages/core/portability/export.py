@@ -103,6 +103,10 @@ EXPORT_SECTIONS = frozenset(
         "vocabulary",
         "sessions",
         "connections",
+        # Rule systems + the tool definitions that bind them. Mechanics travel with the
+        # game: without this a bundle's dice resolve against whatever the importing tenant
+        # happened to have.
+        "rules",
     }
 )
 DEFAULT_SECTIONS = EXPORT_SECTIONS - {"connections"}
@@ -234,6 +238,10 @@ async def export_workspace(
         await _add_connections(writer, tenant_id, workspace_id, encryptor=encryptor)
     if "process" in opts.sections:
         await _add_process(writer, tenant_id, workspace_id)
+    # After process: the tools a bundle carries are the ones its flows name, so the
+    # definitions have to be readable before this can know what to look for.
+    if "rules" in opts.sections:
+        await _add_rules(writer, tenant_id, workspace_id)
     if "secrets" in opts.sections:
         await _add_secrets(
             writer,
@@ -618,6 +626,78 @@ async def _add_process(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id:
                 "version": definition.version,
                 "name": definition.name,
                 "definition": definition.definition,
+            },
+        )
+
+
+async def _add_rules(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> None:
+    """The mechanics a bundle needs to resolve its own dice: the tool definitions this
+    workspace's flows name, and the rule systems those tools validate against.
+
+    Without this a sample could carry a setting, a cast and a flow, and then resolve every
+    roll against whatever generic system happened to exist in the importing tenant -- so
+    "run this one-shot" meant "install a workflow pack first, and hope it is the right
+    one". Mechanics are the half of a game that has to travel with it.
+
+    Scoped to what the workspace's process definitions actually reference, not to every
+    row in the tenant: rule systems and tool definitions are tenant-wide (no workspace_id
+    on either table), so exporting them wholesale would put another workspace's rulesets
+    in this bundle. A tool names its rule system through ``validation_ref``; that is the
+    edge this walks.
+
+    Neither carries anything sensitive -- a tool definition is declarative metadata whose
+    ``impl_ref`` is descriptive and never evaluated (see core.resolution.registry), and a
+    rule system is arithmetic. There is no credential or scope-bearing content here, which
+    is why this rides in the default sections rather than behind the encryption gate.
+    """
+    from core.resolution.registry import list_tool_definitions
+    from core.resolution.rule_system import get_rule_system
+
+    wanted: set[str] = set()
+    for definition in await list_definitions(tenant_id, workspace_id=workspace_id):
+        for phase in (definition.definition.get("phases") or {}).values():
+            if not isinstance(phase, dict):
+                continue
+            for key in phase.get("tools") or []:
+                wanted.add(str(key))
+            for key in phase.get("remote_tools") or []:
+                wanted.add(str(key))
+    if not wanted:
+        return
+
+    rule_system_keys: set[str] = set()
+    for tool in await list_tool_definitions(tenant_id):
+        if tool.key not in wanted:
+            continue
+        writer.add_json(
+            f"rules/tool_{tool.key}.json",
+            {
+                "key": tool.key,
+                "kind": tool.kind,
+                "input_schema": tool.input_schema,
+                "output_schema": tool.output_schema,
+                "impl_ref": tool.impl_ref,
+                "validation_ref": tool.validation_ref,
+                "determinism": tool.determinism,
+            },
+        )
+        if tool.validation_ref:
+            rule_system_keys.add(str(tool.validation_ref))
+
+    for key in sorted(rule_system_keys):
+        row = await get_rule_system(tenant_id, key)
+        if row is None:
+            continue
+        writer.add_json(
+            f"rules/rule_system_{row.key}.json",
+            {
+                "key": row.key,
+                "name": row.name,
+                "dice_grammar": row.dice_grammar,
+                "check_types": row.check_types,
+                "outcome_bands": row.outcome_bands,
+                "modifier_resolver": row.modifier_resolver,
+                "validators": row.validators,
             },
         )
 

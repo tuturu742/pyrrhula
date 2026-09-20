@@ -27,6 +27,7 @@ const SECTION_ORDER = [
   "personas",
   "scopes",
   "flows",
+  "rules",
   "vocabulary",
   "secrets",
 ] as const;
@@ -38,6 +39,7 @@ const SECTION_LABEL: Record<string, string> = {
   personas: "Personas",
   scopes: "Scope bands",
   flows: "Flows",
+  rules: "Rule systems and dice tools",
   vocabulary: "Vocabulary overlays",
   secrets: "Secrets",
 };

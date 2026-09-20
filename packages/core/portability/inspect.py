@@ -36,6 +36,7 @@ SECTIONS: tuple[str, ...] = (
     "personas",
     "scopes",
     "flows",
+    "rules",
     "vocabulary",
     "secrets",
 )
@@ -114,9 +115,7 @@ async def _resident_keys(tenant_id: uuid.UUID) -> dict[str, set[str]]:
     from core.process.models import ProcessDefinitionRow
 
     async with tenant_scope(tenant_id) as session:
-        knowledge = set(
-            (await session.execute(select(KnowledgeSource.key))).scalars()
-        )
+        knowledge = set((await session.execute(select(KnowledgeSource.key))).scalars())
         personas = set((await session.execute(select(Persona.key))).scalars())
         flows = set((await session.execute(select(ProcessDefinitionRow.key))).scalars())
     return {"knowledge": knowledge, "personas": personas, "flows": flows}
@@ -158,6 +157,7 @@ async def inspect_bundle(
         "scopes": _simple_items(files, "scopes/"),
         "entities": _simple_items(files, "entities/"),
         "secrets": _simple_items(files, "secrets/"),
+        "rules": _simple_items(files, "rules/"),
     }
     session_refs = sorted(
         {p.split("/")[1] for p in files if p.startswith("sessions/") and "/" in p[9:]}
