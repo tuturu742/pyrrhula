@@ -1,0 +1,76 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# A starting point for a cluster that is NOT the single-node k3s the dev overlays assume.
+# Copy this directory, change the four marked values, and apply it instead:
+#
+#   cp -r deploy/k8s/overlays/cluster deploy/k8s/overlays/mycluster
+#   $EDITOR deploy/k8s/overlays/mycluster/kustomization.yaml
+#   kubectl apply -k deploy/k8s/overlays/mycluster
+#
+# dev-up.sh is not involved: it builds, imports into k3s and applies overlays/dev. On a
+# real cluster you push images from CI and apply this. See deploy/k8s/README.md,
+# "Other clusters", for the whole flow including secrets and the migration Job.
+
+resources:
+  - ../../base
+
+# (1) IMAGES. The base refers to `localhost/pyrrhula:dev`, which exists only inside a
+# local containerd. Point both at a registry your nodes can actually pull from.
+images:
+  - name: localhost/pyrrhula
+    newName: registry.example.com/pyrrhula
+    newTag: "1.0.0"
+  - name: localhost/pyrrhula-web
+    newName: registry.example.com/pyrrhula-web
+    newTag: "1.0.0"
+
+patches:
+  # (2) INGRESS CLASS AND HOST. The base Ingress names neither, which works on k3s only
+  # because traefik is installed as the *default* IngressClass and `*.localhost` resolves
+  # to 127.0.0.1 in browsers. On a cluster where no IngressClass is marked default --
+  # common on EKS, GKE, and any hand-installed nginx -- no controller claims the Ingress,
+  # nothing serves it, and there is no error anywhere to explain why.
+  - target:
+      kind: Ingress
+      name: pyrrhula-web
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: nginx
+      - op: replace
+        path: /spec/rules/0/host
+        value: pyrrhula.example.com
+
+  # (3) STORAGE CLASS. The claims name none, so they bind through whatever the cluster
+  # marks default. Managed clusters have one (gp3, standard-rwo); bare-metal often has
+  # none at all and the claims pend forever. Name it rather than hoping.
+  #
+  # ReadWriteOnce is deliberate and load-bearing: the api and the worker share `blobs`
+  # and `hf-cache`, and a podAffinity in the base keeps them on one node because of it.
+  # If you switch these to a ReadWriteMany class (EFS, Filestore, NFS, Longhorn), change
+  # accessModes here too and drop that affinity -- then the two can spread.
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      - op: add
+        path: /spec/storageClassName
+        value: standard
+
+# (4) THE PUBLIC URL. Preview share links and OAuth-style redirects are built from this,
+# so it has to be what a browser types, not an in-cluster name. Merging rather than
+# replacing keeps every other literal the base sets.
+configMapGenerator:
+  - name: pyrrhula-config
+    namespace: pyrrhula
+    behavior: merge
+    literals:
+      - PYRRHULA_PUBLIC_BASE_URL=https://pyrrhula.example.com
+
+# Secrets are NOT generated here. Create them out of band -- a sealed secret, an external
+# secrets operator, or `kubectl create secret generic pyrrhula-secrets --from-env-file=` --
+# so that cluster credentials never land in a file next to the manifests. The keys are the
+# same ones deploy/k8s/overlays/dev/secrets.env lists.
+
+generatorOptions:
+  disableNameSuffixHash: true

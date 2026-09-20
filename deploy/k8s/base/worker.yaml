@@ -54,6 +54,29 @@ spec:
       labels:
         app: pyrrhula-worker
     spec:
+      # The worker must land on the SAME NODE as the api, because the two share the
+      # `blobs` and `hf-cache` claims and those are ReadWriteOnce -- one node may mount
+      # them at a time. On a single-node cluster (k3s, kind, minikube) this is satisfied
+      # for free and changes nothing. On a multi-node cluster without it the scheduler is
+      # free to split them, and whichever pod starts second sits in ContainerCreating
+      # with a Multi-Attach error: no failure at apply time, nothing in the events that
+      # names the cause, just a pod that never starts.
+      #
+      # `required`, not `preferred`: a soft rule would let the scheduler place the worker
+      # anywhere under pressure and reintroduce exactly the hang this prevents, at the
+      # worst moment. The worker stays Pending until an api pod is scheduled, which on a
+      # fresh install is a few seconds and is visible in `kubectl get pods`.
+      #
+      # The real fix for a cluster that wants them apart is ReadWriteMany storage (EFS,
+      # Filestore, NFS, Longhorn); then this block can go and the claims' accessModes
+      # change with it. See deploy/k8s/README.md, "Other clusters".
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: pyrrhula-api
       # Service env-var injection (PYRRHULA_ADMIN_PORT=tcp://...) collides with
       # pydantic-settings' PYRRHULA_ prefix -- observed live as a worker crashloop.
       enableServiceLinks: false

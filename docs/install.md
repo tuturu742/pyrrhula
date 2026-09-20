@@ -117,9 +117,12 @@ embedding mode once the model cache is warm.
 - **First boot** downloads the 2.2 GB embedding model into the cache volume — the
   first assistant/knowledge call is slow once, then never again.
 - **Upgrade**: `git pull && ./install.sh k8s`.
+- **Multi-node**: the api and worker share ReadWriteOnce volumes, so a `podAffinity`
+  keeps them on one node. Spreading them needs ReadWriteMany storage — see below.
 - **Engine-only mode** (app stays on compose, agents execute on a cluster) and
-  **other clusters** (non-k3s: push images to a registry, adjust image refs):
-  `deploy/k8s/README.md`.
+  **other clusters** (non-k3s: registry images, ingress class, storage class, the
+  single-node constraint): `deploy/k8s/README.md`, *Other clusters*, with a copyable
+  overlay at `deploy/k8s/overlays/cluster`.
 
 ## aws (ECS Fargate)
 

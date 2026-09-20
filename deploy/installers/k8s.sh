@@ -2,7 +2,8 @@
 # Kubernetes installer: prereq checks, optional dashboard, then the dev-up flow
 # (build images -> import into k3s -> secrets -> apply -> migrate). Built and
 # verified against single-node k3s; any conformant cluster works with a reachable
-# image registry (see docs/install.md "Other clusters").
+# image registry -- see deploy/k8s/README.md, "Other clusters", and the copyable
+# overlay at deploy/k8s/overlays/cluster.
 #
 #   deploy/installers/k8s.sh [--check] [--with-dashboard]
 set -euo pipefail
@@ -35,8 +36,38 @@ K3S=""
 command -v k3s >/dev/null && K3S=1
 if [ -z "$K3S" ]; then
   echo "   note: no local k3s binary -- image import is k3s-specific. On other clusters,"
-  echo "   push the images to a registry your nodes can pull from and update the image"
-  echo "   refs in deploy/k8s/base (docs/install.md, 'Other clusters')."
+  echo "   push the images to a registry your nodes can pull from and apply the cluster"
+  echo "   overlay instead (deploy/k8s/README.md, 'Other clusters')."
+fi
+
+# Two cluster defaults the base manifests rely on without naming. k3s provides both, so
+# neither was ever checked -- and on a cluster missing them the failure is silent in the
+# way that wastes the most time: the Ingress is simply never claimed, or the claims never
+# bind, with no error that says why. Warn rather than fail: a cluster can be fine with
+# neither if the operator is applying their own overlay.
+if ! kubectl get ingressclass -o jsonpath='{.items[*].metadata.annotations.ingressclass\.kubernetes\.io/is-default-class}' 2>/dev/null | grep -q true; then
+  echo "   WARNING: no IngressClass is marked default in this cluster."
+  echo "   The base Ingress names no class, so nothing will claim it and the UI will not"
+  echo "   be reachable -- with no error anywhere. Set spec.ingressClassName (see"
+  echo "   deploy/k8s/overlays/cluster) or mark one of these default:"
+  kubectl get ingressclass --no-headers 2>/dev/null | sed 's/^/     /' || echo "     (none installed at all)"
+fi
+if ! kubectl get storageclass -o jsonpath='{.items[*].metadata.annotations.storageclass\.kubernetes\.io/is-default-class}' 2>/dev/null | grep -q true; then
+  echo "   WARNING: no StorageClass is marked default in this cluster."
+  echo "   The volume claims name none, so they will stay Pending forever. Set"
+  echo "   spec.storageClassName (see deploy/k8s/overlays/cluster) or mark one default."
+fi
+
+# ReadWriteOnce claims shared by the api and the worker are what the base's podAffinity
+# exists for. It keeps them on one node, which is correct but caps the stack at a single
+# node's worth of capacity -- worth saying out loud before someone wonders why a 5-node
+# cluster runs everything in one place.
+NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d ' ')
+if [ "${NODES:-1}" -gt 1 ]; then
+  echo "   note: $NODES nodes. The api and worker share ReadWriteOnce volumes, so a"
+  echo "   podAffinity pins them to one node together. For them to spread, switch"
+  echo "   blobs/hf-cache to a ReadWriteMany class and drop that affinity"
+  echo "   (deploy/k8s/README.md, 'Other clusters')."
 fi
 
 if [ "$CHECK_ONLY" = 1 ]; then say "prerequisites OK"; exit 0; fi
