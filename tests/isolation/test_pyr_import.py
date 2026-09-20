@@ -657,3 +657,66 @@ async def test_an_imported_source_is_openable_not_just_retrievable(
             assert source.current_version_id in {e.version_id for e in entries}, (
                 f"source {source.key!r} points at a version none of its entries belong to"
             )
+
+
+async def test_a_second_import_can_leave_resident_knowledge_alone(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Import forks colliding keys rather than overwriting, which is what makes a first
+    import safe and what doubles a workspace on the second one: re-importing an updated
+    bundle forked every unchanged source to `<key>-imported`.
+
+    Nothing about that is fixable inside the import without giving up the property. What
+    was missing is being able to say which sections to land -- so the second import of an
+    updated roster brings the personas and leaves the knowledge where it is.
+    """
+    from core.portability.inspect import inspect_bundle
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a = await _workspace_of(tenant_a)
+    await seed_default_scopes(tenant_a, workspace_a)
+    exporter = await _facilitator(tenant_a, workspace_a)
+    await seed_dev_agent(tenant_a, workspace_a)
+    source_key = f"src-{uuid.uuid4().hex[:8]}"
+    await _seed_source(
+        tenant_a, workspace_a, key=source_key, bodies={"a-rule": "Rules travel in bundles."}
+    )
+    bundle = await export_workspace(
+        exporter, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    await seed_dev_agent(tenant_b, workspace_b)
+
+    async def source_keys() -> list[str]:
+        async with tenant_scope(tenant_b) as session:
+            return sorted((await session.execute(select(KnowledgeSource.key))).scalars())
+
+    # Nothing of it is here yet, and the inspection says so without writing anything.
+    before = await inspect_bundle(bundle.data, tenant_b)
+    assert source_key in [i.key for i in before.sections["knowledge"]]
+    assert not any(i.collides for i in before.sections["knowledge"])
+    assert source_key not in await source_keys(), "inspecting must not import"
+
+    await import_bundle(bundle.data, tenant_b, workspace_b, bundle_ref="first")
+    assert source_key in await source_keys()
+
+    # Now it collides, and the inspection is what tells a reader that before they press
+    # the button rather than after the workspace has doubled.
+    second = await inspect_bundle(bundle.data, tenant_b)
+    assert [i.collides for i in second.sections["knowledge"] if i.key == source_key] == [True]
+
+    landed = await source_keys()
+    await import_bundle(
+        bundle.data,
+        tenant_b,
+        workspace_b,
+        bundle_ref="second",
+        sections=frozenset({"personas"}),
+    )
+    assert await source_keys() == landed, "a deselected section must not fork a single row"
+
+    # And the default is still everything, which is what forks the duplicate.
+    await import_bundle(bundle.data, tenant_b, workspace_b, bundle_ref="third")
+    assert f"{source_key}-imported" in await source_keys()

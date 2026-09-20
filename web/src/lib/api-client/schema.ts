@@ -2302,7 +2302,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preview Index */
+        /**
+         * Preview Index
+         * @description Redirect to the trailing slash, not to `index.html`.
+         *
+         *     The slash is what makes a page's relative asset paths resolve under this preview
+         *     instead of one level up, which is why a redirect is here at all. Naming `index.html`
+         *     did that too, but it also assumed the thing being previewed is a static site: ttyd
+         *     serves its page at `/` and has no `index.html`, so a terminal preview's share link
+         *     opened to a 404 while the terminal behind it was running perfectly.
+         */
         get: operations["preview_index_p__token__get"];
         put?: never;
         post?: never;
@@ -2757,6 +2766,29 @@ export interface paths {
         get: operations["download_export_export__job_id__download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/export/import/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect Bundle Endpoint
+         * @description What is in this file, and what of it is already here. Writes nothing.
+         *
+         *     The bundle is opened and its integrity map verified exactly as the import does:
+         *     describing a file the importer would then refuse is worse than refusing now.
+         */
+        post: operations["inspect_bundle_endpoint_export_import_inspect_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4044,6 +4076,8 @@ export interface components {
             file: string;
             /** Password */
             password?: string | null;
+            /** Sections */
+            sections?: string | null;
         };
         /** Body_import_card_endpoint_export_cards_import_post */
         Body_import_card_endpoint_export_cards_import_post: {
@@ -4059,6 +4093,13 @@ export interface components {
             /** Scope Key */
             scope_key: string;
         };
+        /** Body_inspect_bundle_endpoint_export_import_inspect_post */
+        Body_inspect_bundle_endpoint_export_import_inspect_post: {
+            /** File */
+            file: string;
+            /** Password */
+            password?: string | null;
+        };
         /** Body_upload_plugin_endpoint_admin_plugin_repositories_upload_post */
         Body_upload_plugin_endpoint_admin_plugin_repositories_upload_post: {
             /** Name */
@@ -4070,6 +4111,34 @@ export interface components {
         Body_upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post: {
             /** File */
             file: string;
+        };
+        /** BundleInspectionResponse */
+        BundleInspectionResponse: {
+            /** Tenant Ref */
+            tenant_ref: string;
+            /** Workflow Key */
+            workflow_key: string;
+            /** App Version */
+            app_version: string;
+            /** Exported At */
+            exported_at: string;
+            /** Encrypted */
+            encrypted: boolean;
+            /** Collisions */
+            collisions: number;
+            /** Sections */
+            sections: {
+                [key: string]: components["schemas"]["BundleItemResponse"][];
+            };
+        };
+        /** BundleItemResponse */
+        BundleItemResponse: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Collides */
+            collides: boolean;
         };
         /** CapabilitiesResponse */
         CapabilitiesResponse: {
@@ -5805,6 +5874,19 @@ export interface components {
             build_cmd?: string | null;
             /** Artifact Name */
             artifact_name?: string | null;
+            /** Preview Image */
+            preview_image?: string | null;
+            /** Preview Cmd */
+            preview_cmd?: string | null;
+            /** Preview Port */
+            preview_port?: number | null;
+            /**
+             * Preview Env
+             * @default {}
+             */
+            preview_env: {
+                [key: string]: string;
+            };
             /**
              * Created At
              * Format: date-time
@@ -13135,6 +13217,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_bundle_endpoint_export_import_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_inspect_bundle_endpoint_export_import_inspect_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleInspectionResponse"];
                 };
             };
             /** @description Validation Error */

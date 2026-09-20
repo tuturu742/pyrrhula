@@ -8,34 +8,97 @@ import { Button } from "@/components/ui/button";
 /** The import half of portability (§16.6): upload a .pyr bundle (synchronous verdict —
  * it lands or is refused with the broken link named), then clear the quarantine queue
  * one entry at a time. Both endpoints existed with no screen. */
+type BundleItem = { key: string; name: string; collides: boolean };
+type Inspection = {
+  tenant_ref: string;
+  workflow_key: string;
+  app_version: string;
+  exported_at: string;
+  encrypted: boolean;
+  collisions: number;
+  sections: Record<string, BundleItem[]>;
+};
+
+/** The order the importer lands them in, which is also the order they read in. */
+const SECTION_ORDER = [
+  "knowledge",
+  "entities",
+  "sessions",
+  "personas",
+  "scopes",
+  "flows",
+  "vocabulary",
+  "secrets",
+] as const;
+
+const SECTION_LABEL: Record<string, string> = {
+  knowledge: "Knowledge sources",
+  entities: "Entities and schemas",
+  sessions: "Sessions and history",
+  personas: "Personas",
+  scopes: "Scope bands",
+  flows: "Flows",
+  vocabulary: "Vocabulary overlays",
+  secrets: "Secrets",
+};
+
 export function ImportPanel({ workspaceId }: { workspaceId: string }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  const [inspection, setInspection] = useState<Inspection | null>(null);
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
   const token = useAuthStore((s) => s.token);
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const queryClient = useQueryClient();
 
-  const importBundle = useMutation({
-    mutationFn: async (file: File) => {
-      // multipart upload — the generated client doesn't cover FormData, plain fetch does
-      const form = new FormData();
-      form.append("file", file);
-      if (password) form.append("password", password);
-      const response = await fetch(`/api/export/import?workspace_id=${workspaceId}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-Pyrrhula-Tenant": tenantSlug ?? "",
-        },
-        body: form,
-      });
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(detail.slice(0, 300));
-      }
-      return response.json();
+  const post = async (path: string, extra?: (form: FormData) => void) => {
+    const file = fileInput.current?.files?.[0];
+    if (!file) throw new Error("Choose a .pyr file first.");
+    // multipart upload — the generated client doesn't cover FormData, plain fetch does
+    const form = new FormData();
+    form.append("file", file);
+    if (password) form.append("password", password);
+    extra?.(form);
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "X-Pyrrhula-Tenant": tenantSlug ?? "" },
+      body: form,
+    });
+    if (!response.ok) throw new Error((await response.text()).slice(0, 300));
+    return response.json();
+  };
+
+  const inspect = useMutation({
+    mutationFn: async () => (await post("/api/export/import/inspect")) as Inspection,
+    onSuccess: (data) => {
+      setInspection(data);
+      setResult(null);
+      // Everything on by default EXCEPT what is already here. Import forks a colliding
+      // key rather than overwriting it, so re-importing an updated bundle with the
+      // defaults doubles every unchanged section -- which is the thing this preview
+      // exists to stop happening silently.
+      setChosen(
+        new Set(
+          SECTION_ORDER.filter((name) => {
+            const items = data.sections[name] ?? [];
+            return items.length > 0 && !items.every((i) => i.collides);
+          }),
+        ),
+      );
     },
+    onError: (e) => {
+      setInspection(null);
+      setResult(String(e));
+      toast.error("Could not read that bundle.");
+    },
+  });
+
+  const importBundle = useMutation({
+    mutationFn: async () =>
+      post("/api/export/import?workspace_id=" + workspaceId, (form) => {
+        if (inspection) form.append("sections", [...chosen].join(","));
+      }),
     onSuccess: (data) => {
       setResult(JSON.stringify(data, null, 2));
       toast.success("Bundle imported.");
@@ -46,6 +109,13 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
       toast.error("Import refused — see the details below.");
     },
   });
+
+  const toggle = (name: string) => {
+    const next = new Set(chosen);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setChosen(next);
+  };
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border p-4">
@@ -61,6 +131,10 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
           type="file"
           accept=".pyr,.tar.gz,.tgz"
           className="text-sm"
+          onChange={() => {
+            setInspection(null);
+            setResult(null);
+          }}
         />
         <input
           type="password"
@@ -72,15 +146,80 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
         />
         <Button
           variant="outline"
-          disabled={importBundle.isPending}
-          onClick={() => {
-            const file = fileInput.current?.files?.[0];
-            if (file) importBundle.mutate(file);
-          }}
+          disabled={inspect.isPending}
+          onClick={() => inspect.mutate()}
         >
-          {importBundle.isPending ? "Importing…" : "Import"}
+          {inspect.isPending ? "Reading…" : "Inspect"}
+        </Button>
+        <Button
+          variant="outline"
+          // Nothing ticked must never reach the server: an empty `sections` field arrives
+          // as absent, and absent means "import everything" -- so the one click that
+          // clearly means "none of it" would otherwise do the most.
+          disabled={importBundle.isPending || (inspection !== null && chosen.size === 0)}
+          onClick={() => importBundle.mutate()}
+        >
+          {importBundle.isPending
+            ? "Importing…"
+            : inspection
+              ? chosen.size === 0
+                ? "Nothing selected"
+                : `Import ${chosen.size} of ${SECTION_ORDER.filter((n) => (inspection.sections[n] ?? []).length).length}`
+              : "Import everything"}
         </Button>
       </div>
+
+      {inspection && (
+        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+          <p className="text-xs text-muted-foreground">
+            From <code>{inspection.tenant_ref.slice(0, 8)}</code>
+            {inspection.workflow_key ? ` · ${inspection.workflow_key}` : ""} · exported{" "}
+            {inspection.exported_at.slice(0, 10)}
+            {inspection.collisions > 0 && (
+              <>
+                {" · "}
+                <span className="text-amber-600 dark:text-amber-400">
+                  {inspection.collisions} already here
+                </span>
+              </>
+            )}
+          </p>
+          {SECTION_ORDER.map((name) => {
+            const items = inspection.sections[name] ?? [];
+            if (items.length === 0) return null;
+            const already = items.filter((i) => i.collides).length;
+            return (
+              <label key={name} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={chosen.has(name)}
+                  onChange={() => toggle(name)}
+                />
+                <span>
+                  <span className="font-medium">{SECTION_LABEL[name] ?? name}</span>{" "}
+                  <span className="text-xs text-muted-foreground">({items.length})</span>
+                  {already > 0 && (
+                    <span className="ml-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400">
+                      {already} already here — importing forks a copy
+                    </span>
+                  )}
+                  <span className="block text-xs text-muted-foreground">
+                    {items.map((i) => i.name || i.key).join(", ")}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+          {chosen.has("secrets") && !chosen.has("personas") && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Secrets are held by personas. Without personas they are skipped rather than
+              imported unreachable.
+            </p>
+          )}
+        </div>
+      )}
+
       {result && (
         <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 text-xs">{result}</pre>
       )}

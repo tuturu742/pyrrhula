@@ -266,6 +266,7 @@ async def import_bundle(
     permission_service: PermissionService | None = None,
     moderation_provider: ModerationProvider | None = None,
     embedding_provider: EmbeddingProvider | None = None,
+    sections: frozenset[str] | None = None,
 ) -> ImportReport:
     """The whole import, in order: open, verify, upcast, verify chains, then write.
 
@@ -273,7 +274,21 @@ async def import_bundle(
     half-imported bundle whose second half failed verification is worse than a refused
     one, because it leaves a tenant with content nobody chose and no obvious way to tell
     which rows came from where.
+
+    ``sections`` limits what lands; ``None`` imports everything, which is what every
+    caller before this did and still means. It exists because import is additive by
+    design -- colliding keys fork rather than overwrite -- and that property, which makes
+    a first import safe, is exactly what doubles a workspace on the second one. Being
+    able to say "just the personas" is the difference between re-importing an updated
+    bundle and rebuilding a workspace by hand. Verification still covers the whole file:
+    a bundle is accepted or refused as a unit, and choosing part of it is not a reason to
+    check less of it.
     """
+    wanted = None if sections is None else frozenset(sections)
+
+    def _do(section: str) -> bool:
+        return wanted is None or section in wanted
+
     from core.portability.crypto import decrypt_bundle, is_encrypted
 
     if is_encrypted(data):
@@ -302,32 +317,46 @@ async def import_bundle(
 
     report = ImportReport()
     await _adopt_workspace_settings(tenant_id, workspace_id, files, report)
-    await _import_knowledge(files, tenant_id, workspace_id, report, bundle_ref=bundle_ref)
-    await _import_schemas_and_entities(
-        files, tenant_id, workspace_id, report, bundle_ref=bundle_ref
-    )
-    await _import_sessions(files, tenant_id, workspace_id, report)
-    await _import_personas(
-        files, tenant_id, workspace_id, report, encryptor=encryptor, manifest=manifest
-    )
+    if _do("knowledge"):
+        await _import_knowledge(files, tenant_id, workspace_id, report, bundle_ref=bundle_ref)
+    if _do("entities"):
+        await _import_schemas_and_entities(
+            files, tenant_id, workspace_id, report, bundle_ref=bundle_ref
+        )
+    if _do("sessions"):
+        await _import_sessions(files, tenant_id, workspace_id, report)
+    if _do("personas"):
+        await _import_personas(
+            files, tenant_id, workspace_id, report, encryptor=encryptor, manifest=manifest
+        )
     # After personas (their principals are what a band's membership resolves to) and
     # before nothing in particular -- knowledge already landed carrying its scope_key.
-    await _import_scopes(files, tenant_id, workspace_id, report)
-    await _import_process(files, tenant_id, workspace_id, report)
-    await _import_vocabulary(files, tenant_id, workspace_id, report)
+    #
+    # A band whose members were not imported resolves to nobody, which is why scopes
+    # follow personas rather than standing alone: deselecting personas and keeping scopes
+    # produces empty bands, not an error. The UI says so; the importer does not guess.
+    if _do("scopes"):
+        await _import_scopes(files, tenant_id, workspace_id, report)
+    if _do("flows"):
+        await _import_process(files, tenant_id, workspace_id, report)
+    if _do("vocabulary"):
+        await _import_vocabulary(files, tenant_id, workspace_id, report)
     # Last, and deliberately: a secret is attached to a persona or an entity and held by
-    # a persona, so everything it points at has to exist before it can be resolved.
-    await _import_secrets(
-        files,
-        tenant_id,
-        workspace_id,
-        report,
-        encryptor=encryptor,
-        importing_principal_id=importing_principal_id,
-        permission_service=permission_service,
-        moderation_provider=moderation_provider,
-        embedding_provider=embedding_provider,
-    )
+    # a persona, so everything it points at has to exist before it can be resolved --
+    # which is also why it is skipped when either was left out rather than importing a
+    # secret that can never be disclosed to anyone.
+    if _do("secrets") and _do("personas"):
+        await _import_secrets(
+            files,
+            tenant_id,
+            workspace_id,
+            report,
+            encryptor=encryptor,
+            importing_principal_id=importing_principal_id,
+            permission_service=permission_service,
+            moderation_provider=moderation_provider,
+            embedding_provider=embedding_provider,
+        )
     return report
 
 

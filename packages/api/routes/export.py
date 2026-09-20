@@ -205,11 +205,75 @@ class QuarantinedEntryResponse(BaseModel):
     reason: str | None
 
 
+class BundleItemResponse(BaseModel):
+    key: str
+    name: str
+    # Already present in this tenant. Importing anyway is safe -- the incoming object
+    # forks to `<key>-imported` and nothing resident is touched -- but it is how a
+    # workspace doubles on a second import, so it is said before rather than after.
+    collides: bool
+
+
+class BundleInspectionResponse(BaseModel):
+    tenant_ref: str
+    workflow_key: str
+    app_version: str
+    exported_at: str
+    encrypted: bool
+    collisions: int
+    sections: dict[str, list[BundleItemResponse]]
+
+
+@router.post("/import/inspect")
+async def inspect_bundle_endpoint(
+    file: UploadFile = File(...),
+    password: str | None = Form(default=None),
+    ctx: RequestContext = Depends(get_request_context),
+) -> BundleInspectionResponse:
+    """What is in this file, and what of it is already here. Writes nothing.
+
+    The bundle is opened and its integrity map verified exactly as the import does:
+    describing a file the importer would then refuse is worse than refusing now."""
+    from core.portability.inspect import inspect_bundle
+
+    data = await file.read()
+    try:
+        found = await inspect_bundle(
+            data, ctx.tenant_id, password=password, encryptor=get_encryptor()
+        )
+    except WrongPasswordError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except BundleIntegrityError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except UnsupportedFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    return BundleInspectionResponse(
+        tenant_ref=found.tenant_ref,
+        workflow_key=found.workflow_key,
+        app_version=found.app_version,
+        exported_at=found.exported_at,
+        encrypted=found.encrypted,
+        collisions=found.collisions,
+        sections={
+            name: [BundleItemResponse(key=i.key, name=i.name, collides=i.collides) for i in items]
+            for name, items in found.sections.items()
+        },
+    )
+
+
 @router.post("/import", status_code=201)
 async def import_bundle_endpoint(
     workspace_id: uuid.UUID,
     file: UploadFile = File(...),
     password: str | None = Form(default=None),
+    # Comma-separated section names (see core.portability.inspect.SECTIONS). Absent means
+    # all of them, which is what every caller before this meant and still means.
+    #
+    # An *empty* value is indistinguishable from absent here -- a multipart field with no
+    # content does not reach the handler -- so it also means everything. That is the wrong
+    # way round for a field whose empty state reads as "none of it", which is why the UI
+    # refuses to submit an empty selection rather than sending one.
+    sections: str | None = Form(default=None),
     ctx: RequestContext = Depends(get_request_context),
     permission_service: PermissionService = Depends(get_permission_service),
     moderation_provider: ModerationProvider = Depends(get_moderation_provider),
@@ -222,6 +286,11 @@ async def import_bundle_endpoint(
     posture shown before a user chooses to import, whereas the envelope and the scanner
     are the mitigations, and putting the disclaimer text here would imply otherwise."""
     data = await file.read()
+    chosen = (
+        frozenset(s.strip() for s in sections.split(",") if s.strip())
+        if sections is not None
+        else None
+    )
     try:
         # Shielded: the importer commits section by section, so a client disconnect
         # mid-flight (an impatient proxy, a first boot still warming the embedding
@@ -244,6 +313,7 @@ async def import_bundle_endpoint(
                 moderation_provider=moderation_provider,
                 # Without this every imported secret is invisible to the disclosure gate.
                 embedding_provider=get_embedding_provider(),
+                sections=chosen,
             )
         )
     except WrongPasswordError as exc:
