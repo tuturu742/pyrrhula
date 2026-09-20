@@ -97,7 +97,7 @@ of the engine holding a murderer's secret through a police interview.
 - **Deterministic resolution** — dice and checks are seeded, code-executed, validated
   against the actor's own sheet via CEL modifier resolvers, hash-chained, and rendered
   from the record, never from prose. Ships a faithful Basic Fantasy RPG (CC-BY-SA)
-  rule system alongside d20-SRD-style, PbtA-style, and coin-flip systems.
+  rule system alongside generic d20 and coin-flip systems.
 - **Entities** — JSON Schema fields + CEL constraints + declarative state machines;
   semantic tags drive automatic sheet rendering. Characters and work items are the same
   object; domain content lives in packs, never in core.

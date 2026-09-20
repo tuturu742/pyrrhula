@@ -25,6 +25,9 @@ from core.tenancy.scope import tenant_scope
 from core.vocabulary.service import get_overlay_by_key
 
 _PACK_DIR = pathlib.Path(__file__).resolve().parents[2] / ".plugins" / "default" / "rpg"
+# The rpg pack ships no seed: a specific ruleset's reference text travels with the game
+# that uses it, not with the generic workflow. swdev's handbook is the seeded one.
+_SEEDED_PACK_DIR = pathlib.Path(__file__).resolve().parents[2] / ".plugins" / "default" / "swdev"
 
 
 async def _workspace_id(tenant_id: uuid.UUID) -> uuid.UUID:
@@ -111,7 +114,7 @@ async def test_three_rule_systems_resolve_through_unchanged_core(
         return RuleSystemDefinition.from_row(row), row.id
 
     # d20 with a real modifier resolved from actual entity/actor state.
-    d20_system, d20_id = await _rule_system("dnd5e_srd")
+    d20_system, d20_id = await _rule_system("generic_d20")
     d20_record = await resolve(
         tenant_id=tenant_a,
         session_id=sess.id,
@@ -175,13 +178,17 @@ async def test_rpg_pack_has_zero_core_imports() -> None:
     assert py_files == []
 
 
-async def test_srd_seed_is_library_read_only_with_fork_on_edit(
+async def test_pack_seed_is_library_read_only_with_fork_on_edit(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
+    # D13's library tenant, exercised against a pack seed that actually ships. It used to
+    # be the rpg pack's, which was a placeholder for licensed reference text whose own note
+    # said it had never been legally reviewed; that seed is gone and the mechanism is not,
+    # so the test moved to the one shipped seed left rather than disappearing with it.
     tenant_a, _tenant_b = two_tenants
     workspace_id = await _workspace_id(tenant_a)
-    loaded = await load_pack(_PACK_DIR, tenant_a, workspace_id)
-    assert "rpg-core-mechanics" in loaded.seed_source_keys
+    loaded = await load_pack(_SEEDED_PACK_DIR, tenant_a, workspace_id)
+    assert "swdev-engineering-handbook" in loaded.seed_source_keys
 
     async with tenant_scope(LIBRARY_TENANT_ID) as session:
         from sqlalchemy import text as sa_text
@@ -189,7 +196,7 @@ async def test_srd_seed_is_library_read_only_with_fork_on_edit(
         source_id = (
             await session.execute(
                 sa_text("SELECT id FROM knowledge_source WHERE key = :key"),
-                {"key": "rpg-core-mechanics"},
+                {"key": "swdev-engineering-handbook"},
             )
         ).scalar_one()
 

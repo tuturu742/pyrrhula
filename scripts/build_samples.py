@@ -104,6 +104,12 @@ class SampleSpec:
     extra_sources: tuple[SourceSpec, ...] = ()
     conduct_rules: str = ""
     axis_pack: str = ""
+    # Mechanics the sample ships for itself. A specific ruleset belongs with the game that
+    # uses it, not in the generic workflow pack -- the pack should run any RPG, and
+    # "which dice, resolved how" is the part that differs per game. The bundle carries
+    # both: a rule system, and the tool whose `validation_ref` selects it.
+    rule_systems: tuple[dict, ...] = ()
+    tools: tuple[dict, ...] = ()
 
 
 # ── flows ────────────────────────────────────────────────────────────────────────────
@@ -1083,6 +1089,133 @@ _DOGFOOD = SampleSpec(
 )
 
 
+# The Basic Fantasy mechanics this sample resolves against, carried in the bundle rather
+# than assumed present in the importing tenant. They used to live in the `rpg` workflow
+# pack, which was the wrong home twice over: that pack is supposed to run *any* RPG, and a
+# sample needing a specific ruleset should not require installing one separately to be
+# playable.
+#
+# Mechanics only -- check types, dice grammar, the ability-modifier table as CEL. No
+# rulebook prose, which is what keeps this a conversion of a system rather than a copy of
+# a text. Attribution travels with it, in the bundle and in the sample's README.
+_BFRPG_RULE_SYSTEM = {
+    "key": "basic_fantasy",
+    "name": "Basic Fantasy RPG",
+    "dice_grammar": {
+        "allowed_sides": [4, 6, 8, 10, 12, 20, 100],
+        "max_dice_count": 10,
+        "allow_keep_drop": True,
+    },
+    "check_types": [
+        "strength_check",
+        "dexterity_check",
+        "constitution_check",
+        "intelligence_check",
+        "wisdom_check",
+        "charisma_check",
+        "attack_roll",
+        "save_death_ray",
+        "save_magic_wands",
+        "save_paralysis",
+        "save_dragon_breath",
+        "save_spells",
+        "thief_skill",
+        "morale",
+    ],
+    "outcome_bands": [],
+    "modifier_resolver": {
+        "strength_check": "has(fields.strength) ? (fields.strength<=3 ? -3 : "
+        "(fields.strength<=5 ? -2 : (fields.strength<=8 ? "
+        "-1 : (fields.strength<=12 ? 0 : "
+        "(fields.strength<=15 ? 1 : (fields.strength<=17 ? "
+        "2 : 3)))))) : 0",
+        "dexterity_check": "has(fields.dexterity) ? (fields.dexterity<=3 ? -3 "
+        ": (fields.dexterity<=5 ? -2 : "
+        "(fields.dexterity<=8 ? -1 : (fields.dexterity<=12 "
+        "? 0 : (fields.dexterity<=15 ? 1 : "
+        "(fields.dexterity<=17 ? 2 : 3)))))) : 0",
+        "constitution_check": "has(fields.constitution) ? "
+        "(fields.constitution<=3 ? -3 : "
+        "(fields.constitution<=5 ? -2 : "
+        "(fields.constitution<=8 ? -1 : "
+        "(fields.constitution<=12 ? 0 : "
+        "(fields.constitution<=15 ? 1 : "
+        "(fields.constitution<=17 ? 2 : 3)))))) : 0",
+        "intelligence_check": "has(fields.intelligence) ? "
+        "(fields.intelligence<=3 ? -3 : "
+        "(fields.intelligence<=5 ? -2 : "
+        "(fields.intelligence<=8 ? -1 : "
+        "(fields.intelligence<=12 ? 0 : "
+        "(fields.intelligence<=15 ? 1 : "
+        "(fields.intelligence<=17 ? 2 : 3)))))) : 0",
+        "wisdom_check": "has(fields.wisdom) ? (fields.wisdom<=3 ? -3 : "
+        "(fields.wisdom<=5 ? -2 : (fields.wisdom<=8 ? -1 : "
+        "(fields.wisdom<=12 ? 0 : (fields.wisdom<=15 ? 1 : "
+        "(fields.wisdom<=17 ? 2 : 3)))))) : 0",
+        "charisma_check": "has(fields.charisma) ? (fields.charisma<=3 ? -3 : "
+        "(fields.charisma<=5 ? -2 : (fields.charisma<=8 ? "
+        "-1 : (fields.charisma<=12 ? 0 : "
+        "(fields.charisma<=15 ? 1 : (fields.charisma<=17 ? "
+        "2 : 3)))))) : 0",
+        "attack_roll": "(has(fields.attack_bonus) ? fields.attack_bonus : 0) "
+        "+ (has(fields.strength) ? (fields.strength<=3 ? -3 : "
+        "(fields.strength<=5 ? -2 : (fields.strength<=8 ? -1 : "
+        "(fields.strength<=12 ? 0 : (fields.strength<=15 ? 1 : "
+        "(fields.strength<=17 ? 2 : 3)))))) : 0)",
+        "save_death_ray": "0",
+        "save_magic_wands": "0",
+        "save_paralysis": "0",
+        "save_dragon_breath": "0",
+        "save_spells": "0",
+        "thief_skill": "0",
+        "morale": "0",
+    },
+    "validators": [],
+}
+
+_BFRPG_DICE_TOOL = {
+    "key": "bfrpg_dice",
+    "kind": "deterministic",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "expression": {"type": "string"},
+            "check_type": {"type": "string"},
+            "actor_entity_id": {"type": "string"},
+            "target": {"type": "integer"},
+            "reason": {"type": "string"},
+        },
+        "required": ["expression", "check_type"],
+    },
+    "output_schema": {
+        "type": "object",
+        "properties": {
+            "resolution_id": {"type": "string"},
+            "total": {"type": "integer"},
+            "outcome": {"type": "string"},
+        },
+        "required": ["resolution_id", "total", "outcome"],
+    },
+    "impl_ref": "builtin:dice_roller",
+    "validation_ref": "basic_fantasy",
+    "determinism": "seeded_random",
+}
+
+_BFRPG_ATTRIBUTION = (
+    "These mechanics are a conversion of the **Basic Fantasy Role-Playing Game** "
+    "(4th edition, release 142) by **Chris Gonnerman** and contributors -- "
+    "<https://www.basicfantasy.org/> -- distributed under the **Creative Commons "
+    "Attribution-ShareAlike 4.0 International** licence "
+    "(<https://creativecommons.org/licenses/by-sa/4.0/>).\n\n"
+    "Only game mechanics are reproduced: check types, dice grammar and the ability "
+    "modifier table. No prose from the rulebook and no artwork is included. This "
+    "conversion, and anything derived from it, carries the same CC BY-SA 4.0 licence "
+    "and its share-alike obligation.\n\n"
+    "The setting -- Karsh Vale, Ashmere, the Hollow Crown, the tallowmen and every "
+    "named character -- is original to this sample and contains no Basic Fantasy text."
+)
+
+
 def _karsh_vale_sample() -> SampleSpec:
     """Basic Fantasy RPG at a Pyrrhula table, with lore in three bands.
 
@@ -1117,7 +1250,17 @@ def _karsh_vale_sample() -> SampleSpec:
         source_key="bfrpg-rules",
         source_name="Basic Fantasy RPG — the rules in play",
         source_class="rules",
-        entries=_entries(bf.RULES),
+        # Attribution first, and inside the bundle rather than only in the repo's README:
+        # the .pyr is what gets redistributed, and a licence notice that stays behind in a
+        # git repo the recipient never sees is not attribution accompanying the work.
+        entries=(
+            EntrySpec(
+                entry_key="attribution-and-licence",
+                title="Attribution and licence",
+                body_md=_BFRPG_ATTRIBUTION,
+            ),
+        )
+        + _entries(bf.RULES),
         extra_sources=(
             # Band 1 -- common talk, open to the whole table.
             SourceSpec(
@@ -1156,6 +1299,11 @@ def _karsh_vale_sample() -> SampleSpec:
         ),
         flow_key="karsh-vale",
         flow=_karsh_vale_flow(),
+        # The mechanics ride along. `bfrpg_dice` is what the flow names, and its
+        # validation_ref is what selects the system -- so the pair has to travel together
+        # or the tool resolves against whatever the importing tenant happens to have.
+        rule_systems=(_BFRPG_RULE_SYSTEM,),
+        tools=(_BFRPG_DICE_TOOL,),
         conduct_rules=(
             "The referee frames and resolves; the players declare. No player character "
             "rolls their own dice or narrates their own success, and no one -- referee "
@@ -1578,6 +1726,17 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
     for definition in await list_definitions(tenant_id, workspace_id=workspace_id):
         await archive_definition(tenant_id, definition.id)
 
+    # Mechanics before the flow: the exporter finds a rule system by walking the flow's
+    # tools to their validation_ref, so both have to exist by the time it looks.
+    if spec.rule_systems or spec.tools:
+        from core.resolution.registry import ToolDefinitionSchema, register_tool_definition
+        from core.resolution.rule_system import RuleSystemDefinitionSchema, create_rule_system
+
+        for raw in spec.rule_systems:
+            await create_rule_system(tenant_id, RuleSystemDefinitionSchema.model_validate(raw))
+        for raw in spec.tools:
+            await register_tool_definition(tenant_id, ToolDefinitionSchema.model_validate(raw))
+
     await create_definition(
         tenant_id,
         spec.flow_key,
@@ -1603,7 +1762,14 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
             include_sessions=False,
             # No "schemas"/"entities": the only ones present are the
             # workflow pack's, which the reader already has.
-            sections=frozenset({"knowledge", "personas", "process", "secrets", "vocabulary"}),
+            #
+            # "rules" is the exception to that reasoning, and the reason it exists: a
+            # sample's rule system is exactly what the reader does NOT already have, now
+            # that specific rulesets have left the generic pack. A sample with no
+            # rule_systems of its own exports nothing here.
+            sections=frozenset(
+                {"knowledge", "personas", "process", "secrets", "vocabulary", "rules"}
+            ),
         ),
     )
 

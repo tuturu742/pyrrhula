@@ -92,7 +92,6 @@ Scenario assertions:
 - **rpg** *(implemented, passing)* — a GM + 2 players; each player creates its character via `entity.create`
   (→ 2 character entities); one encounter resolves via `encounter_resolve` → a
   `ResolutionRecord` + ≥1 append to `entity_state_change` (a health-FSM transition).
-  Also ingests TossedFate rules/lore (`~/code/TossedFate`) into the rpg workspace.
 - **swe** *(implemented, passing)* — the full moddable stack in one scenario: the seed
   creates + selects a **tenant workflow** (`swe-delivery`, cloned from the swdev template,
   repo access granted), registers **`babykb` in the repo registry** (node20 runtime + a real

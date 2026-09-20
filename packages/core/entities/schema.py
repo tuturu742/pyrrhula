@@ -1,5 +1,5 @@
 """EntitySchema (F3.1, plan §10.1/§10.2 (D7), §12.5): the generic Entity Schema shared by
-every domain -- a D&D character, a support ticket, and a software work item are the same
+every domain -- a fantasy character, a support ticket, and a software work item are the same
 object; nothing in core knows what HP is. Typed fields as a JSON Schema 2020-12 subset,
 derived fields and cross-field constraints as CEL (bounded, no I/O, safe for untrusted
 expressions in a shared process), versioned per workspace or pack-provided.

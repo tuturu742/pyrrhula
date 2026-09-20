@@ -1,4 +1,4 @@
-"""The remote-tools synthetic phase must be a VALID PhaseSpec (the TossedFate lesson:
+"""The remote-tools synthetic phase must be a VALID PhaseSpec (learned the hard way:
 an invalid literal here crashes every turn in a workspace with a registered remote
 server), and the remote/preset routing predicate must never surface preset keys."""
 

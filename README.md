@@ -108,7 +108,7 @@ Key mechanisms:
   engine and gated on a CI eval harness that measures leak rates per provider.
 - **Generic entity framework** — JSON Schema fields + CEL expressions + declarative state
   machines; semantic tags (`resource`, `status_set`, `progression`, …) drive automatic sheet
-  rendering. D&D-style characters and support tickets are the same object. RPG content ships
+  rendering. Fantasy characters and support tickets are the same object. RPG content ships
   as a pack, never in the core.
 - **Multi-tenancy from day one** — Postgres row-level security (`FORCE`) on every
   tenant-scoped table, backed by a CI-blocking negative test suite that deliberately omits

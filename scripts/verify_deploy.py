@@ -18,7 +18,6 @@ in seed_verification.py.
 from __future__ import annotations
 
 import contextlib
-import glob
 import json
 import os
 import subprocess
@@ -414,7 +413,6 @@ def scenario_exec() -> None:
     print(f"  ✅ exec PASS — synthesis {len(synthesis)} chars, structure terms {hits}, 0 failed")
 
 
-TOSSEDFATE = os.path.expanduser("~/code/TossedFate")
 
 
 def _ingest_knowledge(
@@ -530,16 +528,6 @@ def scenario_rpg() -> None:
     assert int(machines) >= 2, (
         f"rpg: expected >=2 distinct state machines driven by resolutions, got {machines}"
     )
-
-    # 'Try to set info on rules and lore from ~/code/TossedFate' -- best-effort, not a gate.
-    if os.path.isdir(TOSSEDFATE):
-        token = _login("rpg")
-        rules = sorted(glob.glob(f"{TOSSEDFATE}/mechanics/*.md"))[:3]
-        lore = sorted(glob.glob(f"{TOSSEDFATE}/settings/Sydenus/*.md"))[:3]
-        if rules:
-            _ingest_knowledge("rpg", token, wid, "tossedfate-rules", "rules", rules)
-        if lore:
-            _ingest_knowledge("rpg", token, wid, "tossedfate-lore", "lore", lore)
 
     assert_handbook_seeded("rpg")
     print(

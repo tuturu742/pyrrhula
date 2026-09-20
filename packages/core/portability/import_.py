@@ -1037,6 +1037,8 @@ async def _import_rules(
     from core.resolution.registry import ToolDefinitionSchema, register_tool_definition
     from core.resolution.rule_system import RuleSystemDefinitionSchema, create_rule_system
 
+    landed_tools: list[str] = []
+
     for path in sorted(files):
         if not path.startswith("rules/rule_system_") or not path.endswith(".json"):
             continue
@@ -1060,6 +1062,30 @@ async def _import_rules(
             continue
         await register_tool_definition(tenant_id, tool)
         report.imported.append(f"tool: {tool.key}")
+        landed_tools.append(tool.key)
+
+    # Registering a tool is not the same as being allowed to call one. The workspace's
+    # `resolution` MCP server carries an allowlist, populated from the *workflow's* pack
+    # manifest -- so a tool that arrived in a bundle is registered, selected by a flow,
+    # and then refused at call time, because the workflow never heard of it. Widening the
+    # allowlist by exactly the keys that landed is what makes a carried ruleset usable;
+    # it grants nothing new, since the tool itself can only name a handler the
+    # composition root already registered.
+    if landed_tools:
+        from core.mcp.registry import get_server, register_server
+
+        existing = await get_server(tenant_id, workspace_id, "resolution")
+        if existing is not None:
+            widened = sorted({*(existing.enabled_tools or []), *landed_tools})
+            if widened != sorted(existing.enabled_tools or []):
+                await register_server(
+                    tenant_id,
+                    workspace_id,
+                    "resolution",
+                    existing.url,
+                    enabled_tools=widened,
+                )
+                report.imported.append(f"resolution tools enabled: {', '.join(landed_tools)}")
 
 
 async def _import_process(

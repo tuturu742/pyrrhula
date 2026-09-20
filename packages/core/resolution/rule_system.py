@@ -219,7 +219,7 @@ async def get_rule_system(tenant_id: uuid.UUID, key: str) -> RuleSystemRow | Non
 
 # ── MVP fixtures (C1.5's own subtask: a d20-like system + a coin-flip, both exercised by
 # the same validator code path with no core branching on system kind -- the real INV-9
-# test this task cares about). Full dnd5e_srd/pbta/coin_flip pack content lands with
+# test this task cares about). Richer systems ship as workflow-pack or bundle content,
 # F3.7; these are core-neutral-named placeholders for the Phase-1 exit slice only. ──
 
 MINIMAL_D20_SYSTEM = RuleSystemDefinitionSchema(

@@ -67,7 +67,7 @@ def test_tag_widget_registry_is_total_and_domain_blind() -> None:
     # "Domain-blind" is a claim about the registry's own data (and the validator logic
     # keyed off it) -- not about illustrative examples in prose docstrings/comments,
     # which this codebase's own core modules use freely elsewhere (e.g.
-    # core.resolution.rule_system's docstring names dnd5e_srd/pbta/coin_flip and "d20").
+    # core.resolution.rule_system's docstring names the shipped systems and "d20").
     registry_literals = " ".join(f"{k} {v}" for k, v in TAG_WIDGET_REGISTRY.items()).lower()
     offenders = [word for word in _FORBIDDEN_DOMAIN_WORDS if word in registry_literals]
     assert not offenders, f"tag->widget registry references domain content: {offenders}"
