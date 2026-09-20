@@ -124,7 +124,7 @@ def test_resolve_outcome_target_based_threshold() -> None:
     assert resolve_outcome(10, target=15, outcome_bands=()) == "failure"
 
 
-def test_resolve_outcome_pbta_style_bands() -> None:
+def test_resolve_outcome_banded_thresholds() -> None:
     bands = (
         {"min": 10, "max": None, "outcome": "full_success"},
         {"min": 7, "max": 9, "outcome": "partial_success"},

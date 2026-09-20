@@ -43,7 +43,7 @@ export const DEFAULT_LABELS: Record<string, string> = {
   "entity.deterministic_tool": "Dice Roller / Coin Flip / Stat Calculator",
   "entity.effectful_action": "Table Action",
   "entity.resolution_record": "Roll Result",
-  "entity.rule_system": "Game System (5e / PbtA / coin-flip)",
+  "entity.rule_system": "Game System",
   "entity.scope": "Table Knowledge / GM-only / Faction",
   "entity.secret": "Secret / Hidden Motive",
   "entity.behavior_profile": "Personality Dials",

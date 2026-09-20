@@ -96,7 +96,7 @@ async def test_create_character_yields_populated_sheet_from_pack_templates(
     assert overlay.labels["group.attributes"] == "Attributes"  # pack-owned label present
 
 
-async def test_three_rule_systems_resolve_through_unchanged_core(
+async def test_three_resolution_shapes_run_through_unchanged_core(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
     tenant_a, _tenant_b = two_tenants
@@ -132,9 +132,30 @@ async def test_three_rule_systems_resolve_through_unchanged_core(
     assert d20_record.outcome in ("success", "failure")
     assert d20_record.modifiers["total"] == 3  # (16 - 10) / 2
 
-    # PbtA band result.
-    pbta_system, pbta_id = await _rule_system("pbta")
-    pbta_record = await resolve(
+    # A three-band result. Defined here rather than shipped: the claim is that a banded
+    # system resolves through unchanged core, and that is a property of the *shape*, not of
+    # any publisher's game -- the pack itself names no third-party system any more.
+    from core.resolution.rule_system import RuleSystemDefinitionSchema, create_rule_system
+
+    banded_key = f"banded{uuid.uuid4().hex[:8]}"
+    await create_rule_system(
+        tenant_a,
+        RuleSystemDefinitionSchema(
+            key=banded_key,
+            name="Banded 2d6",
+            dice_grammar={"allowed_sides": [6], "max_dice_count": 2, "allow_keep_drop": False},
+            check_types=["move"],
+            outcome_bands=[
+                {"min": 2, "max": 6, "outcome": "miss"},
+                {"min": 7, "max": 9, "outcome": "partial"},
+                {"min": 10, "max": 13, "outcome": "hit"},
+            ],
+            modifier_resolver={"move": "has(fields.stat) ? fields.stat : 0"},
+            validators=[],
+        ),
+    )
+    banded_system, banded_id = await _rule_system(banded_key)
+    banded_record = await resolve(
         tenant_id=tenant_a,
         session_id=sess.id,
         event_seq=1,
@@ -144,11 +165,11 @@ async def test_three_rule_systems_resolve_through_unchanged_core(
         check_type="move",
         actor_fields={"stat": 1},
         target=None,
-        rule_system=pbta_system,
-        rule_system_id=pbta_id,
+        rule_system=banded_system,
+        rule_system_id=banded_id,
         legal_check_types=None,
     )
-    assert pbta_record.outcome in ("miss", "partial", "hit")
+    assert banded_record.outcome in ("miss", "partial", "hit")
 
     # Coin flip.
     coin_system, coin_id = await _rule_system("coin_flip")

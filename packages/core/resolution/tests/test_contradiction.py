@@ -98,7 +98,7 @@ def test_ambiguous_text_mentioning_both_outcomes_is_not_flagged() -> None:
 
 
 def test_banded_outcome_is_never_flagged_by_the_word_heuristic() -> None:
-    """A PbtA-style banded outcome has no reliable word-level signature -- skipped
+    """A banded outcome has no reliable word-level signature -- skipped
     entirely, never a false positive."""
     record = _fake_record(total=8, outcome="partial_success")
     flags = scan_for_contradictions("You fail to convince the guard.", [record])

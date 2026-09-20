@@ -121,7 +121,7 @@ def _compile_check(source: str) -> None:
     """Authoring-time check: the expression must at least parse. Cannot check
     evaluate-safety against ``actor_fields`` the way B1.1's ``compile_check`` does for
     process state -- ``actor_fields`` has no fixed declared schema (a d20 system and a
-    PbtA system use completely different field names) -- a documented, real limitation,
+    a banded system use completely different field names) -- a documented, real limitation,
     not a silent gap."""
     try:
         _cel_env.compile(source)
@@ -147,7 +147,7 @@ def resolve_outcome(
 ) -> str:
     """§9.3: two outcome modes. ``target`` set -> simple threshold (">= target: success",
     the d20-vs-DC shape). ``target`` unset -> ordered ``outcome_bands`` matched against
-    ``total`` alone (PbtA's "10+ / 7-9 / 6-" shape) -- first matching band wins."""
+    ``total`` alone (the "10+ / 7-9 / 6 or under" shape) -- first matching band wins."""
     if target is not None:
         return "success" if total >= target else "failure"
     for band in outcome_bands:

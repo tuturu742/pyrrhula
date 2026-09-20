@@ -12,7 +12,7 @@ flags"). Two independent, narrow signals, each only fired when unambiguous:
 1. **Outcome words.** The reply mentions success-family or failure-family words, but not
    both (mentioning both is ambiguous prose -- "you don't fail, but only barely succeed" --
    and gets no signal at all, not a guess). Only compared against a record whose own
-   ``outcome`` is literally ``"success"``/``"failure"`` -- a PbtA-style banded outcome
+   ``outcome`` is literally ``"success"``/``"failure"`` -- a banded outcome
    (``"partial_success"`` etc) has no reliable word-level narration signature this simple
    lexicon can represent, so it's skipped entirely rather than risk a false positive.
 2. **A stated total.** Only numbers appearing in a small set of roll-referencing patterns
