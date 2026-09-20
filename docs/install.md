@@ -58,7 +58,10 @@ git clone <repo> && cd Pyrrhula
 
 What it does: detects your engine, writes `.env` with five generated secrets
 (backed up to `~/.config/pyrrhula/compose.env.bak`), wires the engine socket for
-delegated coding agents, `compose up -d --build`, waits for health, prints the URL.
+delegated coding agents, `compose up -d --build`, waits for health — reporting what the
+stack is doing if it takes more than 45 seconds rather than sitting silent — pre-warms
+the retrieval models, flips the stack to offline model loads once that cache is warm,
+and prints the URL.
 
 - **UI** http://localhost:5173 · **platform admin** lives in the same UI: sign in with
   organization `admin`. The installer generates the account and **prints the email and
@@ -74,6 +77,12 @@ delegated coding agents, `compose up -d --build`, waits for health, prints the U
   `docker/compose.selfhost.yml`, or point connections at any cloud key.
 - **Upgrade**: `git pull && ./install.sh compose` (compose rebuilds; the migrate
   one-shot runs Alembic before api/worker start).
+- **Offline model loads**: once the model cache is populated the installer sets
+  `PYRRHULA_HF_OFFLINE=1` in `.env` and recreates `api`/`worker`. This is not a
+  preference — an unauthenticated hub check has no timeout and can hang *inside* the
+  in-process model load, wedging the event loop (seen on the k8s stack as NotReady for
+  13+ minutes at idle CPU). Set it back to `0` and re-run if you change the configured
+  model and need the new one fetched.
 - **TLS**: terminate in front of the web port with any proxy (Caddy example in
   `docs/self-host.md`).
 
