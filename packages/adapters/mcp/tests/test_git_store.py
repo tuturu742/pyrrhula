@@ -315,3 +315,58 @@ async def test_remote_default_branch_reads_it_from_the_remote(tmp_path: Path) ->
 
     store = GitStore(str(tmp_path / "store"))
     assert await store.remote_default_branch(url) == "trunk"
+
+
+async def test_commit_on_branch_removes_files_and_git_records_it(tmp_path: Path) -> None:
+    """`git add -A` always staged removals; nothing was ever removing anything."""
+    store = GitStore(str(tmp_path))
+    await store.ensure_repo(
+        "proj",
+        seed_files={"keep.py": "keep\n", "dead.py": "remove me\n", "docs/old.md": "stale\n"},
+    )
+
+    await store.commit_on_branch(
+        "proj",
+        "pyr/cleanup",
+        {"keep.py": "keep, edited\n"},
+        "remove the dead module",
+        deletes=["dead.py", "docs/old.md"],
+    )
+
+    tree = await store.read_tree("proj", ref="pyr/cleanup")
+    assert tree["keep.py"] == "keep, edited\n"
+    assert "dead.py" not in tree
+    assert "docs/old.md" not in tree
+    # And `main` is untouched -- the deletion lives on the branch a human reviews.
+    assert "dead.py" in await store.read_tree("proj", ref="main")
+
+
+async def test_commit_on_branch_can_remove_a_whole_directory(tmp_path: Path) -> None:
+    """ "Remove the tasks directory" is a normal request and means the directory."""
+    store = GitStore(str(tmp_path))
+    await store.ensure_repo(
+        "proj",
+        seed_files={"README.md": "x\n", "tasks/a.md": "a\n", "tasks/b.md": "b\n"},
+    )
+
+    await store.commit_on_branch("proj", "pyr/drop-tasks", {}, "drop tasks/", deletes=["tasks"])
+
+    tree = await store.read_tree("proj", ref="pyr/drop-tasks")
+    assert "README.md" in tree
+    assert not [p for p in tree if p.startswith("tasks/")]
+
+
+async def test_commit_on_branch_refuses_to_delete_outside_the_checkout(tmp_path: Path) -> None:
+    """The parser rejects traversal, and this rejects it again: it is the call that
+    actually removes things, so it does not take the earlier check on trust."""
+    outside = tmp_path / "outside.txt"
+    outside.write_text("do not touch\n")
+    store = GitStore(str(tmp_path / "store"))
+    await store.ensure_repo("proj", seed_files={"a.txt": "a\n"})
+
+    await store.commit_on_branch(
+        "proj", "pyr/evil", {}, "try to escape", deletes=["../../outside.txt", ".."]
+    )
+
+    assert outside.exists()
+    assert outside.read_text() == "do not touch\n"

@@ -8,6 +8,13 @@ reliably than JSON-escaped code:
     ===FILE: relative/path===
     <content>
     ===END===
+    ===DELETE: relative/path===
+
+The delete verb exists because the protocol was write-only, and both commit paths write:
+a file the model simply omitted stayed exactly where it was. So "remove the dead module"
+produced an empty pull request and no explanation -- the one shape of ordinary work the
+pipeline could not express. Deletion is a separate verb rather than an inferred absence,
+because absence is how a model expresses "I did not need to touch this".
 
 Any failure (model unreachable, unparseable output, empty result) falls back to the caller's
 scaffold -- the delegation *flow* must never break on model quality; that is the whole
@@ -18,17 +25,35 @@ contents in a branch a human reviews, never instructions to this process.
 from __future__ import annotations
 
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
-# (work_item, brief, repo_files, rework_comment) -> {path: content}; raises on failure.
-CodegenFn = Callable[[dict[str, Any], str, dict[str, str], str | None], Awaitable[dict[str, str]]]
+
+@dataclass(frozen=True)
+class CodegenOutput:
+    """What one codegen call asks the branch to become.
+
+    Deletions travel beside the writes rather than as an absence: omitting a file is how
+    a model says "I did not need to touch this", so absence cannot also mean "remove it".
+    """
+
+    files: dict[str, str]
+    deletes: frozenset[str] = frozenset()
+
+
+# (work_item, brief, repo_files, rework_comment) -> CodegenOutput; raises on failure.
+CodegenFn = Callable[[dict[str, Any], str, dict[str, str], str | None], Awaitable[CodegenOutput]]
 
 _FILE_BLOCK = re.compile(
     r"===FILE:\s*(?P<path>[^=\n]+?)\s*===\s*\n(?P<body>.*?)(?:\n)?===END===",
     re.DOTALL,
 )
+_DELETE_BLOCK = re.compile(r"===DELETE:\s*(?P<path>[^=\n]+?)\s*===")
 _MAX_FILES = 12
+# Deletions are cheap to emit and expensive to get wrong, so the ceiling is separate
+# from the file budget and deliberately roomier: removing a directory is a normal task.
+_MAX_DELETES = 60
 _MAX_CONTEXT_FILE_CHARS = 4000
 _SAFE_PATH = re.compile(r"[A-Za-z0-9_.@-]+(/[A-Za-z0-9_.@-]+)*")
 
@@ -66,6 +91,30 @@ def parse_file_blocks(text: str) -> dict[str, str]:
     return files
 
 
+def parse_deletions(text: str, *, keep: Iterable[str] = ()) -> set[str]:
+    """Extract ``===DELETE:`` paths, under the same confinement as file blocks.
+
+    ``keep`` is the set of paths the same response also wrote. A model that emits both
+    for one path has contradicted itself; writing wins, because a delete that silently
+    discarded content the model had just produced is the more expensive way to be wrong.
+    """
+    written = set(keep)
+    deletes: set[str] = set()
+    for match in _DELETE_BLOCK.finditer(text):
+        path = match.group("path").strip()
+        # Same order as parse_file_blocks: reject traversal and absolutes BEFORE any
+        # normalisation, since stripping would turn `../evil` into a "valid" path.
+        if path.startswith("/") or ".." in path.split("/"):
+            continue
+        path = path.removeprefix("./")
+        if not path or not _SAFE_PATH.fullmatch(path) or path in written:
+            continue
+        deletes.add(path)
+        if len(deletes) >= _MAX_DELETES:
+            break
+    return deletes
+
+
 def _prompt(
     work_item: dict[str, Any],
     brief: str,
@@ -99,6 +148,10 @@ def _prompt(
         "===FILE: relative/path===\n"
         "<complete file content>\n"
         "===END===\n"
+        "\nTo DELETE a file, emit a delete block instead, with no body and no ===END===:\n"
+        "===DELETE: relative/path===\n"
+        "Only delete files the task actually asks you to remove. Omitting a file leaves "
+        "it untouched; deleting is never the way to say 'unchanged'.\n"
     )
 
 
@@ -166,7 +219,8 @@ def make_model_codegen(
 
         first = await run(req)
         files = parse_file_blocks(first)
-        if not files:
+        deletes = parse_deletions(first, keep=files)
+        if not files and not deletes:
             # One-shot format repair: local models sometimes answer in prose or mimic the
             # context blocks; a direct correction almost always recovers them.
             repair = GenerationRequest(
@@ -192,11 +246,12 @@ def make_model_codegen(
             )
             second = await run(repair)
             files = parse_file_blocks(second)
-        if not files:
+            deletes = parse_deletions(second, keep=files)
+        if not files and not deletes:
             raise CodegenError(
                 "model produced no parseable file blocks after a repair attempt "
                 f"({len(first)} then {len(second)} chars; head: {first[:160]!r})"
             )
-        return files
+        return CodegenOutput(files=files, deletes=frozenset(deletes))
 
     return codegen

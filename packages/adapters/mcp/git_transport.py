@@ -214,7 +214,7 @@ class GitMcpTransport:
         reworking: bool,
         codegen_override: Any | None = None,
         base_branch: str = "main",
-    ) -> tuple[dict[str, str | bytes], str]:
+    ) -> tuple[dict[str, str | bytes], frozenset[str], str]:
         """The coding step. With a codegen model wired: give it the repo's current files
         (the branch's own on rework, so it edits what the reviewer saw) and, on rework,
         the review comment (the rework brief), and take its file blocks. Any failure falls
@@ -229,8 +229,12 @@ class GitMcpTransport:
                 # "TODO: implement" instead of code, with nothing anywhere saying why.
                 ref = branch if reworking else base_branch
                 repo_files = await self._store.read_tree(repo, ref=ref)
-                files = await codegen(work_item, brief, repo_files, brief if reworking else None)
-                return files, "model"
+                out = await codegen(work_item, brief, repo_files, brief if reworking else None)
+                # Only paths the branch actually has: asking git to remove something that
+                # was never there fails the commit, and a model naming a stale path is an
+                # ordinary mistake rather than a reason to lose the whole delegation.
+                deletes = frozenset(p for p in out.deletes if p in repo_files)
+                return dict(out.files), deletes, "model"
             except Exception as exc:  # noqa: BLE001 -- scaffold fallback is the contract
                 import structlog
 
@@ -241,7 +245,8 @@ class GitMcpTransport:
                     reworking=reworking,
                     error=f"{type(exc).__name__}: {str(exc)[:300]}",
                 )
-        return self._generate_files(work_item, brief), "scaffold"
+        # The scaffold writes placeholders and removes nothing.
+        return self._generate_files(work_item, brief), frozenset(), "scaffold"
 
     async def call_tool(
         self, server: McpServerRef, name: str, arguments: dict[str, Any]
@@ -338,7 +343,7 @@ class GitMcpTransport:
         base_branch = str(args.get("base_branch") or "main")
         reworking = await self._store.branch_exists(repo, branch)
         codegen_override = await self._codegen_from_profile(args.get("codegen_profile"))
-        files, generated_by = await self._produce_files(
+        files, deletes, generated_by = await self._produce_files(
             repo,
             branch,
             work_item,
@@ -363,10 +368,19 @@ class GitMcpTransport:
             )
         if envs is not None and isinstance(env_cfg, dict):
             ci_status, test_tail = await self._work_in_env(
-                repo, branch, files, message, env_cfg, envs
+                repo,
+                branch,
+                files,
+                message,
+                env_cfg,
+                envs,
+                base_branch=base_branch,
+                deletes=deletes,
             )
         else:
-            await self._store.commit_on_branch(repo, branch, files, message, base=base_branch)
+            await self._store.commit_on_branch(
+                repo, branch, files, message, base=base_branch, deletes=deletes
+            )
         commits = await self._store.commit_count(repo, branch)
 
         remote_pr = await self._sync_remote(repo, branch, args, work_item, message)
@@ -491,6 +505,8 @@ class GitMcpTransport:
         files: Mapping[str, str | bytes],
         message: str,
         env_cfg: dict[str, Any],
+        base_branch: str = "main",
+        deletes: frozenset[str] = frozenset(),
     ) -> str:
         """The whole delegation as ONE self-contained shell script -- the shape every
         engine can run (a warm socket container, a k8s Job, a cloud task). Steps echo
@@ -534,7 +550,7 @@ class GitMcpTransport:
             "echo PYR_STEP=checkout",
             f"git rev-parse -q --verify origin/{q(branch)} >/dev/null "
             f"&& git checkout -q -B {q(branch)} origin/{q(branch)} "
-            f"|| git checkout -q -B {q(branch)} origin/main",
+            f"|| git checkout -q -B {q(branch)} origin/{q(base_branch)}",
             "echo PYR_STEP=write",
         ]
         for path, content in files.items():
@@ -544,6 +560,11 @@ class GitMcpTransport:
             raw = content if isinstance(content, bytes) else content.encode()
             encoded = base64.b64encode(raw).decode()
             lines.append(f"mkdir -p $(dirname {q(path)}) && echo {encoded} | base64 -d > {q(path)}")
+        # `git add -A` below already stages removals, so deleting the path is the whole
+        # of it. `-rf` because a task that says "remove the tasks directory" means the
+        # directory; `-f` so a path already gone is not a failed build.
+        for path in sorted(deletes):
+            lines.append(f"rm -rf {q(path)}")
         test_cmd = str(env_cfg.get("test_cmd") or "").strip()
         if test_cmd:
             lines += [
@@ -629,6 +650,8 @@ class GitMcpTransport:
         message: str,
         env_cfg: dict[str, Any],
         envs: Any,
+        base_branch: str = "main",
+        deletes: frozenset[str] = frozenset(),
     ) -> tuple[str, str]:
         """The environment path: run the whole delegation script via the engine's
         ``run_script`` (warm container for socket engines, one-shot Job elsewhere).

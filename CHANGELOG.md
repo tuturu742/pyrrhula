@@ -145,6 +145,19 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   repository, where it can also be pointed at a release-candidate branch to put agents
   on stabilisation work.
 
+- **Delegated agents can delete files.** The codegen protocol could only write, and
+  both commit paths write, so a file the model omitted stayed where it was: "remove the
+  dead module" committed nothing and opened an empty pull request with no explanation.
+  `===DELETE: path===` joins `===FILE:`, carried through the in-container and
+  store-side commits alike (`git add -A` already staged removals; nothing was removing
+  anything). Deletion is a verb rather than an inferred absence, because omitting a file
+  is how a model says "I did not need to touch this". Paths are confined to the
+  checkout, checked again at the point of removal rather than trusted from the parser,
+  and a write wins over a delete for the same path.
+- **A delegation that produces no applicable change opens an honest pull request**
+  instead of dying. The in-container path had always allowed an empty commit and the
+  store-side path had not, so it failed there with git's bare empty error.
+
 ### Security
 
 - **A repository's access token was stored in plaintext on the volume.** `clone_from`

@@ -22,7 +22,7 @@ import pathlib
 import re
 import shutil
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -311,9 +311,15 @@ class GitStore:
         message: str,
         *,
         base: str = "main",
+        deletes: Iterable[str] = (),
     ) -> str:
         """Create ``branch`` off ``base`` (or reuse it if it exists -- the review-fix case),
-        write ``files``, commit, and return the new commit sha."""
+        write ``files``, remove ``deletes``, commit, and return the new commit sha.
+
+        Deletion is explicit because ``git add -A`` stages removals but nothing was ever
+        removing anything: the protocol could only write, so "delete the dead module"
+        committed nothing and opened an empty pull request.
+        """
         async with self._locks[repo_key]:
             existing = await self._git(repo_key, "branch", "--list", branch)
             if existing.strip():
@@ -323,10 +329,30 @@ class GitStore:
             work = self._work(repo_key)
             for rel, content in files.items():
                 self._write_file(work / rel, content)
+            for rel in deletes:
+                target = (work / rel).resolve()
+                # Confined to the checkout. The path already passed the codegen parser's
+                # traversal check, but this is the call that actually removes things, so
+                # it does not take that on trust.
+                if not target.is_relative_to(work.resolve()) or target == work.resolve():
+                    continue
+                if target.is_dir():
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink(missing_ok=True)
             await self._git(repo_key, "add", "-A")
-            await self._git(repo_key, "commit", "-q", "-m", message)
+            try:
+                await self._git(repo_key, "commit", "-q", "-m", message)
+            except GitStoreError:
+                # Nothing to commit. The in-container path has always allowed this and
+                # this one did not, so a delegation that produced no applicable change
+                # died here with git's bare "" instead of opening a pull request that
+                # honestly shows no changes. An empty commit is a reviewable answer;
+                # an opaque failure is not.
+                await self._git(repo_key, "commit", "-q", "--allow-empty", "-m", message)
             sha = (await self._git(repo_key, "rev-parse", "HEAD")).strip()
-            await self._git(repo_key, "checkout", "-q", "main")
+            # Back to the repository's own base, not a constant: `main` may not exist.
+            await self._git(repo_key, "checkout", "-q", base)
             return sha
 
     async def read_tree(
