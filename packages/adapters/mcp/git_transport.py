@@ -230,11 +230,13 @@ class GitMcpTransport:
                 ref = branch if reworking else base_branch
                 repo_files = await self._store.read_tree(repo, ref=ref)
                 out = await codegen(work_item, brief, repo_files, brief if reworking else None)
-                # Only paths the branch actually has: asking git to remove something that
-                # was never there fails the commit, and a model naming a stale path is an
-                # ordinary mistake rather than a reason to lose the whole delegation.
-                deletes = frozenset(p for p in out.deletes if p in repo_files)
-                return dict(out.files), deletes, "model"
+                # Deliberately NOT filtered against `repo_files`. That read is capped at
+                # `read_tree`'s file limit -- 150 of this repository's 1088 -- so a filter
+                # against it silently discards every deletion outside the model's context
+                # window, which is precisely the set a cleanup task names. Both commit
+                # paths already tolerate a path that is not there (`rm -rf`,
+                # `missing_ok=True`), so a stale name is a no-op rather than a failure.
+                return dict(out.files), frozenset(out.deletes), "model"
             except Exception as exc:  # noqa: BLE001 -- scaffold fallback is the contract
                 import structlog
 

@@ -23,7 +23,7 @@ from core.entities.mutation import transition
 from core.entities.storage import get_entity
 from core.ports.mcp import McpServerRef
 from core.process.dsl.schema import BudgetSpec, PhaseSpec, VisibilitySpec
-from core.repos.service import RUNTIME_CATALOG, get_repo, store_key
+from core.repos.service import RUNTIME_CATALOG, get_repo, resolve_git_identity, store_key
 from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
 from worker.exec_env_factory import get_exec_env_provider
@@ -69,17 +69,28 @@ async def _pr_summary_line(skey: str | None, branch: str) -> str:
     return " — ".join(parts)
 
 
-def _remote_config(tenant_id: uuid.UUID, repo: Any) -> dict[str, Any] | None:
-    """The push-back target: the registration's source_url + opaque credential_ref (the
-    transport resolves the token itself; nothing secret is persisted in job payloads or
-    action records)."""
+async def _remote_config(
+    tenant_id: uuid.UUID, repo: Any, persona_id: uuid.UUID | None = None
+) -> dict[str, Any] | None:
+    """The push-back target: the registration's source_url + an opaque credential_ref
+    (the transport resolves the token itself; nothing secret is persisted in job
+    payloads or action records).
+
+    Which credential is ``resolve_git_identity``'s decision, not this function's. It
+    used to pass the repository's own ``credential_ref`` unconditionally, so every
+    branch and pull request a delegated agent opened appeared under the repository
+    bot -- while the *merge* path, which did ask, arrived as the persona. The same
+    agent therefore pushed as one identity and merged as another, and the per-persona
+    bindings the UI offers had no effect on the work they were bound for.
+    """
     url = (repo.source_url or "").strip()
     if not url.startswith(("http://", "https://")):
         return None
+    credential_ref = await resolve_git_identity(tenant_id, repo.id, persona_id)
     return {
         "url": url,
         "provider": repo.provider,
-        "credential_ref": str(repo.credential_ref) if repo.credential_ref else None,
+        "credential_ref": str(credential_ref) if credential_ref else None,
         "tenant_id": str(tenant_id),
     }
 
@@ -251,7 +262,9 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
             # Separate from `remote`, which is None for a store-only repository: the
             # branch matters whether or not there is anywhere to push back to.
             extra["base_branch"] = repo.default_branch or "main"
-            remote = _remote_config(tenant_id, repo)
+            remote = await _remote_config(
+                tenant_id, repo, assignee.id if assignee is not None else None
+            )
             if remote:
                 extra["remote"] = remote
     result = await delegate_work_item(
@@ -382,7 +395,10 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("repo_id"):
         repo_row = await get_repo(tenant_id, uuid.UUID(str(payload["repo_id"])))
         if repo_row is not None:
-            remote = _remote_config(tenant_id, repo_row)
+            # The rework path acts as the same persona that did the original work.
+            remote = await _remote_config(
+                tenant_id, repo_row, rework_assignee.id if rework_assignee else None
+            )
             if remote:
                 arguments["remote"] = remote
     transport = get_mcp_transport()
