@@ -248,6 +248,9 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("repo_id"):
         repo = await get_repo(tenant_id, uuid.UUID(str(payload["repo_id"])))
         if repo is not None:
+            # Separate from `remote`, which is None for a store-only repository: the
+            # branch matters whether or not there is anywhere to push back to.
+            extra["base_branch"] = repo.default_branch or "main"
             remote = _remote_config(tenant_id, repo)
             if remote:
                 extra["remote"] = remote

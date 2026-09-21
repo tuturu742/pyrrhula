@@ -10,6 +10,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -235,11 +236,56 @@ async def repo_analysis_endpoint(
     return RepoAnalysisResponse(job_id=job_id, repo_ids=selected)
 
 
+class AnalysisStatus(BaseModel):
+    """The last analysis run for this workspace, so the page can say what happened.
+
+    Without this the page could only report failures to *queue* a job. A job that was
+    queued and then failed looked identical to one that had never been asked for: the
+    graph simply stayed empty. Observed live -- an analysis died on a non-UTF-8 file in
+    one of three repositories, and the only symptom a user could see was a page that
+    said nothing, forever.
+    """
+
+    status: str  # pending | running | done | failed
+    error: str | None = None
+    finished_at: datetime | None = None
+
+
 class RepoGraphResponse(BaseModel):
     available: bool
     overview_md: str = ""
     graph: dict[str, object] | None = None
     repo_summaries: dict[str, str] = {}
+    analysis: AnalysisStatus | None = None
+
+
+async def _latest_analysis(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> AnalysisStatus | None:
+    """The most recent ``analyze_workspace_repos`` job for this workspace.
+
+    ``job`` carries no RLS -- a worker has to claim across tenants -- so the tenant
+    predicate here is the isolation, not a filter. Getting that wrong would report one
+    tenant's failures to another.
+    """
+    from sqlalchemy import text
+
+    from core.tenancy.scope import unscoped_session
+
+    async with unscoped_session() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT status, error, completed_at FROM job "
+                    "WHERE kind = 'analyze_workspace_repos' AND tenant_id = :t "
+                    "AND payload->>'workspace_id' = :w "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"t": str(tenant_id), "w": str(workspace_id)},
+            )
+        ).first()
+    if row is None:
+        return None
+    status, error, completed_at = row
+    return AnalysisStatus(status=str(status), error=error, finished_at=completed_at)
 
 
 @router.get("/{workspace_id}/repo-graph")
@@ -251,9 +297,10 @@ async def repo_graph_endpoint(
     of workspace knowledge, not a parallel store."""
     from core.knowledge.repo_overview import list_published_overview_entries
 
+    analysis = await _latest_analysis(ctx.tenant_id, workspace_id)
     entries = await list_published_overview_entries(ctx.tenant_id, workspace_id)
     if not entries:
-        return RepoGraphResponse(available=False)
+        return RepoGraphResponse(available=False, analysis=analysis)
 
     overview = ""
     graph: dict[str, object] | None = None
@@ -270,5 +317,9 @@ async def repo_graph_endpoint(
         elif entry.entry_key.startswith("repo-"):
             summaries[entry.entry_key.removeprefix("repo-")] = entry.body_md
     return RepoGraphResponse(
-        available=True, overview_md=overview, graph=graph, repo_summaries=summaries
+        available=True,
+        overview_md=overview,
+        graph=graph,
+        repo_summaries=summaries,
+        analysis=analysis,
     )

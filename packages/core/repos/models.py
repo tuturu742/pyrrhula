@@ -61,6 +61,14 @@ class RepoRow(Base):
     provider: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Opaque id of a provider_credential row (Encryptor-sealed access token). Never a token.
     credential_ref: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # The branch delegated work branches from and approved pull requests merge into.
+    # Not a constant: the store used to assume "main" everywhere and rename imported
+    # heads to match, which broke every repository whose remote called it something else
+    # and pinned agent work to one branch for the life of the project. Set it to a
+    # release-candidate branch to point agents at stabilisation work instead.
+    default_branch: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="main", server_default=text("'main'")
+    )
     # Exec-environment config: curated runtime key + one-time setup + the test command.
     runtime: Mapped[str] = mapped_column(
         String(31), nullable=False, default="debian", server_default=text("'debian'")

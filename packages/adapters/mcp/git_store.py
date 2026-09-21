@@ -23,6 +23,7 @@ import re
 import shutil
 from collections import defaultdict
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -79,6 +80,27 @@ def redact_credentials(text: str) -> str:
     return _CREDENTIALED_URL_RE.sub(r"\g<scheme>***@", text)
 
 
+@dataclass(frozen=True)
+class FetchResult:
+    """What a refresh did, said precisely enough to show a user.
+
+    ``status`` is one of:
+
+    * ``unchanged`` -- the store already had the remote's tip.
+    * ``fast_forwarded`` -- the remote had moved on and we caught up cleanly.
+    * ``ahead`` -- the store is in front of the remote. Normal here rather than
+      exceptional: an approved pull request merges into ``main`` *server-side*
+      (``merge_branch``), so the store legitimately leads until something pushes out.
+    * ``diverged`` -- both moved. Nothing is done, deliberately.
+    """
+
+    status: str
+    before_sha: str
+    after_sha: str
+    behind: int = 0
+    ahead: int = 0
+
+
 class GitStoreError(Exception):
     pass
 
@@ -113,6 +135,30 @@ class GitStore:
                 redact_credentials(f"git {' '.join(args)} failed: {err.decode()[:300]}")
             )
         return out.decode()
+
+    async def _git_bytes(self, repo_key: str, *args: str) -> bytes:
+        """``_git`` without the decode, for commands whose output may not be text.
+
+        ``git show`` on a binary blob succeeds and returns bytes that are not UTF-8;
+        decoding them raised ``UnicodeDecodeError``, which is not a ``GitStoreError``
+        and so escaped every caller's handling. One PNG in a repository killed the whole
+        workspace analysis job.
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(self._work(repo_key)),
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={"PATH": "/usr/bin:/bin", **_GIT_ENV},
+        )
+        out, err = await proc.communicate()
+        if proc.returncode != 0:
+            raise GitStoreError(
+                redact_credentials(f"git {' '.join(args)} failed: {err.decode()[:300]}")
+            )
+        return out
 
     def _sweep_broken_refs(self, repo_key: str) -> None:
         """Remove zero-length loose ref files. A process killed mid-ref-write (observed
@@ -163,12 +209,28 @@ class GitStore:
         *,
         token: str | None = None,
         userinfo: str | None = None,
-    ) -> None:
-        """Import a repo's starting content by cloning ``url`` into the store. A token (for
-        private https remotes) is injected as userinfo on the clone URL only -- never stored,
-        never logged (GitStoreError carries git's stderr, which redacts credentials itself).
-        ``file://`` sources work with no network. Raises GitStoreError on failure; the caller
-        treats import as best-effort (the repo stays registered, just empty)."""
+    ) -> str:
+        """Import a repo's starting content by cloning ``url`` into the store.
+
+        Returns the name of the branch that was imported, which the caller stores on the
+        repository row: it is the remote's own name for it, not an assumption.
+
+        A token (for private https remotes) is injected as userinfo on the clone URL.
+        That was described here as "never stored" and it was not true: ``git clone``
+        writes the URL it was given into ``.git/config`` as ``origin``, so every
+        imported repository kept a live credential in plaintext on the blobs volume --
+        readable by anything that can reach the volume, surviving container recreates,
+        and riding along in any backup. Found on a live deployment with five
+        repositories, every one of them holding a writable token.
+
+        So the remote is rewritten to the bare URL immediately after cloning. The
+        credential still has to reach git somehow -- it goes on the command line for the
+        length of one subprocess, which is the narrowest window available without a
+        credential helper -- but nothing persists it.
+
+        ``file://`` sources work with no network. Raises GitStoreError on failure; the
+        caller treats import as best-effort (the repo stays registered, just empty).
+        """
         clone_url = authed_url(url, token, userinfo)
         async with self._locks[repo_key]:
             work = self._work(repo_key)
@@ -189,12 +251,44 @@ class GitStore:
             if proc.returncode != 0:
                 shutil.rmtree(work, ignore_errors=True)
                 raise GitStoreError(redact_credentials(f"clone failed: {err.decode()[:300]}"))
-            # Normalize the primary branch name so branch/PR conventions hold store-wide.
-            head = await self._git(repo_key, "rev-parse", "--abbrev-ref", "HEAD")
-            if head.strip() != "main":
-                await self._git(repo_key, "branch", "-m", head.strip(), "main")
+            await self._strip_remote_credentials(repo_key, url)
+            # The imported branch keeps its own name. This used to rename it to `main`
+            # "so branch/PR conventions hold store-wide", which made the store tidy and
+            # threw away the one fact every outbound operation needs -- a repository
+            # whose remote calls it `master` could then never be refreshed, and said
+            # only "couldn't find remote ref main". The caller records the name instead.
+            head = (await self._git(repo_key, "rev-parse", "--abbrev-ref", "HEAD")).strip()
             if not self._prs_path(repo_key).exists():
                 self._prs_path(repo_key).write_text("{}")
+            return head
+
+    async def _strip_remote_credentials(self, repo_key: str, clean_url: str) -> None:
+        """Rewrite ``origin`` to a URL with no userinfo, or drop it if there is none.
+
+        Called straight after clone. Defensive rather than clever: if anything about
+        this fails, the repository is usable but would still hold a credential, so it
+        raises rather than leaving that quietly true.
+        """
+        work = self._work(repo_key)
+        if not (work / ".git").exists():
+            return
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(work),
+            "remote",
+            "set-url",
+            "origin",
+            clean_url,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={"PATH": "/usr/bin:/bin", **_GIT_ENV},
+        )
+        _, err = await proc.communicate()
+        if proc.returncode != 0:
+            raise GitStoreError(
+                redact_credentials(f"could not clear stored credentials: {err.decode()[:200]}")
+            )
 
     async def import_tree(self, repo_key: str, files: Mapping[str, str | bytes]) -> None:
         """Seed a repo's contents from an in-memory file map (e.g. an imported project) and
@@ -244,7 +338,15 @@ class GitStore:
         max_files: int = 40,
     ) -> dict[str, str]:
         """Small text files at ``ref`` as {path: content} -- codegen context. Binary or
-        oversized files are listed with empty content (the path still informs the model)."""
+        oversized files are listed with empty content (the path still informs the model).
+
+        That contract is now actually kept. It used to be a docstring only: a binary blob
+        makes ``git show`` *succeed*, so the failure arrived as ``UnicodeDecodeError``
+        from the decode rather than as the ``GitStoreError`` this caught, and a single
+        non-UTF-8 file failed the caller's entire job. Read as bytes, size-check as
+        bytes, and decode defensively -- "binary" is then a property we observe rather
+        than one we hope not to meet.
+        """
         async with self._locks[repo_key]:
             listing = await self._git(repo_key, "ls-tree", "-r", "--name-only", ref)
             files: dict[str, str] = {}
@@ -253,12 +355,132 @@ class GitStore:
                 if not path:
                     continue
                 try:
-                    content = await self._git(repo_key, "show", f"{ref}:{path}")
+                    raw = await self._git_bytes(repo_key, "show", f"{ref}:{path}")
                 except GitStoreError:
                     files[path] = ""
                     continue
-                files[path] = content if len(content) <= max_file_bytes else ""
+                # Size first: decoding a 200MB blob to discover it is too large is a
+                # cost with no answer attached.
+                if len(raw) > max_file_bytes:
+                    files[path] = ""
+                    continue
+                try:
+                    files[path] = raw.decode()
+                except UnicodeDecodeError:
+                    files[path] = ""
             return files
+
+    async def remote_default_branch(
+        self, url: str, *, token: str | None = None, userinfo: str | None = None
+    ) -> str | None:
+        """What the remote itself calls its default branch.
+
+        Asked of git rather than of a provider API: ``ls-remote --symref`` works against
+        GitHub, GitLab, Gitea, a bare path or anything else that speaks the protocol,
+        needs no API scope, and cannot disagree with what a fetch would actually find.
+
+        This has to be asked because the store deliberately forgets it. ``clone_from``
+        renames the imported head to ``main`` so branch and pull-request conventions hold
+        store-wide, which is a reasonable internal choice that happens to discard the one
+        fact an outbound operation needs -- a repository whose remote calls it ``master``
+        could not be refreshed at all, and said only "couldn't find remote ref main".
+        """
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "ls-remote",
+            "--symref",
+            authed_url(url, token, userinfo),
+            "HEAD",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={"PATH": "/usr/bin:/bin", **_GIT_ENV},
+        )
+        out, err = await proc.communicate()
+        if proc.returncode != 0:
+            raise GitStoreError(
+                redact_credentials(f"could not read the remote: {err.decode()[:200]}")
+            )
+        for line in out.decode(errors="replace").splitlines():
+            if line.startswith("ref:") and line.rstrip().endswith("HEAD"):
+                ref = line.split()[1]
+                return ref.removeprefix("refs/heads/")
+        return None
+
+    async def fetch_from(
+        self,
+        repo_key: str,
+        url: str,
+        *,
+        token: str | None = None,
+        userinfo: str | None = None,
+        remote_branch: str | None = None,
+        local_branch: str = "main",
+    ) -> FetchResult:
+        """Catch ``branch`` up with its external remote, without ever losing work.
+
+        Registration clones once and ``clone_from`` then refuses to overwrite, which is
+        right -- the hosted store is where agents commit and where approved pull
+        requests land, so it is not a mirror to be reset. But nothing re-read the remote
+        *at all*, so a repository registered from GitHub diverged silently and
+        permanently the moment anyone pushed to it elsewhere, and the knowledge graph
+        went on describing whatever the code looked like on registration day.
+
+        Fast-forward only, and never ``--force``. If ``main`` has moved on both sides
+        this reports ``diverged`` and changes nothing: the store's own commits may be
+        merged pull requests that exist nowhere else, and picking a winner silently is
+        how that work would disappear. ``pyr/*`` work branches are never touched --
+        a single-branch fetch lands in FETCH_HEAD and only ``branch`` is merged.
+        """
+        # The remote's name for its default branch is not the store's: `clone_from`
+        # normalises the local one to `main`. Ask the remote rather than assume.
+        if remote_branch is None:
+            remote_branch = (
+                await self.remote_default_branch(url, token=token, userinfo=userinfo)
+                or local_branch
+            )
+        fetch_url = authed_url(url, token, userinfo)
+        async with self._locks[repo_key]:
+            before = (await self._git(repo_key, "rev-parse", local_branch)).strip()
+            await self._git(repo_key, "fetch", "-q", fetch_url, remote_branch)
+            remote_sha = (await self._git(repo_key, "rev-parse", "FETCH_HEAD")).strip()
+
+            if remote_sha == before:
+                return FetchResult("unchanged", before, before)
+
+            base = (await self._git(repo_key, "merge-base", before, remote_sha)).strip()
+            if base == remote_sha:
+                # The remote is an ancestor: we are in front of it, which merge_branch
+                # does routinely. Nothing to pull.
+                ahead = int(
+                    (
+                        await self._git(repo_key, "rev-list", "--count", f"{remote_sha}..{before}")
+                    ).strip()
+                    or "0"
+                )
+                return FetchResult("ahead", before, before, ahead=ahead)
+            if base != before:
+                behind = int(
+                    (
+                        await self._git(repo_key, "rev-list", "--count", f"{base}..{remote_sha}")
+                    ).strip()
+                    or "0"
+                )
+                ahead = int(
+                    (await self._git(repo_key, "rev-list", "--count", f"{base}..{before}")).strip()
+                    or "0"
+                )
+                return FetchResult("diverged", before, before, behind=behind, ahead=ahead)
+
+            behind = int(
+                (
+                    await self._git(repo_key, "rev-list", "--count", f"{before}..{remote_sha}")
+                ).strip()
+                or "0"
+            )
+            await self._git(repo_key, "checkout", "-q", local_branch)
+            await self._git(repo_key, "merge", "--ff-only", "-q", remote_sha)
+            after = (await self._git(repo_key, "rev-parse", local_branch)).strip()
+            return FetchResult("fast_forwarded", before, after, behind=behind)
 
     async def push_branch(
         self,
@@ -277,6 +499,18 @@ class GitStore:
         push_url = authed_url(remote_url, token, userinfo)
         async with self._locks[repo_key]:
             await self._git(repo_key, "push", "-q", push_url, f"{branch}:{branch}")
+
+    async def create_branch(self, repo_key: str, branch: str, *, base: str = "main") -> str:
+        """Cut ``branch`` from ``base`` if it does not exist. Returns its head sha.
+
+        What "cutting a release-candidate branch" is, mechanically. The working branch
+        is left as it was: creating a branch should not move anybody to it.
+        """
+        async with self._locks[repo_key]:
+            existing = await self._git(repo_key, "branch", "--list", branch)
+            if not existing.strip():
+                await self._git(repo_key, "branch", branch, base)
+            return (await self._git(repo_key, "rev-parse", branch)).strip()
 
     async def branch_exists(self, repo_key: str, branch: str) -> bool:
         if not (self._work(repo_key) / ".git").exists():

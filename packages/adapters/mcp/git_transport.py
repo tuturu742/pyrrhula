@@ -213,6 +213,7 @@ class GitMcpTransport:
         brief: str,
         reworking: bool,
         codegen_override: Any | None = None,
+        base_branch: str = "main",
     ) -> tuple[dict[str, str | bytes], str]:
         """The coding step. With a codegen model wired: give it the repo's current files
         (the branch's own on rework, so it edits what the reviewer saw) and, on rework,
@@ -222,7 +223,11 @@ class GitMcpTransport:
         codegen = codegen_override or self._codegen
         if codegen is not None:
             try:
-                ref = branch if reworking else "main"
+                # The repository's own base branch, not a constant. A repository whose
+                # branch is called anything else raised here -- and this whole block is
+                # wrapped in a scaffold fallback, so the agent silently produced
+                # "TODO: implement" instead of code, with nothing anywhere saying why.
+                ref = branch if reworking else base_branch
                 repo_files = await self._store.read_tree(repo, ref=ref)
                 files = await codegen(work_item, brief, repo_files, brief if reworking else None)
                 return files, "model"
@@ -330,10 +335,17 @@ class GitMcpTransport:
             raise McpTransportError("delegate_work_item requires a branch")
         await self._store.ensure_repo(repo)
 
+        base_branch = str(args.get("base_branch") or "main")
         reworking = await self._store.branch_exists(repo, branch)
         codegen_override = await self._codegen_from_profile(args.get("codegen_profile"))
         files, generated_by = await self._produce_files(
-            repo, branch, work_item, brief, reworking, codegen_override=codegen_override
+            repo,
+            branch,
+            work_item,
+            brief,
+            reworking,
+            codegen_override=codegen_override,
+            base_branch=base_branch,
         )
         verb = "Address review" if reworking else "Implement"
         message = f"{verb}: {work_item.get('name') or branch} [{generated_by}]"
@@ -354,7 +366,7 @@ class GitMcpTransport:
                 repo, branch, files, message, env_cfg, envs
             )
         else:
-            await self._store.commit_on_branch(repo, branch, files, message)
+            await self._store.commit_on_branch(repo, branch, files, message, base=base_branch)
         commits = await self._store.commit_count(repo, branch)
 
         remote_pr = await self._sync_remote(repo, branch, args, work_item, message)

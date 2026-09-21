@@ -306,9 +306,15 @@ async def test_public_config_needs_no_token(client: TestClient, db_available: No
     assert client.get("/auth/config").status_code == 200
 
 
-async def test_public_config_follows_the_single_tenant_setting(
-    client: TestClient, db_available: None, single_tenant: None
+async def test_public_config_reports_what_a_caller_may_omit_not_the_raw_setting(
+    client: TestClient, db_available: None, single_tenant: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """`single_tenant` answers "may I leave the organization out?", which is the setting
+    AND a deployment that has at most one organization. With the setting on and one
+    organization, that is yes."""
+    from api.routes import auth as auth_routes
+
+    monkeypatch.setattr(auth_routes, "_organization_count", lambda: _async(1))
     assert client.get("/auth/config").json()["single_tenant"] is True
 
 
@@ -462,3 +468,21 @@ async def test_a_viewer_who_joins_the_solo_org_is_not_an_admin(
         ).status_code
         == 403
     )
+
+
+async def test_config_reports_multi_tenant_once_several_orgs_exist(
+    client: TestClient, db_available: None, single_tenant: None
+) -> None:
+    """The setting is intent; the number of organizations is fact.
+
+    A near-miss worth a test: a nine-organization cluster had carried
+    `SINGLE_TENANT_UI=true` in its manifests unnoticed, because nothing acted on it
+    until the login form did. Reporting the setting alone would have hidden the
+    organization field there -- leaving nothing to type and nothing the server could
+    infer, which is not a degraded login but no login at all."""
+    await _new_tenant_slug()
+    await _new_tenant_slug()
+
+    body = client.get("/auth/config").json()
+    assert body["single_tenant"] is False
+    assert body["has_organization"] is True

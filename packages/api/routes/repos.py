@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse, Response
@@ -24,7 +25,7 @@ from api.encryptor_factory import get_encryptor
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from api.play_headers import PLAY_HEADERS, content_type_for
-from core.agents.authoring import store_provider_credential
+from core.agents.authoring import resolve_connection_api_key, store_provider_credential
 from core.repos.models import RepoRow
 from core.repos.service import (
     GIT_PROVIDERS,
@@ -33,6 +34,7 @@ from core.repos.service import (
     RepoNotFoundError,
     archive_repo,
     create_repo,
+    get_repo,
     list_repos,
     store_key,
 )
@@ -56,6 +58,8 @@ class RepoResponse(BaseModel):
     description: str = ""
     source_url: str | None = None
     provider: str | None = None
+    # What the remote calls its default branch, and what delegated work targets.
+    default_branch: str = "main"
     has_credential: bool = False
     runtime: str = "debian"
     runtime_image: str | None = None
@@ -84,6 +88,7 @@ def _response(row: RepoRow, *, import_status: str | None = None) -> RepoResponse
         description=row.description,
         source_url=row.source_url,
         provider=row.provider,
+        default_branch=row.default_branch,
         has_credential=row.credential_ref is not None,
         runtime=row.runtime,
         runtime_image=row.runtime_image,
@@ -342,10 +347,20 @@ async def create_repo_endpoint(
                 if remote is not None and body.access_token
                 else None
             )
-            await store.clone_from(
+            imported_branch = await store.clone_from(
                 skey, body.source_url, token=body.access_token, userinfo=userinfo
             )
             import_status = "imported"
+            # The remote's own name for its default branch, not an assumption. Stored
+            # now because nothing can recover it later without asking the remote again.
+            if imported_branch and imported_branch != row.default_branch:
+                from core.tenancy.scope import tenant_scope
+
+                async with tenant_scope(ctx.tenant_id) as session:
+                    live = await session.get(type(row), row.id)
+                    if live is not None:
+                        live.default_branch = imported_branch
+                row.default_branch = imported_branch
         except GitStoreError as exc:
             await store.ensure_repo(skey)
             import_status = f"import failed: {str(exc)[:160]}"
@@ -357,6 +372,9 @@ async def create_repo_endpoint(
 
 class UpdateRepoRequest(BaseModel):
     name: str | None = None
+    # The branch delegated work targets. Point it at a release-candidate branch to put
+    # agents on stabilisation work without moving the project's trunk.
+    default_branch: str | None = None
     description: str | None = None
     source_url: str | None = None
     provider: str | None = None  # 'auto' clears the hint back to auto-detect
@@ -377,6 +395,26 @@ class UpdateRepoRequest(BaseModel):
     preview_port: int | None = None
     preview_env: dict[str, str] | None = None
     clear_preview: bool = False
+
+
+async def _ensure_store_branch(tenant_id: uuid.UUID, repo: Any, branch: str) -> None:
+    """A branch a repository points at has to exist in the hosted store.
+
+    Setting the row alone would leave every later checkout failing on a name nothing
+    ever created -- the row would say `rc/0.1.0` and the store would have no such
+    branch. Created from the current one when absent, which is what cutting a
+    release-candidate branch means.
+    """
+    store = GitStore(default_git_root())
+    skey = store_key(tenant_id, repo.key)
+    try:
+        if await store.branch_exists(skey, branch):
+            return
+        await store.create_branch(skey, branch, base=repo.default_branch)
+    except GitStoreError as exc:
+        raise HTTPException(
+            status_code=409, detail=f"could not prepare branch {branch!r}: {exc}"
+        ) from exc
 
 
 @router.patch("/{repo_id}")
@@ -429,6 +467,9 @@ async def update_repo_endpoint(
             live.credential_ref = credential_ref
         if registry_credential_ref is not None:
             live.registry_credential_ref = registry_credential_ref
+        if body.default_branch:
+            await _ensure_store_branch(ctx.tenant_id, live, body.default_branch)
+            live.default_branch = body.default_branch
         if body.runtime is not None:
             live.runtime = body.runtime
         if body.runtime_image is not None:
@@ -481,6 +522,85 @@ async def update_repo_endpoint(
         await session.flush()
         await session.refresh(live)
         return _response(live)
+
+
+class RefreshRepoResponse(BaseModel):
+    """What a refresh did. ``status`` is ``unchanged`` | ``fast_forwarded`` | ``ahead``
+    | ``diverged`` -- see ``GitStore.fetch_from``."""
+
+    status: str
+    before_sha: str
+    after_sha: str
+    behind: int = 0
+    ahead: int = 0
+    detail: str
+
+
+_REFRESH_DETAIL = {
+    "unchanged": "Already up to date with the source.",
+    "fast_forwarded": "Pulled {behind} new commit(s) from the source.",
+    "ahead": (
+        "This repository is {ahead} commit(s) ahead of its source -- work merged here "
+        "that has not been pushed out. Nothing to pull."
+    ),
+    "diverged": (
+        "This repository and its source have both moved ({ahead} here, {behind} there). "
+        "Nothing was changed: commits here may be merged pull requests that exist "
+        "nowhere else, so which side wins is your call, not a default."
+    ),
+}
+
+
+@router.post("/{repo_id}/refresh")
+async def refresh_repo_endpoint(
+    repo_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
+) -> RefreshRepoResponse:
+    """Re-read the external source into the hosted store.
+
+    Registration imports once and never looked again, so a repository registered from
+    GitHub described whatever it held that day, for ever. Fast-forward only: the store
+    is not a mirror -- approved pull requests merge into ``main`` here -- so a refresh
+    that could rewind is not a refresh, it is data loss.
+    """
+    await require_tenant_permission(ctx, "repo:manage")
+    repo = await get_repo(ctx.tenant_id, repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail=f"no repo {repo_id} in this tenant")
+    if not repo.source_url:
+        raise HTTPException(
+            status_code=400,
+            detail="this repository has no source to refresh from (it was created empty)",
+        )
+
+    token = await resolve_connection_api_key(
+        ctx.tenant_id,
+        str(repo.credential_ref) if repo.credential_ref else None,
+        encryptor=get_encryptor(),
+    )
+    remote = resolve_remote(repo.source_url, repo.provider)
+    userinfo = remote.push_userinfo(token) if remote is not None and token else None
+
+    store = GitStore(default_git_root())
+    try:
+        result = await store.fetch_from(
+            store_key(ctx.tenant_id, repo.key),
+            repo.source_url,
+            token=token,
+            userinfo=userinfo,
+            local_branch=repo.default_branch,
+        )
+    except GitStoreError as exc:
+        # GitStoreError already redacts credentials from git's own message.
+        raise HTTPException(status_code=502, detail=f"could not reach the source: {exc}") from exc
+
+    return RefreshRepoResponse(
+        status=result.status,
+        before_sha=result.before_sha,
+        after_sha=result.after_sha,
+        behind=result.behind,
+        ahead=result.ahead,
+        detail=_REFRESH_DETAIL[result.status].format(behind=result.behind, ahead=result.ahead),
+    )
 
 
 @router.delete("/{repo_id}", status_code=204)

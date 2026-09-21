@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
-import { usePreviewActions, usePreviews } from "@/features/previews/usePreviews";
+import {
+  usePreviewActions,
+  usePreviews,
+} from "@/features/previews/usePreviews";
 
 /**
  * Tenant repo registry: repos live in the hosted server-side git store; registering one may
@@ -52,12 +56,14 @@ function PreviewsCard({ repos }: { repos: RepoRowData[] }) {
     <section className="rounded-md border border-border p-4">
       <h2 className="font-medium">Preview deployments</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Runs a repo&apos;s latest build in its own container and gives you a link anyone
-        can open — no Pyrrhula account needed — so a person can try what the agents built.
-        Previews expire on their own.
+        Runs a repo&apos;s latest build in its own container and gives you a
+        link anyone can open — no Pyrrhula account needed — so a person can try
+        what the agents built. Previews expire on their own.
       </p>
       {notice && (
-        <p className="mt-2 break-all rounded bg-secondary px-2 py-1 text-xs">{notice}</p>
+        <p className="mt-2 break-all rounded bg-secondary px-2 py-1 text-xs">
+          {notice}
+        </p>
       )}
       <div className="mt-3 flex flex-col gap-2">
         {deployable.map((repo) => {
@@ -129,7 +135,6 @@ function PreviewsCard({ repos }: { repos: RepoRowData[] }) {
   );
 }
 
-
 function ExecEngineCard() {
   const queryClient = useQueryClient();
   const { data: engines } = useQuery({
@@ -147,7 +152,8 @@ function ExecEngineCard() {
       });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["exec-engines"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["exec-engines"] }),
   });
   if (!engines || engines.length < 2) return null; // one engine = nothing to choose
 
@@ -156,7 +162,8 @@ function ExecEngineCard() {
       <div>
         <h2 className="font-medium">Agent environments run on</h2>
         <p className="text-xs text-muted-foreground">
-          Where delegated coding agents build and test — engines offered by this deployment.
+          Where delegated coding agents build and test — engines offered by this
+          deployment.
         </p>
       </div>
       <select
@@ -186,7 +193,10 @@ const ENV_STATUS_STYLE: Record<string, string> = {
 };
 
 function envAge(iso: string): string {
-  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  const s = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
+  );
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
@@ -243,8 +253,8 @@ function ExecEnvironmentsCard() {
         </label>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Containers/tasks where delegated coding agents build and test, and who spawned
-        them. Kill removes a stuck or orphaned one through its engine.
+        Containers/tasks where delegated coding agents build and test, and who
+        spawned them. Kill removes a stuck or orphaned one through its engine.
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
@@ -265,7 +275,8 @@ function ExecEnvironmentsCard() {
                 <td className="py-1.5 pr-3 font-mono text-xs">{e.name}</td>
                 <td className="py-1.5 pr-3">{e.spawned_by_label || "—"}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">
-                  {e.session_name || (e.session_id ? e.session_id.slice(0, 8) : "—")}
+                  {e.session_name ||
+                    (e.session_id ? e.session_id.slice(0, 8) : "—")}
                 </td>
                 <td className="py-1.5 pr-3 font-mono text-xs text-muted-foreground">
                   {e.image}
@@ -321,14 +332,16 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
   const { data: personas } = useQuery({
     queryKey: ["personas-for-identities"],
     queryFn: async () => {
-      const { data: workspaces, error: wsError } = await apiClient.GET("/workspaces");
+      const { data: workspaces, error: wsError } =
+        await apiClient.GET("/workspaces");
       if (wsError) throw wsError;
       const out: { id: string; name: string; workspace: string }[] = [];
       for (const ws of workspaces ?? []) {
         const { data: ps } = await apiClient.GET("/agents", {
           params: { query: { workspace_id: ws.id } },
         });
-        for (const p of ps ?? []) out.push({ id: p.id, name: p.name, workspace: ws.name });
+        for (const p of ps ?? [])
+          out.push({ id: p.id, name: p.name, workspace: ws.name });
       }
       return out;
     },
@@ -337,9 +350,12 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
   const { data: bound } = useQuery({
     queryKey: ["persona-credentials", repoId],
     queryFn: async () => {
-      const { data, error: e } = await apiClient.GET("/repos/{repo_id}/persona-credentials", {
-        params: { path: { repo_id: repoId } },
-      });
+      const { data, error: e } = await apiClient.GET(
+        "/repos/{repo_id}/persona-credentials",
+        {
+          params: { path: { repo_id: repoId } },
+        },
+      );
       if (e) throw e;
       return data;
     },
@@ -347,14 +363,25 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
   const boundIds = new Set((bound ?? []).map((b) => b.persona_id));
 
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["persona-credentials", repoId] });
+    queryClient.invalidateQueries({
+      queryKey: ["persona-credentials", repoId],
+    });
 
   const bind = useMutation({
-    mutationFn: async ({ personaId, token }: { personaId: string; token: string }) => {
-      const { error: e } = await apiClient.PUT("/repos/{repo_id}/persona-credentials", {
-        params: { path: { repo_id: repoId } },
-        body: { persona_id: personaId, access_token: token },
-      });
+    mutationFn: async ({
+      personaId,
+      token,
+    }: {
+      personaId: string;
+      token: string;
+    }) => {
+      const { error: e } = await apiClient.PUT(
+        "/repos/{repo_id}/persona-credentials",
+        {
+          params: { path: { repo_id: repoId } },
+          body: { persona_id: personaId, access_token: token },
+        },
+      );
       if (e) throw e;
     },
     onSuccess: (_d, { personaId }) => {
@@ -362,7 +389,8 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
       setError(null);
       invalidate();
     },
-    onError: () => setError("Could not save that token — check it and try again."),
+    onError: () =>
+      setError("Could not save that token — check it and try again."),
   });
 
   const unbind = useMutation({
@@ -379,8 +407,8 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
   return (
     <div className="mt-3 rounded-md border border-border bg-secondary/20 p-3">
       <p className="mb-2 text-xs text-muted-foreground">
-        Personas act under the repo&apos;s token unless given their own. Give a reviewer its
-        own account so it can approve work another persona opened.
+        Personas act under the repo&apos;s token unless given their own. Give a
+        reviewer its own account so it can approve work another persona opened.
       </p>
       {personas?.length === 0 && (
         <p className="text-xs text-muted-foreground">No personas yet.</p>
@@ -392,7 +420,9 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
             <span className="text-xs text-muted-foreground">{p.workspace}</span>
             {boundIds.has(p.id) ? (
               <>
-                <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">own identity</span>
+                <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">
+                  own identity
+                </span>
                 <button
                   type="button"
                   onClick={() => unbind.mutate(p.id)}
@@ -402,19 +432,27 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
                 </button>
               </>
             ) : (
-              <span className="text-xs text-muted-foreground">repo default</span>
+              <span className="text-xs text-muted-foreground">
+                repo default
+              </span>
             )}
             <input
               type="password"
-              placeholder={boundIds.has(p.id) ? "replace token" : "access token"}
+              placeholder={
+                boundIds.has(p.id) ? "replace token" : "access token"
+              }
               value={tokens[p.id] ?? ""}
-              onChange={(e) => setTokens((t) => ({ ...t, [p.id]: e.target.value }))}
+              onChange={(e) =>
+                setTokens((t) => ({ ...t, [p.id]: e.target.value }))
+              }
               className="w-44 rounded-md border border-input bg-transparent px-2 py-1 text-xs"
             />
             <button
               type="button"
               disabled={!(tokens[p.id] ?? "").trim() || bind.isPending}
-              onClick={() => bind.mutate({ personaId: p.id, token: tokens[p.id] ?? "" })}
+              onClick={() =>
+                bind.mutate({ personaId: p.id, token: tokens[p.id] ?? "" })
+              }
               className="rounded-md bg-primary px-2 py-0.5 text-xs text-primary-foreground disabled:opacity-50"
             >
               Save
@@ -433,12 +471,43 @@ export function ReposPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RepoRowData | null>(null);
 
-  const { data: repos, isLoading: pageLoading, isError: pageError } = useQuery({
+  const {
+    data: repos,
+    isLoading: pageLoading,
+    isError: pageError,
+  } = useQuery({
     queryKey: ["repos"],
     queryFn: async () => {
       const { data, error } = await apiClient.GET("/repos");
       if (error) throw error;
       return data;
+    },
+  });
+
+  /**
+   * Re-read the external source into the hosted store.
+   *
+   * Registration imported once and nothing ever looked again, so a repository
+   * registered from GitHub went on describing whatever it held that day — and the
+   * knowledge graph built from it aged with it, silently.
+   */
+  const [refreshed, setRefreshed] = useState<Record<string, string>>({});
+  const refresh = useMutation({
+    mutationFn: async (repoId: string) => {
+      const { data, error } = await apiClient.POST("/repos/{repo_id}/refresh", {
+        params: { path: { repo_id: repoId } },
+      });
+      if (error) throw error;
+      return { repoId, ...(data as { status: string; detail: string }) };
+    },
+    onSuccess: (result) => {
+      setRefreshed((prev) => ({ ...prev, [result.repoId]: result.detail }));
+      void queryClient.invalidateQueries({ queryKey: ["repos"] });
+    },
+    onError: () => {
+      toast.error(
+        "Could not refresh — is the source reachable, and the token still valid?",
+      );
     },
   });
 
@@ -462,7 +531,11 @@ export function ReposPage() {
     );
   }
   if (pageError) {
-    return <p className="py-8 text-sm text-destructive">This page could not load — please refresh or try again.</p>;
+    return (
+      <p className="py-8 text-sm text-destructive">
+        This page could not load — please refresh or try again.
+      </p>
+    );
   }
 
   return (
@@ -504,74 +577,103 @@ export function ReposPage() {
             className="flex flex-col rounded-md border border-border px-4 py-3"
           >
             <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{r.name}</span>
-                <span className="font-mono text-xs text-muted-foreground">{r.key}</span>
-                <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">{r.runtime}</span>
-                {r.source_url?.startsWith("http") && (
-                  <span className="rounded bg-secondary px-1.5 py-0.5 text-xs" title={r.source_url}>
-                    remote
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{r.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {r.key}
+                  </span>
+                  <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">
+                    {r.runtime}
+                  </span>
+                  {r.source_url?.startsWith("http") && (
+                    <span
+                      className="rounded bg-secondary px-1.5 py-0.5 text-xs"
+                      title={r.source_url}
+                    >
+                      remote
+                    </span>
+                  )}
+                  {r.has_credential && (
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">
+                      token set
+                    </span>
+                  )}
+                </div>
+                {(r.description || r.test_cmd) && (
+                  <span className="text-xs text-muted-foreground">
+                    {r.description}
+                    {r.description && r.test_cmd ? " · " : ""}
+                    {r.test_cmd && <code>{r.test_cmd}</code>}
                   </span>
                 )}
-                {r.has_credential && (
-                  <span className="rounded bg-secondary px-1.5 py-0.5 text-xs">token set</span>
-                )}
               </div>
-              {(r.description || r.test_cmd) && (
-                <span className="text-xs text-muted-foreground">
-                  {r.description}
-                  {r.description && r.test_cmd ? " · " : ""}
-                  {r.test_cmd && <code>{r.test_cmd}</code>}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-            {r.artifact_name && (
-              <a
-                href={`/api/repos/${r.id}/artifacts/play`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-border px-2.5 py-1 text-xs"
-                title="Open the latest green build in the browser"
-              >
-                ▶ Play
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={() => setIdentitiesFor((cur) => (cur === r.id ? null : r.id))}
-              className="rounded-md border border-border px-2.5 py-1 text-xs"
-              title="Which hosted-git identity each persona acts under on this repo"
-            >
-              Identities
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm(false);
-                setEditing(r);
-              }}
-              className="rounded-md border border-border px-2.5 py-1 text-xs"
-            >
-              Edit
-            </button>
-            <ConfirmButton
-                title="Archive"
-                description={`Archive repo "${r.name}"? Hosted content is kept.`}
-                confirmLabel="Archive"
-                destructive
-                onConfirm={() => archive.mutate(r.id)}
-              >
+              <div className="flex items-center gap-2">
+                {r.artifact_name && (
+                  <a
+                    href={`/api/repos/${r.id}/artifacts/play`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md border border-border px-2.5 py-1 text-xs"
+                    title="Open the latest green build in the browser"
+                  >
+                    ▶ Play
+                  </a>
+                )}
                 <button
-              type="button"
-              disabled={archive.isPending}
-              className="rounded-md border border-destructive/50 px-2.5 py-1 text-xs text-destructive disabled:opacity-50"
-            >
-              Archive
-            </button>
-              </ConfirmButton>
-            </div>
+                  type="button"
+                  onClick={() =>
+                    setIdentitiesFor((cur) => (cur === r.id ? null : r.id))
+                  }
+                  className="rounded-md border border-border px-2.5 py-1 text-xs"
+                  title="Which hosted-git identity each persona acts under on this repo"
+                >
+                  Identities
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditing(r);
+                  }}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs"
+                >
+                  Edit
+                </button>
+                {r.source_url ? (
+                  <button
+                    type="button"
+                    disabled={refresh.isPending}
+                    onClick={() => refresh.mutate(r.id)}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs disabled:opacity-50"
+                    title="Pull new commits from the source. Fast-forward only — nothing here is overwritten."
+                  >
+                    {refresh.isPending && refresh.variables === r.id
+                      ? "Refreshing…"
+                      : "Refresh"}
+                  </button>
+                ) : null}
+                <ConfirmButton
+                  title="Archive"
+                  description={`Archive repo "${r.name}"? Hosted content is kept.`}
+                  confirmLabel="Archive"
+                  destructive
+                  onConfirm={() => archive.mutate(r.id)}
+                >
+                  <button
+                    type="button"
+                    disabled={archive.isPending}
+                    className="rounded-md border border-destructive/50 px-2.5 py-1 text-xs text-destructive disabled:opacity-50"
+                  >
+                    Archive
+                  </button>
+                </ConfirmButton>
+              </div>
+              {refreshed[r.id] ? (
+                <p className="text-xs text-muted-foreground">
+                  {refreshed[r.id]}
+                </p>
+              ) : null}
             </div>
             {identitiesFor === r.id && <PersonaIdentities repoId={r.id} />}
           </div>
@@ -594,14 +696,23 @@ function RepoForm({
   const [sourceUrl, setSourceUrl] = useState(existing?.source_url ?? "");
   const [token, setToken] = useState("");
   const [provider, setProvider] = useState(existing?.provider ?? "auto");
+  const [defaultBranch, setDefaultBranch] = useState(
+    existing?.default_branch ?? "main",
+  );
   const [runtime, setRuntime] = useState(existing?.runtime ?? "debian");
-  const [runtimeImage, setRuntimeImage] = useState(existing?.runtime_image ?? "");
+  const [runtimeImage, setRuntimeImage] = useState(
+    existing?.runtime_image ?? "",
+  );
   const [registryUser, setRegistryUser] = useState("");
   const [registryToken, setRegistryToken] = useState("");
-  const [setupCmds, setSetupCmds] = useState((existing?.setup_cmds ?? []).join("\n"));
+  const [setupCmds, setSetupCmds] = useState(
+    (existing?.setup_cmds ?? []).join("\n"),
+  );
   const [testCmd, setTestCmd] = useState(existing?.test_cmd ?? "");
   const [buildCmd, setBuildCmd] = useState(existing?.build_cmd ?? "");
-  const [artifactName, setArtifactName] = useState(existing?.artifact_name ?? "");
+  const [artifactName, setArtifactName] = useState(
+    existing?.artifact_name ?? "",
+  );
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const { data: runtimes } = useQuery({
@@ -621,9 +732,15 @@ function RepoForm({
         source_url: sourceUrl.trim() === "" ? null : sourceUrl.trim(),
         access_token: token.trim() === "" ? null : token,
         provider: provider === "auto" && !existing ? null : provider,
+        // Only on edit: at creation the branch is read from the remote, so sending a
+        // guess here would overwrite the true answer with "main".
+        ...(existing && defaultBranch.trim()
+          ? { default_branch: defaultBranch.trim() }
+          : {}),
         runtime,
         runtime_image: runtime === "custom" ? runtimeImage.trim() : null,
-        registry_username: registryUser.trim() === "" ? null : registryUser.trim(),
+        registry_username:
+          registryUser.trim() === "" ? null : registryUser.trim(),
         registry_token: registryToken.trim() === "" ? null : registryToken,
         setup_cmds: setupCmds
           .split("\n")
@@ -651,7 +768,9 @@ function RepoForm({
         if (error) throw error;
         return data;
       }
-      const { data, error } = await apiClient.POST("/repos", { body: { key, ...shared } });
+      const { data, error } = await apiClient.POST("/repos", {
+        body: { key, ...shared },
+      });
       if (error) throw error;
       return data;
     },
@@ -670,6 +789,24 @@ function RepoForm({
 
   return (
     <section className="flex flex-col gap-4 rounded-md border border-border p-4">
+      {existing ? (
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Working branch</span>
+          <input
+            className="rounded-md border border-input bg-transparent px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            value={defaultBranch}
+            onChange={(e) => setDefaultBranch(e.target.value)}
+            placeholder="main"
+          />
+          <span className="text-xs text-muted-foreground">
+            What delegated work branches from, and what refresh pulls into.
+            Detected from the remote when the repo was imported. Point it at a
+            release-candidate branch to put agents on stabilisation work — it is
+            created from the current branch if it does not exist yet.
+          </span>
+        </label>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Name</span>
@@ -694,7 +831,9 @@ function RepoForm({
           <input
             className="rounded-md border border-input bg-transparent px-3 py-2 font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
             value={key}
-            onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "-"))}
+            onChange={(e) =>
+              setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "-"))
+            }
             placeholder="my-project"
             disabled={!!existing}
           />
@@ -727,7 +866,11 @@ function RepoForm({
             className="rounded-md border border-input bg-transparent px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder={existing?.has_credential ? "leave empty to keep the stored token" : "stored encrypted; never shown again"}
+            placeholder={
+              existing?.has_credential
+                ? "leave empty to keep the stored token"
+                : "stored encrypted; never shown again"
+            }
             autoComplete="new-password"
           />
         </label>
@@ -740,15 +883,17 @@ function RepoForm({
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
         >
-          <option value="auto">Auto-detect (github.com / gitlab.com / codeberg.org)</option>
+          <option value="auto">
+            Auto-detect (github.com / gitlab.com / codeberg.org)
+          </option>
           <option value="github">GitHub</option>
           <option value="gitlab">GitLab (incl. self-hosted)</option>
           <option value="gitea">Gitea / Forgejo</option>
           <option value="generic">Generic (push only, no PRs)</option>
         </select>
         <span className="text-xs text-muted-foreground">
-          Self-hosted GitLab/Gitea can't be auto-detected — pick the provider so PRs and
-          review comments land on your server.
+          Self-hosted GitLab/Gitea can't be auto-detected — pick the provider so
+          PRs and review comments land on your server.
         </span>
       </label>
 
@@ -790,7 +935,11 @@ function RepoForm({
                   className="rounded-md border border-input bg-transparent px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                   value={registryToken}
                   onChange={(e) => setRegistryToken(e.target.value)}
-                  placeholder={existing?.has_registry_credential ? "keep stored credentials" : "registry token/password"}
+                  placeholder={
+                    existing?.has_registry_credential
+                      ? "keep stored credentials"
+                      : "registry token/password"
+                  }
                   autoComplete="new-password"
                 />
               </div>
@@ -806,7 +955,8 @@ function RepoForm({
             placeholder="npm test"
           />
           <span className="text-xs text-muted-foreground">
-            Run after each delegated change; its pass/fail becomes the PR's CI status.
+            Run after each delegated change; its pass/fail becomes the PR's CI
+            status.
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -818,8 +968,8 @@ function RepoForm({
             placeholder="npm run build && tar czf dist.tgz -C dist ."
           />
           <span className="text-xs text-muted-foreground">
-            Runs after the tests pass. Whatever it produces is uploaded as the build
-            artifact — which is what a preview serves.
+            Runs after the tests pass. Whatever it produces is uploaded as the
+            build artifact — which is what a preview serves.
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -832,14 +982,16 @@ function RepoForm({
           />
           <span className="text-xs text-muted-foreground">
             The file the build command leaves behind, relative to the repo root.{" "}
-            <b>Both this and the build command are required</b> — with either missing there
-            is no artifact, and nothing to preview.
+            <b>Both this and the build command are required</b> — with either
+            missing there is no artifact, and nothing to preview.
           </span>
         </label>
       </div>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Setup commands (optional, one per line)</span>
+        <span className="font-medium">
+          Setup commands (optional, one per line)
+        </span>
         <textarea
           className="min-h-16 rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
           value={setupCmds}

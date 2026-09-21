@@ -11,7 +11,7 @@ import uuid
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider
 from api.auth.tokens import issue_token
@@ -74,6 +74,24 @@ class PublicConfigResponse(BaseModel):
 # are no credentials here to brute-force, but it is unauthenticated and it touches
 # the database, and the exemption an endpoint like this would need is exactly the
 # kind that gets copied to the next one that does have something to guess.
+async def _organization_count() -> int:
+    """Organizations a person could sign in to: not the library, not the reserved admin
+    tenant (it exists on every install), not deactivated ones."""
+    from core.tenancy.admin import ADMIN_TENANT_SLUG
+
+    async with unscoped_session() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(Tenant)
+            .where(
+                Tenant.is_library.is_(False),
+                Tenant.slug != ADMIN_TENANT_SLUG,
+                Tenant.deactivated_at.is_(None),
+            )
+        )
+    return int(count or 0)
+
+
 @router.get("/config", dependencies=[Depends(rate_limit_by_ip)])
 async def public_config() -> PublicConfigResponse:
     """The deployment shape, unauthenticated.
@@ -82,24 +100,22 @@ async def public_config() -> PublicConfigResponse:
     an organization name, and the login form went on asking for one anyway. A promise
     that a solo user never thinks about organizations is not kept by making the field
     optional -- it is kept by not showing it.
-    """
-    from core.tenancy.admin import ADMIN_TENANT_SLUG
 
+    ``single_tenant`` reports whether a caller may OMIT the organization, which is not
+    the same as whether the setting is on. The setting is a statement of intent; two
+    organizations make it untrue whatever the configuration says, because the server
+    then refuses to guess between them. Reporting the setting alone would hide the
+    organization field on a deployment that still needs one -- and with nothing to type
+    and nothing inferable, nobody could sign in at all. Observed as a near-miss on a
+    nine-organization cluster whose manifests had carried `SINGLE_TENANT_UI=true`
+    unnoticed the whole time, because until now nothing acted on it.
+    """
     settings = get_settings()
-    async with unscoped_session() as session:
-        has_org = await session.scalar(
-            select(Tenant.id)
-            .where(
-                Tenant.is_library.is_(False),
-                Tenant.slug != ADMIN_TENANT_SLUG,
-                Tenant.deactivated_at.is_(None),
-            )
-            .limit(1)
-        )
+    org_count = await _organization_count()
     return PublicConfigResponse(
-        single_tenant=settings.single_tenant_ui,
+        single_tenant=settings.single_tenant_ui and org_count <= 1,
         allow_signup=settings.allow_tenant_signup,
-        has_organization=has_org is not None,
+        has_organization=org_count > 0,
     )
 
 

@@ -19,6 +19,15 @@ export interface paths {
          *     an organization name, and the login form went on asking for one anyway. A promise
          *     that a solo user never thinks about organizations is not kept by making the field
          *     optional -- it is kept by not showing it.
+         *
+         *     ``single_tenant`` reports whether a caller may OMIT the organization, which is not
+         *     the same as whether the setting is on. The setting is a statement of intent; two
+         *     organizations make it untrue whatever the configuration says, because the server
+         *     then refuses to guess between them. Reporting the setting alone would hide the
+         *     organization field on a deployment that still needs one -- and with nothing to type
+         *     and nothing inferable, nobody could sign in at all. Observed as a near-miss on a
+         *     nine-organization cluster whose manifests had carried `SINGLE_TENANT_UI=true`
+         *     unnoticed the whole time, because until now nothing acted on it.
          */
         get: operations["public_config_auth_config_get"];
         put?: never;
@@ -2123,6 +2132,31 @@ export interface paths {
         patch: operations["update_repo_endpoint_repos__repo_id__patch"];
         trace?: never;
     };
+    "/repos/{repo_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Repo Endpoint
+         * @description Re-read the external source into the hosted store.
+         *
+         *     Registration imports once and never looked again, so a repository registered from
+         *     GitHub described whatever it held that day, for ever. Fast-forward only: the store
+         *     is not a mirror -- approved pull requests merge into ``main`` here -- so a refresh
+         *     that could rewind is not a refresh, it is data loss.
+         */
+        post: operations["refresh_repo_endpoint_repos__repo_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{repo_id}/persona-credentials": {
         parameters: {
             query?: never;
@@ -3895,6 +3929,24 @@ export interface components {
             api_base: string | null;
             /** Fallback Agent Id */
             fallback_agent_id: string | null;
+        };
+        /**
+         * AnalysisStatus
+         * @description The last analysis run for this workspace, so the page can say what happened.
+         *
+         *     Without this the page could only report failures to *queue* a job. A job that was
+         *     queued and then failed looked identical to one that had never been asked for: the
+         *     graph simply stayed empty. Observed live -- an analysis died on a non-UTF-8 file in
+         *     one of three repositories, and the only symptom a user could see was a page that
+         *     said nothing, forever.
+         */
+        AnalysisStatus: {
+            /** Status */
+            status: string;
+            /** Error */
+            error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
         };
         /** ApplyEntryEditRequest */
         ApplyEntryEditRequest: {
@@ -5799,6 +5851,31 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * RefreshRepoResponse
+         * @description What a refresh did. ``status`` is ``unchanged`` | ``fast_forwarded`` | ``ahead``
+         *     | ``diverged`` -- see ``GitStore.fetch_from``.
+         */
+        RefreshRepoResponse: {
+            /** Status */
+            status: string;
+            /** Before Sha */
+            before_sha: string;
+            /** After Sha */
+            after_sha: string;
+            /**
+             * Behind
+             * @default 0
+             */
+            behind: number;
+            /**
+             * Ahead
+             * @default 0
+             */
+            ahead: number;
+            /** Detail */
+            detail: string;
+        };
         /** RegisterRequest */
         RegisterRequest: {
             /**
@@ -5869,6 +5946,7 @@ export interface components {
             repo_summaries: {
                 [key: string]: string;
             };
+            analysis?: components["schemas"]["AnalysisStatus"] | null;
         };
         /** RepoResponse */
         RepoResponse: {
@@ -11855,6 +11933,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_repo_endpoint_repos__repo_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                repo_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshRepoResponse"];
                 };
             };
             /** @description Validation Error */

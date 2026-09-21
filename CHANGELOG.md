@@ -120,6 +120,44 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   is the one. With several it refuses and says so rather than signing someone into the
   wrong one, and an explicit `X-Pyrrhula-Tenant` always wins.
 
+- **Repository knowledge graphs build again.** Four separate faults stood between a
+  workspace with repositories attached and a graph. One binary file failed the whole
+  analysis — `read_tree` documented that it skipped binaries and did not, because
+  `git show` on a blob *succeeds* and the `UnicodeDecodeError` escaped the handler that
+  only caught `GitStoreError`. The failure was then invisible: the page had no concept
+  of job status, so a job that failed looked exactly like one nobody had asked for, and
+  a refresh lost even the "queued" notice. Both fixed, and the page now reports what the
+  last run did.
+- **Repositories can be refreshed.** Import happened once at registration and nothing
+  ever re-read the source, so a repository registered from a remote diverged silently
+  and for ever — a knowledge graph went on describing the code as it stood on
+  registration day. `POST /repos/{id}/refresh` fast-forwards from the source. Never
+  force, never a reset: the store is where approved pull requests land, so a refresh
+  that could rewind is not a refresh. When both sides have moved it reports the
+  divergence and changes nothing.
+- **The working branch is a property of a repository, not the constant `main`.** The
+  store assumed `main` in fourteen places and renamed imported heads to match, which
+  made it internally tidy and destroyed the one fact every outbound operation needs: on
+  a live deployment, two of three repositories used `master` and were silently dropped
+  from analysis, while delegated coding would have degraded to scaffolding with nothing
+  reporting why. The remote's own name is read from the remote (`ls-remote --symref`,
+  so it works for any host and cannot disagree with a fetch) and stored on the
+  repository, where it can also be pointed at a release-candidate branch to put agents
+  on stabilisation work.
+
+### Security
+
+- **A repository's access token was stored in plaintext on the volume.** `clone_from`
+  passes the token as userinfo on the clone URL, and `git clone` persists the URL it is
+  given as `origin` — so every imported repository kept a live, writable credential in
+  `.git/config`, readable by anything that could reach the blobs volume, surviving
+  container recreates and riding along in backups. Found on a live deployment where all
+  five repositories held one. The docstring had claimed "never stored, never logged";
+  the second half was true and carefully done, the first was simply wrong about what git
+  does. The remote is now rewritten to the bare URL immediately after cloning, and it
+  raises rather than leaving a credential quietly in place. **Anyone who registered a
+  repository with a token before this should rotate it.**
+
 ### Removed
 
 - `docs/deploy-verification.md` and its scripts, along with the demo and benchmark

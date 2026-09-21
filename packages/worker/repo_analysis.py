@@ -356,9 +356,17 @@ async def handle_analyze_workspace_repos(payload: dict[str, Any]) -> dict[str, A
             raise ValueError(f"no repo {raw_id} in this tenant")
         skey = store_key(tenant_id, repo.key)
         try:
-            sha = await store.head_sha(skey)
+            # The repository's own branch. Assuming "main" silently skipped every repo
+            # whose remote called it something else -- GitStoreError is caught below and
+            # only logged, so two of three repositories could vanish from an analysis
+            # with nothing on screen to say so.
+            branch = repo.default_branch or "main"
+            sha = await store.head_sha(skey, branch)
             tree = await store.read_tree(
-                skey, max_files=_MAX_TREE_FILES, max_file_bytes=_MAX_FILE_BYTES
+                skey,
+                ref=branch,
+                max_files=_MAX_TREE_FILES,
+                max_file_bytes=_MAX_FILE_BYTES,
             )
         except GitStoreError as exc:
             log.warning("repo_analysis.unreadable_repo", repo=repo.key, error=str(exc))
