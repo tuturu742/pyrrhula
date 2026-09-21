@@ -25,24 +25,7 @@ Do not delete any file. Do not add files. Do not touch anything outside these th
 
 ## Brief
 
-<knowledge id="k1" class="lore" source="Why this project exists" entry="Business constraints">
-Single maintainer: features that need staffing to operate are out of scope. Self-hosted first — no hosted service to sell, so the install must stay a one-liner. The engine is AGPL and the packs MIT, so anything that would force pack authors to open their content is a design error, not a licensing detail.
-</knowledge>
-
-<knowledge id="k2" class="lore" source="Why this project exists" entry="What users actually ask for">
-In order of how often it comes up: 'the NPC blurted the twist' (the reason exclusion exists), 'the dice are made up', 'I can't tell why it said that', and 'I don't want my campaign on someone else's server'. Every one of those maps to a structural feature rather than a better prompt — that mapping is the product.
-</knowledge>
-
-<knowledge id="k3" class="lore" source="Why this project exists" entry="Who this is for">
-Three audiences, in priority order. **Tabletop groups** who want a game master that can hold a secret and dice that cannot be talked out of a result. **Teams** running structured multi-agent working sessions where some facts are genuinely confidential. **Engineering orgs** delegating work to coding agents under review. The first pays the rent for the design; the other two prove the engine is domain-neutral.
-</knowledge>
-
-<knowledge id="k4" class="misc" source="Project reference shelf" entry="Decisions worth remembering">
-Postgres-only was chosen over a vector database because the isolation guarantees live in RLS and a second store would need its own. CEL was chosen over any embedded scripting because user-authored code is a security stance we do not want to defend. Both decisions get re-proposed roughly twice a year; neither has changed.
-</knowledge>
-
-<knowledge id="k5" class="misc" source="Project reference shelf" entry="Team glossary">
-**Overlay** — the per-workspace relabelling of core nouns. **Pack** — declarative workflow content (schemas, flo
+The work item is not implemented, and the diff violates the explicit scope constraints by adding two files. Delete `src/update-the-three-files-that-still-reference-the-deleted-planning-artefacts.js` and `tasks/update-the-three-files-that-still-reference-the-deleted-planning-artefacts.md`. Then make only the requested documentation edits in `CLAUDE.md`, `README.md`, and `docs/agent-guide.md`: rewrite the source-of-truth section to identify the guide and CLAUDE.md hard rules as authorities, remove exactly the two obsolete repository-map rows, and reword the guide’s first paragraph so it is the conventions reference rather than a condensation of the deleted plan.
 
 ## Status
 
