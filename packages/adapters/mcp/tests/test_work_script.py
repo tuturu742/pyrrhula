@@ -82,3 +82,30 @@ def test_no_artifact_no_removal(tmp_path: Path) -> None:
         {},
     )
     assert "rm -f" not in script[script.index("PYR_STEP=push") :]
+
+
+def test_work_script_removes_deleted_paths_and_uses_the_repos_base_branch() -> None:
+    """A signature that accepts an argument and a call site that does not pass it look
+    identical from the outside: the script builder grew `deletes` and `base_branch`, the
+    caller kept its old positional call, and both silently took their defaults. Codegen
+    produced 95 deletions, the transport carried them, and the commit was empty -- with
+    the branch still pointing at its base and nothing anywhere saying why.
+    """
+    from adapters.mcp.git_transport import GitMcpTransport
+
+    transport = GitMcpTransport.__new__(GitMcpTransport)
+    script = transport._build_work_script(
+        "proj",
+        "pyr/w-1",
+        {"kept.py": "x\n"},
+        "msg",
+        {"image": "python:3.12", "setup_cmds": [], "test_cmd": ""},
+        base_branch="master",
+        deletes=frozenset({"tasks", "doc.md"}),
+    )
+
+    assert "rm -rf tasks" in script
+    assert "rm -rf doc.md" in script
+    # The fallback base is the repository's branch, not a hardcoded `main`.
+    assert "origin/master" in script
+    assert "origin/main" not in script

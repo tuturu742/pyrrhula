@@ -236,6 +236,22 @@ class GitMcpTransport:
                 # window, which is precisely the set a cleanup task names. Both commit
                 # paths already tolerate a path that is not there (`rm -rf`,
                 # `missing_ok=True`), so a stale name is a no-op rather than a failure.
+                # What the model actually asked for, counted. A delegation that commits
+                # nothing is otherwise silent: the branch exists, the message says
+                # [model], and there is no way to tell "the model declined" from "the
+                # plumbing dropped it" without reproducing the call by hand.
+                import structlog
+
+                structlog.get_logger().info(
+                    "codegen.produced",
+                    repo=repo,
+                    branch=branch,
+                    reworking=reworking,
+                    context_files=len(repo_files),
+                    files=len(out.files),
+                    deletes=len(out.deletes),
+                    sample=sorted(out.files)[:3] or sorted(out.deletes)[:3],
+                )
                 return dict(out.files), frozenset(out.deletes), "model"
             except Exception as exc:  # noqa: BLE001 -- scaffold fallback is the contract
                 import structlog
@@ -661,7 +677,9 @@ class GitMcpTransport:
         main stays checked out in the store and receive-pack refuses it."""
         session8 = branch.removeprefix("pyr/").split("-")[0]
         name = f"pyr-env-{session8}-{repo}"[:60].rstrip("-")
-        script = self._build_work_script(repo, branch, files, message, env_cfg)
+        script = self._build_work_script(
+            repo, branch, files, message, env_cfg, base_branch=base_branch, deletes=deletes
+        )
         await self._track_env("start", env_cfg, name, None)
         exit_code: int | None = None
         try:
