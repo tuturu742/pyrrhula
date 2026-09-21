@@ -362,6 +362,7 @@ class GitStore:
         ref: str = "main",
         max_file_bytes: int = 20_000,
         max_files: int = 40,
+        max_paths: int = 4000,
     ) -> dict[str, str]:
         """Small text files at ``ref`` as {path: content} -- codegen context. Binary or
         oversized files are listed with empty content (the path still informs the model).
@@ -376,9 +377,18 @@ class GitStore:
         async with self._locks[repo_key]:
             listing = await self._git(repo_key, "ls-tree", "-r", "--name-only", ref)
             files: dict[str, str] = {}
-            for path in listing.splitlines()[:max_files]:
+            for index, path in enumerate(listing.splitlines()[:max_paths]):
                 path = path.strip()
                 if not path:
+                    continue
+                # Past the content budget the path is still reported, with no body. A
+                # path costs a line; a body costs the prompt. Truncating the *listing*
+                # to the content budget made everything past it invisible -- on a 1088
+                # file repository the agent saw 150 paths, alphabetically, and could not
+                # act on anything below `m`: asked to delete `tasks/`, it correctly
+                # concluded there was no such thing and did nothing.
+                if index >= max_files:
+                    files[path] = ""
                     continue
                 try:
                     raw = await self._git_bytes(repo_key, "show", f"{ref}:{path}")

@@ -370,3 +370,36 @@ async def test_commit_on_branch_refuses_to_delete_outside_the_checkout(tmp_path:
 
     assert outside.exists()
     assert outside.read_text() == "do not touch\n"
+
+
+async def test_read_tree_lists_every_path_even_past_the_content_budget(
+    tmp_path: Path,
+) -> None:
+    """A path costs a line; a body costs the prompt. Truncating the listing to the
+    content budget is what made a large repository unworkable: on 1088 files the agent
+    saw 150 paths, alphabetically, so a task naming anything below `m` -- `tasks/`, say
+    -- looked to the model like a task about files that did not exist, and it correctly
+    did nothing.
+    """
+    store = GitStore(str(tmp_path))
+    await store.ensure_repo("proj", seed_files={f"f{i:03d}.txt": f"body {i}\n" for i in range(30)})
+
+    tree = await store.read_tree("proj", max_files=5)
+
+    # Every path is reported...
+    assert len(tree) == 30
+    assert "f029.txt" in tree
+    # ...with content only for those inside the budget.
+    assert tree["f000.txt"] == "body 0\n"
+    assert tree["f029.txt"] == ""
+
+
+async def test_read_tree_still_caps_the_listing_itself(tmp_path: Path) -> None:
+    """Paths are cheap, not free: a repository with a hundred thousand files must not
+    put a hundred thousand lines in a prompt."""
+    store = GitStore(str(tmp_path))
+    await store.ensure_repo("proj", seed_files={f"f{i:03d}.txt": "x\n" for i in range(40)})
+
+    tree = await store.read_tree("proj", max_files=2, max_paths=10)
+
+    assert len(tree) == 10

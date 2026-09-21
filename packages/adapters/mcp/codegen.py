@@ -53,7 +53,10 @@ _DELETE_BLOCK = re.compile(r"===DELETE:\s*(?P<path>[^=\n]+?)\s*===")
 _MAX_FILES = 12
 # Deletions are cheap to emit and expensive to get wrong, so the ceiling is separate
 # from the file budget and deliberately roomier: removing a directory is a normal task.
-_MAX_DELETES = 60
+# Generous on purpose: "remove the tasks directory" is one instruction and 93 files on
+# this repository alone. A cap below what a real cleanup names turns a complete answer
+# into a half-applied one, which is worse than refusing -- the branch then looks done.
+_MAX_DELETES = 1000
 _MAX_CONTEXT_FILE_CHARS = 4000
 _SAFE_PATH = re.compile(r"[A-Za-z0-9_.@-]+(/[A-Za-z0-9_.@-]+)*")
 
