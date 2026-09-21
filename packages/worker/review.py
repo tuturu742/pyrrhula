@@ -362,7 +362,17 @@ async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
             f"\n\n🔀 Auto-merged by {persona.name}."
             if merged
             else (
-                "\n\n🔀 Ready to merge — awaiting a human (auto-merge is off for this workspace)."
+                (
+                    "\n\n🔀 Ready to merge — awaiting a human (auto-merge is off for "
+                    "this workspace)."
+                    if not await _automerge_allowed(tenant_id, workspace_id)
+                    # Auto-merge was on and the host refused. Saying so in the session is
+                    # the difference between "a human still has to press it" and "someone
+                    # needs to look" -- the adapter logs the host's own reason.
+                    else "\n\n🔀 Approved, but the host refused the merge — see the logs "
+                    "for its reason (often a missing permission on the token, a required "
+                    "check, or a protected branch)."
+                )
                 if pr.get("html_url")
                 else ""
             )

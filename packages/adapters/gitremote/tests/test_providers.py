@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 
 from adapters.gitremote.base import GenericRemote, parse_remote_url
 from adapters.gitremote.gitea import GiteaRemote
@@ -184,3 +185,56 @@ async def test_generic_remote_has_no_review_or_merge() -> None:
     review = await r.submit_review("https://x/o/r", "T", number=1, verdict="approve", body="")
     assert review is False
     assert await r.merge_pull_request("https://x/o/r", "T", number=1) is False
+
+
+class _MergeTransport(httpx.AsyncBaseTransport):
+    """Answers the merge endpoint with a scripted sequence of statuses."""
+
+    def __init__(self, statuses: list[int]) -> None:
+        self.statuses = list(statuses)
+        self.calls = 0
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.calls += 1
+        code = self.statuses.pop(0) if self.statuses else 500
+        return httpx.Response(code, json={"message": "scripted"})
+
+
+async def test_merge_retries_while_github_is_still_computing_mergeability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`405` means "not mergeable" and "not mergeable YET" alike.
+
+    GitHub decides mergeability asynchronously after a push, and a review that approves
+    seconds after its own rework lands inside that window. Observed live: the merge was
+    refused, and the identical call succeeded minutes later with nothing changed -- so a
+    single attempt turns a timing race into a pull request that silently never lands.
+    """
+    from adapters.gitremote import github as gh
+
+    transport = _MergeTransport([405, 405, 200])
+    monkeypatch.setattr(gh, "_MERGE_RETRY_SECONDS", 0.0)
+    monkeypatch.setattr(
+        gh.GithubRemote, "_client", lambda self, token: httpx.AsyncClient(transport=transport)
+    )
+
+    ok = await gh.GithubRemote().merge_pull_request("https://github.com/o/r.git", "tok", number=10)
+
+    assert ok is True
+    assert transport.calls == 3
+
+
+async def test_merge_does_not_retry_a_real_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 403 is an answer, not a race: retrying it just delays the report."""
+    from adapters.gitremote import github as gh
+
+    transport = _MergeTransport([403])
+    monkeypatch.setattr(gh, "_MERGE_RETRY_SECONDS", 0.0)
+    monkeypatch.setattr(
+        gh.GithubRemote, "_client", lambda self, token: httpx.AsyncClient(transport=transport)
+    )
+
+    ok = await gh.GithubRemote().merge_pull_request("https://github.com/o/r.git", "tok", number=10)
+
+    assert ok is False
+    assert transport.calls == 1

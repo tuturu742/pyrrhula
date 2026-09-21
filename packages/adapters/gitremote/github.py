@@ -5,10 +5,16 @@ formal reviews from the PR's own author, which the platform token is)."""
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from adapters.gitremote.base import MergeMethod, RemotePR, ReviewVerdict, parse_remote_url
 
+# GitHub decides mergeability asynchronously; these cover that window without
+# turning a genuine refusal into a long wait.
+_MERGE_ATTEMPTS = 4
+_MERGE_RETRY_SECONDS = 3.0
 _API = "https://api.github.com"
 
 # verdict -> the GitHub review `event`; the merge_method GitHub's merge endpoint expects.
@@ -112,10 +118,43 @@ class GithubRemote:
         owner, repo = parsed
         try:
             async with self._client(token) as client:
-                resp = await client.put(
-                    f"{_API}/repos/{owner}/{repo}/pulls/{number}/merge",
-                    json={"merge_method": _MERGE_METHOD[method]},
+                for attempt in range(_MERGE_ATTEMPTS):
+                    resp = await client.put(
+                        f"{_API}/repos/{owner}/{repo}/pulls/{number}/merge",
+                        json={"merge_method": _MERGE_METHOD[method]},
+                    )
+                    if resp.status_code < 300:
+                        return True
+                    # "Not mergeable" and "not mergeable YET" arrive as the same 405.
+                    # GitHub computes mergeability asynchronously after a push, and a
+                    # review that approves seconds after its own rework lands inside
+                    # that window -- observed here: the merge was refused, then the
+                    # identical call succeeded minutes later with nothing changed.
+                    # Worth a few seconds before believing the refusal.
+                    if resp.status_code != 405 or attempt == _MERGE_ATTEMPTS - 1:
+                        break
+                    await asyncio.sleep(_MERGE_RETRY_SECONDS * (attempt + 1))
+                # The refusal is the only useful thing here and it was being thrown
+                # away: a False told the caller "not merged" and nothing told anyone
+                # why -- a token without merge permission, a required check still
+                # pending, a protected branch, and an outage all looked identical, and
+                # answering "why did it not merge?" meant reproducing the call by hand
+                # against the API. GitHub says which; this repeats it.
+                import structlog
+
+                structlog.get_logger().warning(
+                    "gitremote.merge_refused",
+                    attempts=_MERGE_ATTEMPTS if resp.status_code == 405 else 1,
+                    provider="github",
+                    number=number,
+                    status=resp.status_code,
+                    reason=resp.text[:300],
                 )
-                return resp.status_code < 300
-        except httpx.HTTPError:
+                return False
+        except httpx.HTTPError as exc:
+            import structlog
+
+            structlog.get_logger().warning(
+                "gitremote.merge_failed", provider="github", number=number, error=str(exc)[:200]
+            )
             return False
