@@ -1,8 +1,10 @@
 # Pyrrhula — Implementer's Guide for Coding Agents
 
-This document condenses the authoritative development plan (`pyrrhula-development-plan.md`,
-v1.2) into the definitions, rules, and conventions an implementing agent needs. When in doubt,
-the plan wins; section references (§) point into it.
+The definitions, rules, and conventions an implementing agent needs. Together with
+`CLAUDE.md`'s hard rules, this is the reference — it began as a condensation of a longer
+development plan, which was a working document and is no longer in the repository. Section
+references (§) and D-numbers scattered through the code point back into that plan; they mark
+decisions that are settled, not documents to go and find.
 
 ---
 

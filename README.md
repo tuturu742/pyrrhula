@@ -167,7 +167,7 @@ with `HF_HUB_OFFLINE=1`, so a new model needs the cache refreshed with offline m
 
 ## Status and roadmap
 
-Phases 0–4 of the development plan are **built and verified**: the walking skeleton,
+The first four phases of the build are **done and verified**: the walking skeleton,
 the core loop, secrets/overseer/disclosure gate, all three workflow packs on an
 unchanged core, and portability (`.pyr` round-trip, CCv3 cards, sanitised reports,
 delegated coding work). One phase-4 exit criterion is honestly unmet: the dogfood
@@ -185,12 +185,9 @@ Ahead:
 
 | Path | What it is |
 |---|---|
-| `pyrrhula-research-brief.md` | The original requirements brief (32 requirements) |
-| `pyrrhula-development-plan.md` | **The authoritative spec** — architecture, decisions D1–D15, invariants, data model, roadmap (v1.2) |
 | `README.md` | This overview |
 | `CLAUDE.md` | Ground rules for coding agents working in this repo |
 | `docs/agent-guide.md` | Detailed definitions, conventions, and architecture reference for implementers |
-| `tasks/` | The build backlog — one file per task with acceptance criteria and dependencies |
 | `CHANGELOG.md` | What changed, release by release |
 
 Running one:
@@ -207,7 +204,8 @@ Running one:
 | [`docs/previews.md`](docs/previews.md) | Running a build where a human can open it |
 | [`docs/portability.md`](docs/portability.md) | `.pyr` bundles: what travels, the export modes, and what import will not overwrite |
 
-Where this README or any task file disagrees with the development plan, **the plan wins**.
+Where this README and the code disagree, the code is what runs — and the disagreement is a
+bug in one of them.
 
 ## Licence
 
@@ -240,4 +238,4 @@ the contributor agreement. Security reports go through
 ## Name
 
 *Pyrrhula* is the genus of the Eurasian bullfinch. No product of that name exists in the
-AI-agent or tabletop space; a formal trademark search is still pending (plan §3.1, Q9).
+AI-agent or tabletop space; a formal trademark search is still pending.

@@ -203,7 +203,11 @@ def make_model_codegen(
             messages=[
                 {"role": "user", "content": _prompt(work_item, brief, repo_files, rework_comment)}
             ],
-            temperature=0.2,
+            # No temperature. A fixed 0.2 is a preference on models that accept it and a
+            # hard failure on those that do not -- Anthropic's refuse anything but 1, so
+            # every delegation assigned to such a persona raised UnsupportedParamsError
+            # and fell back to writing a placeholder file named after the work item. The
+            # connection states its own, like every other request here.
             # A connection that states its own budget wins: the request-level value is
             # only this adapter's default, and a default must not outrank a choice.
             max_tokens=_budget_from(params, max_tokens),
@@ -241,7 +245,13 @@ def make_model_codegen(
                         ),
                     },
                 ],
-                temperature=0.2,
+                # No temperature here. A fixed 0.2 made the repair deterministic on
+                # models that accept it and impossible on those that do not: Anthropic's
+                # refuse anything but 1, so the repair raised UnsupportedParamsError, the
+                # whole call failed, and the delegation fell back to a scaffold that
+                # writes placeholder files named after the work item. A reviewer then
+                # rejected a pull request whose real fault was three layers up. The
+                # connection's own params decide, like every other request here.
                 max_tokens=max_tokens,
                 api_base=api_base,
                 params=dict(params or {}),

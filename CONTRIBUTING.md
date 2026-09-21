@@ -33,8 +33,8 @@ lint.
 
 ## 3. How to work
 
-One task, one branch, one pull request. Start from a file in `tasks/` where one exists,
-and check its `Depends on:` tasks are done.
+One task, one branch, one pull request. Say in the PR what the change is for and how you
+know it works.
 
 ```bash
 uv sync --extra dev

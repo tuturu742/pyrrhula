@@ -45,11 +45,17 @@ def test_the_persona_key_works_as_well_as_the_display_name() -> None:
     assert chosen is MIDDLE
 
 
-def test_no_assignee_falls_back_to_the_round_robin() -> None:
-    assert _select_assignee("", DEVS, BY_NAME, 0) == (SENIOR, False)
-    assert _select_assignee("", DEVS, BY_NAME, 1) == (MIDDLE, False)
-    assert _select_assignee("", DEVS, BY_NAME, 2) == (JUNIOR, False)
-    assert _select_assignee("", DEVS, BY_NAME, 3) == (SENIOR, False)
+def test_no_assignee_is_left_for_the_facilitator_to_decide() -> None:
+    """An unnamed item is undecided, not positional.
+
+    This used to return the round robin, which meant the *ordering of persona ids*
+    picked who built each item -- and a tiered roster whose tiers are chosen by index
+    is not a roster, it is a queue. The worker asks the session's facilitator instead
+    (and keeps the round robin as its own fallback when that is unavailable), which it
+    cannot do if a choice has already been made here.
+    """
+    for index in range(4):
+        assert _select_assignee("", DEVS, BY_NAME, index) == (None, False)
 
 
 def test_an_unknown_name_is_reported_but_still_gets_built() -> None:

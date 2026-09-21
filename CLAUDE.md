@@ -7,11 +7,17 @@ your first implementation task.
 
 ## Source-of-truth order
 
-1. `pyrrhula-development-plan.md` (v1.2) — **authoritative.** Decisions D1–D15 and open-question
-   resolutions Q1–Q6 are final. Do not re-litigate them; do not "improve" on them.
-2. `tasks/<phase>/<task>.md` — the task you were assigned. Its acceptance criteria define done.
-3. `docs/agent-guide.md` — conventions and definitions.
-4. `pyrrhula-research-brief.md` — background only. Where it conflicts with the plan, the plan wins.
+1. **This file.** The hard rules below are not style preferences — violating one fails
+   review, and several encode decisions (D-numbers in the text) that are settled. Do not
+   re-litigate them; do not "improve" on them.
+2. `docs/agent-guide.md` — conventions, definitions, and the vocabulary glossary.
+3. The code and its tests. Where a comment and the code disagree, the code is what runs —
+   but treat the disagreement as a bug in one of them, not as licence to ignore the comment.
+
+The project was built against a longer development plan and requirements brief. Those were
+working documents, not deliverables, and they are no longer in the repository; what they
+settled lives here and in `docs/`. A D-number in a comment is a reference to one of those
+decisions and still means it is settled.
 
 ## Hard rules (violating any of these fails review)
 
@@ -79,15 +85,14 @@ structlog, OpenTelemetry. Data: PostgreSQL 16 (pgvector, JSONB, tsvector, SKIP L
 queue) + Redis + S3-compatible blobs. Frontend: React 18 + Vite + TypeScript, Tailwind +
 shadcn/ui, React Flow, TanStack Query, Zustand; API client generated via `openapi-typescript`.
 Model access exclusively through the `ModelProvider` port (LiteLLM adapter). Repo layout:
-plan Appendix B — do not invent alternative structure.
+the existing layout — do not invent alternative structure.
 
 ## Workflow
 
-- Work from a task file in `tasks/`. Check its `Depends on:` tasks are `done` first. Default:
-  one task = one branch = one PR. Update the task file's checkboxes and status line in the PR.
-- Assigned a whole phase or track to work sequentially instead (a human says so explicitly)?
-  Follow `docs/phase-workflow.md`: one branch for the track, one commit per task in
-  dependency/numeric order, one PR at the end — not one task = one branch = one PR.
+- One task, one branch, one pull request. Say in the PR what the task was and how you know
+  it is done — a reviewer should not have to infer the acceptance criteria from the diff.
+- Asked to work a whole track sequentially instead (a human says so explicitly)? One branch
+  for the track, one commit per task in dependency order, one PR at the end.
 - CI-blocking suites you must keep green and must extend when relevant:
   `tests/isolation/` (T0.4), `tests/architecture/` (INV-1 lint), `tests/replay/` (INV-10),
   `tests/packs/` (INV-9, from Phase 3), `tests/leak/` (from Phase 2).

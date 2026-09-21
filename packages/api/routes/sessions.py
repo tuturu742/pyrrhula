@@ -715,7 +715,11 @@ def _select_assignee(
     """
     fallback = devs[index % len(devs)] if devs else None
     if not named:
-        return fallback, False
+        # Nothing named: leave it undecided rather than positional. The worker asks the
+        # session's facilitator, which can weigh the work against the roster -- and
+        # falls back to this same round robin if that is unavailable. Choosing here
+        # would pre-empt that with an ordering over persona ids.
+        return None, False
     chosen = by_name.get(named.strip().lower())
     if chosen is not None:
         return chosen, False

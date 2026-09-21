@@ -16,6 +16,7 @@ import uuid
 from typing import Any
 
 import structlog
+from pydantic import BaseModel
 
 from adapters.mcp.git_store import GitStore, GitStoreError, default_git_root
 from core.actions.delegation import delegate_work_item
@@ -151,6 +152,115 @@ def _delegation_phase() -> PhaseSpec:
     )
 
 
+async def _assignable_devs(tenant_id: uuid.UUID, session_id: uuid.UUID) -> list[Any]:
+    """The session's non-supervisor roster -- the people work can be given to."""
+    from core.agents.models import Persona
+    from core.sessions.lifecycle import list_session_roster
+
+    entries = [e for e in await list_session_roster(tenant_id, session_id) if not e.is_supervisor]
+    devs: list[Any] = []
+    async with tenant_scope(tenant_id) as session:
+        for entry in entries:
+            persona = await session.get(Persona, entry.persona_id)
+            if persona is None:
+                continue
+            session.expunge(persona)
+            devs.append(persona)
+    return devs
+
+
+class _AssigneeChoice(BaseModel):
+    """Which dev the facilitator picks, and why."""
+
+    assignee: str
+    reason: str = ""
+
+
+_ASSIGN_SYSTEM = (
+    "You are the technical lead of a software team, assigning one work item to one "
+    "developer. Match the work to the tier: routine, well-specified, low-risk changes "
+    "go to the most junior person who can do them; work needing design judgement, or "
+    "touching something many other things depend on, goes to a senior one. Do not "
+    "default to the most senior available -- that wastes the team. Answer with a name "
+    "from the roster exactly as written, and one sentence of reasoning."
+)
+
+
+async def _facilitator_assignee(
+    tenant_id: uuid.UUID, session_id: uuid.UUID, work_item: Any, devs: list[Any]
+) -> tuple[Any | None, str]:
+    """Ask the session's supervisor which developer should take this work item.
+
+    The roster mechanism has always let a supervisor name the assignee; nothing ever
+    asked it one, so an unassigned item fell to a round robin over persona ids -- which
+    is not a delegation decision, it is an ordering. A lead that can reason about
+    seniority should be doing this, and the tiered roster exists precisely so the answer
+    can differ per item.
+
+    Best-effort: any failure returns no choice and the caller keeps its round robin,
+    because an unavailable model must not stall the work.
+    """
+    if not devs:
+        return None, ""
+    from api.encryptor_factory import get_encryptor
+    from api.model_provider_factory import get_model_provider
+    from core.agents.authoring import resolve_connection_api_key
+    from core.ports.model_provider import GenerationRequest
+    from worker.review import _session_supervisor
+
+    try:
+        persona, profile = await _session_supervisor(tenant_id, session_id)
+    except Exception:  # noqa: BLE001 -- no supervisor resolvable; caller falls back
+        return None, ""
+
+    fields = dict(getattr(work_item, "data", None) or {})
+    roster = "\n".join(
+        f"- {d.name}" + (f": {d.description}" if getattr(d, "description", "") else "")
+        for d in devs
+    )
+    req = GenerationRequest(
+        model=f"{profile.provider}/{profile.model}",
+        messages=[
+            {"role": "system", "content": _ASSIGN_SYSTEM},
+            {
+                "role": "user",
+                "content": (
+                    f"Work item: {fields.get('title') or getattr(work_item, 'name', '')}\n"
+                    f"{str(fields.get('description') or '')[:2000]}\n\n"
+                    f"Roster:\n{roster}"
+                ),
+            },
+        ],
+        purpose="delegation",
+        max_tokens=300,
+        api_base=profile.api_base,
+        params=dict(profile.params or {}),
+        api_key=await resolve_connection_api_key(
+            tenant_id, profile.credential_ref, encryptor=get_encryptor()
+        ),
+    )
+    try:
+        choice = await get_model_provider(profile.provider).generate_structured(
+            req, _AssigneeChoice
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("delegation.assignee_choice_failed", error=str(exc)[:200])
+        return None, ""
+
+    by_name = {d.name.strip().lower(): d for d in devs}
+    chosen = by_name.get(choice.assignee.strip().lower())
+    if chosen is None:
+        log.warning("delegation.assignee_choice_unknown", named=choice.assignee[:60])
+        return None, ""
+    log.info(
+        "delegation.assignee_chosen",
+        by=persona.name,
+        assignee=chosen.name,
+        reason=choice.reason[:160],
+    )
+    return chosen, choice.reason
+
+
 async def _load_assignee(tenant_id: uuid.UUID, persona_id: str | None) -> Any | None:
     """The assigned dev persona (id, name, principal_id) -- None when unassigned."""
     if not persona_id:
@@ -235,6 +345,30 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     environment = await _environment_config(tenant_id, payload.get("repo_id"))
     assignee = await _load_assignee(tenant_id, payload.get("assignee_persona_id"))
     entity = await get_entity(tenant_id, uuid.UUID(payload["work_item_id"]))
+    # An unassigned item used to fall to a round robin over persona ids. Ask the
+    # facilitator instead -- it is the one that can weigh the work against the roster,
+    # and a tiered roster is pointless if the choice is positional. Only when nothing
+    # was named: an explicit assignee is a decision already made.
+    if assignee is None and entity is not None:
+        devs = await _assignable_devs(tenant_id, uuid.UUID(payload["session_id"]))
+        chosen, reason = await _facilitator_assignee(
+            tenant_id, uuid.UUID(payload["session_id"]), entity, devs
+        )
+        if chosen is None and devs:
+            # The facilitator could not answer (model down, unparseable, a name that is
+            # not on the roster). Work still has to go to somebody, so this is where the
+            # old round robin lives now -- as a fallback, not as the decision.
+            chosen = devs[0]
+            reason = ""
+        if chosen is not None:
+            assignee = chosen
+            with contextlib.suppress(Exception):
+                await post_note(
+                    tenant_id,
+                    uuid.UUID(payload["session_id"]),
+                    uuid.UUID(payload["viewer_principal_id"]),
+                    f"\U0001f9ed Assigned to {chosen.name}" + (f" — {reason}" if reason else ""),
+                )
     extra: dict[str, Any] = {}
     if environment:
         # Attribution for the exec-environment registry + the transcript's system line:

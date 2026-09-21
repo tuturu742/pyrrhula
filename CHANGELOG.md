@@ -158,6 +158,22 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   instead of dying. The in-container path had always allowed an empty commit and the
   store-side path had not, so it failed there with git's bare empty error.
 
+- **A delegated agent's assignee is chosen, not indexed.** An unassigned work item fell
+  to `devs[index % len(devs)]`, so the ordering of persona ids decided who built what —
+  which makes a tiered roster a queue. The session's facilitator is asked instead, with
+  the work item and the roster, and its reasoning is logged and posted to the session;
+  the round robin survives only as the fallback when no answer comes back. The mechanism
+  for a supervisor to name an assignee had always existed — nothing ever asked one.
+- **A merged pull request moves its work item to `merged`.** The lifecycle had the
+  `approved --merge--> merged` transition and nothing drove it, so a landed branch left
+  its item at `approved` for ever: the repository said merged, the board said not, and
+  the board is what a human reads.
+- **Codegen no longer pins a temperature.** A hardcoded `0.2` is a preference on models
+  that accept it and a hard failure on those that do not — Anthropic's refuse anything
+  but `1` — so every delegation assigned to such a persona raised `UnsupportedParamsError`
+  and fell back to writing a placeholder file named after the work item. A reviewer duly
+  rejected a pull request whose real fault was three layers up.
+
 ### Security
 
 - **A repository's access token was stored in plaintext on the volume.** `clone_from`

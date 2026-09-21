@@ -358,6 +358,23 @@ async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
         merged = False
         if await _automerge_allowed(tenant_id, workspace_id):
             merged = await _merge_remote(tenant_id, payload.get("repo_id"), persona.id, pr)
+        if merged:
+            # The lifecycle has an `approved --merge--> merged` transition and nothing
+            # was driving it, so a landed pull request left its work item sitting at
+            # `approved` for ever: the repository said merged, the board said not, and
+            # the board is what a human reads. Same idempotency shape as the approval
+            # above -- a retried review must not transition twice.
+            await transition(
+                persona.principal_id,
+                tenant_id,
+                workspace_id,
+                work_item_id,
+                "lifecycle",
+                "merge",
+                idempotency_key=f"merge:{work_item_id}:{branch}",
+                permission_service=get_permission_service(),
+                cause="agent",
+            )
         tail = (
             f"\n\n🔀 Auto-merged by {persona.name}."
             if merged
