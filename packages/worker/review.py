@@ -54,7 +54,14 @@ _REVIEW_SYSTEM = (
     "'request_changes' only for concrete, actionable problems (bugs, missing "
     "requirements, wrong language/framework) — style nits alone never block. When "
     "requesting changes, write comments a coding agent can act on directly: name the "
-    "file and what to change."
+    "file and what to change.\n\n"
+    "The diff begins with a COMPLETE list of every changed file, and that list is never "
+    "truncated. File contents below it may be. Judge scope -- what was touched, and "
+    "whether anything was touched that should not have been -- from the list, which is "
+    "whole; judge correctness from the contents you can see. Never treat a truncated "
+    "body as evidence that nothing else changed, and do not withhold a verdict merely "
+    "because the contents are cut: say which part of your judgement the truncation "
+    "limits."
 )
 
 

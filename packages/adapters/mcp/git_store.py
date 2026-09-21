@@ -575,14 +575,52 @@ class GitStore:
         return stats
 
     async def diff_text(
-        self, repo_key: str, branch: str, base: str = "main", max_chars: int = 40_000
+        self,
+        repo_key: str,
+        branch: str,
+        base: str = "main",
+        max_chars: int = 40_000,
+        max_listed_files: int = 2000,
     ) -> str:
-        """The unified diff for base...branch, capped — reviewer-model input."""
+        """The unified diff for base...branch, capped — reviewer-model input.
+
+        The cap used to be a blind slice of the diff body, which answered the wrong
+        question first. Asked whether a branch deleted three named things, a reviewer
+        was handed forty thousand characters of the *first* file's content and never
+        learned the other ninety-four existed -- and approved, saying so: "the diff is
+        truncated, so no concrete defect is visible in the provided portion."
+
+        So the file-level summary is always complete and always first. It is small (one
+        line per file, where a body is thousands) and it is what most review questions
+        actually turn on: what changed, and was anything touched that should not have
+        been. Bodies then fill whatever budget remains, and what was dropped is stated
+        rather than implied.
+        """
         async with self._locks[repo_key]:
+            status = await self._git(repo_key, "diff", "--name-status", f"{base}...{branch}")
             out = await self._git(repo_key, "diff", f"{base}...{branch}")
-        if len(out) > max_chars:
-            return out[:max_chars] + "\n... (diff truncated)"
-        return out
+
+        lines = [ln for ln in status.splitlines() if ln.strip()]
+        listed, hidden = lines[:max_listed_files], max(0, len(lines) - max_listed_files)
+        header = (
+            f"Files changed ({len(lines)}):\n"
+            + "\n".join(listed)
+            + (f"\n... and {hidden} more file(s)" if hidden else "")
+        )
+        budget = max_chars - len(header) - 200
+        if budget <= 0 or len(out) <= budget:
+            body = (
+                out
+                if budget > 0
+                else "(file contents omitted: the file list alone fills the budget)"
+            )
+        else:
+            body = (
+                out[:budget] + f"\n... (file contents truncated here; {len(out) - budget} more "
+                "characters of diff body not shown. The complete list of changed files "
+                "is above -- judge scope from that, not from the portion below.)"
+            )
+        return f"{header}\n\n{body}"
 
     async def head_sha(self, repo_key: str, ref: str = "main") -> str:
         async with self._locks[repo_key]:

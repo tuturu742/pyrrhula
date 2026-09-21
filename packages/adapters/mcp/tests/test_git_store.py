@@ -403,3 +403,39 @@ async def test_read_tree_still_caps_the_listing_itself(tmp_path: Path) -> None:
     tree = await store.read_tree("proj", max_files=2, max_paths=10)
 
     assert len(tree) == 10
+
+
+async def test_diff_text_always_lists_every_changed_file(tmp_path: Path) -> None:
+    """The reviewer's question is usually about scope, and scope lives in the file list.
+
+    A blind slice of the diff body answered the wrong question first: asked whether a
+    branch deleted three named things, the reviewer got the first file's contents and
+    never learned the other ninety-four existed. It approved, saying so -- "the diff is
+    truncated, so no concrete defect is visible in the provided portion."
+    """
+    store = GitStore(str(tmp_path))
+    bulky = {f"doc{i:02d}.md": ("x" * 3000 + "\n") for i in range(20)}
+    await store.ensure_repo("proj", seed_files={**bulky, "keep.md": "keep\n"})
+    await store.commit_on_branch("proj", "pyr/cleanup", {}, "drop the docs", deletes=sorted(bulky))
+
+    diff = await store.diff_text("proj", "pyr/cleanup", max_chars=4000)
+
+    # Every deleted file is named, even though the bodies cannot all fit.
+    assert "Files changed (20)" in diff
+    for name in bulky:
+        assert name in diff, name
+    # ...and the truncation says what it dropped rather than trailing off.
+    assert "more characters of diff body not shown" in diff
+    assert len(diff) < 8000
+
+
+async def test_diff_text_returns_the_whole_body_when_it_fits(tmp_path: Path) -> None:
+    store = GitStore(str(tmp_path))
+    await store.ensure_repo("proj", seed_files={"a.txt": "one\n"})
+    await store.commit_on_branch("proj", "pyr/w", {"a.txt": "two\n"}, "edit")
+
+    diff = await store.diff_text("proj", "pyr/w")
+
+    assert "Files changed (1)" in diff
+    assert "+two" in diff
+    assert "truncated" not in diff
