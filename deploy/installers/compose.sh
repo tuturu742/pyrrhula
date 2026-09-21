@@ -247,21 +247,32 @@ say "up."
 echo
 echo "  Open   http://localhost:${WEB_PORT}"
 echo
-echo "  Sign in as the platform admin:"
-echo "    organization  admin"
-echo "    email         $(envval .env PYRRHULA_ADMIN_EMAIL '(not set)')"
-echo "    password      $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)')"
-echo "  (generated on first run, stored in .env; change the password IN THE APP"
-echo "   after first login -- editing .env afterwards does not rotate it)"
-echo
+# Single-tenant needs no credentials at all: signing up creates the one organization
+# and makes you its owner, which on this shape of deployment is also the platform
+# admin. Leading with a generated password would be telling someone to use an account
+# that is not theirs, on their own machine.
 if [ "$SINGLE_TENANT" = true ]; then
-  echo "  Single-tenant: sign in without naming an organization. Re-run with"
-  echo "  --multi-tenant to host several."
+  echo "  Sign up. You will be the owner of this deployment's one organization and"
+  echo "  its administrator -- no organization name to type, and nothing to copy from"
+  echo "  here. Re-run with --multi-tenant to host several organizations instead."
+  echo
+  echo "  Next   Admin -> Models: choose and download the retrieval models (needed"
+  echo "         for semantic search), then add a model connection on Connections."
+  echo
+  echo "  Locked out? A break-glass platform admin exists: organization 'admin',"
+  echo "  $(envval .env PYRRHULA_ADMIN_EMAIL '(not set)') / $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)') (also in .env)."
 else
-  echo "  Multi-tenant: every sign-in names its organization."
+  echo "  Sign up to create an organization -- every sign-in names its organization."
+  echo
+  echo "  Administer the deployment (tenants, models, plugins) as the platform admin:"
+  echo "    organization  admin"
+  echo "    email         $(envval .env PYRRHULA_ADMIN_EMAIL '(not set)')"
+  echo "    password      $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)')"
+  echo "  (generated on first run, stored in .env; change the password IN THE APP"
+  echo "   after first login -- editing .env afterwards does not rotate it)"
+  echo
+  echo "  Next   Admin -> Models: choose and download the retrieval models (needed"
+  echo "         for semantic search), then add a model connection on Connections."
 fi
-echo "  Or Sign up to create your own organization."
 echo "  Legacy token console (deprecated): http://localhost:$(envval .env PYRRHULA_ADMIN_PORT 8100)  (token: grep ADMIN_TOKEN .env)"
-echo "  Next   Admin -> Models: choose and download the retrieval models (needed for"
-echo "         semantic search), then add a model connection on the Connections page."
 echo "  Docs   docs/install.md (post-install, TLS, upgrades, troubleshooting)"

@@ -22,6 +22,16 @@ Installs **single-tenant** unless you say otherwise:
 Single-tenant means nobody types an organization name to sign in — the right shape for
 one person or one team. Multi-tenant means every sign-in names its organization.
 
+**A single-tenant install needs no credentials from the installer.** Open the URL, sign
+up, and you are the owner of the deployment's one organization *and* its platform
+admin — one account, both the workspace product and Admin → Models. There is no second
+generated account to log in as. (One is still bootstrapped as break-glass, printed at
+the end of the install; you should not need it.)
+
+In **multi-tenant** mode the platform admin stays a separate account, because there it is
+a separate person: the one running the box for organizations they are not a member of.
+Owning a tenant grants nothing over the deployment or over anyone else's tenant.
+
 It is a flag over the same multi-tenant core, never a different build, so **the choice
 is not permanent**: rerun the installer with the other flag and it switches. Nothing is
 migrated, no data changes, and every organization stays reachable either way — the flag

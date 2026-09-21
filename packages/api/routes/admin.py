@@ -5,9 +5,10 @@ Two ways in, checked in this order by ``require_platform_admin``:
 1. the legacy shared bearer token (``PYRRHULA_ADMIN_TOKEN``) -- kept for scripts, CI
    and bootstrap, and for the deprecated standalone admin app (which now just mounts
    this same router);
-2. a normal user JWT whose tenant is the reserved admin tenant
-   (``core.tenancy.admin.ADMIN_TENANT_ID``) with an owner/admin membership role --
-   the "log in with organization 'admin'" path the web UI uses.
+2. a normal user JWT belonging to a platform admin -- an owner/admin of the reserved
+   admin tenant (the "log in with organization 'admin'" path), or, on a single-tenant
+   deployment, the sole organization's own owner. ``api.auth.platform_admin`` is the
+   single place that decides, so the gate and what ``/me`` reports cannot disagree.
 
 Deactivation is a soft UPDATE; truly deleting a tenant stays the ``core.tenancy.purge``
 CLI's job, never a button here.
@@ -24,14 +25,13 @@ from fastapi import APIRouter, Cookie, Depends, File, Form, Header, HTTPExceptio
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
 
 from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider
+from api.auth.platform_admin import is_platform_admin
 from api.middleware.auth import get_request_context
 from core.config import get_settings
 from core.mcp.registry import is_external_mcp_url
 from core.tenancy.admin import ADMIN_TENANT_ID
-from core.tenancy.models import Membership
 from core.tenancy.provisioning import (
     TenantExistsError,
     create_tenant,
@@ -43,7 +43,6 @@ from core.tenancy.provisioning import (
     set_principal_disabled,
     set_tenant_deactivated,
 )
-from core.tenancy.scope import tenant_scope
 from core.vocabulary.service import list_overlays, set_tenant_default_overlay
 from core.workflows.service import (
     WorkflowNotFoundError,
@@ -53,7 +52,6 @@ from core.workflows.service import (
 )
 
 _ROLES = {"owner", "admin", "editor", "participant", "viewer"}
-_ADMIN_TENANT_ROLES = {"owner", "admin"}
 _identity_provider = LocalArgon2IdentityProvider()
 
 
@@ -61,7 +59,11 @@ async def require_platform_admin(
     authorization: str | None = Header(default=None),
     pyrrhula_session: str | None = Cookie(default=None),
 ) -> None:
-    """Admit the legacy ops token OR an owner/admin of the reserved admin tenant."""
+    """Admit the legacy ops token OR a platform admin.
+
+    "Platform admin" is not always an admin-tenant membership: on a single-tenant
+    deployment the sole organization's owner is one, because there is no one else it
+    could be. See ``api.auth.platform_admin``."""
     expected = get_settings().admin_token
     scheme, _, value = (authorization or "").partition(" ")
     if expected and scheme.lower() == "bearer" and value == expected:
@@ -69,16 +71,7 @@ async def require_platform_admin(
 
     # Not the ops token -> the normal JWT path (raises 401 when no token at all).
     ctx = await get_request_context(authorization, pyrrhula_session, None)
-    if ctx.tenant_id != ADMIN_TENANT_ID:
-        raise HTTPException(status_code=403, detail="platform admin required")
-    async with tenant_scope(ADMIN_TENANT_ID) as session:
-        role = await session.scalar(
-            select(Membership.role).where(
-                Membership.tenant_id == ADMIN_TENANT_ID,
-                Membership.principal_id == ctx.principal_id,
-            )
-        )
-    if role not in _ADMIN_TENANT_ROLES:
+    if not await is_platform_admin(ctx.tenant_id, ctx.principal_id):
         raise HTTPException(status_code=403, detail="platform admin required")
 
 

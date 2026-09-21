@@ -48,7 +48,12 @@ function HomeRoute() {
   const me = useMe();
   const landing = useAdminLanding();
   if (me.isLoading) return null;
-  if (me.data?.platform_admin !== true) return <WorkspaceListPage />;
+  // `platform_admin` says what you MAY administer; `admin_tenant` says whether you are
+  // signed into the reserved admin organization, which is the one with no workspaces of
+  // its own to land on. A single-tenant owner is both an ordinary user and an admin --
+  // sending them to the console instead of their own workspace would be answering the
+  // wrong question.
+  if (me.data?.admin_tenant !== true) return <WorkspaceListPage />;
   // Which admin page depends on whether this deployment has a retrieval model yet; see
   // useAdminLanding. Render nothing rather than flashing the wrong page first.
   if (landing.loading) return null;

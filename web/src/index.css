@@ -9,6 +9,13 @@
    for a brand theme later. */
 
 :root {
+  /* Tells the browser which way round this page is, which is not the same as telling
+     it our colours. Native controls -- a <select>'s option list above all -- are drawn
+     by the browser, not by CSS: without this it assumed light, painted the popup white,
+     and the options inherited the near-white dark foreground, so a dark-theme dropdown
+     was white-on-white and only legible under the hover highlight. Also fixes scrollbars,
+     date pickers and autofill for free, none of which our tokens can reach. */
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -34,6 +41,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -91,5 +99,17 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* `color-scheme` above makes the popup legible; this makes it *ours*. A <select> is
+     styled with bg-transparent so the closed control sits on the page, but the option
+     list is a separate surface -- give it the popover tokens rather than the browser's
+     generic dark grey, and the two stop looking like different applications.
+     Chrome honours these on Linux/Windows; Safari and some GTK themes ignore option
+     colours entirely, which is exactly why `color-scheme` is the load-bearing half. */
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 }

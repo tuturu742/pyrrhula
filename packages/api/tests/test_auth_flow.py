@@ -321,3 +321,144 @@ async def test_public_config_sees_an_organization_once_one_exists(
     single-tenant inference."""
     await _new_tenant_slug()
     assert client.get("/auth/config").json()["has_organization"] is True
+
+
+# ── who administers the deployment (api.auth.platform_admin) ─────────────────────────
+
+
+async def test_single_tenant_owner_is_also_the_platform_admin(
+    client: TestClient, db_available: None, single_tenant: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One person, one account, both roles.
+
+    Choosing an embedding model lives in the admin console, so without this a solo
+    operator has to sign out of their own workspace and back in as a second, generated
+    account to configure their own machine."""
+    from api.middleware import tenant as tenant_middleware
+    from core.tenancy.models import Tenant
+    from core.tenancy.scope import unscoped_session
+
+    # Signup, not register: self-registration grants `viewer`, and a viewer is
+    # deliberately NOT a platform admin. Only the organization's owner is -- which the
+    # first signup on a fresh deployment makes you.
+    org = f"Solo {uuid.uuid4().hex[:6]}"
+    signup = client.post(
+        "/auth/signup",
+        json={
+            "organization": org,
+            "email": "owner@example.com",
+            "password": "correct horse",
+            "display_name": "Owner",
+        },
+    )
+    assert signup.status_code == 200, signup.text
+    token = signup.json()["access_token"]
+    async with unscoped_session() as session:
+        sole = await session.scalar(
+            select(Tenant).where(Tenant.slug == signup.json()["tenant_slug"])
+        )
+        session.expunge(sole)
+    monkeypatch.setattr(tenant_middleware, "_sole_tenant", lambda: _async(sole))
+
+    me = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200, me.text
+    assert me.json()["platform_admin"] is True
+    # ...but their home is still their own workspace, not the admin console.
+    assert me.json()["admin_tenant"] is False
+
+
+async def test_a_tenant_owner_is_not_a_platform_admin_in_multi_tenant_mode(
+    client: TestClient, db_available: None
+) -> None:
+    """The boundary that matters: on a box hosting several organizations, owning one
+    grants nothing over the others or over the deployment."""
+    signup = client.post(
+        "/auth/signup",
+        json={
+            "organization": f"Org {uuid.uuid4().hex[:6]}",
+            "email": "notadmin@example.com",
+            "password": "correct horse",
+            "display_name": "Owner",
+        },
+    )
+    assert signup.status_code == 200, signup.text
+    token = signup.json()["access_token"]
+
+    me = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.json()["platform_admin"] is False
+    assert (
+        client.get(
+            "/admin/retrieval-models/cache", headers={"Authorization": f"Bearer {token}"}
+        ).status_code
+        == 403
+    )
+
+
+async def test_the_single_tenant_grant_evaporates_once_a_second_org_exists(
+    client: TestClient, db_available: None, single_tenant: None
+) -> None:
+    """Fails closed. `_sole_tenant` is unmocked here and the shared test database holds
+    many tenants, so there is no sole organization -- and an owner of one of them must
+    not be able to administer the deployment the others live on."""
+    await _new_tenant_slug()
+    signup = client.post(
+        "/auth/signup",
+        json={
+            "organization": f"Org {uuid.uuid4().hex[:6]}",
+            "email": "notsole@example.com",
+            "password": "correct horse",
+            "display_name": "Owner",
+        },
+    )
+    assert signup.status_code == 200, signup.text
+    token = signup.json()["access_token"]
+
+    me = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.json()["platform_admin"] is False
+    assert (
+        client.get(
+            "/admin/retrieval-models/cache", headers={"Authorization": f"Bearer {token}"}
+        ).status_code
+        == 403
+    )
+
+
+async def test_a_viewer_who_joins_the_solo_org_is_not_an_admin(
+    client: TestClient, db_available: None, single_tenant: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ "The sole organization's owner" is load-bearing, not shorthand for "anyone in it".
+
+    A solo deployment is still a place a second person can be invited, and self-
+    registration deliberately grants `viewer`. Inheriting the deployment's admin console
+    from that would be a real privilege escalation."""
+    from api.middleware import tenant as tenant_middleware
+    from core.tenancy.models import Tenant
+    from core.tenancy.scope import unscoped_session
+
+    signup = client.post(
+        "/auth/signup",
+        json={
+            "organization": f"Solo {uuid.uuid4().hex[:6]}",
+            "email": "the-owner@example.com",
+            "password": "correct horse",
+            "display_name": "Owner",
+        },
+    )
+    assert signup.status_code == 200, signup.text
+    slug = signup.json()["tenant_slug"]
+    async with unscoped_session() as session:
+        sole = await session.scalar(select(Tenant).where(Tenant.slug == slug))
+        session.expunge(sole)
+    monkeypatch.setattr(tenant_middleware, "_sole_tenant", lambda: _async(sole))
+
+    viewer_token = _register(client, slug, "the-viewer@example.com")
+
+    me = client.get("/me", headers={"Authorization": f"Bearer {viewer_token}"})
+    assert me.json()["platform_admin"] is False
+    assert (
+        client.get(
+            "/admin/retrieval-models/cache",
+            headers={"Authorization": f"Bearer {viewer_token}"},
+        ).status_code
+        == 403
+    )

@@ -5390,6 +5390,8 @@ export interface components {
             tenant_name: string;
             /** Platform Admin */
             platform_admin: boolean;
+            /** Admin Tenant */
+            admin_tenant: boolean;
         };
         /** MessageCitationsResponse */
         MessageCitationsResponse: {

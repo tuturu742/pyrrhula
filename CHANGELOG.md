@@ -95,6 +95,15 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   It had only ever passed because single-tenant mode answered `404 unknown tenant:
   'dev'`. The probe now names a tenant slug nothing can own, so it is independent of the
   mode and still proves a real database lookup.
+- **A single-tenant install needs no credentials.** Sign up and you are the one
+  organization's owner *and* the platform admin — one account for both the workspace
+  product and Admin → Models. Previously a solo operator got two accounts on their own
+  machine and had to sign out of their own workspace, and in as a generated one, to
+  choose an embedding model. Principals are per-tenant, so the role is derived rather
+  than duplicated into a second identity with its own password to drift. It fails
+  closed: the grant is scoped to the deployment's *sole* organization and to its owner,
+  so a second organization removes it and a `viewer` who joins never had it. Multi-tenant
+  is unchanged — there the platform admin is a different person by definition.
 - **Single-tenant mode reaches the UI.** It was half a feature: the API stopped
   requiring an organization name and the sign-in form went on asking for one, because
   nothing told it the deployment's shape. A new unauthenticated `GET /auth/config`
