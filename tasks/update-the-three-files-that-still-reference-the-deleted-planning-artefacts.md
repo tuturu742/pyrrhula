@@ -25,7 +25,7 @@ Do not delete any file. Do not add files. Do not touch anything outside these th
 
 ## Brief
 
-The work item is not implemented, and the diff violates the explicit scope constraints by adding two files. Delete `src/update-the-three-files-that-still-reference-the-deleted-planning-artefacts.js` and `tasks/update-the-three-files-that-still-reference-the-deleted-planning-artefacts.md`. Then make only the requested documentation edits in `CLAUDE.md`, `README.md`, and `docs/agent-guide.md`: rewrite the source-of-truth section to identify the guide and CLAUDE.md hard rules as authorities, remove exactly the two obsolete repository-map rows, and reword the guide’s first paragraph so it is the conventions reference rather than a condensation of the deleted plan.
+The requested documentation updates are still not implemented, and the diff violates the explicit constraints to add no files and touch nothing outside the three named files. Remove `src/update-the-three-files-that-still-reference-the-deleted-planning-artefacts.js` and `tasks/update-the-three-files-that-still-reference-the-deleted-planning-artefacts.md` from the change. Then modify only `CLAUDE.md`, `README.md`, and `docs/agent-guide.md` as specified: rewrite the source-of-truth section to name `docs/agent-guide.md` and CLAUDE.md’s hard rules as the remaining authorities; remove exactly the two obsolete repository-map rows from README.md; and reword the guide’s opening paragraph so the guide is the conventions reference, not a condensation of the deleted plan.
 
 ## Status
 
