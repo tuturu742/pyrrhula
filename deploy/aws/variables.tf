@@ -75,9 +75,9 @@ variable "single_tenant_ui" {
 }
 
 variable "hf_offline" {
-  description = "1 = load the embedding model strictly from the EFS cache (set after the install's pre-warm; an online HF-hub check can stall and wedge the api). 0 for first boot."
+  description = "1 = load retrieval models strictly from the EFS cache, never the network. The default: the runtime refuses a model it does not have rather than fetching one mid-request, and an online HF-hub check can stall and wedge the api. An admin-console download lifts this for the duration of that fetch alone."
   type        = string
-  default     = "0"
+  default     = "1"
 }
 
 variable "image_tag" {

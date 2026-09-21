@@ -123,8 +123,10 @@ phone app.
 - **Password reset** (no email delivery in v1):
   `podman exec pyrrhula_api_1 python -m worker.reset_password <tenant-slug> <email>`
   prints a fresh password once.
-- **Health**: `curl localhost:8000/health`; per-deploy verification lives in
-  `docs/deploy-verification.md`; exec-engine options in `docs/exec-engines.md`.
+- **Health**: `curl localhost:8000/health` for liveness, and
+  `podman exec pyrrhula_api_1 python /app/deploy-smoke.py` for the real question — the
+  same check the installer runs, which drives a document through the queue and the
+  worker. Exec-engine options in `docs/exec-engines.md`.
 
 ## The admin assistant
 

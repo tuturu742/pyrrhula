@@ -7,6 +7,14 @@
 #
 #   ./install.sh <target> --check # verify prerequisites only, change nothing
 #
+# Tenancy (default: single). Single-tenant means nobody types an organization name to
+# sign in -- the right shape for one person or one team. It is a flag over the same
+# multi-tenant core, not a different build, so rerunning with the other flag switches
+# an existing deployment:
+#
+#   ./install.sh compose                  # single-tenant (default)
+#   ./install.sh compose --multi-tenant   # host several organizations
+#
 # Each target's installer is deploy/installers/<target>.sh; the full walkthrough,
 # what gets created, and troubleshooting live in docs/install.md.
 set -euo pipefail
@@ -19,11 +27,15 @@ case "$TARGET" in
     exec "deploy/installers/$TARGET.sh" "$@"
     ;;
   *)
-    echo "usage: ./install.sh {compose|k8s|aws} [--check]"
+    echo "usage: ./install.sh {compose|k8s|aws} [--single-tenant|--multi-tenant] [--check]"
     echo
     echo "  compose  docker or podman on this machine (smallest footprint)"
     echo "  k8s      any Kubernetes cluster; one-command dev install on k3s"
     echo "  aws      ECS Fargate demo stack via Terraform (cloud)"
+    echo
+    echo "  --single-tenant  one organization, no organization field at login (default)"
+    echo "  --multi-tenant   several organizations, each named at login"
+    echo "  Rerun with the other flag to switch; nothing is migrated either way."
     echo
     echo "Full guide: docs/install.md"
     exit 64

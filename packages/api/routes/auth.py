@@ -19,7 +19,7 @@ from api.middleware.rate_limit import rate_limit_by_ip
 from api.middleware.tenant import resolve_tenant_for_auth
 from core.config import get_settings
 from core.tenancy.models import Identity, Membership, Principal, Tenant
-from core.tenancy.scope import tenant_scope
+from core.tenancy.scope import tenant_scope, unscoped_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _identity_provider = LocalArgon2IdentityProvider()
@@ -53,6 +53,53 @@ def _set_session_cookie(response: Response, token: str) -> None:
         # cookie over plain http, which is the whole point of terminating TLS.
         secure=get_settings().cookie_secure,
         max_age=60 * 60 * 24,
+    )
+
+
+class PublicConfigResponse(BaseModel):
+    """What the sign-in and register screens need to know before anyone is signed in.
+
+    Deliberately three booleans about the *shape* of the deployment, nothing about its
+    contents. All three are already observable by anyone who can reach the login page
+    (try a header-less login, try a signup), so this leaks nothing -- it just stops the
+    UI from having to discover them by failing.
+    """
+
+    single_tenant: bool
+    allow_signup: bool
+    has_organization: bool
+
+
+# Rate-limited like every other /auth route, enforced by test_route_inventory. There
+# are no credentials here to brute-force, but it is unauthenticated and it touches
+# the database, and the exemption an endpoint like this would need is exactly the
+# kind that gets copied to the next one that does have something to guess.
+@router.get("/config", dependencies=[Depends(rate_limit_by_ip)])
+async def public_config() -> PublicConfigResponse:
+    """The deployment shape, unauthenticated.
+
+    Added because single-tenant mode was only half a feature: the API stopped requiring
+    an organization name, and the login form went on asking for one anyway. A promise
+    that a solo user never thinks about organizations is not kept by making the field
+    optional -- it is kept by not showing it.
+    """
+    from core.tenancy.admin import ADMIN_TENANT_SLUG
+
+    settings = get_settings()
+    async with unscoped_session() as session:
+        has_org = await session.scalar(
+            select(Tenant.id)
+            .where(
+                Tenant.is_library.is_(False),
+                Tenant.slug != ADMIN_TENANT_SLUG,
+                Tenant.deactivated_at.is_(None),
+            )
+            .limit(1)
+        )
+    return PublicConfigResponse(
+        single_tenant=settings.single_tenant_ui,
+        allow_signup=settings.allow_tenant_signup,
+        has_organization=has_org is not None,
     )
 
 

@@ -24,8 +24,8 @@ A useful test when filing a source: *if the model contradicts this text, is that
 ### Tabletop RPG (`rpg` — labels: Rulebook / Lorebook / Miscellany)
 
 - **rules** — the game system: how dice are rolled, how characters are created, what an
-  attack or saving throw is, class/race mechanics. The shipped example is the
-  [Basic Fantasy table reference](../scripts/handbooks/basic_fantasy_rules.md).
+  attack or saving throw is, class/race mechanics. The shipped example is the Basic
+  Fantasy rules carried inside the karsh-vale sample bundle.
 - **lore** — the world and its common knowledge: the region's history, places and roads,
   who rules, what everyone in the tavern already knows. This is what grounds the GM's
   narration and keeps five agents describing the *same* village.
@@ -87,7 +87,8 @@ So you build as many tiers as the world needs:
 | `scholarly_lore` (group) | the GM, the wizard, a cleric with an archive | who bound the thing under the chapel five centuries ago |
 | a secret (one holder + the gate) | one persona | what this specific NPC is hiding tonight |
 
-**In the Basic Fantasy sample** (`scripts/basic_fantasy_game.py`) this is wired live. The
+**In the karsh-vale sample** (the `.pyr` bundle in the samples repository) this is wired
+live. The
 common lorebook (Thornwick, the Gallowfen, the bell) is `workspace_public`. A second
 lore source — *The Sundering and the Bell*: Archmagister Vaelith Corr, the mages' circle
 struck from the rolls, the bell's tolls as a failing ward — is filed under a

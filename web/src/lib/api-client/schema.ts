@@ -4,6 +4,31 @@
  */
 
 export interface paths {
+    "/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Config
+         * @description The deployment shape, unauthenticated.
+         *
+         *     Added because single-tenant mode was only half a feature: the API stopped requiring
+         *     an organization name, and the login form went on asking for one anyway. A promise
+         *     that a solo user never thinks about organizations is not kept by making the field
+         *     optional -- it is kept by not showing it.
+         */
+        get: operations["public_config_auth_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -5648,6 +5673,23 @@ export interface components {
             /** Instruction */
             instruction: string;
         };
+        /**
+         * PublicConfigResponse
+         * @description What the sign-in and register screens need to know before anyone is signed in.
+         *
+         *     Deliberately three booleans about the *shape* of the deployment, nothing about its
+         *     contents. All three are already observable by anyone who can reach the login page
+         *     (try a header-less login, try a signup), so this leaks nothing -- it just stops the
+         *     UI from having to discover them by failing.
+         */
+        PublicConfigResponse: {
+            /** Single Tenant */
+            single_tenant: boolean;
+            /** Allow Signup */
+            allow_signup: boolean;
+            /** Has Organization */
+            has_organization: boolean;
+        };
         /** PublishRequest */
         PublishRequest: {
             /** Change Note */
@@ -6958,6 +7000,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    public_config_auth_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicConfigResponse"];
+                };
+            };
+        };
+    };
     register_auth_register_post: {
         parameters: {
             query?: never;

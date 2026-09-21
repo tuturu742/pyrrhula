@@ -1,11 +1,30 @@
 #!/usr/bin/env bash
 # Compose installer: docker or podman, one machine, smallest footprint.
 # Idempotent -- rerun after `git pull` to upgrade. `--check` verifies prereqs only.
+#
+#   deploy/installers/compose.sh [--single-tenant|--multi-tenant] [--check]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 say()  { printf '\033[1m== %s\033[0m\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+# Tenancy is chosen here, not in a config file somebody has to find afterwards.
+# Single is the default because that is what a self-hosted install almost always is:
+# one person or one team, one organization, and no reason to type its name at every
+# login. `--multi-tenant` is the same build with the pre-auth shortcut off -- it is a
+# flag over one multi-tenant core, never a different product, and switching later is an
+# env change plus a restart (rerun this installer with the other flag).
+CHECK_ONLY=0
+SINGLE_TENANT=true
+for arg in "$@"; do
+  case "$arg" in
+    --check) CHECK_ONLY=1 ;;
+    --single-tenant) SINGLE_TENANT=true ;;
+    --multi-tenant)  SINGLE_TENANT=false ;;
+    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check)" ;;
+  esac
+done
 
 # --- prerequisites ----------------------------------------------------------------
 ENGINE=""
@@ -37,7 +56,7 @@ else
   [ -S /var/run/docker.sock ] && SOCKET=/var/run/docker.sock
 fi
 
-if [ "${1:-}" = "--check" ]; then
+if [ "$CHECK_ONLY" = 1 ]; then
   say "prerequisites OK"; exit 0
 fi
 
@@ -81,6 +100,20 @@ else
   say "using existing .env"
 fi
 
+# Tenancy, written every run rather than only at generation: rerunning with the other
+# flag is how a deployment switches, so the flag has to win over what is already there.
+# The app reads this once at startup, so the recreate below is what makes it take effect.
+if grep -q '^PYRRHULA_SINGLE_TENANT_UI=' .env; then
+  CURRENT=$(envval .env PYRRHULA_SINGLE_TENANT_UI true)
+  if [ "$CURRENT" != "$SINGLE_TENANT" ]; then
+    say "switching to $([ "$SINGLE_TENANT" = true ] && echo single || echo multi)-tenant"
+    sed -i.bak "s/^PYRRHULA_SINGLE_TENANT_UI=.*/PYRRHULA_SINGLE_TENANT_UI=$SINGLE_TENANT/" .env
+    rm -f .env.bak
+  fi
+else
+  echo "PYRRHULA_SINGLE_TENANT_UI=$SINGLE_TENANT" >> .env
+fi
+
 # Top-up for stacks created before the installer generated an admin login: without these
 # the admin console can only be reached through the deprecated token app.
 if ! grep -q '^PYRRHULA_ADMIN_EMAIL=' .env; then
@@ -116,14 +149,23 @@ say "waiting for the stack"
 WEB_PORT=$(envval .env PYRRHULA_WEB_PORT 5173)
 
 # The readiness probe must touch the DATABASE, not just the process: a login with
-# bogus credentials answers 401/422 when the stack (incl. migrations) is healthy,
+# bogus credentials answers 401/404/422 when the stack (incl. migrations) is healthy,
 # 5xx when it is not (observed live: /health green over a broken database).
-# 401/403/422 = bad credentials; 404 = "unknown tenant" on a fresh database. All four
-# prove the request went through the app AND a database lookup.
+# 401/403/422 = bad credentials; 404 = "unknown tenant" -- all four prove the request
+# went through the app AND a database lookup.
+#
+# The tenant header is sent deliberately, with a slug nothing can own. Without it the
+# probe's result depends on the tenancy mode: multi-tenant answers 400 "header
+# required" -- raised before any query, so it would not prove a database lookup even if
+# it were accepted -- and the install would wait five minutes and fail on a stack that
+# was healthy the whole time. It passed before only because single-tenant mode was on
+# and answered 404 for a tenant slug no installer creates, which is to say the probe was
+# resting on a bug.
 api_ready() {
   _code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
     -X POST "http://localhost:${WEB_PORT}/api/auth/login" \
     -H 'Content-Type: application/json' \
+    -H 'X-Pyrrhula-Tenant: readiness-probe-no-such-tenant' \
     -d '{"email":"readiness-probe@invalid.local","password":"x"}' 2>/dev/null || echo 000)
   case "$_code" in 401|403|404|422) return 0 ;; *) return 1 ;; esac
 }
@@ -175,100 +217,30 @@ while ! api_ready; do
   sleep 5
 done
 
-# Pre-warm the retrieval models NOW, during install, instead of blocking the user's
-# first knowledge/assistant call for many minutes (a cold in-request download has also
-# been seen wedging on registry rate-limit stalls).
+# The retrieval models are NOT downloaded here. That used to be the slowest part of an
+# install by a wide margin -- multiple gigabytes, before the operator had seen a single
+# screen -- to fetch a model nobody had yet chosen. Which embedding model a deployment
+# runs is a decision its operator makes, so it belongs where decisions are made: Admin
+# console -> Models, which can download in the background (a worker job, restartable) or
+# take an uploaded cache tarball on a box with no route to Hugging Face.
 #
-# No model name appears here on purpose: the deployment's choice lives in its
-# configuration (PYRRHULA_EMBEDDING_MODEL / PYRRHULA_RERANKER_MODEL, see
-# docs/install.md), so the installer asks the app what it is set to and warms that. A
-# hardcoded name would silently pre-warm the wrong model for anyone who changed it, and
-# then charge them the cold download anyway.
-#
-# Opt-out: the models are no longer *required* at install time. They can be fetched
-# later from Admin -> Retrieval models (a background job), or uploaded there as a cache
-# tarball on a box with no route to huggingface.co. Skipping costs a slow first
-# knowledge call, nothing more.
-if [ "${PYRRHULA_SKIP_MODEL_DOWNLOAD:-0}" = "1" ]; then
-  echo "   skipping the retrieval-model download (PYRRHULA_SKIP_MODEL_DOWNLOAD=1)."
-  echo "   Fetch them later: Admin -> Retrieval models -> Download, or upload a"
-  echo "   cache tarball there. Until then the first knowledge call fetches them."
-else
-  say "downloading the retrieval models (one-time, please wait; set"
-  say "PYRRHULA_SKIP_MODEL_DOWNLOAD=1 to skip and do it from the admin console)"
-  warm='
-from core.config import get_settings
-from sentence_transformers import CrossEncoder, SentenceTransformer
-s = get_settings()
-SentenceTransformer(s.embedding_model.split("/", 1)[-1])
-if s.reranker_enabled:
-    CrossEncoder(s.reranker_model.split("/", 1)[-1])
-'
-  # Two attempts: container DNS can lag for a few seconds right after first start.
-  if ! "$ENGINE" exec pyrrhula_api_1 python -c "$warm" >/dev/null 2>&1; then
-    echo "   first attempt failed -- retrying in 20s"
-    sleep 20
-    if ! "$ENGINE" exec pyrrhula_api_1 python -c "$warm" >/dev/null 2>&1; then
-      # Don't leave a mystery: the most common cause is container DNS that answers
-      # internal names but cannot forward external ones (rootless podman's aardvark-dns
-      # blocked by a host firewall change is the classic case). That breaks far more
-      # than this download -- every model-provider call would fail the same way -- so
-      # diagnose it now, while someone is watching.
-      if "$ENGINE" exec pyrrhula_api_1 python -c \
-          'import socket; socket.gethostbyname("huggingface.co")' >/dev/null 2>&1; then
-        echo "   warning: pre-download failed (network reachable; likely transient or a"
-        echo "            huggingface outage). The first knowledge/assistant call will"
-        echo "            fetch the model instead."
-      else
-        echo "   ERROR: containers cannot resolve external DNS (internal service names"
-        echo "          work, huggingface.co does not). Until this is fixed, model"
-        echo "          downloads AND every cloud model call will fail from this stack."
-        echo "          This is host container-networking, not Pyrrhula: on rootless"
-        echo "          podman it is usually aardvark-dns forwarding blocked by a"
-        echo "          firewall change. Quick fix -- pin public DNS for this stack:"
-        echo "            cat > docker/compose.override.yml <<'EOF'"
-        echo "            services:"
-        echo "              api:    {dns: [1.1.1.1, 8.8.8.8]}"
-        echo "              worker: {dns: [1.1.1.1, 8.8.8.8]}"
-        echo "            EOF"
-        echo "            $ENGINE compose -p pyrrhula -f docker/compose.selfhost.yml -f docker/compose.override.yml up -d api worker"
-        echo "          then re-run: ./install.sh compose"
-      fi
-    fi
-  fi
-fi
+# Nothing breaks meanwhile. Knowledge ingests and chunks without a model; only semantic
+# search waits, and the app says so rather than stalling on a silent fetch.
 
-# Once the cache is populated, run offline. An unauthenticated HF-hub check can HANG
-# (rate-limit stall, no timeout) inside the in-process model load and wedge the api's
-# event loop -- observed on the k8s stack as NotReady for 13+ minutes at idle CPU, which
-# is why that installer flips its pods. Compose had the same exposure with the fix
-# available only as a comment in the compose file, so it never happened on its own.
-#
-# Keyed on the cache actually being populated, not on the warm step's exit status: a
-# rerun over a wiped volume must be able to download again rather than being pinned
-# offline against an empty cache.
-HF_SIZE=$("$ENGINE" exec pyrrhula_api_1 du -sm /app/.cache/huggingface 2>/dev/null | cut -f1 || echo 0)
-if [ "${HF_SIZE:-0}" -gt 1000 ] && [ "$(envval .env PYRRHULA_HF_OFFLINE 0)" != "1" ]; then
-  say "cache warm (${HF_SIZE}MB) -- pinning this stack to offline model loads"
-  # `sed -i.bak` + rm, not bare `-i`: BSD sed (macOS) requires the suffix argument.
-  if grep -q '^PYRRHULA_HF_OFFLINE=' .env; then
-    sed -i.bak 's/^PYRRHULA_HF_OFFLINE=.*/PYRRHULA_HF_OFFLINE=1/' .env && rm -f .env.bak
-  else
-    echo 'PYRRHULA_HF_OFFLINE=1' >> .env
-  fi
-  # The running containers still hold the old value; .env alone changes nothing until
-  # they are recreated. Only api and worker load models, so leave the rest alone.
-  "${COMPOSE[@]}" "${CARGS[@]}" up -d --no-deps api worker >/dev/null 2>&1 || true
-  echo "   waiting for the api to come back"
-  back=$(( $(date +%s) + 120 ))
-  while ! api_ready; do
-    if [ "$(date +%s)" -ge "$back" ]; then
-      echo "   warning: the api did not answer within 2 minutes of the offline switch."
-      diagnose
-      break
-    fi
-    sleep 5
-  done
+# --- does this deployment actually work? ------------------------------------------
+# Mandatory, and deliberately so: "installed" has to mean more than "the API answers".
+# The readiness gate above proves the app reached the database; this proves a document
+# survives the whole loop -- blob write, queue, a *second* process claiming it, a parse,
+# a row. The failure modes that cost the most time -- a worker OOMing on its first job,
+# a queue whose leases were never reclaimed, a blob volume mounted read-only -- all pass
+# the readiness gate and all fail here. Pack-free and model-free, so it means the same
+# thing on every install, including one that will only ever run the swdev workflow.
+say "verifying the deployment"
+if ! "$ENGINE" exec pyrrhula_api_1 python /app/deploy-smoke.py; then
+  echo
+  echo "ERROR: the stack is up but cannot do real work. Details above."
+  diagnose
+  exit 1
 fi
 
 say "up."
@@ -282,7 +254,14 @@ echo "    password      $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)')"
 echo "  (generated on first run, stored in .env; change the password IN THE APP"
 echo "   after first login -- editing .env afterwards does not rotate it)"
 echo
+if [ "$SINGLE_TENANT" = true ]; then
+  echo "  Single-tenant: sign in without naming an organization. Re-run with"
+  echo "  --multi-tenant to host several."
+else
+  echo "  Multi-tenant: every sign-in names its organization."
+fi
 echo "  Or Sign up to create your own organization."
 echo "  Legacy token console (deprecated): http://localhost:$(envval .env PYRRHULA_ADMIN_PORT 8100)  (token: grep ADMIN_TOKEN .env)"
-echo "  Next   add a model connection (Connections page), then launch a session."
+echo "  Next   Admin -> Models: choose and download the retrieval models (needed for"
+echo "         semantic search), then add a model connection on the Connections page."
 echo "  Docs   docs/install.md (post-install, TLS, upgrades, troubleshooting)"

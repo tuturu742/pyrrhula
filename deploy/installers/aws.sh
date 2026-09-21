@@ -39,7 +39,7 @@ cd deploy/aws
 say "terraform init"
 "$TF" init -upgrade >/dev/null
 say "terraform apply (RDS is the slow part, ~10-15 min)"
-"$TF" apply $AUTO
+"$TF" apply $AUTO -var "single_tenant_ui=$SINGLE_TENANT"
 
 say "building + pushing images to ECR"
 ./build-and-push.sh
@@ -47,16 +47,16 @@ say "building + pushing images to ECR"
 say "running schema migration"
 ./migrate.sh
 
-say "pre-warming the embedding model (one-time, ~2.2GB into EFS)"
-if ./prewarm.sh; then
-  say "switching pods to offline model loading"
-  "$TF" apply $AUTO -var hf_offline=1
-  REGION=$("$TF" output -raw region); CLUSTER=$("$TF" output -raw ecs_cluster)
-  for svc in api worker; do
-    aws ecs update-service --region "$REGION" --cluster "$CLUSTER" \
-      --service "$svc" --force-new-deployment >/dev/null
-  done
-fi
+# No model pre-warm. Which retrieval model this deployment runs is its operator's
+# decision, made in Admin -> Models (which downloads into the same EFS cache as a
+# background job), not multiple gigabytes spent during terraform apply on a model
+# nobody has chosen. deploy/aws/prewarm.sh still exists for an operator who wants the
+# cache populated before anyone logs in.
+
+# Mandatory, like the other two installers: Ready services are not the same as working
+# ones. Runs the same check, on the api task definition, as a one-shot task.
+say "verifying the deployment"
+./smoke.sh
 
 say "done."
 echo

@@ -10,6 +10,28 @@ Three supported deployment targets, one entry point:
 
 Add `--check` to any target to verify prerequisites without changing anything.
 
+## Single-tenant or multi-tenant
+
+Installs **single-tenant** unless you say otherwise:
+
+```bash
+./install.sh compose                  # one organization (default)
+./install.sh compose --multi-tenant   # several, each named at login
+```
+
+Single-tenant means nobody types an organization name to sign in — the right shape for
+one person or one team. Multi-tenant means every sign-in names its organization.
+
+It is a flag over the same multi-tenant core, never a different build, so **the choice
+is not permanent**: rerun the installer with the other flag and it switches. Nothing is
+migrated, no data changes, and every organization stays reachable either way — the flag
+only decides what happens when a login arrives without naming one.
+
+One thing to know about growing: a single-tenant deployment that signs up a *second*
+organization can no longer infer which one a header-less login means, and says so
+instead of guessing. Either name the organization at login, switch to `--multi-tenant`,
+or pin one with `PYRRHULA_DEFAULT_TENANT_SLUG`.
+
 | | compose | k8s | aws |
 |---|---|---|---|
 | Good for | trying it out, small self-host | dev/test on a cluster, k8s shops | a shareable cloud demo |
@@ -29,25 +51,46 @@ connection, create a starter team, launch a session.
 Pyrrhula runs two models itself: one embeds text for search, one reranks the results. They
 are ~3GB together and live in a cache volume shared by the api and the worker.
 
-The installer downloads them at the end of a first install, because the alternative is
-that somebody's first knowledge query stalls for several minutes. **It is no longer
-required.** Skip it with:
+**The installer does not download them, and does not choose them for you.** It used to,
+and that was the slowest part of an install by a wide margin — several gigabytes spent
+before you had seen a single screen, on a model nobody had picked. Which models a
+deployment runs is a decision its operator makes, so it is made where decisions are made:
 
-```bash
-PYRRHULA_SKIP_MODEL_DOWNLOAD=1 ./install.sh compose   # or: k8s
-```
+**Admin → Models**, on your first login:
 
-Then get them whenever you like, from **Admin → Models**:
-
+- **Choose** the embedding and reranking models this deployment uses. Deployment-level,
+  not per tenant — every tenant's vectors live in one column of one width, so this cannot
+  coherently differ between them.
 - **Download from Hugging Face** — a background job; the sizes on that page grow as it
   runs. Safe to press twice.
 - **Upload cache archive** — for a deployment with no route to `huggingface.co`. On a
   machine that has one, fetch the models, then
   `tar czf cache.tgz -C ~/.cache/huggingface hub` and upload that file.
 
-Nothing here is required for correctness: a model that is missing is fetched the first
-time something embeds. That first call is simply slow, and on an air-gapped box it fails
-instead — which is what the upload path is for.
+Until you do, the deployment is *installed and working* — it just cannot answer a
+semantic query. Knowledge still ingests, chunks and stores; sessions still run. The
+install check at the end of every installer says which models are present, and the app
+tells you where to go rather than stalling: the runtime never fetches a model
+mid-request, because an unauthenticated hub check has no timeout and has been seen
+wedging the API's event loop for thirteen minutes at idle CPU.
+
+## Does it work? The installer answers that
+
+Every installer ends by running the same check, and **fails the install if it does not
+pass**. It is not the readiness probe — that one proves the API reached the database.
+This one drives a document through the whole loop: a blob write, a job on the queue, the
+*worker* claiming and running it, a parse, rows in the database. A worker that OOMs on
+its first job, a queue whose leases were never reclaimed, a blob volume mounted
+read-only — all of those look healthy to a readiness probe and fail here.
+
+It needs no workflow pack and no model, so it means the same thing on every install,
+including one that will only ever run `swdev`. To re-run it later:
+
+```bash
+podman exec pyrrhula_api_1 python /app/deploy-smoke.py          # compose
+kubectl -n pyrrhula exec deploy/pyrrhula-api -- python /app/deploy-smoke.py   # k8s
+cd deploy/aws && ./smoke.sh                                      # aws
+```
 
 ## compose (docker / podman)
 
@@ -222,10 +265,9 @@ workspace assistant.
 
 ## Choosing the retrieval models
 
-Pyrrhula runs two models itself: one that embeds text for search, and one that reranks
-what search found. The installers do not hardcode either — they ask the deployment what it
-is configured to use and pre-warm that, so setting these *before* you install means the
-right weights are fetched once instead of blocking your first knowledge call.
+The short version is above: pick them in **Admin → Models** after installing. This
+section is the detail — what the choice means, and how to set a default in configuration
+before anyone logs in.
 
 Set them in `.env` (compose) or `deploy/k8s/overlays/dev/secrets.env` (k8s):
 
@@ -237,7 +279,7 @@ PYRRHULA_RERANKER_MODEL=local/BAAI/bge-reranker-v2-m3
 PYRRHULA_RERANKER_ENABLED=true         # false = skip reranking entirely
 ```
 
-Those particular models are what a default install fetches because they are multilingual,
+Those particular models are the configured default because they are multilingual,
 permissively licensed (MIT and Apache-2.0) and run acceptably on CPU. They are a starting
 point, not a recommendation: a smaller model is faster and cheaper to host, a
 domain-specific one may retrieve better on your content, and a deployment that never
@@ -250,8 +292,9 @@ Two rules when changing them:
   mismatch fails on boot rather than returning nothing at query time.
 - **Existing vectors are not migrated.** Embeddings from a different model are not
   comparable; changing the embedding model on a deployment that already has knowledge
-  orphans what is stored, and that content has to be re-indexed. Decide at install time
-  if you can.
+  orphans what is stored, and that content has to be re-indexed. Decide before you
+  ingest anything, if you can — which is the other reason this choice is the first
+  screen a new admin sees.
 
 The reranker is safe to change or disable at any time — it re-ranks results and stores
 nothing. Platform admins can see and change both from the admin console after install.
@@ -283,13 +326,6 @@ credential (model keys, repo tokens). Losing it means re-entering them all.
 | compose | `.env` | `~/.config/pyrrhula/compose.env.bak` |
 | k8s | `deploy/k8s/overlays/dev/secrets.env` | make one (the installer prints a reminder) |
 | aws | Secrets Manager `pyrrhula/encryption-key` | AWS-managed; don't delete the secret |
-
-## Verifying an install
-
-`docs/deploy-verification.md` is the standing runbook (three end-to-end scenarios:
-an executive discussion, an RPG encounter, a software-delivery flow with real PRs
-and CI). It runs against any target via env overrides — the k8s example is in
-`deploy/k8s/README.md`.
 
 ## Troubleshooting
 

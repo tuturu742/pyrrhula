@@ -67,9 +67,15 @@ terraform output url                  # open it, Sign up, done
 
 The services start crash-looping the moment `apply` finishes (no image yet) and heal
 on their own after the push; give them a minute after `migrate.sh`. The installer
-additionally pre-warms the embedding model into EFS (`prewarm.sh`) and re-applies
-with `-var hf_offline=1` so model loading never depends on the HuggingFace hub
-again.
+finishes by running `smoke.sh` — the same post-install check every deployment shape
+runs, as a one-shot task on the api task definition — and fails if the stack is up
+but cannot do real work.
+
+Retrieval models are not downloaded during install. Pods load them strictly from the
+EFS cache (`hf_offline=1`), and which model this deployment runs is chosen in
+**Admin → Models**, which downloads into that same cache as a background job.
+`prewarm.sh` is still here for an operator who wants the cache populated before
+anyone logs in.
 
 Routing: the ALB serves the UI at `/` and sends `/api/*` and `/git/*` straight to
 the api (the app tolerates the unstripped `/api` prefix), so api redeploys never

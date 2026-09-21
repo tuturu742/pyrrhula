@@ -38,3 +38,20 @@ dump.rdb
 .plugins/
 .kube/
 eval-results/
+
+# Demo and benchmark drivers: they provision specific showcase tenants against a live
+# stack with specific models, so they are one person's harness rather than something a
+# self-hoster can run. What the *product* does is covered by CI and by the post-install
+# check every installer runs (deploy/installers/smoke.py).
+scripts/catmice_*.py
+scripts/gamedev_*.py
+scripts/hagnaryd_bench.py
+scripts/mystery_bench.py
+scripts/secrets_showcase_seed.py
+scripts/basic_fantasy_game.py
+scripts/bench_dense_retrieval.py
+# The same harness: verify_deploy drives showcase tenants against a live stack with
+# specific local models, and seed_verification/handbooks are the content it seeds.
+scripts/verify_deploy.py
+scripts/seed_verification.py
+scripts/handbooks/

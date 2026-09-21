@@ -30,6 +30,37 @@ _DEFAULT_ENCODE_BATCH_SIZE = 8
 _DEFAULT_MAX_SEQ_LENGTH = 1024
 
 
+class ModelNotDownloadedError(RuntimeError):
+    """The model is not on this box, and this is not the moment to fetch it.
+
+    A lazy in-request download is how the installer used to avoid a decision, and it
+    cost more than it saved: minutes of stall inside whichever turn happened to be
+    first, and -- observed live on Kubernetes -- an unauthenticated hub check with no
+    timeout wedging the api's event loop for thirteen minutes at idle CPU. So the
+    runtime never reaches the network on its own. Fetching is an explicit act from the
+    admin console (a worker job, restartable, visible), and until it happens this says
+    so in a sentence an operator can act on.
+    """
+
+
+def _require_cached(model: str) -> None:
+    """Refuse to load a model that is not in the shared cache.
+
+    Checked here rather than left to ``HF_HUB_OFFLINE``, because that env var produces
+    a stack trace about a missing repo snapshot, which says nothing about what to do.
+    """
+    from core.retrieval_cache import presence
+
+    if presence(model).present:
+        return
+    raise ModelNotDownloadedError(
+        f"the embedding model {model!r} is not on this deployment. "
+        "Admin console -> Models: choose the models you want and press Download "
+        "(or upload a cache tarball if this box has no route to Hugging Face). "
+        "Knowledge still ingests and chunks meanwhile; only semantic search waits."
+    )
+
+
 class SentenceTransformersEmbeddingProvider:
     def __init__(
         self,
@@ -58,6 +89,7 @@ class SentenceTransformersEmbeddingProvider:
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
+            _require_cached(self._hf_model_name)
             model = SentenceTransformer(self._hf_model_name)
             # Capped rather than left at the checkpoint's default: see the module constants.
             model.max_seq_length = min(

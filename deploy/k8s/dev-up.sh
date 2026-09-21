@@ -85,6 +85,11 @@ HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)
 echo "== apply"
 kubectl delete job pyrrhula-migrate -n pyrrhula --ignore-not-found
 kubectl apply -k "$OVERLAY"
+# Tenancy, set on the deployments rather than in base's ConfigMap so a rerun with the
+# other value actually switches an existing cluster. base's literal stays the default
+# for anyone applying the manifests without this script.
+kubectl -n pyrrhula set env deploy/pyrrhula-api deploy/pyrrhula-worker \
+  "PYRRHULA_SINGLE_TENANT_UI=${PYRRHULA_SINGLE_TENANT_UI:-true}" >/dev/null
 if [ -n "$HOST_IP" ]; then
   # Discovered by label, never by a hardcoded list: attaching a host MCP server should
   # be copying one manifest, not editing the installer. The old list named one
@@ -185,52 +190,22 @@ wait_with_reason "the migration" \
 wait_with_reason "the api" \
   'kubectl -n pyrrhula rollout status deploy/pyrrhula-api --timeout=10s'
 
-# Pre-warm the embedding model (bge-m3, ~2.2GB) during install: a cold in-request
-# download blocks the first knowledge/assistant call for minutes and has been seen
-# wedging the api's event loop on an HF-hub rate-limit stall.
-HF_SIZE=$(kubectl -n pyrrhula exec deploy/pyrrhula-api -- du -sm /app/.cache/huggingface 2>/dev/null | cut -f1 || echo 0)
-if [ "${PYRRHULA_SKIP_MODEL_DOWNLOAD:-0}" = "1" ]; then
-  echo "== skipping the retrieval-model download (PYRRHULA_SKIP_MODEL_DOWNLOAD=1)"
-  echo "   Fetch them later from Admin -> Retrieval models -> Download, or upload a"
-  echo "   cache tarball there on a cluster with no route to huggingface.co."
-elif [ "${HF_SIZE:-0}" -le 1000 ]; then
-  echo "== downloading the retrieval models (one-time; set PYRRHULA_SKIP_MODEL_DOWNLOAD=1"
-  echo "   to skip and do it from the admin console instead)"
-  # No model name here: the deployment's choice lives in its configuration
-  # (PYRRHULA_EMBEDDING_MODEL / PYRRHULA_RERANKER_MODEL, see docs/install.md), so ask
-  # the app what it is set to and warm that. A hardcoded name would pre-warm the wrong
-  # model for anyone who changed it, and charge them the cold download anyway.
-  WARM='
-from core.config import get_settings
-from sentence_transformers import CrossEncoder, SentenceTransformer
-s = get_settings()
-SentenceTransformer(s.embedding_model.split("/", 1)[-1])
-if s.reranker_enabled:
-    CrossEncoder(s.reranker_model.split("/", 1)[-1])
-'
-  # Two attempts with a pause: right after the stack comes up, in-cluster DNS can
-  # still be settling (observed live: the first attempt failed on name resolution
-  # seconds after rollout; the retry succeeded).
-  for attempt in 1 2; do
-    if kubectl -n pyrrhula exec deploy/pyrrhula-api -- python -c "$WARM" >/dev/null 2>&1
-    then break; fi
-    if [ "$attempt" = 1 ]; then
-      echo "   first attempt failed (startup DNS can lag) -- retrying in 20s"
-      sleep 20
-    else
-      echo "   warning: pre-download failed; the first knowledge call will fetch it"
-    fi
-  done
-  HF_SIZE=$(kubectl -n pyrrhula exec deploy/pyrrhula-api -- du -sm /app/.cache/huggingface 2>/dev/null | cut -f1 || echo 0)
-fi
+# The retrieval models are NOT downloaded here -- see deploy/installers/compose.sh for
+# why: which model a deployment runs is its operator's decision, made in Admin ->
+# Models, not multiple gigabytes spent before they have seen a screen. The pods run
+# HF_HUB_OFFLINE=1 (base kustomization), so the runtime never reaches the network on its
+# own; an explicit admin fetch lifts that for the duration of the fetch alone.
 
-# Once the cache is populated, run offline: an unauthenticated HF-hub check can HANG
-# (rate-limit stall, no timeout) inside the in-process model load and wedge the api's
-# event loop (observed live: NotReady for 13+ min at idle CPU).
-if [ "${HF_SIZE:-0}" -gt 1000 ]; then
-  kubectl -n pyrrhula set env deploy/pyrrhula-api deploy/pyrrhula-worker \
-    HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
-  echo "   embedding cache present (${HF_SIZE}MB) -> pods set to HF offline mode"
+# --- does this deployment actually work? ------------------------------------------
+# Mandatory. The rollout status above proves pods are Ready, which is not the same as
+# working: a worker that OOMs on its first job is Ready right up until it claims one.
+# This drives a document through the whole loop instead. Pack-free and model-free.
+echo "== verifying the deployment"
+if ! kubectl -n pyrrhula exec deploy/pyrrhula-api -- python /app/deploy-smoke.py; then
+  echo
+  echo "ERROR: the stack is up but cannot do real work. Details above."
+  kubectl -n pyrrhula get pods
+  exit 1
 fi
 
 # POSIX sed, not `grep -oP`: -P is a GNU extension and BSD grep (macOS) has no such

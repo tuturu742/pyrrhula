@@ -1,5 +1,5 @@
 """The Glasshouse Affair runner -- runs IN the api pod (core imports + DB), invoked by
-``scripts/mystery_bench.py`` over ``kubectl exec``.
+a host-side driver over ``kubectl exec``.
 
 Modes (argv[1]):
   seed <slug>              -- provision the bench tenant/cast/secrets/axes; print ids.

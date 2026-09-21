@@ -7,7 +7,7 @@ resolve a check and drive a character's state machine). Core-neutral keys throug
 reading arrives via ``vocabulary_overlay`` only.
 
 Whether a local model reliably emits those tool calls is a model-quality matter (upgradeable);
-the mechanics themselves are covered deterministically by scripts/rpg_mechanics_check.py.
+the mechanics themselves are covered deterministically by tests/isolation/test_rpg_pack.py.
 """
 
 from __future__ import annotations

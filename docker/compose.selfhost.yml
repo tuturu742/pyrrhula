@@ -70,8 +70,8 @@ services:
       PYRRHULA_PUBLIC_BASE_URL: ${PYRRHULA_PUBLIC_BASE_URL:-}
       # First run downloads the embedding model into the hf-cache volume; flip both to
       # "1" afterwards for fully-offline startups.
-      HF_HUB_OFFLINE: ${PYRRHULA_HF_OFFLINE:-0}
-      TRANSFORMERS_OFFLINE: ${PYRRHULA_HF_OFFLINE:-0}
+      HF_HUB_OFFLINE: ${PYRRHULA_HF_OFFLINE:-1}
+      TRANSFORMERS_OFFLINE: ${PYRRHULA_HF_OFFLINE:-1}
       # Agent web search: the bundled SearXNG below by default; point elsewhere or
       # set empty to disable the feature.
       PYRRHULA_WEB_SEARCH_URL: ${PYRRHULA_WEB_SEARCH_URL:-http://searxng:8080}

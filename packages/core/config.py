@@ -27,11 +27,18 @@ class Settings(BaseSettings):
     auth_provider: str = "local"
     isolation_mode: str = "shared"
     single_tenant_ui: bool = False
-    # PYRRHULA_SINGLE_TENANT_UI pins requests to this tenant when no
-    # X-Pyrrhula-Tenant header is present (T0.6) -- "the MVP UI exposes one tenant's
-    # worth of functionality" is a feature flag over a multi-tenant core (plan §13.8),
-    # not a different build.
-    default_tenant_slug: str = "dev"
+    # PYRRHULA_SINGLE_TENANT_UI pins requests to one tenant when no X-Pyrrhula-Tenant
+    # header is present (T0.6) -- "the MVP UI exposes one tenant's worth of
+    # functionality" is a feature flag over a multi-tenant core (plan §13.8), not a
+    # different build.
+    #
+    # Empty by default, meaning "infer it". This used to default to "dev", a tenant no
+    # installer has ever created, while compose and Kubernetes both switch the mode on:
+    # out of the box it promised "no tenant header required" and 404'd every header-less
+    # login. A deployment with exactly one tenant needs no configuration to say which one
+    # it is (see api.middleware.tenant); set this only to pin a specific slug where
+    # several exist.
+    default_tenant_slug: str = ""
 
     # Session-cookie hardening: set true wherever the deployment terminates TLS, so the
     # browser refuses to send the session cookie over plain http. Left false by default

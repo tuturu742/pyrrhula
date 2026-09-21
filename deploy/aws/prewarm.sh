@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Download the embedding model (bge-m3, ~2.2GB) into the shared EFS cache as an
-# install step -- a cold in-request download blocks the first knowledge/assistant
-# call for minutes and can wedge on an HF-hub stall. Reuses the migrate task
-# definition with a command override. After it succeeds, apply with
-# -var hf_offline=1 (the installer does both).
+# Download the embedding model (bge-m3, ~2.2GB) into the shared EFS cache.
+#
+# NOT an install step any more: which model a deployment runs is chosen in Admin ->
+# Models, which downloads into this same cache as a background job. This stays for the
+# operator who would rather have the cache populated before anyone logs in -- an
+# air-gapped rollout, or simply not wanting the first admin to wait on a download.
+# Reuses the api task definition with a command override.
 set -euo pipefail
 cd "$(dirname "$0")"
 TF=$(command -v terraform || command -v tofu)

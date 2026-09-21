@@ -162,14 +162,11 @@ Details worth knowing:
 
   After that, an image update is just:
   `podman build -t pyrrhula:dev -f docker/Dockerfile . && podman push --tls-verify=false localhost/pyrrhula:dev 127.0.0.1:5000/pyrrhula:dev && kubectl -n pyrrhula rollout restart deploy/pyrrhula-api deploy/pyrrhula-worker`.
-- **Verification**: the standing runbook (docs/deploy-verification.md) runs against
-  this stack via env overrides, e.g.:
+- **Verification**: `dev-up.sh` runs the post-install check itself and fails if the
+  stack cannot do real work. To re-run it later:
 
   ```bash
-  PYRRHULA_VERIFY_API=http://pyrrhula.localhost/api \
-  PYRRHULA_VERIFY_PG_EXEC="kubectl -n pyrrhula exec statefulset/postgres --" \
-  PYRRHULA_VERIFY_API_EXEC="kubectl -n pyrrhula exec deploy/pyrrhula-api --" \
-  python scripts/verify_deploy.py exec rpg swe
+  kubectl -n pyrrhula exec deploy/pyrrhula-api -- python /app/deploy-smoke.py
   ```
 
 ## Other clusters (not k3s)

@@ -5,22 +5,31 @@
 # image registry -- see deploy/k8s/README.md, "Other clusters", and the copyable
 # overlay at deploy/k8s/overlays/cluster.
 #
-#   deploy/installers/k8s.sh [--check] [--with-dashboard]
+#   deploy/installers/k8s.sh [--single-tenant|--multi-tenant] [--check] [--with-dashboard]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 say()  { printf '\033[1m== %s\033[0m\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+# Tenancy is chosen here, not in a config file somebody has to find afterwards. Single
+# is the default: a self-hosted install is almost always one team with one organization,
+# and no reason to type its name at every login. `--multi-tenant` is the same build with
+# the pre-auth shortcut off -- a flag over one multi-tenant core, never a different
+# product -- and switching later is a rerun with the other flag.
 WITH_DASHBOARD=0
 CHECK_ONLY=0
+SINGLE_TENANT=true
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
     --with-dashboard) WITH_DASHBOARD=1 ;;
-    *) fail "unknown flag $arg" ;;
+    --single-tenant) SINGLE_TENANT=true ;;
+    --multi-tenant)  SINGLE_TENANT=false ;;
+    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check | --with-dashboard)" ;;
   esac
 done
+export PYRRHULA_SINGLE_TENANT_UI="$SINGLE_TENANT"
 
 # --- prerequisites ----------------------------------------------------------------
 command -v kubectl >/dev/null || fail "need kubectl (with k3s: sudo install -D -m600 -o \$USER /etc/rancher/k3s/k3s.yaml ~/.kube/config)"

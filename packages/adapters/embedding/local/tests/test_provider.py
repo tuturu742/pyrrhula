@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import pytest
 
-from adapters.embedding.local.provider import SentenceTransformersEmbeddingProvider
+from adapters.embedding.local.provider import (
+    ModelNotDownloadedError,
+    SentenceTransformersEmbeddingProvider,
+)
 from core.ports.embedding import EmbedRequest
 from core.ports.model_provider import EgressDeniedError
 
@@ -33,6 +36,12 @@ class _FakeModel:
         self.calls.append((texts, normalize_embeddings))
         self.batch_sizes.append(batch_size)
         return [_FakeVector([float(len(t))] * 4) for t in texts]
+
+
+def _pretend_downloaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The `_load()` tests use a fake model that is, correctly, not in the HF cache.
+    They are about the sequence cap; presence has its own tests below."""
+    monkeypatch.setattr("adapters.embedding.local.provider._require_cached", lambda _model: None)
 
 
 async def test_embed_calls_model_encode_and_normalises_output() -> None:
@@ -79,6 +88,7 @@ def test_load_caps_the_models_sequence_length(monkeypatch: pytest.MonkeyPatch) -
     other half of the OOM fix."""
     fake_model = _FakeModel(max_seq_length=8192)
     provider = SentenceTransformersEmbeddingProvider("fake/model", dimension=4, max_seq_length=1024)
+    _pretend_downloaded(monkeypatch)
     monkeypatch.setattr(
         "sentence_transformers.SentenceTransformer", lambda name: fake_model, raising=False
     )
@@ -91,8 +101,44 @@ def test_load_never_raises_a_models_own_shorter_limit(monkeypatch: pytest.Monkey
     assignment, or it would silently ask a model for sequences it cannot encode."""
     fake_model = _FakeModel(max_seq_length=512)
     provider = SentenceTransformersEmbeddingProvider("fake/model", dimension=4, max_seq_length=1024)
+    _pretend_downloaded(monkeypatch)
     monkeypatch.setattr(
         "sentence_transformers.SentenceTransformer", lambda name: fake_model, raising=False
     )
 
     assert provider._load().max_seq_length == 512
+
+
+def test_a_model_that_is_not_downloaded_is_refused_with_somewhere_to_go(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The runtime never fetches a model mid-request.
+
+    It used to, lazily, and the cost was a turn that stalled for minutes -- and, on
+    Kubernetes, an unauthenticated hub check with no timeout that wedged the api's event
+    loop at idle CPU. Now that the installers do not download either, this message is
+    the whole of what an operator gets, so it has to name the place that fixes it."""
+    provider = SentenceTransformersEmbeddingProvider("fake/model", dimension=4)
+    monkeypatch.setattr(
+        "core.retrieval_cache.presence",
+        lambda model: type("P", (), {"present": False, "model": model})(),
+    )
+
+    with pytest.raises(ModelNotDownloadedError) as excinfo:
+        provider._load()
+
+    assert "Admin console -> Models" in str(excinfo.value)
+
+
+def test_a_downloaded_model_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_model = _FakeModel()
+    provider = SentenceTransformersEmbeddingProvider("fake/model", dimension=4)
+    monkeypatch.setattr(
+        "core.retrieval_cache.presence",
+        lambda model: type("P", (), {"present": True, "model": model})(),
+    )
+    monkeypatch.setattr(
+        "sentence_transformers.SentenceTransformer", lambda name: fake_model, raising=False
+    )
+
+    assert provider._load() is fake_model

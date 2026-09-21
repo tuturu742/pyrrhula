@@ -52,5 +52,5 @@ configMapGenerator:
       # not exist. Set ASSISTANT_MODEL (and ASSISTANT_API_BASE for a local provider) in
       # overlays/dev/secrets.env -- they reach the app prefixed with PYRRHULA_ -- or
       # pick a model on the "Assistant model" profile in the UI. See docs/mcp.md.
-      - HF_HUB_OFFLINE=0
-      - TRANSFORMERS_OFFLINE=0
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1

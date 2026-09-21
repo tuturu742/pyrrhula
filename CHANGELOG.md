@@ -65,6 +65,60 @@ and hardcoded in another, and this closes those gaps rather than adding new surf
   documented and that every documented default matches the code.
 - Installers no longer require GitHub credentials, and a clean install assumes nothing
   about local models.
+- **Every installer now proves the deployment works, and fails if it does not.** The
+  readiness gate answered "the API reached the database", which a stack whose worker
+  OOMs on its first job also answers. The new check drives a document through the whole
+  loop — a blob write, a job on the queue, the *worker* claiming and running it, a parse,
+  rows in the database — and needs no workflow pack and no model, so it means the same
+  thing on an install that will only ever run `swdev`. Re-runnable afterwards:
+  `python /app/deploy-smoke.py` in the api container, or `deploy/aws/smoke.sh`.
+- **The installer no longer downloads a retrieval model.** It was the slowest part of an
+  install by a wide margin, spent on a model nobody had chosen. Choosing and fetching
+  them is the operator's, in **Admin → Models**, which is where a platform admin now
+  lands on first login while none is installed. Until then the deployment is installed
+  and working; only semantic search waits.
+- **The runtime never fetches a model mid-request.** It refuses one it does not have,
+  with a message naming the page that fixes it. The lazy path cost minutes inside
+  whichever turn happened to be first, and an unauthenticated hub check with no timeout
+  wedged the API's event loop for thirteen minutes at idle CPU. `PYRRHULA_HF_OFFLINE`
+  now defaults to `1` everywhere, and an admin-console download lifts it for that fetch
+  alone.
+
+- **Tenancy is an install-time flag.** `./install.sh <target> [--single-tenant |
+  --multi-tenant]`, defaulting to single, on all three targets. It applies on every run
+  rather than only at first install, so rerunning with the other flag is how a
+  deployment switches — nothing is migrated either way, because single-tenant is a flag
+  over the same multi-tenant core and always was.
+- **The compose readiness gate no longer depends on a bug.** It sent a header-less login
+  and accepted `401|403|404|422`; multi-tenant mode answers `400`, so choosing it made
+  every install wait five minutes and then fail on a stack that was healthy throughout.
+  It had only ever passed because single-tenant mode answered `404 unknown tenant:
+  'dev'`. The probe now names a tenant slug nothing can own, so it is independent of the
+  mode and still proves a real database lookup.
+- **Single-tenant mode reaches the UI.** It was half a feature: the API stopped
+  requiring an organization name and the sign-in form went on asking for one, because
+  nothing told it the deployment's shape. A new unauthenticated `GET /auth/config`
+  carries three booleans about that shape, and the pre-auth screens use them — the
+  organization field is gone from sign-in, and a solo deployment that already has its
+  organization offers "create your account" (joining it) instead of a create/join
+  toggle and a slug to type. Creating a *second* organization is the one action that
+  breaks single-tenant inference, so the UI stops steering people into it.
+- **Single-tenant mode works.** It is on by default in compose and Kubernetes and had
+  never been exercised: `PYRRHULA_DEFAULT_TENANT_SLUG` defaulted to `dev`, a tenant no
+  installer creates, so a deployment that advertised "no organization field needed"
+  answered every header-less login with `404 unknown tenant: 'dev'` — confirmed against
+  a clean compose install. The slug is now inferred: with exactly one organization, that
+  is the one. With several it refuses and says so rather than signing someone into the
+  wrong one, and an explicit `X-Pyrrhula-Tenant` always wins.
+
+### Removed
+
+- `docs/deploy-verification.md` and its scripts, along with the demo and benchmark
+  drivers. They provisioned specific showcase tenants against a live stack with specific
+  local models — one person's harness, not something a self-hoster could run — and the
+  question they were nominally for ("did this install work?") is the installer's own
+  now. A pack's mechanics stay covered by `tests/packs/` and `tests/isolation/`, in CI,
+  without a live stack.
 - **One randomizer instead of a tool per kind of randomness.** The `dice_roller` and
   `coin_flip` tools were the same handler over the same builtin, differing only in which
   rule system validated the roll — so there is now one tool, `randomizer`, and a call may

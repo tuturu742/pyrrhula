@@ -38,8 +38,8 @@ in a `.env` file; the rest are read directly where they are used.
 | Variable | Default | What it does |
 |---|---|---|
 | `PYRRHULA_ISOLATION_MODE` | `shared` | `shared` (RLS) or stricter per-tenant isolation. |
-| `PYRRHULA_SINGLE_TENANT_UI` | `false` | Solo/self-host mode: no tenant header required, `default_tenant_slug` is assumed. |
-| `PYRRHULA_DEFAULT_TENANT_SLUG` | `dev` | The tenant assumed when the UI is single-tenant. |
+| `PYRRHULA_SINGLE_TENANT_UI` | `false` (but **`true` in compose and k8s**) | Solo/self-host mode: a request with no tenant header resolves to this deployment's single organization. |
+| `PYRRHULA_DEFAULT_TENANT_SLUG` | — (inferred) | Pins single-tenant mode to one tenant slug. Leave unset: with exactly one organization, that one is used. Set it only where several exist and one should be the default. |
 | `PYRRHULA_ALLOW_TENANT_SIGNUP` | `true` | Whether strangers can create their own organisation. |
 | `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD` | generated | The platform admin created on first boot. Changing them afterwards does **not** rotate the account — change the password in the app. |
 | `PYRRHULA_ADMIN_TOKEN` | generated | Legacy admin console token (deprecated). |
@@ -155,7 +155,7 @@ application behaves.
 | `PYRRHULA_TLS_CERT_DIR` | — (**required for TLS**) | Directory holding `fullchain.pem` and `privkey.pem`, mounted read-only. |
 | `PYRRHULA_TLS_SERVER_NAME` | `localhost` | Server name nginx serves the certificate for. |
 | `PYRRHULA_API_PORT` | `8000` | Host port the API is published on in the self-host compose file. |
-| `PYRRHULA_HF_OFFLINE` | `0` in compose (`1` baked into the image) | `1` uses the baked embedding cache and never reaches the network. Compose starts at `0` so a first run can fetch weights; flip it to `1` afterwards. |
+| `PYRRHULA_HF_OFFLINE` | `1` | Retrieval models load strictly from the shared cache; the runtime never reaches Hugging Face on its own. A model that is not there is refused with a message pointing at Admin → Models, rather than fetched mid-request — an unauthenticated hub check has no timeout and has wedged the API's event loop. An admin-console download lifts this for that fetch alone. |
 
 ## Installer and verification only
 
@@ -163,10 +163,9 @@ Never read by the running product.
 
 | Variable | What it does |
 |---|---|
-| `PYRRHULA_SKIP_MODEL_DOWNLOAD` | `1` skips the retrieval-model download at install time. Fetch or upload them later from Admin → Models; see `docs/install.md`. |
+| `PYRRHULA_SMOKE_WORKER_TIMEOUT` | Seconds the installer's post-install check waits for the worker to run its test job (default `90`). |
 | `PYRRHULA_K8S_REGISTRY` | Push images to a registry instead of importing into k3s — the no-sudo install path. |
 | `PYRRHULA_COMPOSE_PROJECT`, `PYRRHULA_WEB_PORT`, `PYRRHULA_API_UPSTREAM` | Compose naming and ports. |
-| `PYRRHULA_VERIFY_*` | Targets for `docs/deploy-verification.md` scripts (API URL, exec sockets, model names, MCP sidecars). |
 | `DEEPSEEK_KEY` | A one-off demo script's provider key. Never used by the product. |
 
 ---

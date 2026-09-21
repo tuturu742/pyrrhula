@@ -33,6 +33,7 @@ import { AdminPluginReposPage } from "@/features/admin/AdminPluginReposPage";
 import { AdminModelsPage } from "@/features/admin/AdminModelsPage";
 import { AdminAssistantPage } from "@/features/admin/AdminAssistantPage";
 import { useMe } from "@/features/admin/useMe";
+import { useAdminLanding } from "@/features/admin/useAdminLanding";
 
 /**
  * Where "/" goes.
@@ -45,12 +46,13 @@ import { useMe } from "@/features/admin/useMe";
  */
 function HomeRoute() {
   const me = useMe();
+  const landing = useAdminLanding();
   if (me.isLoading) return null;
-  return me.data?.platform_admin === true ? (
-    <Navigate to="/admin/tenants" replace />
-  ) : (
-    <WorkspaceListPage />
-  );
+  if (me.data?.platform_admin !== true) return <WorkspaceListPage />;
+  // Which admin page depends on whether this deployment has a retrieval model yet; see
+  // useAdminLanding. Render nothing rather than flashing the wrong page first.
+  if (landing.loading) return null;
+  return <Navigate to={landing.path} replace />;
 }
 
 export function App() {
