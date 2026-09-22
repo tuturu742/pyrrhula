@@ -243,6 +243,7 @@ async def _create_inner(
     fields: Mapping[str, object],
     scope_key: str,
     idempotency_key: str,
+    origin_session_id: uuid.UUID | None,
 ) -> dict[str, Any]:
     del idempotency_key  # consumed by the @idempotent wrapper's key_fn
 
@@ -262,7 +263,15 @@ async def _create_inner(
             data[field.key] = _default_for_field(field)
 
     row = await create_entity(
-        tenant_id, workspace_id, schema_row.id, definition, entity_key, name, scope_key, data
+        tenant_id,
+        workspace_id,
+        schema_row.id,
+        definition,
+        entity_key,
+        name,
+        scope_key,
+        data,
+        origin_session_id=origin_session_id,
     )
     return {
         "entity_id": str(row.id),
@@ -291,6 +300,7 @@ async def create(
     idempotency_key: str,
     *,
     permission_service: PermissionService,
+    origin_session_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Create one entity instance of ``schema_key``. Distinct permission from ``mutate``
     (``entity:create``, rule 12). Idempotent on ``idempotency_key`` -- a retry returns the
@@ -313,6 +323,7 @@ async def create(
         fields=fields,
         scope_key=scope_key,
         idempotency_key=idempotency_key,
+        origin_session_id=origin_session_id,
     )
 
 

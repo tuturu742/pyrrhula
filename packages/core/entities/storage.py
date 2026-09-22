@@ -78,6 +78,13 @@ class EntityRow(Base):
     data: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     fsm_states: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, default=dict)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Which session filed this, when one did. Entities stay workspace-scoped -- a backlog
+    # is shared and outlives any conversation -- but without recording where each came
+    # from, every view of them is the same view, and a session panel showed a workspace's
+    # whole accumulated history as if it were this session's work.
+    origin_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("session.id", ondelete="SET NULL"), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -165,6 +172,7 @@ async def create_entity(
     name: str,
     scope_key: str,
     data: Mapping[str, object],
+    origin_session_id: uuid.UUID | None = None,
 ) -> EntityRow:
     validated = validate_and_prepare_write(schema_definition, data)
     async with tenant_scope(tenant_id) as session:
@@ -178,6 +186,7 @@ async def create_entity(
             data=dict(validated),
             fsm_states={},
             version=1,
+            origin_session_id=origin_session_id,
         )
         session.add(row)
         await session.flush()

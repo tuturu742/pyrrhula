@@ -97,6 +97,10 @@ def make_entity_create_handler(
                 # every one of them.
                 idempotency_key=f"create:{ctx.session_id}:{principal_id}:{entity_key}",
                 permission_service=permission_service,
+                # Where this came from. The entity stays the workspace's, but a session
+                # panel that cannot tell its own six items from the workspace's thirty
+                # is not showing you your work, it is showing you a filing cabinet.
+                origin_session_id=ctx.session_id,
             )
         except PermissionDeniedError as exc:
             return ToolResult(content=json.dumps({"error": "forbidden", "message": str(exc)}))

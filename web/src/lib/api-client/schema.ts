@@ -2738,6 +2738,11 @@ export interface paths {
          * List Entities Endpoint
          * @description Name-level listing (no field data -- field visibility stays the per-entity
          *     view's job). `schema_key` filters to one schema, e.g. the swe pack's work items.
+         *
+         *     `origin_session_id` narrows to what one session filed. Entities are workspace-scoped
+         *     and stay that way -- a backlog is shared -- but a session's own view of them needs to
+         *     lead with its own work, or thirty items from eight previous runs bury the six in
+         *     front of you.
          */
         get: operations["list_entities_endpoint_entities_get"];
         put?: never;
@@ -2781,6 +2786,57 @@ export interface paths {
         get: operations["get_entity_history_endpoint_entities__entity_id__history_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entities/{entity_id}/transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Entity Transitions Endpoint
+         * @description What this entity can be moved to from where it is.
+         *
+         *     A person correcting a state needs to know which moves exist before making one --
+         *     and which are legal from here, rather than discovering it through a 409.
+         */
+        get: operations["list_entity_transitions_endpoint_entities__entity_id__transitions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entities/{entity_id}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transition Entity Endpoint
+         * @description Move an entity by hand.
+         *
+         *     Automation drives these state machines almost all of the time, and almost all of the
+         *     time it is right. When it is not -- work merged somewhere the sweep does not watch, a
+         *     pull request that will never land, an item filed twice -- a person needs to be able
+         *     to say so. Without this the only correction available was a database write, which is
+         *     both worse and unaudited: this goes through the same ``transition`` every agent uses,
+         *     so the guard still applies, the change is still recorded, and the history says a
+         *     human did it.
+         */
+        post: operations["transition_entity_endpoint_entities__entity_id__transition_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4085,6 +4141,20 @@ export interface components {
              */
             detail: string;
         };
+        /** AvailableTransition */
+        AvailableTransition: {
+            /** Trigger */
+            trigger: string;
+            /** To */
+            to: string;
+            /** Allowed */
+            allowed: boolean;
+            /**
+             * Blocked By Guard
+             * @default false
+             */
+            blocked_by_guard: boolean;
+        };
         /** AxisCapabilityResponse */
         AxisCapabilityResponse: {
             /** Axis Key */
@@ -4819,6 +4889,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Origin Session Id */
+            origin_session_id?: string | null;
         };
         /** EntityViewResponse */
         EntityViewResponse: {
@@ -5969,6 +6041,11 @@ export interface components {
             /** Provider */
             provider?: string | null;
             /**
+             * Default Branch
+             * @default main
+             */
+            default_branch: string;
+            /**
              * Has Credential
              * @default false
              */
@@ -6548,6 +6625,46 @@ export interface components {
              */
             token_type: string;
         };
+        /** TransitionOptionsResponse */
+        TransitionOptionsResponse: {
+            /** Machine Key */
+            machine_key: string;
+            /** Current State */
+            current_state: string;
+            /** Transitions */
+            transitions: components["schemas"]["AvailableTransition"][];
+        };
+        /** TransitionRequest */
+        TransitionRequest: {
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Trigger */
+            trigger: string;
+            /**
+             * Machine Key
+             * @default lifecycle
+             */
+            machine_key: string;
+            /** Expected Version */
+            expected_version?: number | null;
+        };
+        /** TransitionResponse */
+        TransitionResponse: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Machine Key */
+            machine_key: string;
+            /** State */
+            state: string;
+            /** Version */
+            version: number;
+        };
         /** UpdateAgentRequest */
         UpdateAgentRequest: {
             /** Name */
@@ -6595,6 +6712,8 @@ export interface components {
         UpdateRepoRequest: {
             /** Name */
             name?: string | null;
+            /** Default Branch */
+            default_branch?: string | null;
             /** Description */
             description?: string | null;
             /** Source Url */
@@ -13226,6 +13345,7 @@ export interface operations {
             query: {
                 workspace_id: string;
                 schema_key?: string | null;
+                origin_session_id?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -13321,6 +13441,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryEntryResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entity_transitions_endpoint_entities__entity_id__transitions_get: {
+        parameters: {
+            query?: {
+                machine_key?: string;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionOptionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transition_entity_endpoint_entities__entity_id__transition_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionResponse"];
                 };
             };
             /** @description Validation Error */

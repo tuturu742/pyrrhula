@@ -32,6 +32,10 @@ export function WorkPanel({
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
+  // A session leads with its own work. The workspace backlog is real and shared, but it
+  // accumulates: eight runs left thirty items, most of them stuck mid-lifecycle, and the
+  // six this session filed were indistinguishable in the list.
+  const [showBacklog, setShowBacklog] = useState(false);
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [reviewBranch, setReviewBranch] = useState("");
   const [reviewComment, setReviewComment] = useState("Please address review feedback.");
@@ -101,19 +105,34 @@ export function WorkPanel({
     fsm["lifecycle"] ?? fsm["status"] ?? Object.values(fsm)[0] ?? "backlog";
 
   // Work items belong to the workspace, not to one session -- a backlog is shared, and a
-  // standup, a triage and a planning session all legitimately look at the same one. What
-  // makes that unreadable is finished work never leaving the list, so hide it by default
-  // and let the panel say how much it is hiding.
+  // standup, a triage and a planning session all legitimately look at the same one. Two
+  // things made that unreadable: finished work never leaving the list, and every other
+  // session's work sitting in it. Both are hidden by default and both say how much they
+  // are hiding, because a filter you cannot see is a filter that loses your work.
   const isFinished = (item: { fsm_states: Record<string, string> }) =>
     FINISHED_STATES.has(status(item.fsm_states));
-  const finishedCount = workItems.filter(isFinished).length;
-  const visibleItems = showCompleted ? workItems : workItems.filter((i) => !isFinished(i));
+  const isThisSession = (item: { origin_session_id?: string | null }) =>
+    item.origin_session_id === sessionId;
+  const backlogCount = workItems.filter((i) => !isThisSession(i) && !isFinished(i)).length;
+  const inScope = showBacklog ? workItems : workItems.filter(isThisSession);
+  const finishedCount = inScope.filter(isFinished).length;
+  const visibleItems = showCompleted ? inScope : inScope.filter((i) => !isFinished(i));
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Work items</h2>
         <span className="flex items-center gap-2">
+          {backlogCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showBacklog}
+                onChange={(e) => setShowBacklog(e.target.checked)}
+              />
+              Workspace backlog ({backlogCount})
+            </label>
+          )}
           {finishedCount > 0 && (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <input

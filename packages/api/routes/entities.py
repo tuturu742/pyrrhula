@@ -385,16 +385,25 @@ class EntityListItem(BaseModel):
     schema_key: str
     fsm_states: dict[str, str]
     updated_at: datetime
+    # Which session filed this, when one did. Null for the workspace's standing backlog:
+    # entities created through the API, imported from a bundle, or seeded by a pack.
+    origin_session_id: uuid.UUID | None = None
 
 
 @router.get("")
 async def list_entities_endpoint(
     workspace_id: uuid.UUID,
     schema_key: str | None = None,
+    origin_session_id: uuid.UUID | None = None,
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[EntityListItem]:
     """Name-level listing (no field data -- field visibility stays the per-entity
-    view's job). `schema_key` filters to one schema, e.g. the swe pack's work items."""
+    view's job). `schema_key` filters to one schema, e.g. the swe pack's work items.
+
+    `origin_session_id` narrows to what one session filed. Entities are workspace-scoped
+    and stay that way -- a backlog is shared -- but a session's own view of them needs to
+    lead with its own work, or thirty items from eight previous runs bury the six in
+    front of you."""
     from core.entities.repo import get_schema as _get_schema
     from core.entities.storage import list_all_entities_for_workspace
 
@@ -408,6 +417,8 @@ async def list_entities_endpoint(
         row_schema_key = schema_keys[row.schema_id]
         if schema_key is not None and row_schema_key != schema_key:
             continue
+        if origin_session_id is not None and row.origin_session_id != origin_session_id:
+            continue
         out.append(
             EntityListItem(
                 id=row.id,
@@ -416,6 +427,7 @@ async def list_entities_endpoint(
                 schema_key=row_schema_key,
                 fsm_states=dict(row.fsm_states),
                 updated_at=row.updated_at,
+                origin_session_id=row.origin_session_id,
             )
         )
     return sorted(out, key=lambda item: item.name)
