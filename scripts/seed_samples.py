@@ -61,14 +61,54 @@ CONNECTIONS: tuple[Connection, ...] = (
     Connection("Anthropic Sonnet", "anthropic", "claude-sonnet-5", "anthropic"),
     Connection("Anthropic Opus", "anthropic", "claude-opus-5-5", "anthropic"),
     Connection("DeepSeek", "deepseek", "deepseek-chat", "deepseek"),
-    Connection(
-        "Ollama Qwen",
-        "ollama_chat",
-        "qwen3.8:27b",
-        None,
-        api_base="http://host.containers.internal:11434",
-    ),
+    # api_base is resolved at run time -- see ollama_base_url.
+    Connection("Ollama Qwen", "ollama_chat", "qwen3.8:27b", None),
 )
+
+# Where a container reaches a model server running on the host. There is no single right
+# answer: `host.containers.internal` is podman's, `host.docker.internal` is Docker
+# Desktop's, and on this host both resolve to an address that does not answer while the
+# bridge gateway does. Guessing wrong is expensive to diagnose -- the name resolves, so
+# it reads as a hung model rather than an unreachable one -- so the candidates are tried
+# and the first that accepts a connection wins.
+_OLLAMA_PORT = 11434
+
+
+def ollama_base_url() -> str | None:
+    import os
+    import socket
+
+    override = os.environ.get("PYRRHULA_OLLAMA_BASE")
+    if override:
+        return override
+
+    candidates = ["host.containers.internal", "host.docker.internal", "127.0.0.1"]
+    # The default gateway is the host on a bridge network, and is what actually answers
+    # here. Read it rather than assuming a subnet.
+    try:
+        with open("/proc/net/route") as handle:
+            for line in handle.readlines()[1:]:
+                fields = line.split()
+                if len(fields) > 2 and fields[1] == "00000000":
+                    packed = int(fields[2], 16)
+                    candidates.insert(
+                        0, ".".join(str((packed >> (8 * i)) & 0xFF) for i in range(4))
+                    )
+                    break
+    except OSError:
+        pass
+
+    for host in candidates:
+        probe = socket.socket()
+        probe.settimeout(2)
+        try:
+            probe.connect((host, _OLLAMA_PORT))
+            return f"http://{host}:{_OLLAMA_PORT}"
+        except OSError:
+            continue
+        finally:
+            probe.close()
+    return None
 
 # Which connection a persona gets, by table kind and seniority. Seniority is read from
 # the persona's own name/key because that is where the samples express it; anything
@@ -167,15 +207,26 @@ async def seed(
     # Step "add your model connection", once per connection the deployment offers.
     encryptor = get_encryptor()
     made: dict[str, uuid.UUID] = {}
+    local_base = ollama_base_url()
     for conn in CONNECTIONS:
         key = read_secret(secrets_dir, conn.secret_file) if conn.secret_file else None
+        api_base = conn.api_base
+        if conn.provider.startswith("ollama"):
+            if local_base is None:
+                print(
+                    f"[{slug}] no model server answering on :{_OLLAMA_PORT} from here; "
+                    f"skipping {conn.name}",
+                    flush=True,
+                )
+                continue
+            api_base = local_base
         agent = await create_agent(
             tenant_id,
             conn.name,
             conn.provider,
             conn.model,
             api_key=key,
-            api_base=conn.api_base,
+            api_base=api_base,
             encryptor=encryptor,
         )
         made[conn.name] = agent.id
