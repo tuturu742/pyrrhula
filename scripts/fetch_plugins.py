@@ -99,6 +99,8 @@ def _clone_into(url: str, ref: str, dest: pathlib.Path) -> None:
 
 
 failures: list[tuple[str, str]] = []
+# (name, the ref on disk, the ref the pin asks for, why the fetch failed)
+stale: list[tuple[str, str, str, str]] = []
 
 
 def fetch(force: bool = False) -> list[str]:
@@ -123,7 +125,17 @@ def fetch(force: bool = False) -> list[str]:
             # install has a working "Default" workflow before any plugin repository
             # exists, and the image copies it. An unreachable plugin repo should cost
             # the extra workflows, not the whole install.
-            failures.append((name, _redact(str(exc)).splitlines()[0][:160]))
+            reason = _redact(str(exc)).splitlines()[0][:160]
+            # Absent and STALE are different failures and only one of them is harmless.
+            # A directory left from an earlier ref keeps building into the image, so the
+            # deploy ships content the pin does not name and reports success either way.
+            # Observed: three pack commits written, pushed and pinned, none of which
+            # reached a container, across several green deploys.
+            had = dest.exists() and any(dest.iterdir())
+            if had and stamp.exists() and stamp.read_text().strip() != want:
+                stale.append((name, stamp.read_text().strip(), want, reason))
+            else:
+                failures.append((name, reason))
             dest.mkdir(parents=True, exist_ok=True)
             continue
         stamp.write_text(want + "\n")
@@ -134,6 +146,20 @@ def fetch(force: bool = False) -> list[str]:
 if __name__ == "__main__":
     names = fetch(force="--force" in sys.argv)
     print(f"plugins ready under {PLUGINS_DIR} (fetched: {', '.join(names) or 'cached'})")
+    for name, on_disk, wanted, reason in stale:
+        print(
+            f"WARNING: the {name!r} plugin on disk is NOT the pinned one.\n"
+            f"         on disk: {on_disk}\n"
+            f"         pinned : {wanted}\n"
+            f"         fetch failed: {reason}\n"
+            f"         The build will use what is on disk, so pack changes you have\n"
+            f"         committed will not be in this image. Set PYRRHULA_PLUGINS_TOKEN\n"
+            f"         (or GH_TOKEN) for a private repo, or PYRRHULA_PLUGINS_STRICT=1\n"
+            f"         to make this a build failure instead of a warning.",
+            file=sys.stderr,
+        )
+    if stale and os.environ.get("PYRRHULA_PLUGINS_STRICT"):
+        sys.exit(1)
     for name, reason in failures:
         print(
             f"NOTE: could not fetch the {name!r} workflow plugin -- {reason}\n"
