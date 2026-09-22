@@ -90,9 +90,20 @@ async def test_every_swdev_flow_can_run_without_a_human_at_the_keyboard(
                     f"{where}: mode 'free' on a selector that can resolve to an agent, "
                     f"which parks the session on a human-typed turn"
                 )
-            assert phase.await_field is None, (
-                f"{where}: an await parks the flow with nothing in the product to satisfy it"
-            )
+            # An await is only a stall when nothing in the product can satisfy it.
+            # `human_input` is exactly that in a pack meant to run unattended: there is
+            # no human at this keyboard, so the phase waits out its timeout. A
+            # `delegated_work` await is the opposite -- it exists because the phase
+            # dispatched work that takes minutes, and the worker satisfies it when the
+            # last job belonging to the session finishes (worker.session_wake). Forbidding
+            # both would forbid the flow from waiting for the very work it commissioned,
+            # which is what it did before: review reviewed an untouched repository and
+            # merge found an empty queue, both reporting success.
+            if phase.await_field is not None:
+                assert phase.await_field.type == "delegated_work", (
+                    f"{where}: an {phase.await_field.type!r} await parks an unattended "
+                    f"flow with nobody to satisfy it"
+                )
 
 
 async def test_every_swdev_phase_is_reachable_and_every_flow_ends(
