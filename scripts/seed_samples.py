@@ -216,6 +216,72 @@ async def seed(
         await session.flush()
     print(f"[{slug}] bound personas: {bound}", flush=True)
 
+    await register_repos(slug, tenant_id, owner_id, bundle.parent, secrets_dir)
+
+
+async def register_repos(
+    slug: str,
+    tenant_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    sample_dir: pathlib.Path,
+    secrets_dir: pathlib.Path,
+) -> None:
+    """Register the repositories a sample declares in ``repos.json``, if it has one.
+
+    A ``.pyr`` cannot carry this: a repository registration is half configuration and
+    half credential, and a bundle holds neither by design. So the sample declares the
+    configuration beside its bundle and the credential is read from the secrets
+    directory at run time -- the same split every sample README already describes for
+    model connections.
+    """
+    import json
+
+    from api.encryptor_factory import get_encryptor
+    from core.agents.authoring import store_provider_credential
+    from core.repos.runtimes import register_runtime
+    from core.repos.service import create_repo
+
+    manifest = sample_dir / "repos.json"
+    if not manifest.is_file():
+        return
+    declared = json.loads(manifest.read_text())
+    encryptor = get_encryptor()
+
+    for spec in declared:
+        # Runtimes first: a repo naming one that is not registered yet is refused, and
+        # the refusal would read as a broken sample rather than an ordering problem.
+        for key, entry in (spec.get("runtimes") or {}).items():
+            await register_runtime(
+                tenant_id, key, str(entry["image"]), [str(c) for c in entry.get("setup") or []]
+            )
+            print(f"[{slug}] runtime {key} -> {entry['image']}", flush=True)
+
+        credential_ref = None
+        secret_name = spec.get("credential_secret")
+        if secret_name:
+            token = read_secret(secrets_dir, secret_name)
+            credential_ref = await store_provider_credential(
+                tenant_id, token, encryptor=encryptor
+            )
+
+        repo = await create_repo(
+            tenant_id,
+            str(spec["key"]),
+            str(spec.get("name") or spec["key"]),
+            description=str(spec.get("description") or ""),
+            source_url=spec.get("source_url"),
+            default_branch=str(spec.get("default_branch") or "main"),
+            runtime=str(spec.get("runtime") or "debian"),
+            runtime_image=spec.get("runtime_image"),
+            credential_ref=credential_ref,
+            setup_cmds=[str(c) for c in spec.get("setup_cmds") or []],
+            test_cmd=spec.get("test_cmd"),
+            build_cmd=spec.get("build_cmd"),
+            artifact_name=spec.get("artifact_name"),
+            created_by=owner_id,
+        )
+        print(f"[{slug}] repo {repo.key} ({spec.get('source_url') or 'store-only'})", flush=True)
+
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
