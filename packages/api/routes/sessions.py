@@ -8,12 +8,10 @@ replacement.
 
 from __future__ import annotations
 
-import contextlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -32,6 +30,14 @@ from api.permission_service_factory import get_permission_service
 from api.reranker_factory import get_reranker
 from api.streaming.pubsub import publish_chunk, publish_event
 from api.streaming.sse import sse_stream
+from core.actions.dispatch import (
+    DispatchError,
+    dispatch_work_items,
+    git_server,
+    resolve_session_repo_server,
+    select_assignee,
+    session_supervisor_principal,
+)
 from core.agents.authoring import get_persona, resolve_connection_api_key
 from core.agents.models import Agent, Persona
 from core.agents.override import (
@@ -42,7 +48,6 @@ from core.agents.override import (
     post_override,
 )
 from core.entities.mutation import transition as entity_transition
-from core.entities.storage import EntityRow, get_entity
 from core.mcp.registry import list_servers, register_server
 from core.process.authoring import get_definition
 from core.process.awaits import satisfy_await
@@ -78,8 +83,7 @@ from core.sessions.lifecycle import (
     set_session_roster,
     set_session_turn_policy,
 )
-from core.sessions.models import SessionPersonaRow, SessionRow
-from core.sessions.notes import post_note
+from core.sessions.models import SessionPersonaRow
 from core.tenancy.context import RequestContext
 from core.tenancy.scope import tenant_scope
 from core.workflows.service import tenant_workflow_grants_repo_access
@@ -678,52 +682,21 @@ async def _resolve_session_repo_server(
     repo_id: uuid.UUID | None,
     fallback_server_key: str,
 ) -> tuple[str, str | None]:
-    """Which git server a delegate/review call targets. A session with selected repos is
-    bound to them: an explicit ``repo_id`` must be in the selection (409), a sole selection
-    is the default, several demand a choice (422). Only a session with *no* selection falls
-    back to the legacy fixed ``server_key`` (pre-registry workspaces)."""
-    selected = await list_session_repos(tenant_id, session_id)
-    if repo_id is not None:
-        match = next((r for r in selected if r.id == repo_id), None)
-        if match is None:
-            raise HTTPException(
-                status_code=409, detail="that repo is not in this session's selection"
-            )
-        return f"git-{match.key}", str(match.id)
-    if len(selected) == 1:
-        return f"git-{selected[0].key}", str(selected[0].id)
-    if len(selected) > 1:
-        raise HTTPException(
-            status_code=422,
-            detail="this session has several repos; specify repo_id",
+    """HTTP face of ``core.actions.dispatch.resolve_session_repo_server``."""
+    try:
+        return await resolve_session_repo_server(
+            tenant_id, session_id, repo_id, fallback_server_key
         )
-    return fallback_server_key, None
+    except DispatchError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
-def _select_assignee(
-    named: str, devs: list[Any], by_name: dict[str, Any], index: int
-) -> tuple[Any | None, bool]:
-    """Which dev builds this work item.
-
-    The name the item carries wins when it matches a dev on the roster -- that is what
-    lets a supervisor match work to a person (by seniority, by ownership, by whatever it
-    can reason about) instead of items landing in persona-id order. An unrecognised name
-    falls back to the round robin and is reported rather than failing the batch: a typo in
-    a plan should not stall every other item in it.
-
-    Returns (persona, the_name_did_not_resolve).
-    """
-    fallback = devs[index % len(devs)] if devs else None
-    if not named:
-        # Nothing named: leave it undecided rather than positional. The worker asks the
-        # session's facilitator, which can weigh the work against the roster -- and
-        # falls back to this same round robin if that is unavailable. Choosing here
-        # would pre-empt that with an ordering over persona ids.
-        return None, False
-    chosen = by_name.get(named.strip().lower())
-    if chosen is not None:
-        return chosen, False
-    return fallback, True
+# Kept as module-level names because they read as part of this route's vocabulary; the
+# implementations live in core so the endpoint and a supervisor's in-turn delegation
+# cannot answer these questions differently.
+_select_assignee = select_assignee
+_git_server = git_server
+_session_supervisor_principal = session_supervisor_principal
 
 
 class DelegateRequest(BaseModel):
@@ -772,127 +745,23 @@ async def delegate_endpoint(
     if sess is None:
         raise HTTPException(status_code=404, detail=f"no session {session_id}")
     await require_permission(ctx, "session:conduct", "workspace", sess.workspace_id)
-    if not body.work_item_ids:
-        raise HTTPException(status_code=422, detail="no work items to delegate")
-    server_key, resolved_repo_id = await _resolve_session_repo_server(
-        ctx.tenant_id, session_id, body.repo_id, body.server_key
-    )
-    server = await _git_server(ctx.tenant_id, sess.workspace_id, server_key)
-    if server is None:
-        raise HTTPException(
-            status_code=409,
-            detail=f"workspace has no {server_key!r} MCP server offering delegate_work_item",
-        )
-    viewer_principal = await _session_supervisor_principal(ctx.tenant_id, session_id)
-    if viewer_principal is None:
-        raise HTTPException(status_code=409, detail="session has no supervisor to dispatch as")
-
-    # Each work item is assigned to a participant persona (round-robin over the roster,
-    # stable order) -- the dev whose name the PR-opened and fix notes carry. The work
-    # itself still dispatches under the supervisor's authority (permissions unchanged);
-    # assignment is attribution, the thing a transcript reader actually wants to see.
-    roster = await list_session_roster(ctx.tenant_id, session_id)
-    dev_entries = sorted(
-        (e for e in roster if not e.is_supervisor), key=lambda e: str(e.persona_id)
-    )
-    assignments: list[tuple[uuid.UUID, uuid.UUID | None, str]] = []
-    unresolved: list[str] = []
-    async with tenant_scope(ctx.tenant_id) as session:
-        # The devs on this roster, indexed by the names a plan would actually write.
-        devs: list[Persona] = []
-        by_name: dict[str, Persona] = {}
-        for entry in dev_entries:
-            persona = await session.get(Persona, entry.persona_id)
-            if persona is None:
-                continue
-            devs.append(persona)
-            by_name[persona.name.strip().lower()] = persona
-            by_name[persona.key.strip().lower()] = persona
-
-        for i, work_item_id in enumerate(body.work_item_ids):
-            # A work item carries an `assignee` field (swdev's schema has always had one);
-            # honouring it is what lets a supervisor match work to a specific dev -- by
-            # seniority, by ownership, by anything it can reason about -- instead of the
-            # round robin below handing items out in persona-id order. Falling back rather
-            # than failing on an unknown name keeps a typo in a plan from stalling the
-            # whole batch; the name that did not resolve is reported instead.
-            entity = await session.get(EntityRow, work_item_id)
-            named = str((entity.data or {}).get("assignee") or "").strip() if entity else ""
-            chosen, missed = _select_assignee(named, devs, by_name, i)
-            if missed:
-                unresolved.append(named)
-            assignments.append(
-                (work_item_id, chosen.id if chosen else None, chosen.name if chosen else "")
-            )
-    if unresolved:
-        structlog.get_logger().warning(
-            "delegation.assignee_unresolved",
-            session_id=str(session_id),
-            names=sorted(set(unresolved)),
-        )
-
-    # Reserve one event_seq per item so their branches (pyr/<session8>-<seq>) are distinct.
-    n = len(body.work_item_ids)
-    async with tenant_scope(ctx.tenant_id) as session:
-        row = await session.get(SessionRow, session_id)
-        assert row is not None
-        base_seq = row.next_event_seq
-        row.next_event_seq = base_seq + n
-
-    queue = get_job_queue()
-    jobs: list[str] = []
-    for i, (work_item_id, assignee_id, _name) in enumerate(assignments):
-        job_id = await queue.enqueue(
+    # Every other check -- empty batch, a repo outside the selection, a workspace with no
+    # git server, a session with no supervisor -- belongs to the dispatcher, so the HTTP
+    # caller and a supervisor's own in-turn call are refused for the same reasons.
+    try:
+        result = await dispatch_work_items(
             ctx.tenant_id,
-            "delegate_work_item",
-            {
-                "tenant_id": str(ctx.tenant_id),
-                "workspace_id": str(sess.workspace_id),
-                "session_id": str(session_id),
-                "event_seq": base_seq + i,
-                "work_item_id": str(work_item_id),
-                "viewer_principal_id": str(viewer_principal),
-                "server_key": server_key,
-                "repo_id": resolved_repo_id,
-                "auto_review": body.auto_review,
-                "assignee_persona_id": str(assignee_id) if assignee_id else None,
-            },
+            sess.workspace_id,
+            session_id,
+            body.work_item_ids,
+            queue=get_job_queue(),
+            repo_id=body.repo_id,
+            fallback_server_key=body.server_key,
+            auto_review=body.auto_review,
         )
-        jobs.append(str(job_id))
-
-    # A batch of several PRs also gets the facilitator's recommended merge order --
-    # enqueued after the delegate jobs, so the single-loop worker runs it once every PR
-    # in the batch exists.
-    if n >= 2:
-        from core.actions.delegation import branch_name
-
-        await queue.enqueue(
-            ctx.tenant_id,
-            "merge_order",
-            {
-                "tenant_id": str(ctx.tenant_id),
-                "workspace_id": str(sess.workspace_id),
-                "session_id": str(session_id),
-                "store": server.url,
-                "branches": [branch_name(session_id, base_seq + i) for i in range(n)],
-            },
-        )
-
-    # One announcement from the facilitator: who is building what.
-    if any(name for _, _, name in assignments):
-        lines = []
-        for work_item_id, _aid, name in assignments:
-            entity = await get_entity(ctx.tenant_id, work_item_id)
-            title = entity.name if entity is not None else str(work_item_id)
-            lines.append(f"- **{title}** → {name or 'unassigned'}")
-        with contextlib.suppress(Exception):  # announcement only; jobs are already queued
-            await post_note(
-                ctx.tenant_id,
-                session_id,
-                viewer_principal,
-                "📋 Delegating work:\n" + "\n".join(lines),
-            )
-    return {"accepted": True, "jobs": jobs}
+    except DispatchError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return {"accepted": True, "jobs": result.job_ids}
 
 
 class ReviewRequest(BaseModel):
@@ -1320,6 +1189,9 @@ async def _run_process_definition_advance(
             encryptor=get_encryptor(),
             permission_service=get_permission_service(),
             mcp_transport=get_mcp_transport(),
+            # What lets a supervisor delegate its own plan instead of describing a
+            # hand-over and waiting for a human to press Delegate.
+            job_queue=get_job_queue(),
             moderation_provider=await moderation_provider_for(tenant_id),
         )
         if result.status != "active":

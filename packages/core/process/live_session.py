@@ -28,6 +28,7 @@ from core.behavior.repo import get_current_behavior_profile, list_axis_definitio
 from core.entities.storage import EntityRow
 from core.ports.embedding import EmbeddingProvider, EmbedRequest
 from core.ports.encryptor import Encryptor
+from core.ports.job_queue import JobQueue
 from core.ports.mcp import McpTransport
 from core.ports.model_provider import GenerationRequest, ModelProvider, ToolSpec
 from core.ports.moderation import ModerationProvider
@@ -48,6 +49,12 @@ from core.process.interpreter import (
     advance_session,
 )
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
+from core.process.session_delegation_tools import (
+    DELEGATE_TOOL_DESCRIPTION,
+    DELEGATE_TOOL_NAME,
+    DELEGATE_TOOL_PARAMETERS,
+    make_delegate_handler,
+)
 from core.process.session_entity_tools import (
     make_entity_create_handler,
     make_resolve_apply_handler,
@@ -209,6 +216,7 @@ async def run_one_persona_turn(
     on_chunk: OnChunk | None = None,
     permission_service: PermissionService | None = None,
     mcp_transport: McpTransport | None = None,
+    job_queue: JobQueue | None = None,
     moderation_provider: ModerationProvider | None = None,
     eval_arm: str | None = None,
     extra_tools: Sequence[tuple[ToolSpec, ToolHandler]] | None = None,
@@ -576,6 +584,25 @@ async def run_one_persona_turn(
                 ),
             )
 
+    # Delegation. The git store is served by a dedicated transport and is deliberately
+    # excluded from the remote-MCP path below (`session_remote_tools._RESERVED_KEYS`), so
+    # a phase asking for `delegate_work_item` in `remote_tools` used to get nothing at all
+    # -- the supervisor was told to hand work to coding agents and had no tool to do it
+    # with, and said so, three runs in a row. The tool is a core one because what it does
+    # is enqueue: the work itself needs an exec environment and minutes, which a model
+    # turn does not have.
+    allowed_remote_tools = _phase_remote_allowlist(phase)
+    wants_delegation = allowed_remote_tools is None or DELEGATE_TOOL_NAME in allowed_remote_tools
+    if job_queue is not None and wants_delegation:
+        tool_registry.register(
+            ToolSpec(
+                name=DELEGATE_TOOL_NAME,
+                description=DELEGATE_TOOL_DESCRIPTION,
+                parameters=DELEGATE_TOOL_PARAMETERS,
+            ),
+            make_delegate_handler(workspace_id=workspace_id, queue=job_queue),
+        )
+
     # Registered REMOTE MCP servers (admin-attached tenant grants or pack-declared
     # external endpoints): their allowed tools become native in-turn tools through
     # the same client-side enforcement (M-C). Workspace registration is the gate.
@@ -781,6 +808,7 @@ def _make_execute_turn(
     encryptor: Encryptor | None = None,
     permission_service: PermissionService | None = None,
     mcp_transport: McpTransport | None = None,
+    job_queue: JobQueue | None = None,
     moderation_provider: ModerationProvider | None = None,
     on_event: OnEvent | None = None,
 ) -> Callable[[ActorRef, InterpreterContext], Awaitable[ActorTurnResult]]:
@@ -822,6 +850,7 @@ def _make_execute_turn(
             on_chunk=on_chunk,
             permission_service=permission_service,
             mcp_transport=mcp_transport,
+            job_queue=job_queue,
             moderation_provider=moderation_provider,
             # The typing cue and the rich completed-message mirror both live inside
             # run_one_persona_turn and both hang off this. Omitting it meant the
@@ -876,6 +905,7 @@ async def run_process_definition_session(
     encryptor: Encryptor | None = None,
     permission_service: PermissionService | None = None,
     mcp_transport: McpTransport | None = None,
+    job_queue: JobQueue | None = None,
     moderation_provider: ModerationProvider | None = None,
 ) -> AdvanceResult:
     """The entry point the HTTP layer calls (once at message-submit time, and again
@@ -902,6 +932,7 @@ async def run_process_definition_session(
     execute_turn = _make_execute_turn(
         tenant_id=tenant_id,
         workspace_id=workspace_id,
+        job_queue=job_queue,
         model_provider_factory=model_provider_factory,
         embedding_provider=embedding_provider,
         reranker=reranker,
