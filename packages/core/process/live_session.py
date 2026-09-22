@@ -453,20 +453,29 @@ async def run_one_persona_turn(
             ToolSpec(
                 name="entity_create",
                 description=(
-                    "Create one entity instance (e.g. a character sheet) for yourself. Any "
-                    "field you omit gets a sensible default."
+                    "Create one entity instance. Call it once per entity -- there is no "
+                    "limit on how many you create. Any field you omit gets a sensible "
+                    "default."
                 ),
                 parameters={
                     "type": "object",
                     "properties": {
                         "schema_key": {
                             "type": "string",
-                            "description": "which entity schema to instantiate, e.g. 'character'",
+                            "description": "which entity schema to instantiate",
                         },
                         "name": {"type": "string", "description": "the entity's display name"},
                         "fields": {
                             "type": "object",
                             "description": "field values; omit any you don't care about",
+                        },
+                        "bind_to_self": {
+                            "type": "boolean",
+                            "description": (
+                                "true only when this entity represents you -- the record "
+                                "you act through. You may have at most one. Leave it out "
+                                "when creating anything else."
+                            ),
                         },
                     },
                     "required": ["schema_key", "name"],

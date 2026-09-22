@@ -20,8 +20,6 @@ from typing import Any
 from core.agents.models import Persona
 from core.agents.tools import ToolContext, ToolHandler, ToolResult
 from core.entities.mutation import PermissionDeniedError, SchemaNotFoundError, create
-from core.entities.schema import EntitySchemaRow
-from core.entities.storage import EntityRow
 from core.ports.permission import PermissionService
 from core.resolution.consequence import resolve_and_apply
 from core.resolution.registry import get_tool_definition
@@ -29,8 +27,8 @@ from core.resolution.rule_system import RuleSystemDefinition, get_rule_system
 from core.sessions.models import SessionRow
 from core.tenancy.scope import tenant_scope
 
-# Characters are visible to the whole table (the GM and every player) -- a game entity, not a
-# private note. A per-workspace scope that the default tenant provisioning always creates.
+# Entities created in a session are visible to the whole roster, not private notes. A
+# per-workspace scope that the default tenant provisioning always creates.
 _ENTITY_SCOPE_KEY = "workspace_public"
 
 
@@ -48,6 +46,10 @@ def make_entity_create_handler(
             )
         raw_fields = args.get("fields")
         fields = raw_fields if isinstance(raw_fields, dict) else {}
+        # Whether the new entity *is* the caller -- the record it acts through -- or is
+        # merely something it is creating. Only the caller knows, so it is an argument,
+        # and it defaults to "not me": binding is the special case, not the norm.
+        bind_to_self = bool(args.get("bind_to_self") or False)
 
         async with tenant_scope(ctx.tenant_id) as session:
             persona = await session.get(Persona, ctx.persona_id)
@@ -55,40 +57,30 @@ def make_entity_create_handler(
                 return ToolResult(content=json.dumps({"error": "no_persona"}))
             principal_id = persona.principal_id
             existing_entity = persona.entity_id
-            bound_schema = None
-            if existing_entity is not None:
-                bound = await session.get(EntityRow, existing_entity)
-                if bound is not None:
-                    schema_row = await session.get(EntitySchemaRow, bound.schema_id)
-                    bound_schema = schema_row.key if schema_row is not None else None
 
-        # "One per persona" is a rule about a persona's OWN entity -- a player has one
-        # character -- and it was applied to every schema. A lead asked to create six
-        # work items got one, then five refusals saying it "already has a character";
-        # the session then had nothing to delegate and reviewed nothing. The cap now
-        # covers only the schema the persona is actually bound to.
-        if existing_entity is not None and bound_schema == schema_key:
+        # "One per persona" is a rule about the entity a persona ACTS THROUGH, and it was
+        # being applied to everything the persona created. Worse, the first entity created
+        # was bound as the persona's own whatever it was: a lead that once created a work
+        # item owned that work item forever, and every later create -- in that session and
+        # in every session after it -- was refused. So the cap now guards exactly one
+        # thing, the self-binding, and only when the caller asked for one.
+        if bind_to_self and existing_entity is not None:
             return ToolResult(
                 content=json.dumps(
                     {
                         "created": False,
                         "entity_id": str(existing_entity),
                         "message": (
-                            f"this persona already has its own {schema_key}; "
-                            "mutate that one instead of creating a second"
+                            "this persona already acts through an entity; mutate that one "
+                            "instead of creating a second, or create without bind_to_self"
                         ),
                     }
                 )
             )
 
-        # A key per entity, not per persona. The old `char-<principal>` was a single
-        # deterministic name, so a second create collided with the first even where the
-        # cap allowed it.
-        entity_key = (
-            f"char-{str(principal_id)[:8]}"
-            if existing_entity is None
-            else f"{schema_key}-{uuid.uuid4().hex[:8]}"
-        )
+        # A key per entity, not per persona: a deterministic per-principal key made a
+        # second create collide with the first.
+        entity_key = f"{schema_key}-{uuid.uuid4().hex[:8]}"
         try:
             result = await create(
                 principal_id,
@@ -113,12 +105,14 @@ def make_entity_create_handler(
         except Exception as exc:  # validation etc. -- report so the model can retry
             return ToolResult(content=json.dumps({"error": "invalid", "message": str(exc)[:200]}))
 
-        # Bind the persona to its new character so later turns/visibility resolve it.
-        async with tenant_scope(ctx.tenant_id) as session:
-            persona = await session.get(Persona, ctx.persona_id)
-            if persona is not None and persona.entity_id is None:
-                persona.entity_id = uuid.UUID(result["entity_id"])
-                await session.flush()
+        # Bind only when asked: this is the record the persona acts through, so later
+        # turns resolve its state (INV-7) instead of falling back to defaults.
+        if bind_to_self:
+            async with tenant_scope(ctx.tenant_id) as session:
+                persona = await session.get(Persona, ctx.persona_id)
+                if persona is not None and persona.entity_id is None:
+                    persona.entity_id = uuid.UUID(result["entity_id"])
+                    await session.flush()
 
         return ToolResult(content=json.dumps({"created": True, **result}))
 
