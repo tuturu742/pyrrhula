@@ -23,6 +23,7 @@ interface RepoRowData {
   description?: string;
   source_url?: string | null;
   provider?: string | null;
+  default_branch?: string | null;
   runtime_image?: string | null;
   has_registry_credential?: boolean;
   has_credential?: boolean;
