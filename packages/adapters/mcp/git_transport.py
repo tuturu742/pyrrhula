@@ -578,11 +578,21 @@ class GitMcpTransport:
             raw = content if isinstance(content, bytes) else content.encode()
             encoded = base64.b64encode(raw).decode()
             lines.append(f"mkdir -p $(dirname {q(path)}) && echo {encoded} | base64 -d > {q(path)}")
-        # `git add -A` below already stages removals, so deleting the path is the whole
-        # of it. `-rf` because a task that says "remove the tasks directory" means the
-        # directory; `-f` so a path already gone is not a failed build.
+        # Staging removals is what makes a deletion a deletion; `-rf` because a task that
+        # says "remove the tasks directory" means the directory, and `-f` so a path
+        # already gone is not a failed build.
         for path in sorted(deletes):
             lines.append(f"rm -rf {q(path)}")
+        # Stage the agent's work HERE, before anything else runs, and commit the index
+        # rather than the working tree at push time. Staging after the test step swept in
+        # whatever the tests wrote: loxia has five failing `insta` snapshot assertions on
+        # its base branch, insta writes a `.snap.new` per failure, and so every agent
+        # committed five junk files regardless of its task. The reviewer caught them and
+        # asked for their removal; the rework agent removed them; the test step recreated
+        # them; `git add -A` put them back. Two review rounds, the identical complaint,
+        # and no path to convergence -- the loop could not close for a reason that had
+        # nothing to do with the work.
+        lines.append("git add -A -- .")
         test_cmd = str(env_cfg.get("test_cmd") or "").strip()
         if test_cmd:
             lines += [
@@ -635,16 +645,19 @@ class GitMcpTransport:
                 "set -e",
             ]
         lines += ["echo PYR_STEP=push"]
-        # The build output must never enter history. Delete it rather than excluding it
-        # from the pathspec: it has already been uploaded by this point, and a
-        # ':(exclude)' pathspec against a file that is ALSO gitignored makes `git add`
-        # exit non-zero ("The following paths are ignored by one of your .gitignore
-        # files"). That failure silently discarded the agent's work -- tests passed, the
-        # artifact uploaded, and the branch was pushed still pointing at its base commit.
+        # The build output must never enter history. Staging before the build step is
+        # now what keeps it out; this delete keeps the working tree clean besides, and
+        # is cheap insurance for a build that writes into an already-tracked path. It
+        # is a delete rather than a ':(exclude)' pathspec because such a pathspec
+        # against a file that is ALSO gitignored makes `git add` exit non-zero, which
+        # once silently discarded an agent's work: tests passed, the artifact uploaded,
+        # and the branch was pushed still pointing at its base commit.
         if build_cmd and artifact_name:
             lines.append(f"rm -f {q(artifact_name)}")
         lines += [
-            f"git add -A -- . && (git commit -q -m {q(message)} "
+            # No `git add` here: the index was built before the test and build steps, so
+            # what they left in the working tree stays out of history.
+            f"(git commit -q -m {q(message)} "
             f"|| git commit -q --allow-empty -m {q(message)})",
             f"git push -q origin {q(branch)}",
             'echo "PYR_TEST_RC=$PYR_TEST_RC"',

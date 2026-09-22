@@ -18,7 +18,6 @@ import pytest
 
 from core.agents.tools import ToolContext
 from core.process.session_delegation_tools import (
-    DELEGATE_TOOL_NAME,
     DELEGATE_TOOL_PARAMETERS,
     make_delegate_handler,
 )

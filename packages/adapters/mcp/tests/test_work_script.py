@@ -69,7 +69,7 @@ def test_gitignored_artifact_is_removed_before_commit(tmp_path: Path) -> None:
     push = script[script.index("PYR_STEP=push") :]
     assert "rm -f game-web.tar.gz" in push, "artifact not deleted before commit"
     assert ":(exclude)" not in push, "pathspec exclude reintroduced; it breaks on ignored files"
-    assert push.index("rm -f") < push.index("git add"), "must be removed before staging"
+    assert "git add" not in push, "staging moved back after the build; build output would commit"
 
 
 def test_no_artifact_no_removal(tmp_path: Path) -> None:
@@ -109,3 +109,41 @@ def test_work_script_removes_deleted_paths_and_uses_the_repos_base_branch() -> N
     # The fallback base is the repository's branch, not a hardcoded `main`.
     assert "origin/master" in script
     assert "origin/main" not in script
+
+
+def test_the_agents_work_is_staged_before_the_tests_run(tmp_path: Path) -> None:
+    """Regression, found on a live delegation batch: the index was built at push time
+    with `git add -A`, so whatever the TEST step wrote landed in the commit.
+
+    The repository under work had five failing `insta` snapshot assertions on its base
+    branch. insta writes a `.snap.new` file per failure, so every agent committed five
+    artefacts that had nothing to do with its task. The reviewer spotted them and asked
+    for their removal, the rework agent removed them, the test step wrote them again and
+    `git add -A` restaged them: two review rounds, the same complaint twice, and no way
+    for the loop to converge on work that was otherwise fine.
+    """
+    transport = GitMcpTransport(GitStore(str(tmp_path)))
+    script = transport._build_work_script(  # noqa: SLF001 -- the seam under test
+        "proj",
+        "pyr/abcd1234-0",
+        {"a.txt": "hi"},
+        "msg",
+        {"test_cmd": "cargo test"},
+    )
+    assert script.index("git add -A -- .") < script.index("PYR_STEP=test")
+    assert "git add" not in script[script.index("PYR_STEP=push") :]
+
+
+def test_deletions_are_staged_too(tmp_path: Path) -> None:
+    """Staging early must still capture removals -- `git add -A` stages a delete, but
+    only for paths already gone when it runs."""
+    transport = GitMcpTransport(GitStore(str(tmp_path)))
+    script = transport._build_work_script(  # noqa: SLF001
+        "proj",
+        "pyr/abcd1234-0",
+        {"a.txt": "hi"},
+        "msg",
+        {"test_cmd": "cargo test"},
+        deletes=frozenset({"docs/plan.md"}),
+    )
+    assert script.index("rm -rf docs/plan.md") < script.index("git add -A -- .")
