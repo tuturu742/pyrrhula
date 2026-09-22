@@ -217,6 +217,71 @@ async def seed(
     print(f"[{slug}] bound personas: {bound}", flush=True)
 
     await register_repos(slug, tenant_id, owner_id, bundle.parent, secrets_dir)
+    await load_packs(slug, tenant_id, workspace_id, kind)
+
+
+# Which pack each kind of table needs loaded on top of its bundle. A bundle carries the
+# flow it was authored with; the pack carries the rest, including flows written after the
+# bundle was exported.
+PACKS = {"rpg": "rpg", "swdev": "swdev", "enterprise": None}
+
+
+async def load_packs(slug: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> None:
+    """Load this table's pack, then leave one active version of each flow.
+
+    ``load_pack`` is versioned, not idempotent: loading the same pack twice leaves v1 and
+    v2 of every flow active, both in the picker, both called the same thing and not
+    distinguishable by looking at them. A daily rebuild that reloads packs turns that
+    into a list nobody can choose from -- which is how a workspace ends up with nine
+    flows and two that work.
+
+    The newest version of each key wins, which is what a reload means. Older ones are
+    archived rather than deleted: a session already running on v1 keeps its definition,
+    because a flow row is what an in-flight session resolves its phases against.
+    """
+    import pathlib as _pathlib
+
+    from sqlalchemy import select
+
+    from core.packs.loader import load_pack
+    from core.process.authoring import archive_definition
+    from core.process.models import ProcessDefinitionRow
+    from core.tenancy.scope import tenant_scope
+
+    pack = PACKS.get(kind)
+    if not pack:
+        return
+    pack_dir = _pathlib.Path("/app/packs") / pack
+    if not pack_dir.is_dir():
+        print(f"[{slug}] no pack at {pack_dir}; skipping", flush=True)
+        return
+    loaded = await load_pack(pack_dir, tenant_id, workspace_id)
+    print(f"[{slug}] pack {pack}: {sorted(loaded.process_definition_ids)}", flush=True)
+
+    async with tenant_scope(tenant_id) as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(ProcessDefinitionRow).where(
+                        ProcessDefinitionRow.tenant_id == tenant_id,
+                        ProcessDefinitionRow.archived_at.is_(None),
+                    )
+                )
+            ).scalars()
+        )
+    newest: dict[tuple[str, object], int] = {}
+    for row in rows:
+        ident = (row.key, row.workspace_id)
+        newest[ident] = max(newest.get(ident, 0), row.version)
+    superseded = [r for r in rows if r.version < newest[(r.key, r.workspace_id)]]
+    for row in superseded:
+        await archive_definition(tenant_id, row.id)
+    if superseded:
+        print(
+            f"[{slug}] archived {len(superseded)} superseded flow version(s): "
+            f"{sorted({f'{r.key} v{r.version}' for r in superseded})}",
+            flush=True,
+        )
 
 
 async def register_repos(
