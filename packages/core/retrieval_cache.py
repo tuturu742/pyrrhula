@@ -21,6 +21,7 @@ is what lets the worker do the fetching and the api see the result.
 
 from __future__ import annotations
 
+import importlib
 import os
 import pathlib
 import shutil
@@ -102,15 +103,38 @@ def fetch_models(embedding_model: str, reranker_model: str | None) -> dict[str, 
     fetch a subtly different set of files. Blocking and slow -- the caller is a worker job.
     """
     # The deployment runs offline so a turn never reaches the network mid-generation, and
-    # an explicit fetch is the one moment it should. There are TWO switches doing that --
-    # the hub's and transformers' own -- and lifting only the first left the download
-    # failing with "couldn't connect to huggingface.co, and couldn't find them in the
-    # cached files" on a box with a perfectly good connection. Both come off together and
-    # both go back exactly as they were.
+    # an explicit fetch is the one moment it should.
+    #
+    # Setting the environment variables is not enough and looks like it is. huggingface_hub
+    # reads HF_HUB_OFFLINE once, at import, into a module constant; by the time this runs
+    # the worker has long since imported it through the embedding provider, so flipping
+    # os.environ changes a string nobody reads again. The download then fails with
+    # "couldn't connect to huggingface.co, and couldn't find them in the cached files" on a
+    # machine whose network is fine -- which is exactly the wrong message, and cost an
+    # evening of looking at DNS.
+    #
+    # So flip the constants the libraries actually consult, and put them back. Both are
+    # set: the environment for anything imported after this point, the constants for
+    # everything already holding a copy.
     offline_vars = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
-    previous = {name: os.environ.get(name) for name in offline_vars}
+    previous_env = {name: os.environ.get(name) for name in offline_vars}
     for name in offline_vars:
         os.environ[name] = "0"
+
+    patched: list[tuple[Any, str, Any]] = []
+
+    def _force_online(module_name: str, attr: str) -> None:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:  # noqa: BLE001 -- a library that is not installed is not a problem
+            return
+        if hasattr(module, attr):
+            patched.append((module, attr, getattr(module, attr)))
+            setattr(module, attr, False)
+
+    _force_online("huggingface_hub.constants", "HF_HUB_OFFLINE")
+    _force_online("transformers.utils.hub", "_is_offline_mode")
+
     try:
         from sentence_transformers import CrossEncoder, SentenceTransformer
 
@@ -118,11 +142,14 @@ def fetch_models(embedding_model: str, reranker_model: str | None) -> dict[str, 
         if reranker_model:
             CrossEncoder(reranker_model.split("/", 1)[-1])
     finally:
-        for name, was in previous.items():
+        for module, attr, was in patched:
+            setattr(module, attr, was)
+        for name, was in previous_env.items():
             if was is None:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = was
+
     return {
         "embedding": presence(embedding_model).as_dict(),
         "reranker": presence(reranker_model).as_dict() if reranker_model else None,

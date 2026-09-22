@@ -106,9 +106,25 @@ def test_an_explicit_fetch_lifts_every_offline_switch(monkeypatch) -> None:  # n
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
+    # huggingface_hub reads its flag ONCE, at import, into a module constant. Setting the
+    # environment variable afterwards changes a string nobody reads again -- which is why
+    # the download failed on a machine with a working connection and blamed the network.
+    constants = types.ModuleType("huggingface_hub.constants")
+    constants.HF_HUB_OFFLINE = True  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "huggingface_hub.constants", constants)
+
+    def fake_sentence_transformer_checking_constant(name: str):  # noqa: ANN202
+        seen["HF_HUB_OFFLINE"] = os.environ.get("HF_HUB_OFFLINE")
+        seen["TRANSFORMERS_OFFLINE"] = os.environ.get("TRANSFORMERS_OFFLINE")
+        seen["constant"] = constants.HF_HUB_OFFLINE  # type: ignore[attr-defined]
+        return object()
+
+    fake.SentenceTransformer = fake_sentence_transformer_checking_constant  # type: ignore[attr-defined]
+
     mod.fetch_models("local/BAAI/bge-m3", None)
 
-    assert seen == {"HF_HUB_OFFLINE": "0", "TRANSFORMERS_OFFLINE": "0"}
-    # And both are restored, or the next turn quietly gains network access.
+    assert seen == {"HF_HUB_OFFLINE": "0", "TRANSFORMERS_OFFLINE": "0", "constant": False}
+    # Everything restored, or the next turn quietly gains network access.
     assert os.environ["HF_HUB_OFFLINE"] == "1"
     assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+    assert constants.HF_HUB_OFFLINE is True  # type: ignore[attr-defined]
