@@ -20,6 +20,8 @@ from typing import Any
 from core.agents.models import Persona
 from core.agents.tools import ToolContext, ToolHandler, ToolResult
 from core.entities.mutation import PermissionDeniedError, SchemaNotFoundError, create
+from core.entities.schema import EntitySchemaRow
+from core.entities.storage import EntityRow
 from core.ports.permission import PermissionService
 from core.resolution.consequence import resolve_and_apply
 from core.resolution.registry import get_tool_definition
@@ -53,18 +55,40 @@ def make_entity_create_handler(
                 return ToolResult(content=json.dumps({"error": "no_persona"}))
             principal_id = persona.principal_id
             existing_entity = persona.entity_id
-        if existing_entity is not None:
+            bound_schema = None
+            if existing_entity is not None:
+                bound = await session.get(EntityRow, existing_entity)
+                if bound is not None:
+                    schema_row = await session.get(EntitySchemaRow, bound.schema_id)
+                    bound_schema = schema_row.key if schema_row is not None else None
+
+        # "One per persona" is a rule about a persona's OWN entity -- a player has one
+        # character -- and it was applied to every schema. A lead asked to create six
+        # work items got one, then five refusals saying it "already has a character";
+        # the session then had nothing to delegate and reviewed nothing. The cap now
+        # covers only the schema the persona is actually bound to.
+        if existing_entity is not None and bound_schema == schema_key:
             return ToolResult(
                 content=json.dumps(
                     {
                         "created": False,
                         "entity_id": str(existing_entity),
-                        "message": "this persona already has a character",
+                        "message": (
+                            f"this persona already has its own {schema_key}; "
+                            "mutate that one instead of creating a second"
+                        ),
                     }
                 )
             )
 
-        entity_key = f"char-{str(principal_id)[:8]}"
+        # A key per entity, not per persona. The old `char-<principal>` was a single
+        # deterministic name, so a second create collided with the first even where the
+        # cap allowed it.
+        entity_key = (
+            f"char-{str(principal_id)[:8]}"
+            if existing_entity is None
+            else f"{schema_key}-{uuid.uuid4().hex[:8]}"
+        )
         try:
             result = await create(
                 principal_id,
@@ -75,7 +99,11 @@ def make_entity_create_handler(
                 name,
                 fields,
                 _ENTITY_SCOPE_KEY,
-                idempotency_key=f"create:{ctx.session_id}:{principal_id}",
+                # Keyed on the entity being created, not merely on who is creating:
+                # a persona making six work items in one session made six distinct
+                # calls, and one key for all of them returned the first result to
+                # every one of them.
+                idempotency_key=f"create:{ctx.session_id}:{principal_id}:{entity_key}",
                 permission_service=permission_service,
             )
         except PermissionDeniedError as exc:
