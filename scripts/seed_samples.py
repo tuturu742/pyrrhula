@@ -348,6 +348,36 @@ async def register_repos(
         print(f"[{slug}] repo {repo.key} ({spec.get('source_url') or 'store-only'})", flush=True)
 
 
+async def ensure_retrieval_models() -> None:
+    """Queue the embedding-model download if it is not on this deployment yet.
+
+    Model downloads were deliberately taken out of the installer: they are gigabytes,
+    and which models a deployment wants is the operator's choice rather than the
+    installer's. The consequence is that a purge takes the model cache with it and a
+    freshly installed deployment has no embedder at all -- every turn then fails at
+    context assembly with ModelNotDownloadedError, which reads like a broken build
+    rather than an empty cache.
+    """
+    from api.job_queue_factory import get_job_queue
+    from core.tenancy.admin import ADMIN_TENANT_ID
+
+    try:
+        from adapters.embedding.local.provider import LocalEmbeddingProvider
+
+        LocalEmbeddingProvider()._load()  # noqa: SLF001 -- the cheapest "is it there?"
+        print("retrieval models: already cached", flush=True)
+        return
+    except Exception:  # noqa: BLE001 -- absent, wrong version, unreadable: all mean fetch
+        pass
+
+    await get_job_queue().enqueue(ADMIN_TENANT_ID, "download_retrieval_models", {})
+    print(
+        "retrieval models: download queued -- turns will fail until the worker finishes "
+        "(gigabytes; watch the worker log)",
+        flush=True,
+    )
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--secrets-dir", required=True, type=pathlib.Path)
@@ -362,6 +392,8 @@ async def main() -> None:
         help="comma-separated sample names, or 'slug=sample' to name the tenant",
     )
     args = parser.parse_args()
+
+    await ensure_retrieval_models()
 
     for item in args.samples.split(","):
         item = item.strip()

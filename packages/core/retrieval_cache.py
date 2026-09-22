@@ -101,10 +101,16 @@ def fetch_models(embedding_model: str, reranker_model: str | None) -> dict[str, 
     download: whatever that pulls is by definition what the runtime needs, so this cannot
     fetch a subtly different set of files. Blocking and slow -- the caller is a worker job.
     """
-    # HF_HUB_OFFLINE is normally on so a running deployment never reaches the network mid
-    # turn. An explicit fetch is the one moment it should, so lift it for this call only.
-    previous = os.environ.get("HF_HUB_OFFLINE")
-    os.environ["HF_HUB_OFFLINE"] = "0"
+    # The deployment runs offline so a turn never reaches the network mid-generation, and
+    # an explicit fetch is the one moment it should. There are TWO switches doing that --
+    # the hub's and transformers' own -- and lifting only the first left the download
+    # failing with "couldn't connect to huggingface.co, and couldn't find them in the
+    # cached files" on a box with a perfectly good connection. Both come off together and
+    # both go back exactly as they were.
+    offline_vars = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+    previous = {name: os.environ.get(name) for name in offline_vars}
+    for name in offline_vars:
+        os.environ[name] = "0"
     try:
         from sentence_transformers import CrossEncoder, SentenceTransformer
 
@@ -112,10 +118,11 @@ def fetch_models(embedding_model: str, reranker_model: str | None) -> dict[str, 
         if reranker_model:
             CrossEncoder(reranker_model.split("/", 1)[-1])
     finally:
-        if previous is None:
-            os.environ.pop("HF_HUB_OFFLINE", None)
-        else:
-            os.environ["HF_HUB_OFFLINE"] = previous
+        for name, was in previous.items():
+            if was is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = was
     return {
         "embedding": presence(embedding_model).as_dict(),
         "reranker": presence(reranker_model).as_dict() if reranker_model else None,

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import io
+import os
 import pathlib
+import sys
 import tarfile
+import types
 
 import pytest
 
@@ -75,3 +78,37 @@ def test_an_oversized_upload_is_cut_off(cache: pathlib.Path) -> None:
         install_from_tarball(
             _archive({"hub/models--x--y/blobs/big": b"z" * 200_000}), max_bytes=1024
         )
+
+
+def test_an_explicit_fetch_lifts_every_offline_switch(monkeypatch) -> None:  # noqa: ANN001
+    """A deployment runs offline so no turn reaches the network mid-generation. An
+    explicit model download is the one moment it must, and there are two switches doing
+    that -- the hub's and transformers' own.
+
+    Lifting only the first failed with "couldn't connect to huggingface.co, and couldn't
+    find them in the cached files" on a box with a working connection, and the job
+    reported completion with a failed outcome, so a purged deployment came back with no
+    embedder and no obvious reason why.
+    """
+    import core.retrieval_cache as mod
+
+    seen: dict[str, str | None] = {}
+
+    def fake_sentence_transformer(name: str):  # noqa: ANN202
+        seen["HF_HUB_OFFLINE"] = os.environ.get("HF_HUB_OFFLINE")
+        seen["TRANSFORMERS_OFFLINE"] = os.environ.get("TRANSFORMERS_OFFLINE")
+        return object()
+
+    fake = types.ModuleType("sentence_transformers")
+    fake.SentenceTransformer = fake_sentence_transformer  # type: ignore[attr-defined]
+    fake.CrossEncoder = fake_sentence_transformer  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+    mod.fetch_models("local/BAAI/bge-m3", None)
+
+    assert seen == {"HF_HUB_OFFLINE": "0", "TRANSFORMERS_OFFLINE": "0"}
+    # And both are restored, or the next turn quietly gains network access.
+    assert os.environ["HF_HUB_OFFLINE"] == "1"
+    assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
