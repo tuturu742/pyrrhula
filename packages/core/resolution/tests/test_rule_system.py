@@ -12,6 +12,7 @@ import pytest
 from core.resolution.rule_system import (
     COIN_FLIP_SYSTEM,
     MINIMAL_D20_SYSTEM,
+    UNJUDGED,
     OutcomeBandingError,
     RuleSystemDefinition,
     RuleSystemDefinitionSchema,
@@ -150,3 +151,29 @@ def test_definition_from_row_and_from_schema_agree() -> None:
     from_schema = RuleSystemDefinition.from_schema(MINIMAL_D20_SYSTEM)
     assert from_schema.key == "mvp_d20"
     assert from_schema.check_types == frozenset(MINIMAL_D20_SYSTEM.check_types)
+
+
+def test_a_roll_nobody_is_judging_is_recorded_not_refused() -> None:
+    """Rolling ability scores, damage, a reaction table: a number that nothing succeeds
+    or fails against.
+
+    A target-based system declares no bands by design -- Basic Fantasy rolls d20 against
+    a number -- so requiring a band for an untargeted roll killed a character-creation
+    turn on 3d6 totalling 8. The only workaround would have been a catch-all band, which
+    then mislabels every real check in the same system.
+    """
+    assert resolve_outcome(8, None, ()) == UNJUDGED
+
+
+def test_a_band_table_that_does_not_cover_its_dice_still_raises() -> None:
+    """The permissive case is 'no bands declared', not 'bands declared and none matched'.
+    The second is a gap in the system's own definition, and swallowing it would hide a
+    table that cannot classify its own rolls."""
+    bands = ({"min": 10, "outcome": "strong"}, {"min": 7, "max": 9, "outcome": "weak"})
+    with pytest.raises(OutcomeBandingError):
+        resolve_outcome(3, None, bands)
+
+
+def test_a_target_still_decides_when_one_is_given() -> None:
+    assert resolve_outcome(15, 12, ()) == "success"
+    assert resolve_outcome(9, 12, ()) == "failure"

@@ -112,6 +112,10 @@ class RuleSystemValidationError(Exception):
     pass
 
 
+# The outcome of a roll nobody is judging: the total is the result.
+UNJUDGED = "recorded"
+
+
 class OutcomeBandingError(Exception):
     """No outcome band matched a total, and no ``target`` was supplied either -- an
     authoring gap in the rule system (bands should be exhaustive), not a caller error."""
@@ -145,9 +149,18 @@ def validate_definition(definition: RuleSystemDefinitionSchema) -> None:
 def resolve_outcome(
     total: int, target: int | None, outcome_bands: tuple[dict[str, object], ...]
 ) -> str:
-    """§9.3: two outcome modes. ``target`` set -> simple threshold (">= target: success",
-    the d20-vs-DC shape). ``target`` unset -> ordered ``outcome_bands`` matched against
-    ``total`` alone (the "10+ / 7-9 / 6 or under" shape) -- first matching band wins."""
+    """§9.3: outcome modes. ``target`` set -> simple threshold (">= target: success", the
+    d20-vs-DC shape). ``target`` unset with ``outcome_bands`` declared -> ordered bands
+    matched against ``total`` alone (the "10+ / 7-9 / 6 or under" shape), first match wins.
+
+    ``target`` unset and no bands declared -> the roll is not being judged, and the total
+    is the whole result. Rolling ability scores, damage, a reaction, a wandering monster:
+    a number that nothing succeeds or fails against. A target-based system declares no
+    bands by design (Basic Fantasy rolls d20 against a number), so demanding one here
+    made every unjudged roll raise -- a character creation phase died on 3d6 totalling 8,
+    and the only way out would have been for each such pack to invent a catch-all band
+    that then mislabels the real checks.
+    """
     if target is not None:
         return "success" if total >= target else "failure"
     for band in outcome_bands:
@@ -156,6 +169,10 @@ def resolve_outcome(
         max_ok = max_v is None or (isinstance(max_v, int) and total <= max_v)
         if min_ok and max_ok:
             return str(band["outcome"])
+    if not outcome_bands:
+        return UNJUDGED
+    # Bands exist and none matched: that IS a gap in the system's own definition, and a
+    # silent fallback would hide a band table that does not cover its dice.
     raise OutcomeBandingError(f"no outcome band matches total {total} and no target was given")
 
 
