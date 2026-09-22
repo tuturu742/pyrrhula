@@ -160,6 +160,17 @@ python3 scripts/fetch_plugins.py
 say "building and starting (first build takes a few minutes)"
 "${COMPOSE[@]}" "${CARGS[@]}" up -d --build
 
+# `up --build` builds the new image and then, depending on the compose implementation,
+# happily leaves the old container running on the old one. Observed here: an image built
+# thirty seconds ago beside a container started half an hour earlier, serving packs that
+# had been replaced -- an install that reports success and ships yesterday's code.
+#
+# Recreate the services that carry application code. The data services are deliberately
+# left alone: postgres and redis hold the deployment's state, restarting them costs
+# every open connection, and neither has code in this image.
+say "recreating application containers so they run the image just built"
+"${COMPOSE[@]}" "${CARGS[@]}" up -d --force-recreate --no-deps api worker web admin
+
 say "waiting for the stack"
 WEB_PORT=$(envval .env PYRRHULA_WEB_PORT 5173)
 
