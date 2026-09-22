@@ -50,6 +50,19 @@ export PYRRHULA_PLUGINS_TOKEN="$(tr -d '\n' < ~/code/lets_finish_it/gh_tuturu)"
 ./install.sh compose --multi-tenant --purge
 ```
 
+On a host whose DNS runs through `systemd-resolved`, set a resolver for the containers:
+
+```bash
+export PYRRHULA_COMPOSE_DNS=1.1.1.1
+```
+
+The host's only nameserver is then `127.0.0.53`, a loopback address that means nothing
+inside a container's namespace, so every outbound name lookup fails. Nothing says "DNS":
+the model download reports `couldn't connect to huggingface.co`, which reads as an outage
+at Hugging Face. The installer now notices the loopback resolver and says so, but it
+cannot fix the host for you -- either set this variable or put `dns_servers = ["1.1.1.1"]`
+under `[containers]` in `~/.config/containers/containers.conf` once.
+
 `--purge` here removes the named volumes (postgres, blobs, the retrieval model) and the
 generated `.env`. The `.env` has to go with them: it holds the password of the database
 being deleted, and an install that writes fresh credentials into a file still carrying
@@ -76,6 +89,24 @@ kubectl -n pyrrhula exec "$POD" -- python /tmp/seed_samples.py \
 
 Each sample name becomes a tenant of the same slug; `slug=sample` names it differently
 (`loxia=pyrrhula` seeds a tenant called `loxia` from the `pyrrhula` bundle's cast).
+
+### The embedding model
+
+A purge takes the model cache with it, and the installer deliberately does not download
+models -- which ones a deployment wants is the operator's choice. So a freshly purged
+deployment has no embedder, and **every session fails at context assembly** with a message
+about the admin console. `seed_samples.py` queues the download before it seeds anything;
+it is gigabytes, so the first sessions after a rebuild will fail until the worker
+finishes. Check before starting one:
+
+```bash
+psql -tAc "select status, result->>'outcome' from job
+            where kind='download_retrieval_models' order by created_at desc limit 1"
+```
+
+`done` with outcome `downloaded` is the only green. A job can be `done` with outcome
+`failed`: the outcome lives in the result payload for the admin console to render, so the
+job table alone will tell you it succeeded.
 
 ### Which model each persona gets
 

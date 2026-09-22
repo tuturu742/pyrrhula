@@ -154,10 +154,41 @@ if [ "$FRESH_ENV" = 1 ] && command -v docker >/dev/null 2>&1 && [ "$ENGINE" = do
 fi
 
 # --- up ---------------------------------------------------------------------------
+# A container that cannot resolve a name is not obviously a DNS problem from inside the
+# product: the model download reports "couldn't connect to huggingface.co", which reads
+# as an outage. The common cause on this shape of host is systemd-resolved -- the host's
+# only nameserver is 127.0.0.53, a loopback address that means nothing in a container's
+# namespace, and podman's DNS forwards there. Say so now rather than at the first
+# download, and say what to do about it.
+if command -v podman >/dev/null && [ "$ENGINE" = podman ]; then
+  if grep -qs '^nameserver 127\.' /etc/resolv.conf; then
+    echo "   note: this host resolves DNS through a loopback address (127.0.0.x)."
+    echo "         Containers cannot reach that, so downloads inside the deployment"
+    echo "         will fail with connection errors that look like an outage."
+    echo "         Fix once, either way:"
+    echo "           - podman: add   dns_servers = [\"1.1.1.1\"]   under [containers]"
+    echo "             in ~/.config/containers/containers.conf, or"
+    echo "           - set PYRRHULA_COMPOSE_DNS=1.1.1.1 before this installer."
+  fi
+fi
+
 say "fetching workflow plugins (deploy/plugins.json)"
 python3 scripts/fetch_plugins.py
 
 say "building and starting (first build takes a few minutes)"
+if [ -n "${PYRRHULA_COMPOSE_DNS:-}" ]; then
+  # compose has no portable "set a resolver" switch, so this goes in as an override file
+  # rather than being edited into the shipped compose file.
+  cat > docker/compose.dns.yml <<YAML
+services:
+  api:     { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
+  worker:  { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
+  migrate: { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
+YAML
+  CARGS+=(-f docker/compose.dns.yml)
+  say "using DNS ${PYRRHULA_COMPOSE_DNS} inside the containers"
+fi
+
 "${COMPOSE[@]}" "${CARGS[@]}" up -d --build
 
 # `up --build` builds the new image and then, depending on the compose implementation,
