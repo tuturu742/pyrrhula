@@ -123,3 +123,37 @@ def test_a_turn_renders_entity_state_so_ids_survive_the_phase_boundary() -> None
     src = inspect.getsource(live_session)
     assert "entity_state_renderer=render_entity_state" in src
     assert "from core.entities.injection import render_entity_state" in src
+
+
+def test_a_phase_can_declare_how_many_tool_calls_its_work_takes() -> None:
+    """The runtime's cap guards against a model that never stops calling. It is the wrong
+    number for a phase whose work genuinely takes more.
+
+    Basic Fantasy character creation is six ability rolls and then the sheet: seven calls
+    against a cap of eight. A single re-roll ended the turn with "tool loop exceeded 8
+    iterations", which took the session with it -- and the phase had no way to say that
+    seven was expected.
+    """
+    from core.process.dsl.schema import PhaseSpec
+
+    bare = {
+        "label_key": "phase.x",
+        "actors": [],
+        "visibility": {
+            "knowledge_classes": [],
+            "scopes": [],
+            "entity_fields": "all",
+            "secrets": "none",
+        },
+    }
+    assert PhaseSpec.model_validate(bare).max_tool_calls is None
+    assert PhaseSpec.model_validate({**bare, "max_tool_calls": 14}).max_tool_calls == 14
+
+
+def test_the_declared_budget_reaches_the_turn() -> None:
+    """A field nothing reads is the same as no field. The runtime default stays in force
+    when a phase declares nothing."""
+    from core.process import live_session
+
+    src = inspect.getsource(live_session)
+    assert 'max_tool_loop=getattr(phase, "max_tool_calls", None) or _DEFAULT_MAX_TOOL_LOOP' in src

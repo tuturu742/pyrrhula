@@ -350,6 +350,12 @@ class PhaseSpec(BaseModel):
     # model gets no phase-specific instruction. Declarative prose, not code — the place a
     # flow author says "output ## headings X/Y/Z, no filler".
     prompt: str = ""
+    # How many tool calls one turn of this phase may make before the runtime calls it a
+    # runaway loop. The default guards against a model that never stops calling; it is
+    # wrong for a phase whose work genuinely takes more. Basic Fantasy character creation
+    # is six ability rolls and a sheet -- seven calls against a cap of eight, so a single
+    # re-roll ended the turn, and the session, with "tool loop exceeded".
+    max_tool_calls: int | None = Field(default=None, ge=1, le=64)
     budget: BudgetSpec | None = None
     gates: list[GateSpec] = Field(default_factory=list)
     effects: list[EffectSpec] = Field(default_factory=list)

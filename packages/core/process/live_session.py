@@ -18,7 +18,12 @@ from sqlalchemy import select
 
 from core.agents.authoring import HISTORY_CHAR_BUDGET_KEY, merged_persona_params
 from core.agents.models import Agent, Persona
-from core.agents.runtime import AllRetriesExhaustedError, ToolLoopExceededError, run_agent_turn
+from core.agents.runtime import (
+    _DEFAULT_MAX_TOOL_LOOP,
+    AllRetriesExhaustedError,
+    ToolLoopExceededError,
+    run_agent_turn,
+)
 from core.agents.scheduling import make_persona_candidate_resolver
 from core.agents.tools import ToolHandler, ToolRegistry
 from core.assembler.context_assembler import assemble
@@ -767,6 +772,7 @@ async def run_one_persona_turn(
             event_seq=event_seq,
             finalize_reply=finalize_reply,
             triggered_by=triggered_by,
+            max_tool_loop=getattr(phase, "max_tool_calls", None) or _DEFAULT_MAX_TOOL_LOOP,
         )
     except UsageLimitExceededError as exc:
         # Same clean-pause guarantee: the session parks with the limit message rather
