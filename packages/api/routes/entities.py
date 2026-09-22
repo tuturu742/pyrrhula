@@ -19,9 +19,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from api.authz import require_permission
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from api.model_provider_factory import get_model_provider
+from api.permission_service_factory import get_permission_service
 from core.agents.authoring import get_agent
 from core.assembler.visibility import EXPORT, scopes_for
 from core.entities.cel import evaluate
@@ -30,8 +32,10 @@ from core.entities.editing import (
     apply_schema_edit_proposal,
     propose_schema_edit,
 )
-from core.entities.fsm import EntityStateChangeRow
+from core.entities.fsm import ANY_STATE, EntityStateChangeRow, guard_passes
 from core.entities.injection import visible_fields
+from core.entities.mutation import PermissionDeniedError
+from core.entities.mutation import transition as entity_transition
 from core.entities.repo import (
     get_schema,
     list_latest_schemas,
@@ -490,3 +494,115 @@ async def get_entity_history_endpoint(
             )
             for row in rows
         ]
+
+
+class AvailableTransition(BaseModel):
+    trigger: str
+    to: str
+    # A transition whose CEL guard does not currently pass is listed but not offered:
+    # hiding it entirely leaves a person asking why the button they remember is gone.
+    allowed: bool
+    blocked_by_guard: bool = False
+
+
+class TransitionOptionsResponse(BaseModel):
+    machine_key: str
+    current_state: str
+    transitions: list[AvailableTransition]
+
+
+@router.get("/{entity_id}/transitions")
+async def list_entity_transitions_endpoint(
+    entity_id: uuid.UUID,
+    machine_key: str = "lifecycle",
+    ctx: RequestContext = Depends(get_request_context),
+) -> TransitionOptionsResponse:
+    """What this entity can be moved to from where it is.
+
+    A person correcting a state needs to know which moves exist before making one --
+    and which are legal from here, rather than discovering it through a 409."""
+    entity = await _load_entity(ctx.tenant_id, entity_id)
+    schema_row = await get_schema(ctx.tenant_id, entity.schema_id)
+    if schema_row is None:
+        raise HTTPException(status_code=404, detail="entity's schema no longer exists")
+    machine = next(
+        (m for m in schema_row.to_definition().state_machines if m.key == machine_key), None
+    )
+    if machine is None:
+        raise HTTPException(status_code=404, detail=f"no state machine {machine_key!r}")
+
+    current = str(entity.fsm_states.get(machine_key) or machine.initial)
+    options: list[AvailableTransition] = []
+    for t in machine.transitions:
+        if t.from_state not in (current, ANY_STATE):
+            continue
+        passes = guard_passes(t, entity.data)
+        options.append(
+            AvailableTransition(
+                trigger=t.trigger, to=t.to, allowed=passes, blocked_by_guard=not passes
+            )
+        )
+    return TransitionOptionsResponse(
+        machine_key=machine_key, current_state=current, transitions=options
+    )
+
+
+class TransitionRequest(BaseModel):
+    workspace_id: uuid.UUID
+    trigger: str
+    machine_key: str = "lifecycle"
+    # Optimistic concurrency: pass the version the caller was looking at, and a state
+    # that moved underneath them is refused rather than overwritten.
+    expected_version: int | None = None
+
+
+class TransitionResponse(BaseModel):
+    entity_id: uuid.UUID
+    machine_key: str
+    state: str
+    version: int
+
+
+@router.post("/{entity_id}/transition")
+async def transition_entity_endpoint(
+    entity_id: uuid.UUID,
+    body: TransitionRequest,
+    ctx: RequestContext = Depends(get_request_context),
+) -> TransitionResponse:
+    """Move an entity by hand.
+
+    Automation drives these state machines almost all of the time, and almost all of the
+    time it is right. When it is not -- work merged somewhere the sweep does not watch, a
+    pull request that will never land, an item filed twice -- a person needs to be able
+    to say so. Without this the only correction available was a database write, which is
+    both worse and unaudited: this goes through the same ``transition`` every agent uses,
+    so the guard still applies, the change is still recorded, and the history says a
+    human did it.
+    """
+    await require_permission(ctx, "entity:mutate", "workspace", body.workspace_id)
+    try:
+        result = await entity_transition(
+            ctx.principal_id,
+            ctx.tenant_id,
+            body.workspace_id,
+            entity_id,
+            body.machine_key,
+            body.trigger,
+            # Deliberately unique per call: a person clicking the same button twice
+            # means it twice. Idempotency here belongs to automation, which replays.
+            idempotency_key=f"manual:{ctx.principal_id}:{entity_id}:{uuid.uuid4()}",
+            permission_service=get_permission_service(),
+            cause="human",
+            expected_version=body.expected_version,
+        )
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:  # an illegal trigger, a failed guard, a stale version
+        raise HTTPException(status_code=409, detail=str(exc)[:300]) from exc
+
+    return TransitionResponse(
+        entity_id=entity_id,
+        machine_key=body.machine_key,
+        state=str(result.get("new_state") or ""),
+        version=int(result.get("version") or 0),
+    )

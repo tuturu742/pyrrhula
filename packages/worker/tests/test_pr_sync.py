@@ -7,6 +7,8 @@ sweep that reads a network error as "closed" abandons work that is alive and wel
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from adapters.gitremote.base import RemotePRStatus
@@ -37,17 +39,16 @@ def test_only_unfinished_work_is_eligible() -> None:
 
 
 def test_closed_without_merging_means_abandon() -> None:
-    assert pr_sync._TRIGGER_FOR["closed"] == "abandon"
+    assert pr_sync._ABANDON_TRIGGER == "abandon"
 
 
-def test_a_merge_walks_the_item_up_to_approved_first() -> None:
-    """`merge` is only legal from `approved`. A pull request merged on the host may never
-    have been approved inside Pyrrhula, so the sync walks the path rather than attempting
-    a transition the FSM will refuse."""
-    for state in ("in_progress", "in_review", "changes_requested", "approved"):
-        path = pr_sync._PATH_TO_MERGE[state]
-        assert path[-1] == "merge", state
-    assert pr_sync._PATH_TO_MERGE["in_review"] == ("approve", "merge")
+def test_a_merge_elsewhere_is_left_to_a_person() -> None:
+    """Merging is the deliberate end of a piece of work, so it is not inferred from a
+    host's state minutes later -- ``POST /entities/{id}/transition`` is how a person says
+    it landed. This sweep acts on closures and nothing else."""
+    src = inspect.getsource(pr_sync.sync_pull_requests_for_tenant)
+    assert 'status.state != "closed"' in src
+    assert not hasattr(pr_sync, "_PATH_TO_MERGE")
 
 
 class _Remote:
@@ -70,8 +71,9 @@ async def test_an_unknown_status_moves_nothing() -> None:
     remote = _Remote(None)
     status = await remote.pull_request_status("https://example.test/a/b", "t", number=1)
     assert status is None
-    # There is no trigger for "unknown": the mapping covers only real verdicts.
-    assert set(pr_sync._TRIGGER_FOR) == {"merged", "closed"}
+    # The guard is a single equality against "closed", so None can never satisfy it.
+    src = inspect.getsource(pr_sync.sync_pull_requests_for_tenant)
+    assert "if status is None or status.state != \"closed\":" in src
 
 
 @pytest.mark.asyncio
@@ -79,7 +81,7 @@ async def test_an_open_pull_request_moves_nothing() -> None:
     remote = _Remote(RemotePRStatus(number=1, state="open"))
     status = await remote.pull_request_status("https://example.test/a/b", "t", number=1)
     assert status is not None
-    assert status.state not in pr_sync._TRIGGER_FOR
+    assert status.state != "closed"
 
 
 def test_the_sweep_runs_on_the_workers_idle_tick() -> None:

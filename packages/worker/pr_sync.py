@@ -1,13 +1,18 @@
-"""Pull-request state sync: what the host did to a pull request drives its work item.
+"""Closed pull requests put their work items down.
 
-A work item reached ``in_review`` when its pull request opened and then depended on
-something inside Pyrrhula to move it again. Anything that happened on the host did not
-come back. Merge somewhere else and the item stayed in review; close a pull request
-without merging -- superseded, duplicated, or simply wrong -- and the item stayed in
-review forever, because until the ``abandoned`` state existed there was nowhere else for
-it to go. Eleven collected that way in one workspace, and once sessions could see the
-workspace's entities they read as work in flight: a lead planning a fresh batch believed
-five items were already being built and planned around them.
+A work item reached ``in_review`` when its pull request opened, and then only something
+inside Pyrrhula could move it again. So a pull request closed without merging --
+superseded, duplicated, or simply wrong -- left its item in review forever, because until
+the ``abandoned`` state existed there was nowhere else for it to go. Eleven collected
+that way in one workspace, and once sessions could see the workspace's entities they read
+as work in flight: a lead planning a fresh batch believed five items were already being
+built and planned around them.
+
+**Only closures.** A pull request merged outside Pyrrhula is drift too, but it is not
+watched here: merging is the deliberate end of a piece of work and deserves a person
+deciding it, not a sweep inferring it from a host's state minutes later. Correcting that,
+and any other state a human disagrees with, is what ``POST /entities/{id}/transition``
+is for.
 
 **Unknown is not closed.** ``pull_request_status`` returns ``None`` for a URL that does
 not parse, a provider with no pull-request API, a failed request, a revoked token. Every
@@ -45,18 +50,10 @@ log = structlog.get_logger()
 # finished item is not re-decided because a host changed its mind about an old branch.
 _LIVE_STATES = frozenset({"in_progress", "in_review", "changes_requested", "approved"})
 
-# What the host's verdict means for the work item.
-_TRIGGER_FOR = {"merged": "merge", "closed": "abandon"}
-
-# `merge` runs from `approved` only; a pull request merged outside Pyrrhula may never
-# have been approved inside it, so the item is walked up first. `abandon` is reachable
-# from anywhere and needs no such path.
-_PATH_TO_MERGE = {
-    "in_progress": ("submit_for_review", "approve", "merge"),
-    "in_review": ("approve", "merge"),
-    "changes_requested": ("rework", "submit_for_review", "approve", "merge"),
-    "approved": ("merge",),
-}
+# The one host verdict this sweep acts on. `abandon` is reachable from any state, so
+# there is no path to walk -- which is the other reason closures are safe to automate
+# and merges are not.
+_ABANDON_TRIGGER = "abandon"
 
 
 def _pr_number(record: dict[str, Any]) -> int | None:
@@ -70,34 +67,26 @@ def _pr_number(record: dict[str, Any]) -> int | None:
         return None
 
 
-async def _drive(
+async def _abandon(
     tenant_id: uuid.UUID,
     workspace_id: uuid.UUID,
     principal_id: uuid.UUID,
     work_item_id: uuid.UUID,
-    state: str,
-    current: str,
     branch: str,
-) -> bool:
-    """Walk the item to where the host says it is. Returns whether anything moved."""
-    triggers = _PATH_TO_MERGE.get(current, ()) if state == "merged" else (_TRIGGER_FOR[state],)
-    if not triggers:
-        return False
-    for trigger in triggers:
-        await transition(
-            principal_id,
-            tenant_id,
-            workspace_id,
-            work_item_id,
-            "lifecycle",
-            trigger,
-            # Keyed on the outcome being applied, not on the moment of applying it: a
-            # sweep that runs every minute must not re-drive what it already drove.
-            idempotency_key=f"pr-sync:{work_item_id}:{branch}:{state}:{trigger}",
-            permission_service=get_permission_service(),
-            cause="system",
-        )
-    return True
+) -> None:
+    await transition(
+        principal_id,
+        tenant_id,
+        workspace_id,
+        work_item_id,
+        "lifecycle",
+        _ABANDON_TRIGGER,
+        # Keyed on the outcome, not the moment: a sweep that runs every minute must not
+        # re-drive what it already drove.
+        idempotency_key=f"pr-sync:{work_item_id}:{branch}:closed",
+        permission_service=get_permission_service(),
+        cause="system",
+    )
 
 
 async def _workspace_supervisor_principal(
@@ -167,8 +156,9 @@ async def sync_pull_requests_for_tenant(tenant_id: uuid.UUID) -> int:
                 continue
 
             status = await remote.pull_request_status(source_url, token, number=number)
-            if status is None or status.state == "open":
-                continue  # unknown, or nothing to do -- both are "leave it alone"
+            if status is None or status.state != "closed":
+                # Unknown, still open, or merged -- none of them is this sweep's call.
+                continue
 
             branch = str(record.get("branch") or "")
             actor = await _workspace_supervisor_principal(tenant_id, entity.workspace_id)
@@ -180,38 +170,27 @@ async def sync_pull_requests_for_tenant(tenant_id: uuid.UUID) -> int:
                 )
                 continue
             try:
-                changed = await _drive(
-                    tenant_id,
-                    entity.workspace_id,
-                    actor,
-                    work_item_id,
-                    status.state,
-                    current,
-                    branch,
-                )
+                await _abandon(tenant_id, entity.workspace_id, actor, work_item_id, branch)
             except Exception as exc:  # noqa: BLE001 -- one item must not stop the sweep
                 log.warning(
                     "pr_sync.transition_failed",
                     work_item_id=str(work_item_id),
-                    state=status.state,
                     error=str(exc)[:200],
                 )
                 continue
-            if changed:
-                moved += 1
-                log.info(
-                    "pr_sync.work_item_followed_its_pull_request",
-                    work_item_id=str(work_item_id),
-                    repo=repo.key,
-                    pr=f"#{number}",
-                    from_state=current,
-                    host_state=status.state,
-                )
+            moved += 1
+            log.info(
+                "pr_sync.work_item_abandoned_with_its_pull_request",
+                work_item_id=str(work_item_id),
+                repo=repo.key,
+                pr=f"#{number}",
+                from_state=current,
+            )
     return moved
 
 
 async def sync_pull_requests() -> int:
-    """One sweep tick across every tenant. Returns how many work items moved."""
+    """One sweep tick across every tenant. Returns how many work items were put down."""
     async with unscoped_session() as session:
         tenant_ids = list((await session.execute(select(Tenant.id))).scalars())
     return sum([await sync_pull_requests_for_tenant(t) for t in tenant_ids])
