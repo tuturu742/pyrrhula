@@ -9,6 +9,7 @@ import httpx
 from adapters.gitremote.base import (
     MergeMethod,
     RemotePR,
+    RemotePRStatus,
     RemoteRepoRef,
     ReviewVerdict,
     parse_remote_url,
@@ -118,3 +119,24 @@ class GiteaRemote:
                 return resp.status_code < 300
         except httpx.HTTPError:
             return False
+
+    async def pull_request_status(
+        self, source_url: str, token: str, *, number: int
+    ) -> RemotePRStatus | None:
+        parsed = self._split(source_url)
+        if parsed is None:
+            return None
+        ref, owner, repo = parsed
+        try:
+            async with self._client(ref, token) as client:
+                resp = await client.get(f"/repos/{owner}/{repo}/pulls/{number}")
+                if resp.status_code >= 300:
+                    return None
+                pr = resp.json()
+        except httpx.HTTPError:
+            return None
+        if pr.get("merged"):
+            return RemotePRStatus(number=number, state="merged")
+        if pr.get("state") == "closed":
+            return RemotePRStatus(number=number, state="closed")
+        return RemotePRStatus(number=number, state="open")

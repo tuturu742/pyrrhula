@@ -238,3 +238,65 @@ async def test_merge_does_not_retry_a_real_refusal(monkeypatch: pytest.MonkeyPat
 
     assert ok is False
     assert transport.calls == 1
+
+
+def _status_transport(payload: dict, status_code: int = 200) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code, json=payload)
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.asyncio
+async def test_github_does_not_mistake_a_merged_pr_for_an_abandoned_one() -> None:
+    """GitHub's ``state`` is only open/closed -- a merged PR is closed AND carries
+    ``merged_at``. Reading ``state`` alone would report every merge as an abandonment,
+    which downstream drives the work item to ``abandoned`` instead of ``merged``."""
+    remote = GithubRemote(
+        transport=_status_transport({"state": "closed", "merged_at": "2026-09-22T00:00:00Z"})
+    )
+    status = await remote.pull_request_status("https://github.com/o/r", "t", number=3)
+    assert status is not None and status.state == "merged"
+
+
+@pytest.mark.asyncio
+async def test_github_reports_a_closed_pr_as_closed() -> None:
+    remote = GithubRemote(transport=_status_transport({"state": "closed", "merged_at": None}))
+    status = await remote.pull_request_status("https://github.com/o/r", "t", number=3)
+    assert status is not None and status.state == "closed"
+
+
+@pytest.mark.asyncio
+async def test_github_reports_an_open_pr_as_open() -> None:
+    remote = GithubRemote(transport=_status_transport({"state": "open", "merged_at": None}))
+    status = await remote.pull_request_status("https://github.com/o/r", "t", number=3)
+    assert status is not None and status.state == "open"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_lookup_is_unknown_not_closed() -> None:
+    """404, 403, outage -- all of them mean "cannot tell". None is the only honest
+    answer, because the caller abandons work on anything else."""
+    remote = GithubRemote(transport=_status_transport({"message": "Not Found"}, 404))
+    assert await remote.pull_request_status("https://github.com/o/r", "t", number=3) is None
+
+
+@pytest.mark.asyncio
+async def test_gitlab_only_treats_merged_as_a_landing() -> None:
+    """GitLab has four states and two of them are not landings."""
+    for state, expected in (("merged", "merged"), ("closed", "closed"), ("locked", "open")):
+        remote = GitlabRemote(transport=_status_transport({"state": state}))
+        status = await remote.pull_request_status("https://gitlab.com/g/p", "t", number=3)
+        assert status is not None and status.state == expected, state
+
+
+@pytest.mark.asyncio
+async def test_gitea_reads_its_own_merged_flag() -> None:
+    remote = GiteaRemote(transport=_status_transport({"merged": True, "state": "closed"}))
+    status = await remote.pull_request_status("https://gitea.example/o/r", "t", number=3)
+    assert status is not None and status.state == "merged"
+
+
+@pytest.mark.asyncio
+async def test_a_push_only_remote_never_claims_to_know() -> None:
+    assert await GenericRemote().pull_request_status("https://x.test/o/r", "t", number=1) is None

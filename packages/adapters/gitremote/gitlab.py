@@ -13,6 +13,7 @@ import httpx
 from adapters.gitremote.base import (
     MergeMethod,
     RemotePR,
+    RemotePRStatus,
     RemoteRepoRef,
     ReviewVerdict,
     parse_remote_url,
@@ -124,3 +125,26 @@ class GitlabRemote:
                 return resp.status_code < 300
         except httpx.HTTPError:
             return False
+
+    async def pull_request_status(
+        self, source_url: str, token: str, *, number: int
+    ) -> RemotePRStatus | None:
+        ref = parse_remote_url(source_url)
+        if ref is None:
+            return None
+        project = quote(ref.path, safe="")
+        try:
+            async with self._client(ref, token) as client:
+                resp = await client.get(f"/projects/{project}/merge_requests/{number}")
+                if resp.status_code >= 300:
+                    return None
+                mr = resp.json()
+        except httpx.HTTPError:
+            return None
+        # GitLab states: opened | closed | merged | locked. Only "merged" is a landing.
+        state = str(mr.get("state") or "")
+        if state == "merged":
+            return RemotePRStatus(number=number, state="merged")
+        if state == "closed":
+            return RemotePRStatus(number=number, state="closed")
+        return RemotePRStatus(number=number, state="open")

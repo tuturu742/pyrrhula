@@ -432,6 +432,11 @@ class GitMcpTransport:
                 "title": str(work_item.get("name") or branch),
                 "summary": summary,
                 "html_url": remote_pr["html_url"] if remote_pr else None,
+                # Which work item this pull request IS. Without it the record is a
+                # dead end: anything later asking "the host closed this PR, whose
+                # work was it?" has to reconstruct the answer from job payloads that
+                # outlive nothing. `pr_sync` reads exactly this.
+                "work_item_id": str(work_item.get("id") or "") or None,
             },
         )
         return McpToolResult(

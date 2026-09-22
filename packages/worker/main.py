@@ -31,6 +31,7 @@ from worker.export import handle_export_workspace
 from worker.history_summary import handle_summarise_history
 from worker.ingestion import handle_knowledge_ingest
 from worker.notifications import handle_notify_await_opened, handle_send_digest
+from worker.pr_sync import sync_pull_requests
 from worker.preview import handle_start_preview, handle_stop_preview, reap_expired_previews
 from worker.render_reports import handle_render_report
 from worker.repo_analysis import handle_analyze_workspace_repos
@@ -120,6 +121,15 @@ async def main() -> None:
                         log.info("worker.previews_reaped", count=reaped)
                 except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
                     log.warning("worker.reap_failed", error=str(exc))
+                # What the host did to a pull request has to come back: merged
+                # elsewhere, or closed without merging, the work item followed
+                # neither and sat in review forever.
+                try:
+                    followed = await sync_pull_requests()
+                    if followed:
+                        log.info("worker.work_items_followed_prs", count=followed)
+                except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
+                    log.warning("worker.pr_sync_failed", error=str(exc))
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=_IDLE_POLL_INTERVAL)
             continue

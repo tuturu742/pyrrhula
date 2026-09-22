@@ -9,7 +9,13 @@ import asyncio
 
 import httpx
 
-from adapters.gitremote.base import MergeMethod, RemotePR, ReviewVerdict, parse_remote_url
+from adapters.gitremote.base import (
+    MergeMethod,
+    RemotePR,
+    RemotePRStatus,
+    ReviewVerdict,
+    parse_remote_url,
+)
 
 # GitHub decides mergeability asynchronously; these cover that window without
 # turning a genuine refusal into a long wait.
@@ -158,3 +164,26 @@ class GithubRemote:
                 "gitremote.merge_failed", provider="github", number=number, error=str(exc)[:200]
             )
             return False
+
+    async def pull_request_status(
+        self, source_url: str, token: str, *, number: int
+    ) -> RemotePRStatus | None:
+        parsed = self._owner_repo(source_url)
+        if parsed is None:
+            return None
+        owner, repo = parsed
+        try:
+            async with self._client(token) as client:
+                resp = await client.get(f"{_API}/repos/{owner}/{repo}/pulls/{number}")
+                if resp.status_code >= 300:
+                    return None
+                pr = resp.json()
+        except httpx.HTTPError:
+            return None
+        # `state` is only "open" or "closed"; a merged PR is closed AND carries
+        # merged_at. Reading state alone would report every merge as an abandonment.
+        if pr.get("merged_at"):
+            return RemotePRStatus(number=number, state="merged")
+        if pr.get("state") == "closed":
+            return RemotePRStatus(number=number, state="closed")
+        return RemotePRStatus(number=number, state="open")

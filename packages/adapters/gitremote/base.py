@@ -28,6 +28,19 @@ class RemotePR:
     html_url: str
 
 
+# What became of a pull request, as the host sees it. "open" and "merged" are
+# self-explanatory; "closed" means closed WITHOUT merging, which is the case the
+# delegation lifecycle had no answer for -- the work item sat in review forever because
+# nothing told it the pull request was never going to land.
+PRState = Literal["open", "merged", "closed"]
+
+
+@dataclass(frozen=True)
+class RemotePRStatus:
+    number: int
+    state: PRState
+
+
 @dataclass(frozen=True)
 class RemoteRepoRef:
     """A parsed https remote: host + the repo path (owner/name, or a GitLab
@@ -86,6 +99,16 @@ class GitRemote(Protocol):
         gate doing its job, not an error to paper over."""
         ...
 
+    async def pull_request_status(
+        self, source_url: str, token: str, *, number: int
+    ) -> RemotePRStatus | None:
+        """What the host says became of this PR/MR. ``None`` when it cannot be
+        determined -- the URL does not parse, the provider has no PR API, the request
+        failed. None means "unknown", never "gone": a caller must not conclude anything
+        from it, because concluding "closed" from a network error would abandon live
+        work."""
+        ...
+
 
 class GenericRemote:
     """Push-only: any https git remote. No PR API, no comments — the branch push is the
@@ -114,3 +137,8 @@ class GenericRemote:
         self, source_url: str, token: str, *, number: int, method: MergeMethod = "merge"
     ) -> bool:
         return False
+
+    async def pull_request_status(
+        self, source_url: str, token: str, *, number: int
+    ) -> RemotePRStatus | None:
+        return None
