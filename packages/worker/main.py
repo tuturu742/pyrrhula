@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import signal
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -20,6 +21,7 @@ import structlog
 from adapters.queue.postgres.queue import PostgresJobQueue
 from core.observability.otel import configure_tracing
 from core.ports.job_queue import Job, JobQueue
+from worker.advance import handle_advance_session
 from worker.delegation import (
     handle_delegate_work_item,
     handle_kill_exec_environment,
@@ -40,6 +42,7 @@ from worker.reports import handle_generate_report
 from worker.retrieval_models import handle_download_retrieval_models
 from worker.review import handle_facilitator_review, handle_merge_order
 from worker.schedules import handle_apply_due_schedules
+from worker.session_wake import wake_if_work_is_done
 
 log = structlog.get_logger()
 
@@ -67,6 +70,7 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
     "start_preview": handle_start_preview,
     "download_retrieval_models": handle_download_retrieval_models,
     "stop_preview": handle_stop_preview,
+    "advance_session": handle_advance_session,
 }
 
 # Previews are the only thing here with a wall-clock deadline, and this deployment has no
@@ -87,6 +91,16 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
         return
     log.info("worker.job_completed", job_id=str(job.id), kind=job.kind)
     await queue.complete(job.id, result)
+
+    # A session that dispatched work and parked is waiting on exactly this: the last job
+    # belonging to it finishing. Checked after every kind, not just the delegation ones,
+    # because the tail of a batch is a review or a rework as often as it is a build.
+    session_id = job.payload.get("session_id")
+    if session_id:
+        try:
+            await wake_if_work_is_done(job.tenant_id, uuid.UUID(str(session_id)), job.id)
+        except Exception as exc:  # noqa: BLE001 -- the job itself already succeeded
+            log.warning("worker.wake_failed", job_id=str(job.id), error=str(exc)[:200])
 
 
 async def main() -> None:

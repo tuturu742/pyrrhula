@@ -259,9 +259,19 @@ class EffectSpec(BaseModel):
 
 
 class AwaitSpec(BaseModel):
-    """The interrupt primitive (§5.2, B1.6): a phase suspends for human input (or, later,
-    an external result) until satisfied or ``timeout`` elapses, at which point
-    ``on_timeout`` is the transition target.
+    """The interrupt primitive (§5.2, B1.6): a phase suspends until satisfied or
+    ``timeout`` elapses, at which point ``on_timeout`` is the transition target.
+
+    Two things are worth waiting for. ``human_input`` is the original: a person has to
+    act. ``delegated_work`` is the other one this primitive always implied -- the phase
+    handed work to coding agents, and the phases after it are about that work, so running
+    them before it exists makes the flow incoherent rather than fast. A review phase that
+    reviews nothing and a merge phase with an empty queue both reported success on a
+    session whose branches had not been built yet.
+
+    The interpreter treats both identically: it yields, and something satisfies. What
+    differs is who -- a person through the HTTP endpoint, or the worker, when the last
+    job belonging to the session finishes.
 
     ``reminder_at`` (G4.3) is pacing data, not new engine semantics: the elapsed duration
     after which a human who hasn't acted gets one nudge. B1.6's timeout sweep reads it;
@@ -271,7 +281,7 @@ class AwaitSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["human_input"]
+    type: Literal["human_input", "delegated_work"]
     timeout: str
     on_timeout: str
     reminder_at: str | None = None
