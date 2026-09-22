@@ -119,6 +119,8 @@ async def seed(
     from sqlalchemy import select
 
     from api.encryptor_factory import get_encryptor
+    from api.moderation_provider_factory import moderation_provider_for
+    from api.permission_service_factory import get_permission_service
     from core.agents.authoring import create_agent
     from core.agents.models import Persona
     from core.portability.import_ import import_bundle
@@ -136,6 +138,31 @@ async def seed(
         slug=slug, tenant_name=slug.replace("-", " ").title()
     )
     print(f"[{slug}] tenant {tenant_id} workspace {workspace_id}", flush=True)
+
+    # The seat signup gives a person, which `seed_dev_tenant` does not: owning a tenant
+    # is not a role inside its workspaces. Without it the import authors no secrets --
+    # "may not author secrets in workspace ..." -- and the sample lands with its private
+    # briefs missing. Steward is what the sample READMEs describe you as after signing
+    # up: the seat that can both build the room and inspect it.
+    from core.tenancy.models import WorkspaceMembership
+
+    async with tenant_scope(tenant_id) as session:
+        held = await session.scalar(
+            select(WorkspaceMembership).where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.principal_id == owner_id,
+            )
+        )
+        if held is None:
+            session.add(
+                WorkspaceMembership(
+                    tenant_id=tenant_id,
+                    workspace_id=workspace_id,
+                    principal_id=owner_id,
+                    role="steward",
+                )
+            )
+            await session.flush()
 
     # Step "add your model connection", once per connection the deployment offers.
     encryptor = get_encryptor()
@@ -161,12 +188,14 @@ async def seed(
         workspace_id,
         bundle_ref=f"{sample}.pyr",
         encryptor=encryptor,
-        # Secrets are authored BY someone, and an import with nobody to attribute them
-        # to skips all of them -- silently enough that a six-agent mystery imports
-        # looking complete while the private briefs that are the whole point of it are
-        # missing. Observed: "secrets:11 (this import path supplies no authoring
-        # principal)" as the only trace.
+        # Secrets need all four of these, and an import missing any of them skips
+        # every one -- silently enough that a six-agent mystery imports looking
+        # complete while the eleven private briefs that are the whole point of it are
+        # absent. A secret is authored by someone, sealed, permission-checked and
+        # moderated; none of those has a sensible default, so the caller supplies them.
         importing_principal_id=owner_id,
+        permission_service=get_permission_service(),
+        moderation_provider=await moderation_provider_for(tenant_id),
     )
     skipped_secrets = [s for s in report.skipped if s.startswith("secret")]
     print(f"[{slug}] imported {sample}", flush=True)

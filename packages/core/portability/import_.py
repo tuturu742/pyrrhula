@@ -1216,14 +1216,24 @@ async def _import_secrets(
     paths = sorted(p for p in files if p.startswith("secrets/") and p.endswith(".json"))
     if not paths:
         return
-    if (
-        encryptor is None
-        or importing_principal_id is None
-        or permission_service is None
-        or moderation_provider is None
-    ):
+    missing = [
+        label
+        for label, value in (
+            ("encryptor", encryptor),
+            ("importing_principal_id", importing_principal_id),
+            ("permission_service", permission_service),
+            ("moderation_provider", moderation_provider),
+        )
+        if value is None
+    ]
+    if missing:
+        # Name the one that is actually absent. This used to say "supplies no authoring
+        # principal" whichever of the four was missing, so a caller that had passed the
+        # principal read it as a contradiction and went looking in the wrong place --
+        # while eleven private briefs, the entire point of the bundle in hand, silently
+        # did not import.
         report.skipped.append(
-            f"secrets:{len(paths)} (this import path supplies no authoring principal)"
+            f"secrets:{len(paths)} (this import path supplies no {', no '.join(missing)})"
         )
         return
 
