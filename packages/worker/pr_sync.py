@@ -144,6 +144,11 @@ async def sync_pull_requests_for_tenant(tenant_id: uuid.UUID) -> int:
             number = _pr_number(record)
             if not raw_id or number is None:
                 continue  # recorded before the link existed, or never opened remotely
+            if record.get("remote_open_failed"):
+                # The branch is pushed but the host issued no number, so the ref is the
+                # store's own. Asking the host about it would at best find nothing and at
+                # worst find an unrelated pull request that happens to share the digits.
+                continue
             try:
                 work_item_id = uuid.UUID(str(raw_id))
             except ValueError:

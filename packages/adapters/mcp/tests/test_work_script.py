@@ -147,3 +147,25 @@ def test_deletions_are_staged_too(tmp_path: Path) -> None:
         deletes=frozenset({"docs/plan.md"}),
     )
     assert script.index("rm -rf docs/plan.md") < script.index("git add -A -- .")
+
+
+def test_a_store_local_ref_is_not_mistaken_for_a_host_number() -> None:
+    """A pull request that failed to open gets the store's own ref (``PR-28``). The sync
+    parses refs to ask the host about them, and ``PR-28`` must not become ``28`` -- there
+    is very likely a real pull request #28, belonging to someone else's work."""
+    from worker.pr_sync import _pr_number
+
+    assert _pr_number({"pr_ref": "PR-28"}) is None
+    assert _pr_number({"pr_ref": "#28"}) == 28
+
+
+def test_a_failed_remote_open_says_so_instead_of_reading_as_success(tmp_path: Path) -> None:
+    """Degrading to the store ref is right; reporting it as "Opened PR-28" is not. That
+    note is indistinguishable from a real open, and a reviewer sent to a pull request
+    that does not exist cannot tell which happened."""
+    from adapters.mcp.git_transport import _wanted_a_remote_pr
+
+    assert _wanted_a_remote_pr({"remote": {"url": "https://h/o/r", "credential_ref": "c"}})
+    # A store-only repo never expected one, so it must not be reported as a failure.
+    assert not _wanted_a_remote_pr({})
+    assert not _wanted_a_remote_pr({"remote": {"url": "https://h/o/r"}})

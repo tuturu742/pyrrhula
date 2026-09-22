@@ -99,6 +99,16 @@ def _slug(text: str) -> str:
     return s or "work-item"
 
 
+
+def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
+    """Was a host configured for this call? Distinguishes a store-only repo, where no
+    pull request was ever expected, from a repo whose pull request failed to open."""
+    remote = args.get("remote")
+    if not isinstance(remote, dict):
+        return False
+    return bool(remote.get("url")) and bool(remote.get("credential_ref"))
+
+
 class GitMcpTransport:
     """``env_provider`` (an ``ExecEnvProvider``) turns delegation real: the work happens in
     an isolated per-(session, repo) environment -- clone from the store over the shared
@@ -415,6 +425,13 @@ class GitMcpTransport:
         if remote_pr is not None:
             pr_ref = f"#{remote_pr['number']}"
             remote_url_note = f" {remote_pr['html_url']}"
+        elif _wanted_a_remote_pr(args):
+            # The branch is pushed and the work is real, but there is no pull request on
+            # the host. Degrading to the store's own ref is the right behaviour; letting
+            # it read as "Opened PR-28" is not. That is indistinguishable from a real
+            # open in the session note, and a reviewer asked to look at a pull request
+            # that does not exist has no way to tell which of the two happened.
+            remote_url_note = " (NOT opened on the host -- branch pushed, PR not created)"
         summary = f"{message} on {branch} ({commits} commit(s)); {pr_ref} {status}{remote_url_note}"
         if ci_status != "pending":
             summary += f"; tests {ci_status}"
@@ -437,6 +454,9 @@ class GitMcpTransport:
                 # work was it?" has to reconstruct the answer from job payloads that
                 # outlive nothing. `pr_sync` reads exactly this.
                 "work_item_id": str(work_item.get("id") or "") or None,
+                # False only when a host was configured and the open did not happen --
+                # `pr_sync` must not ask GitHub about a number GitHub never issued.
+                "remote_open_failed": remote_pr is None and _wanted_a_remote_pr(args),
             },
         )
         return McpToolResult(
@@ -512,7 +532,18 @@ class GitMcpTransport:
                 title=str(work_item.get("name") or branch),
                 body=body,
             )
-            return {"number": pr.number, "html_url": pr.html_url} if pr else None
+            if pr is None:
+                # A provider that answers "no" without raising -- a 403 from a token
+                # without pull-request scope, a 422 from a branch with no diff. Nothing
+                # logged this at all until now, so the only evidence a pull request had
+                # failed to open was a store-local ref in a note that read like success.
+                import structlog
+
+                structlog.get_logger().warning(
+                    "remote_sync.pr_not_opened", repo=repo, branch=branch, url=url
+                )
+                return None
+            return {"number": pr.number, "html_url": pr.html_url}
         except Exception as exc:  # noqa: BLE001
             import structlog
 
