@@ -470,6 +470,7 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
 export function ReposPage() {
   const queryClient = useQueryClient();
   const [identitiesFor, setIdentitiesFor] = useState<string | null>(null);
+  const [tab, setTab] = useState<"repositories" | "runtimes">("repositories");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RepoRowData | null>(null);
 
@@ -542,8 +543,32 @@ export function ReposPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Runtimes are a long list that most visits do not need: registering images is a
+          setup task, while the repositories themselves are the daily one. A tab keeps
+          it reachable without it being the first thing between you and the repos. */}
+      <div className="flex gap-1 border-b border-border">
+        {(["repositories", "runtimes"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={
+              "rounded-t-md px-4 py-2 text-sm " +
+              (tab === key
+                ? "border border-b-0 border-border bg-background font-medium"
+                : "text-muted-foreground hover:text-foreground")
+            }
+          >
+            {key === "repositories" ? "Repositories" : "Build runtimes"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "runtimes" && <RuntimesCard />}
+
+      {tab === "repositories" && (
+        <>
       <ExecEngineCard />
-      <RuntimesCard />
       <PreviewsCard repos={repos ?? []} />
       <ExecEnvironmentsCard />
       <div className="flex items-center justify-between">
@@ -682,6 +707,8 @@ export function ReposPage() {
           </div>
         ))}
       </section>
+        </>
+      )}
     </div>
   );
 }
