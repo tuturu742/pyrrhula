@@ -78,6 +78,22 @@ def idempotent(
                 won_claim = claim.first() is not None
 
             if not won_claim:
+                # Someone else holds the claim. Usually that someone is alive and we wait
+                # for their result -- but a process killed mid-operation leaves its row at
+                # 'in_progress' for ever, and nothing else ever writes it. Every retry then
+                # polls a row that will never change and dies on the timeout, so a session
+                # whose worker was killed mid-turn could never be resumed: rule 8 says
+                # resume re-executes, and this made resume impossible instead.
+                #
+                # A claim older than the lease is treated as abandoned and taken over. The
+                # takeover is conditional on it still being stale, so two reclaimers race
+                # for one winner exactly as the original insert does.
+                if await _reclaim_if_abandoned(key, tenant_id):
+                    won_claim = True
+                else:
+                    return await _await_result(key, tenant_id, poll_interval, timeout)
+
+            if not won_claim:  # pragma: no cover -- defensive, both branches set it
                 return await _await_result(key, tenant_id, poll_interval, timeout)
 
             try:
@@ -126,6 +142,32 @@ async def clear_failed_operation(tenant_id: uuid.UUID, idempotency_key: str) -> 
         return rowcount > 0
 
 
+# How long an operation may sit 'in_progress' before another caller may take it over. It
+# has to exceed the longest legitimate operation -- a model turn with a tool loop -- or a
+# slow turn gets executed twice. Fifteen minutes is well past any single turn and well
+# short of a person noticing a stuck session.
+_CLAIM_LEASE_SECONDS = 900
+
+
+async def _reclaim_if_abandoned(key: str, tenant_id: uuid.UUID) -> bool:
+    """Take over an 'in_progress' claim whose holder is gone. True if this caller won it."""
+    from datetime import UTC, datetime, timedelta
+
+    cutoff = datetime.now(UTC) - timedelta(seconds=_CLAIM_LEASE_SECONDS)
+    async with tenant_scope(tenant_id) as session:
+        claimed = await session.execute(
+            update(CompletedOperationRow)
+            .where(
+                CompletedOperationRow.idempotency_key == key,
+                CompletedOperationRow.status == "in_progress",
+                CompletedOperationRow.created_at < cutoff,
+            )
+            .values(created_at=func.now())
+            .returning(CompletedOperationRow.idempotency_key)
+        )
+        return claimed.first() is not None
+
+
 async def _await_result(
     key: str, tenant_id: uuid.UUID, poll_interval: float, timeout: float
 ) -> dict[str, Any]:
@@ -141,4 +183,8 @@ async def _await_result(
             if row.status == "failed":
                 raise OperationFailedError(key)
         await asyncio.sleep(poll_interval)
-    raise OperationTimeoutError(key)
+    raise OperationTimeoutError(
+        f"{key}: still in progress after {timeout}s. Another caller holds this "
+        f"operation; if its process died, the claim is taken over after "
+        f"{_CLAIM_LEASE_SECONDS}s."
+    )

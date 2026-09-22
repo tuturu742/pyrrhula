@@ -139,3 +139,75 @@ async def test_requires_tenant_id_kwarg() -> None:
 
     with pytest.raises(TypeError):
         await do_work(tenant_id="not-a-uuid")  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_an_operation_whose_process_died_can_be_retried(db_available: None) -> None:
+    """Rule 8 says resume re-executes. A process killed mid-operation leaves its claim at
+    'in_progress' and nothing else ever writes that row, so before this every retry polled
+    a row that would never change and failed on the timeout -- with the idempotency key as
+    the entire error message.
+
+    A tabletop session whose worker was killed by the OOM reaper could not be resumed at
+    all: not slow, not degraded, impossible.
+    """
+    import uuid as _uuid
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    from core.actions.idempotency import _CLAIM_LEASE_SECONDS, idempotent
+    from core.actions.models import CompletedOperationRow
+    from core.tenancy.scope import tenant_scope
+    from core.tenancy.seed import seed_dev_tenant
+
+    tenant_id, _owner, _ws = await seed_dev_tenant(slug=f"idem-{_uuid.uuid4().hex[:8]}")
+    key = f"turn:{_uuid.uuid4()}"
+    calls: list[int] = []
+
+    @idempotent(key_fn=lambda **kw: key)
+    async def operation(*, tenant_id: _uuid.UUID) -> dict[str, object]:
+        calls.append(1)
+        return {"ran": len(calls)}
+
+    # A claim left behind by a process that never came back.
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            CompletedOperationRow(
+                idempotency_key=key, tenant_id=tenant_id, status="in_progress"
+            )
+        )
+    async with tenant_scope(tenant_id) as session:
+        await session.execute(
+            update(CompletedOperationRow)
+            .where(CompletedOperationRow.idempotency_key == key)
+            .values(
+                created_at=datetime.now(UTC) - timedelta(seconds=_CLAIM_LEASE_SECONDS + 60)
+            )
+        )
+
+    assert await operation(tenant_id=tenant_id) == {"ran": 1}
+
+
+@pytest.mark.asyncio
+async def test_a_live_claim_is_still_waited_for(db_available: None) -> None:
+    """The lease only frees an abandoned claim. A claim made a moment ago belongs to a
+    caller that is probably still working, and taking it over would run the operation
+    twice -- which for a model turn means charging for it twice."""
+    import uuid as _uuid
+
+    from core.actions.idempotency import _reclaim_if_abandoned
+    from core.actions.models import CompletedOperationRow
+    from core.tenancy.scope import tenant_scope
+    from core.tenancy.seed import seed_dev_tenant
+
+    tenant_id, _owner, _ws = await seed_dev_tenant(slug=f"idem-{_uuid.uuid4().hex[:8]}")
+    key = f"turn:{_uuid.uuid4()}"
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            CompletedOperationRow(
+                idempotency_key=key, tenant_id=tenant_id, status="in_progress"
+            )
+        )
+
+    assert await _reclaim_if_abandoned(key, tenant_id) is False
