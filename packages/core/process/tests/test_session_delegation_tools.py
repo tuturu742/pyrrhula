@@ -107,3 +107,20 @@ def test_both_callers_dispatch_through_one_implementation() -> None:
     assert "dispatch_work_items(" in src
     assert "queue.enqueue(" not in src
     assert routes._select_assignee.__module__ == "core.actions.dispatch"
+
+
+def test_a_turn_renders_entity_state_so_ids_survive_the_phase_boundary() -> None:
+    """F3.6's renderer was complete and unused: ``assemble()`` kept its no-op default
+    because no caller ever passed the real one.
+
+    The cost showed up as a delegation failure. A lead filed six work items in the plan
+    phase, reached implement with a working ``delegate_work_item`` tool, and still could
+    not call it -- the ids existed only in tool results, which the transcript does not
+    replay. It said so and stopped rather than guessing uuids, which was the right call
+    and the wrong outcome.
+    """
+    from core.process import live_session
+
+    src = inspect.getsource(live_session)
+    assert "entity_state_renderer=render_entity_state" in src
+    assert "from core.entities.injection import render_entity_state" in src

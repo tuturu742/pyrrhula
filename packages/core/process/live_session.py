@@ -25,6 +25,7 @@ from core.assembler.context_assembler import assemble
 from core.assembler.manifest import write_context_manifest
 from core.behavior.directives import render_directives_for_profile
 from core.behavior.repo import get_current_behavior_profile, list_axis_definitions
+from core.entities.injection import render_entity_state
 from core.entities.storage import EntityRow
 from core.ports.embedding import EmbeddingProvider, EmbedRequest
 from core.ports.encryptor import Encryptor
@@ -417,6 +418,12 @@ async def run_one_persona_turn(
         event_seq=event_seq,
         history_summary=history_summary,
         reranker=reranker,
+        # F3.6's real renderer, which has existed since F3.6 and was never passed by
+        # any caller. Without it an entity created in one phase is invisible in the
+        # next: the ids live only in a tool result, and the transcript does not replay
+        # those. A lead that filed six work items was then asked to hand them to coding
+        # agents, had no ids to name, and correctly refused to guess.
+        entity_state_renderer=render_entity_state,
     )
     manifest_row = await write_context_manifest(
         tenant_id,
