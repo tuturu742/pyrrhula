@@ -15,14 +15,28 @@ COPY packages ./packages
 COPY migrations ./migrations
 
 # Sync into an in-project venv so the runtime stage can copy it verbatim.
-RUN uv sync --frozen --no-dev --no-editable || uv sync --no-dev --no-editable
+# --extra pdf: report export to PDF (core.reporting.render). Without it render_pdf
+# raises a named error and a campaign that asks for a PDF gets an explanation
+# instead of a file.
+RUN uv sync --frozen --no-dev --no-editable --extra pdf \
+ || uv sync --no-dev --no-editable --extra pdf
 
 FROM python:3.12-slim AS runtime
 
 # git: the server-side VCS store for delegated coding work (D15) runs real branch/commit/PR
 # operations against volume-backed repos via `git` (packages/adapters/mcp/git_store.py). The
 # hosted-service model keeps all branching/editing server-side -- never on a client checkout.
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+# git: the server-side VCS store (above). The pango/cairo/gobject trio is WeasyPrint's
+# runtime -- the Python package alone cannot rasterise a page, and its absence surfaces
+# only when someone asks for a PDF, which is the worst moment to find out.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git \
+      libpango-1.0-0 \
+      libpangoft2-1.0-0 \
+      libcairo2 \
+      libgdk-pixbuf-2.0-0 \
+      libffi8 \
+      shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 10001 pyrrhula

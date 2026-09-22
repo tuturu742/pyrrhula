@@ -16,13 +16,15 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 # flag over one multi-tenant core, never a different product, and switching later is an
 # env change plus a restart (rerun this installer with the other flag).
 CHECK_ONLY=0
+PURGE=0
 SINGLE_TENANT=true
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
+    --purge) PURGE=1 ;;
     --single-tenant) SINGLE_TENANT=true ;;
     --multi-tenant)  SINGLE_TENANT=false ;;
-    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check)" ;;
+    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check | --purge)" ;;
   esac
 done
 
@@ -66,6 +68,19 @@ fi
 # matched the fresh .env.
 PROJECT="${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}"
 CARGS=(-p "$PROJECT" -f docker/compose.selfhost.yml)
+
+if [ "$PURGE" = 1 ]; then
+  # Everything this installer ever created: containers, networks, and the named volumes
+  # holding postgres, blobs and the downloaded retrieval model. `.env` goes too -- it
+  # carries the generated passwords for the database that is being deleted, and keeping
+  # it means the next install writes fresh credentials into a file the stale ones are
+  # still in, which is the one way to get a deployment that looks installed and cannot
+  # authenticate to its own database.
+  say "purging the '$PROJECT' deployment (containers, volumes, generated .env)"
+  "${COMPOSE[@]}" "${CARGS[@]}" down -v --remove-orphans 2>/dev/null || true
+  rm -f docker/.env .env
+  say "purged -- installing fresh"
+fi
 
 # Read KEY=value out of an env file, with a fallback. POSIX sed rather than `grep -oP`:
 # -P is a GNU extension, so on macOS's BSD grep every one of these silently produced an

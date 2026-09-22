@@ -19,16 +19,33 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 # product -- and switching later is a rerun with the other flag.
 WITH_DASHBOARD=0
 CHECK_ONLY=0
+PURGE=0
 SINGLE_TENANT=true
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
+    --purge) PURGE=1 ;;
     --with-dashboard) WITH_DASHBOARD=1 ;;
     --single-tenant) SINGLE_TENANT=true ;;
     --multi-tenant)  SINGLE_TENANT=false ;;
-    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check | --with-dashboard)" ;;
+    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check | --with-dashboard | --purge)" ;;
   esac
 done
+
+if [ "$PURGE" = 1 ]; then
+  # Both namespaces: `pyrrhula` is the deployment, `pyrrhula-envs` is where delegated
+  # agents' environments run, and leaving the second behind means the next install
+  # inherits somebody else's half-finished build pods.
+  #
+  # Deleting the namespace takes the PersistentVolumeClaims with it, which is the point:
+  # a purge that leaves the postgres volume is not a purge, and the symptom -- a "fresh"
+  # install carrying yesterday's tenants -- looks like the installer ignoring you.
+  echo "== purging namespaces pyrrhula and pyrrhula-envs (this deletes their volumes)"
+  kubectl delete namespace pyrrhula pyrrhula-envs --ignore-not-found --wait=true || true
+  # The dev overlay's generated secrets carry the password of the database just deleted.
+  rm -f deploy/k8s/overlays/dev/secrets.env deploy/k8s/overlays/dev-registry/secrets.env
+  echo "== purged -- installing fresh"
+fi
 export PYRRHULA_SINGLE_TENANT_UI="$SINGLE_TENANT"
 
 # --- prerequisites ----------------------------------------------------------------

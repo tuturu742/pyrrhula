@@ -58,6 +58,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# G4.11: PDF rendering. Kept out of the base install because it needs system libraries
+# (pango, cairo, gobject) that a slim environment has no reason to carry -- Markdown,
+# HTML and EPUB render without it. The shipped container installs this extra, so a
+# deployment can export a PDF while `pip install` of the package alone stays small.
+pdf = ["weasyprint>=62"]
 dev = [
   # Pinned exactly: these two ARE the CI gates, and a floating linter means a
   # green tree can go red on the next `uv sync` with no commit at fault. Bumps
