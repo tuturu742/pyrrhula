@@ -267,6 +267,38 @@ async def seed(
         await session.flush()
     print(f"[{slug}] bound personas: {bound}", flush=True)
 
+    # A persona with no seat in the workspace cannot act in it. entity:create is granted
+    # by a workspace role, and a bundle carries a cast rather than a deployment's
+    # membership table -- so imported personas arrive able to speak and unable to do
+    # anything. Observed: two players rolled a full set of Basic Fantasy ability scores
+    # and then reported "the sheet won't bind -- the system refuses the write", and the
+    # referee carried on from the transcript because there was nothing else to do.
+    seated: dict[str, int] = {}
+    async with tenant_scope(tenant_id) as session:
+        personas = (
+            await session.execute(select(Persona).where(Persona.tenant_id == tenant_id))
+        ).scalars()
+        for persona in personas:
+            role = "facilitator" if persona.persona_type == "supervisor" else "participant"
+            held = await session.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == workspace_id,
+                    WorkspaceMembership.principal_id == persona.principal_id,
+                )
+            )
+            if held is None:
+                session.add(
+                    WorkspaceMembership(
+                        tenant_id=tenant_id,
+                        workspace_id=workspace_id,
+                        principal_id=persona.principal_id,
+                        role=role,
+                    )
+                )
+                seated[role] = seated.get(role, 0) + 1
+        await session.flush()
+    print(f"[{slug}] seated personas: {seated or 'already seated'}", flush=True)
+
     await register_repos(slug, tenant_id, owner_id, bundle.parent, secrets_dir)
     await load_packs(slug, tenant_id, workspace_id, kind)
 
