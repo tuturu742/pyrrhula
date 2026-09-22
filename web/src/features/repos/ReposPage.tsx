@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
+import { RuntimesCard } from "./RuntimesCard";
 import {
   usePreviewActions,
   usePreviews,
@@ -542,6 +543,7 @@ export function ReposPage() {
   return (
     <div className="flex flex-col gap-6">
       <ExecEngineCard />
+      <RuntimesCard />
       <PreviewsCard repos={repos ?? []} />
       <ExecEnvironmentsCard />
       <div className="flex items-center justify-between">

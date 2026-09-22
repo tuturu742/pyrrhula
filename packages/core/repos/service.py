@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from core.repos.models import PersonaGitCredentialRow, RepoRow, SessionRepoRow
+from core.repos.runtimes import BUILTIN_RUNTIMES, CUSTOM, resolved_runtimes
 from core.tenancy.scope import tenant_scope
 
 _KEY_RE = re.compile(r"[a-z0-9][a-z0-9_-]{1,62}")
@@ -27,22 +28,11 @@ GIT_PROVIDERS = ("github", "gitlab", "gitea", "generic")
 
 # runtime key -> {image, baseline setup} (git must end up present in every runtime; the
 # clone happens inside the environment).
-RUNTIME_CATALOG: dict[str, dict[str, object]] = {
-    "debian": {
-        "image": "docker.io/library/debian:bookworm",
-        "setup": [
-            "apt-get update && apt-get install -y --no-install-recommends git ca-certificates"
-        ],
-    },
-    "node20": {"image": "docker.io/library/node:20-bookworm", "setup": []},
-    "python312": {"image": "docker.io/library/python:3.12-bookworm", "setup": []},
-    "java21": {
-        "image": "docker.io/library/eclipse-temurin:21-jdk",
-        "setup": [
-            "apt-get update && apt-get install -y --no-install-recommends git ca-certificates"
-        ],
-    },
-}
+# The deployment's built-in runtimes. The *effective* catalog is per tenant -- a tenant
+# registers its own images and may override any of these by key -- so read
+# ``core.repos.runtimes.resolved_runtimes`` rather than this. Kept as a name because it
+# is the floor every tenant starts from.
+RUNTIME_CATALOG = BUILTIN_RUNTIMES
 
 
 async def resolve_git_identity(
@@ -296,12 +286,14 @@ async def create_repo(
         raise InvalidRepoError(
             f"invalid repo key {key!r}: lowercase letters/digits/-/_, 2..63 chars"
         )
-    if runtime not in RUNTIME_CATALOG and runtime != "custom":
+    known = await resolved_runtimes(tenant_id)
+    if runtime not in known and runtime != CUSTOM:
         raise InvalidRepoError(
-            f"unknown runtime {runtime!r}; pick one of {sorted(RUNTIME_CATALOG)} or 'custom'"
+            f"unknown runtime {runtime!r}; pick one of {sorted(known)} or {CUSTOM!r}, "
+            "or register it first"
         )
-    if runtime == "custom" and not (runtime_image or "").strip():
-        raise InvalidRepoError("runtime 'custom' requires a runtime_image")
+    if runtime == CUSTOM and not (runtime_image or "").strip():
+        raise InvalidRepoError(f"runtime {CUSTOM!r} requires a runtime_image")
     if provider is not None and provider not in GIT_PROVIDERS:
         raise InvalidRepoError(
             f"unknown git provider {provider!r}; pick one of {sorted(GIT_PROVIDERS)}"

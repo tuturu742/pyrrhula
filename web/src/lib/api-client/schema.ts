@@ -2080,12 +2080,46 @@ export interface paths {
         };
         /**
          * List Runtimes Endpoint
-         * @description The curated exec-runtime catalog (+ the 'custom' sentinel: bring your own image).
+         * @description Every runtime this tenant may build in: the deployment's built-ins, this tenant's
+         *     own registrations on top, plus the 'custom' sentinel (bring your own image).
          */
         get: operations["list_runtimes_endpoint_repos_runtimes_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/runtimes/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register Runtime Endpoint
+         * @description Register (or replace) one of this tenant's runtimes.
+         *
+         *     Naming a key that a built-in already uses overrides it for this tenant -- which is
+         *     how a deployment behind an internal registry points ``debian`` at its own mirror once
+         *     instead of every repo carrying the mirror's address.
+         */
+        put: operations["register_runtime_endpoint_repos_runtimes__key__put"];
+        post?: never;
+        /**
+         * Remove Runtime Endpoint
+         * @description Forget one of this tenant's runtimes. A built-in of the same name becomes visible
+         *     again -- removing an override is how a tenant goes back to the deployment's image.
+         *
+         *     Repos already pinned to the key keep the name and resolve to whatever it means now,
+         *     which for a removed non-built-in is nothing: that build is refused with an unknown
+         *     runtime rather than silently running on some other image.
+         */
+        delete: operations["remove_runtime_endpoint_repos_runtimes__key__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5960,6 +5994,16 @@ export interface components {
             /** Display Name */
             display_name: string;
         };
+        /** RegisterRuntimeRequest */
+        RegisterRuntimeRequest: {
+            /** Image */
+            image: string;
+            /**
+             * Setup
+             * @default []
+             */
+            setup: string[];
+        };
         /** RenameSessionRequest */
         RenameSessionRequest: {
             /** Name */
@@ -6262,6 +6306,16 @@ export interface components {
             key: string;
             /** Image */
             image: string;
+            /**
+             * Setup
+             * @default []
+             */
+            setup: string[];
+            /**
+             * Tenant Owned
+             * @default false
+             */
+            tenant_owned: boolean;
         };
         /** SatisfyAwaitRequest */
         SatisfyAwaitRequest: {
@@ -11907,6 +11961,80 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RuntimeResponse"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_runtime_endpoint_repos_runtimes__key__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRuntimeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_runtime_endpoint_repos_runtimes__key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

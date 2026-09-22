@@ -29,7 +29,6 @@ from core.agents.authoring import resolve_connection_api_key, store_provider_cre
 from core.repos.models import RepoRow
 from core.repos.service import (
     GIT_PROVIDERS,
-    RUNTIME_CATALOG,
     InvalidRepoError,
     RepoNotFoundError,
     archive_repo,
@@ -221,16 +220,81 @@ async def kill_exec_environment_endpoint(
 class RuntimeResponse(BaseModel):
     key: str
     image: str
+    setup: list[str] = []
+    # Whether this tenant registered it. A built-in overridden by the tenant reports
+    # True: what runs is the tenant's image, and a catalog that hid that would be lying
+    # about which image a build uses.
+    tenant_owned: bool = False
+
+
+class RegisterRuntimeRequest(BaseModel):
+    image: str
+    setup: list[str] = []
 
 
 @router.get("/runtimes")
-async def list_runtimes_endpoint() -> list[RuntimeResponse]:
-    """The curated exec-runtime catalog (+ the 'custom' sentinel: bring your own image)."""
+async def list_runtimes_endpoint(
+    ctx: RequestContext = Depends(get_request_context),
+) -> list[RuntimeResponse]:
+    """Every runtime this tenant may build in: the deployment's built-ins, this tenant's
+    own registrations on top, plus the 'custom' sentinel (bring your own image)."""
+    from core.repos.runtimes import BUILTIN_RUNTIMES, CUSTOM, resolved_runtimes
+
+    effective = await resolved_runtimes(ctx.tenant_id)
     entries = [
-        RuntimeResponse(key=k, image=str(v["image"])) for k, v in sorted(RUNTIME_CATALOG.items())
+        RuntimeResponse(
+            key=k,
+            image=str(v["image"]),
+            setup=[str(c) for c in (v.get("setup") or [])],
+            tenant_owned=BUILTIN_RUNTIMES.get(k) != v,
+        )
+        for k, v in sorted(effective.items())
     ]
-    entries.append(RuntimeResponse(key="custom", image=""))
+    entries.append(RuntimeResponse(key=CUSTOM, image=""))
     return entries
+
+
+@router.put("/runtimes/{key}")
+async def register_runtime_endpoint(
+    key: str,
+    body: RegisterRuntimeRequest,
+    ctx: RequestContext = Depends(get_request_context),
+) -> RuntimeResponse:
+    """Register (or replace) one of this tenant's runtimes.
+
+    Naming a key that a built-in already uses overrides it for this tenant -- which is
+    how a deployment behind an internal registry points ``debian`` at its own mirror once
+    instead of every repo carrying the mirror's address."""
+    from core.repos.runtimes import InvalidRuntimeError, register_runtime
+
+    await require_tenant_permission(ctx, "repo:manage")
+    try:
+        entry = await register_runtime(ctx.tenant_id, key, body.image, body.setup)
+    except InvalidRuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RuntimeResponse(
+        key=key,
+        image=str(entry["image"]),
+        setup=[str(c) for c in (entry.get("setup") or [])],
+        tenant_owned=True,
+    )
+
+
+@router.delete("/runtimes/{key}", status_code=204)
+async def remove_runtime_endpoint(
+    key: str, ctx: RequestContext = Depends(get_request_context)
+) -> None:
+    """Forget one of this tenant's runtimes. A built-in of the same name becomes visible
+    again -- removing an override is how a tenant goes back to the deployment's image.
+
+    Repos already pinned to the key keep the name and resolve to whatever it means now,
+    which for a removed non-built-in is nothing: that build is refused with an unknown
+    runtime rather than silently running on some other image."""
+    from core.repos.runtimes import remove_runtime
+
+    await require_tenant_permission(ctx, "repo:manage")
+    if not await remove_runtime(ctx.tenant_id, key):
+        raise HTTPException(status_code=404, detail=f"this tenant has no runtime {key!r}")
 
 
 @router.get("")
@@ -432,12 +496,12 @@ async def update_repo_endpoint(
     row = await get_repo(ctx.tenant_id, repo_id)
     if row is None or row.archived_at is not None:
         raise HTTPException(status_code=404, detail=f"no active repo {repo_id}")
-    if (
-        body.runtime is not None
-        and body.runtime not in RUNTIME_CATALOG
-        and body.runtime != "custom"
-    ):
-        raise HTTPException(status_code=422, detail=f"unknown runtime {body.runtime!r}")
+    if body.runtime is not None:
+        from core.repos.runtimes import CUSTOM, resolved_runtimes
+
+        known = await resolved_runtimes(ctx.tenant_id)
+        if body.runtime not in known and body.runtime != CUSTOM:
+            raise HTTPException(status_code=422, detail=f"unknown runtime {body.runtime!r}")
     if body.provider is not None and body.provider not in (*GIT_PROVIDERS, "auto"):
         raise HTTPException(status_code=422, detail=f"unknown provider {body.provider!r}")
 

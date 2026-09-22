@@ -24,7 +24,7 @@ from core.entities.mutation import transition
 from core.entities.storage import get_entity
 from core.ports.mcp import McpServerRef
 from core.process.dsl.schema import BudgetSpec, PhaseSpec, VisibilitySpec
-from core.repos.service import RUNTIME_CATALOG, get_repo, resolve_git_identity, store_key
+from core.repos.service import get_repo, resolve_git_identity, store_key
 from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
 from worker.exec_env_factory import get_exec_env_provider
@@ -96,34 +96,71 @@ async def _remote_config(
     }
 
 
-async def _environment_config(tenant_id: uuid.UUID, repo_id: str | None) -> dict[str, Any] | None:
-    """The exec-environment config for a delegation, from the repo's registration: the
-    curated runtime's image + baseline setup, the repo's own setup commands, and its test
-    command. None (-> direct-store fallback) when no repo is bound to the call."""
+async def _environment_config(
+    tenant_id: uuid.UUID, repo_id: str | None, base_branch: str | None = None
+) -> dict[str, Any] | None:
+    """The exec-environment config for a delegation.
+
+    Three layers, folded per field by ``core.repos.build_recipe``: the repo row (an
+    operator's override), ``pyrrhula-build.json`` at the ref being worked (the recipe
+    that lives with the code), and the runtime catalog the tenant can now extend
+    itself. None (-> direct-store fallback) when no repo is bound to the call."""
     if not repo_id:
         return None
     repo = await get_repo(tenant_id, uuid.UUID(repo_id))
     if repo is None:
         return None
-    runtime = RUNTIME_CATALOG.get(repo.runtime) or RUNTIME_CATALOG["debian"]
-    # A custom image overrides the catalog entry (its baseline setup is meaningless for
-    # an arbitrary image; the repo's own setup_cmds still run).
-    if repo.runtime_image:
-        image, baseline = repo.runtime_image, []
-    else:
-        raw_setup = runtime.get("setup")
-        image = str(runtime["image"])
-        baseline = [str(c) for c in raw_setup] if isinstance(raw_setup, list) else []
+
+    from core.repos.build_recipe import (
+        BuildRecipeError,
+        read_repo_manifest,
+        resolve_build_recipe,
+    )
+    from core.repos.runtimes import get_runtime
+
+    ref = base_branch or repo.default_branch or "main"
+    try:
+        manifest = await read_repo_manifest(store_key(tenant_id, repo.key), ref=ref)
+    except BuildRecipeError as exc:
+        # A manifest that is present and wrong must not fall back to the row silently --
+        # the author configured something and would never learn it was ignored.
+        log.warning(
+            "delegation.build_manifest_invalid", repo=repo.key, ref=ref, error=str(exc)[:300]
+        )
+        raise
+
+    manifest_runtime = manifest.get("runtime")
+    recipe = resolve_build_recipe(
+        repo_runtime=repo.runtime,
+        repo_image=repo.runtime_image,
+        repo_setup_cmds=list(repo.setup_cmds or []),
+        repo_test_cmd=repo.test_cmd,
+        repo_build_cmd=repo.build_cmd,
+        repo_artifact_name=repo.artifact_name,
+        manifest=manifest,
+        runtime_entry=await get_runtime(tenant_id, repo.runtime),
+        manifest_runtime_entry=(
+            await get_runtime(tenant_id, str(manifest_runtime)) if manifest_runtime else None
+        ),
+    )
+    if any(src == "manifest" for src in recipe.sources.values()):
+        log.info(
+            "delegation.build_recipe",
+            repo=repo.key,
+            ref=ref,
+            sources=recipe.sources,
+        )
+
     from core.exec_engines import engine_by_key, get_tenant_engine_key
 
     engine_key = await get_tenant_engine_key(tenant_id)
     engine = engine_by_key(engine_key) or {}
     return {
-        "image": image,
-        "setup_cmds": [*baseline, *(repo.setup_cmds or [])],
-        "test_cmd": repo.test_cmd,
-        "build_cmd": repo.build_cmd,
-        "artifact_name": repo.artifact_name,
+        "image": recipe.image,
+        "setup_cmds": recipe.setup_cmds,
+        "test_cmd": recipe.test_cmd,
+        "build_cmd": recipe.build_cmd,
+        "artifact_name": recipe.artifact_name,
         "engine": engine_key,
         # Per-engine route to the api's git smart-HTTP (remote engines' environments
         # may not resolve the deployment-default hostname).
@@ -342,7 +379,9 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
             )
         return {"work_item_id": payload["work_item_id"], "skipped": "usage_limit"}
     viewer = await _load_principal(tenant_id, uuid.UUID(payload["viewer_principal_id"]))
-    environment = await _environment_config(tenant_id, payload.get("repo_id"))
+    environment = await _environment_config(
+        tenant_id, payload.get("repo_id"), payload.get("base_branch")
+    )
     assignee = await _load_assignee(tenant_id, payload.get("assignee_persona_id"))
     entity = await get_entity(tenant_id, uuid.UUID(payload["work_item_id"]))
     # An unassigned item used to fall to a round robin over persona ids. Ask the
@@ -504,7 +543,9 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
         "fields": dict(entity.data),
         "states": dict(entity.fsm_states),
     }
-    environment = await _environment_config(tenant_id, payload.get("repo_id"))
+    environment = await _environment_config(
+        tenant_id, payload.get("repo_id"), payload.get("base_branch")
+    )
     arguments: dict[str, Any] = {"branch": branch, "brief": comment, "work_item": work_item_arg}
     record_for_codegen = await GitStore(default_git_root()).get_pr(repo, branch) or {}
     rework_assignee = await _load_assignee(tenant_id, record_for_codegen.get("assignee_persona_id"))
