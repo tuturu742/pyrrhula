@@ -1107,6 +1107,15 @@ _BFRPG_RULE_SYSTEM = {
         "allow_keep_drop": True,
     },
     "check_types": [
+        # Character creation rolls dice that take no modifier at all. Without a check
+        # type that says so there was no honest call to make: every other type resolves
+        # an ability modifier, so a player rolling 3d6 for a score got it silently
+        # adjusted -- [5, 6, 6] was recorded as 19, which 3d6 cannot produce. The
+        # constitution bonus on hit points is added when the sheet is written, where the
+        # referee can check it, because at the moment of the roll there is no sheet to
+        # read it from.
+        "ability_score_roll",
+        "hit_die",
         "strength_check",
         "dexterity_check",
         "constitution_check",
@@ -1124,6 +1133,8 @@ _BFRPG_RULE_SYSTEM = {
     ],
     "outcome_bands": [],
     "modifier_resolver": {
+        "ability_score_roll": "0",
+        "hit_die": "0",
         "strength_check": "has(fields.strength) ? (fields.strength<=3 ? -3 : "
         "(fields.strength<=5 ? -2 : (fields.strength<=8 ? "
         "-1 : (fields.strength<=12 ? 0 : "
