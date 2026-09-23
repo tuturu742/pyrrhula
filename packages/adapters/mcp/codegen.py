@@ -255,6 +255,13 @@ def make_model_codegen(
                 max_tokens=max_tokens,
                 api_base=api_base,
                 params=dict(params or {}),
+                # The key, like every other field here. Without it the repair went out
+                # keyless, the hosted provider refused it on authentication, and the
+                # delegation fell back to the scaffold -- which is the failure the
+                # paragraph above describes, arriving by a different door. It only bit
+                # when the first answer had no file blocks, so it read as an
+                # intermittent "the model declined" rather than as a dropped argument.
+                api_key=api_key,
                 purpose="delegation",
             )
             second = await run(repair)
