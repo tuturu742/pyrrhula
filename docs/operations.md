@@ -155,6 +155,38 @@ diagnosing why a timed-out session never moved.
 podman exec pyrrhula_worker_1 python -m worker.timeouts
 ```
 
+## How many workers
+
+One worker advances one session at a time. A deployment running several sessions at once
+serialises them, and the effect is easy to misread: a session sits at `seq=0` for twenty
+minutes looking stuck while another holds the worker through a long model turn.
+
+Kubernetes scales the ordinary way, and the session claim plus its heartbeat is what makes
+more than one safe — a second worker that finds a session claimed declines and says so
+(`advance.already_claimed`) instead of colliding:
+
+```bash
+kubectl -n pyrrhula scale deploy/pyrrhula-worker --replicas=3
+```
+
+Compose fixes `container_name` on the worker, so `podman compose` cannot scale it. Running
+extra workers by hand works, and **two details bite**:
+
+* `--dns` is not inherited. The compose files set a resolver on api and worker because a
+  host whose only nameserver is `systemd-resolved` at `127.0.0.53` gives a container a
+  loopback address that means nothing in its namespace. Without it the hand-started worker
+  claims a job and fails it with `Cannot connect to host api.deepseek.com:443`.
+* **Do not build the environment with `--env-file`.** `PYRRHULA_EXEC_ENGINES` is
+  multi-line JSON and the env-file format cannot carry a newline: it keeps the first line
+  and discards the rest, and the worker then fails every job that touches an execution
+  engine with `PYRRHULA_EXEC_ENGINES is not valid JSON`. Pass each variable as its own
+  `--env` argument, which survives newlines, and check one afterwards:
+
+```bash
+podman exec pyrrhula_worker_2 python -c \
+  "import json,os; json.loads(os.environ['PYRRHULA_EXEC_ENGINES']); print('ok')"
+```
+
 ## Populating and checking a deployment
 
 | Command | What it does |
