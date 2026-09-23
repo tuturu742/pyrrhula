@@ -49,9 +49,9 @@ from sqlalchemy import select, text
 from core.agents.models import Persona
 from core.audit.hashing import compute_row_hash
 from core.entities.fsm import EntityStateChangeRow
-from core.entities.repo import get_schema, save_schema
+from core.entities.repo import get_schema, list_latest_schemas, save_schema
 from core.entities.schema import EntitySchemaDefinition
-from core.entities.storage import create_entity
+from core.entities.storage import EntityRow, create_entity
 from core.knowledge.models import KnowledgeEntry, KnowledgeSource, KnowledgeSourceVersion
 from core.portability.bundle import BundleIntegrityError, open_bundle, verify_bundle
 from core.portability.injection_scan import quarantine_reason, scan_text
@@ -781,14 +781,27 @@ async def _import_schemas_and_entities(
     each recording an ``entity_state_change`` with ``cause='import'`` and the bundle as
     ``cause_ref``. That row is not bookkeeping: it is the only thing that later explains
     why an entity in this tenant holds state nobody here ever set."""
+    # Fork on collision, not on principle -- the same rule knowledge sources and flows
+    # already follow. ``save_schema`` versions by ``(workspace, key)``, so reusing a
+    # resident key would graft an imported shape onto a resident schema's version
+    # history; renaming one that collides with nothing gives an empty workspace a
+    # ``character-imported`` schema and no ``character``, which is how a bundle's state
+    # machines arrived under a name nothing in the workspace refers to.
+    taken = {row.key for row in await list_latest_schemas(tenant_id, workspace_id)}
+    taken |= {row.key for row in await list_latest_schemas(tenant_id, None)}
+
     schema_map: dict[str, uuid.UUID] = {}
     for path in sorted(p for p in files if p.startswith("schemas/") and p.endswith(".json")):
         payload = json.loads(files[path].decode())
         definition = EntitySchemaDefinition.model_validate(payload["definition"])
+        key = str(payload["key"])
+        if key in taken:
+            key = _forked_entity_key(key, report)
+        taken.add(key)
         row = await save_schema(
             tenant_id,
             workspace_id,
-            _forked_entity_key(str(payload["key"]), report),
+            key,
             int(payload["version"]),
             definition,
         )
@@ -816,7 +829,35 @@ async def _import_schemas_and_entities(
             data=dict(payload["data"]),
         )
         report.id_map[str(payload["id"])] = str(entity.id)
+        # Bundles written before entity state travelled have no ``fsm_states`` key; those
+        # entities keep the initial states ``create_entity`` seeded. A machine the resident
+        # schema does not declare is dropped rather than stored unreadable.
+        declared = {m.key for m in definition_row.to_definition().state_machines}
+        imported_states = {
+            str(k): str(v)
+            for k, v in dict(payload.get("fsm_states") or {}).items()
+            if str(k) in declared
+        }
+        if imported_states:
+            async with tenant_scope(tenant_id) as session:
+                row = await session.get(EntityRow, entity.id)
+                assert row is not None
+                row.fsm_states = {**row.fsm_states, **imported_states}
         async with tenant_scope(tenant_id) as session:
+            for machine_key, state in imported_states.items():
+                session.add(
+                    EntityStateChangeRow(
+                        tenant_id=tenant_id,
+                        entity_id=entity.id,
+                        session_id=None,
+                        event_seq=None,
+                        field_path=f"fsm_states.{machine_key}",
+                        old_value=None,
+                        new_value=state,
+                        cause="import",
+                        cause_ref=bundle_ref,
+                    )
+                )
             for field_path, new_value in dict(payload["data"]).items():
                 session.add(
                     EntityStateChangeRow(
@@ -836,7 +877,7 @@ async def _import_schemas_and_entities(
 def _forked_entity_key(key: str, report: ImportReport) -> str:
     """Schema keys fork on the same principle source keys do -- ``save_schema`` versions by
     ``(workspace, key)``, so reusing a resident key would silently graft imported shapes
-    onto a resident schema's version history."""
+    onto a resident schema's version history. Only called when the key is actually taken."""
     forked = f"{key}-imported"
     report.forked_keys.append((key, forked))
     return forked

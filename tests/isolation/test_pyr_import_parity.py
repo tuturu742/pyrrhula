@@ -389,3 +389,128 @@ def test_every_section_export_writes_is_read_by_import() -> None:
         "missing that section, silently. Handle it in import_.py, or add it to "
         "_NOT_IMPORTED with the reason."
     )
+
+
+@pytest.mark.asyncio
+async def test_an_entity_arrives_in_the_state_it_left_in(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """A `.pyr` carried the sheet and dropped the situation. Export wrote ``data`` and not
+    ``fsm_states``, so a bloodied character, a work item in review, a quest half-finished
+    all landed in the importing deployment as if nothing had happened to them -- silently,
+    which is the failure mode this file exists to prevent.
+    """
+    from core.entities.mutation import transition
+    from core.entities.repo import save_schema
+    from core.entities.schema import EntitySchemaDefinition, FieldDef
+    from core.entities.storage import EntityRow, create_entity
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a, referee, _persona_a = await _case_workspace(tenant_a)
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    importer = await _member(tenant_b, workspace_b, "facilitator")
+
+    definition = EntitySchemaDefinition(
+        fields=[FieldDef(key="name", type="string")],
+        state_machines=[
+            {
+                "key": "health",
+                "states": [
+                    {"key": "healthy", "label_key": "entity.health.healthy"},
+                    {"key": "bloodied", "label_key": "entity.health.bloodied"},
+                ],
+                "initial": "healthy",
+                "transitions": [{"from": "healthy", "to": "bloodied", "trigger": "wound"}],
+            }
+        ],
+    )
+    schema_row = await save_schema(tenant_a, workspace_a, "traveller", 1, definition)
+    entity = await create_entity(
+        tenant_a,
+        workspace_a,
+        schema_row.id,
+        definition,
+        key=f"traveller-{uuid.uuid4().hex[:8]}",
+        name="Bram",
+        scope_key="workspace_public",
+        data={"name": "Bram"},
+    )
+    await transition(
+        referee.id,
+        tenant_a,
+        workspace_a,
+        entity.id,
+        "health",
+        "wound",
+        f"wound-{uuid.uuid4()}",
+        permission_service=_PERMISSIONS,
+    )
+
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    await _import_into(result.data, tenant_b, workspace_b, importer.id)
+
+    async with tenant_scope(tenant_b) as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(EntityRow).where(EntityRow.workspace_id == workspace_b)
+                )
+            ).scalars()
+        )
+    assert len(rows) == 1, f"expected the one traveller, got {len(rows)}"
+    assert rows[0].fsm_states == {"health": "bloodied"}, (
+        "the character arrived healthy: machine state did not survive the bundle"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_schema_keeps_its_key_on_the_way_into_an_empty_workspace(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Entity schemas forked unconditionally, unlike flows and knowledge sources, which
+    fork only when a resident key is actually taken. The cost fell on the one thing a
+    schema carries that nothing else does -- its state machines. They arrived under
+    ``character-imported``, a key no persona, tool or flow in the importing workspace
+    refers to, so an FSM that round-tripped perfectly was attached to nothing.
+    """
+    from core.entities.repo import list_latest_schemas, save_schema
+    from core.entities.schema import EntitySchemaDefinition, FieldDef
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a, referee, _persona_a = await _case_workspace(tenant_a)
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    importer = await _member(tenant_b, workspace_b, "facilitator")
+
+    definition = EntitySchemaDefinition(
+        fields=[FieldDef(key="name", type="string")],
+        state_machines=[
+            {
+                "key": "health",
+                "states": [
+                    {"key": "healthy", "label_key": "entity.health.healthy"},
+                    {"key": "bloodied", "label_key": "entity.health.bloodied"},
+                ],
+                "initial": "healthy",
+                "transitions": [{"from": "healthy", "to": "bloodied", "trigger": "wound"}],
+            }
+        ],
+    )
+    await save_schema(tenant_a, workspace_a, "traveller", 1, definition)
+
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    await _import_into(result.data, tenant_b, workspace_b, importer.id)
+
+    keys = {row.key for row in await list_latest_schemas(tenant_b, workspace_b)}
+    assert "traveller" in keys, f"the schema was renamed on arrival: {sorted(keys)}"
+
+    # Importing the same bundle again must not graft a second definition onto the
+    # resident schema's version history -- that collision is what forking is for.
+    await _import_into(result.data, tenant_b, workspace_b, importer.id)
+    keys = {row.key for row in await list_latest_schemas(tenant_b, workspace_b)}
+    assert "traveller-imported" in keys, f"the second copy did not fork: {sorted(keys)}"

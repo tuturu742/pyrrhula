@@ -461,6 +461,9 @@ async def _add_entities(
                 "scope_key": entity.scope_key,
                 "version": entity.version,
                 "data": entity.data,
+                # An entity mid-session is bloodied, or its work item is in review.
+                # Carrying only ``data`` exported the shape and dropped the situation.
+                "fsm_states": entity.fsm_states,
             },
         )
 
