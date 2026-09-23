@@ -150,7 +150,16 @@ _CLAIM_LEASE_SECONDS = 900
 
 
 async def _reclaim_if_abandoned(key: str, tenant_id: uuid.UUID) -> bool:
-    """Take over an 'in_progress' claim whose holder is gone. True if this caller won it."""
+    """Take over a claim nobody is working on. True if this caller won it.
+
+    Only an 'in_progress' row older than the lease qualifies: a live holder finishes or
+    fails within the lease, so one older than that has no holder left.
+
+    A 'failed' row is deliberately NOT reclaimed here. Failure is sticky by design --
+    an operation that failed after its side effect landed must not be re-run just
+    because someone asked again -- and ``clear_failed_operation`` is the explicit way to
+    say "that failure was the deployment's fault, run it again".
+    """
     from datetime import UTC, datetime, timedelta
 
     cutoff = datetime.now(UTC) - timedelta(seconds=_CLAIM_LEASE_SECONDS)
@@ -162,6 +171,8 @@ async def _reclaim_if_abandoned(key: str, tenant_id: uuid.UUID) -> bool:
                 CompletedOperationRow.status == "in_progress",
                 CompletedOperationRow.created_at < cutoff,
             )
+            # A fresh timestamp under this caller, so a second reclaimer loses the race
+            # rather than running the same operation alongside it.
             .values(created_at=func.now())
             .returning(CompletedOperationRow.idempotency_key)
         )
