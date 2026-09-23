@@ -268,9 +268,16 @@ def make_model_codegen(
             files = parse_file_blocks(second)
             deletes = parse_deletions(second, keep=files)
         if not files and not deletes:
+            # Keep enough of the answer to tell the causes apart. Four different
+            # failures have arrived at this line -- a keyless retry, context chosen
+            # alphabetically, fixtures the preference never matched, and an output
+            # budget too small for what was asked -- and all four read identically from
+            # outside. The model usually says which one it is, in the first paragraph,
+            # and 160 characters was never enough to reach the verb.
             raise CodegenError(
                 "model produced no parseable file blocks after a repair attempt "
-                f"({len(first)} then {len(second)} chars; head: {first[:160]!r})"
+                f"({len(first)} then {len(second)} chars). "
+                f"First answer: {first[:600]!r}. Repair answer: {second[:400]!r}"
             )
         return CodegenOutput(files=files, deletes=frozenset(deletes))
 

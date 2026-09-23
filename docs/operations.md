@@ -285,7 +285,15 @@ marker is the fastest way to tell a real change from a stub.
 
 `fallback_to_scaffold` **without** a preceding `codegen.no_api_key` means the credential
 resolved and the call still failed: read the `error=` on the fallback line rather than
-assuming a missing key. A provider authentication error there points at a request built
+assuming a missing key.
+
+`model produced no parseable file blocks` is the catch-all, and the model's own answer —
+quoted on that line — says which of several things went wrong. The ones seen in practice:
+it did not receive the files it was asked about (a context problem — the task should name
+them, by path or by the identifier the file is generated from); or it received them and
+says it cannot write that much, which means the work is larger than one delegation's
+output budget (`_DEFAULT_CODEGEN_MAX_TOKENS`, 12000) and belongs in several work items.
+Rewriting five 10KB fixtures in one item is past it; one item per fixture is not. A provider authentication error there points at a request built
 somewhere other than the first one — the format-repair retry, for instance, which fires
 only when a model's first answer carries no `===FILE:` blocks and so makes the whole
 thing look intermittent.
