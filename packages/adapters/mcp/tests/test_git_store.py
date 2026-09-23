@@ -439,3 +439,47 @@ async def test_diff_text_returns_the_whole_body_when_it_fits(tmp_path: Path) -> 
     assert "Files changed (1)" in diff
     assert "+two" in diff
     assert "truncated" not in diff
+
+
+async def test_named_files_are_read_before_whatever_sorts_first(tmp_path) -> None:
+    """The content budget is small and the repository is not, so something chooses which
+    files arrive with bodies. Alphabetical order is not a relevance ranking: asked to
+    update a fixture deep in the tree, an agent was handed the first N paths and answered
+    that the file it had been asked about was given as empty.
+    """
+    store = GitStore(str(tmp_path))
+    seed = {f"aaa/file{i:03d}.txt": f"filler {i}\n" for i in range(30)}
+    seed["zzz/deep/target.snap"] = "the fixture that matters\n"
+    await store.ensure_repo("proj", seed_files=seed)
+
+    # Without a preference the budget is spent on the front of the alphabet.
+    plain = await store.read_tree("proj", max_files=5)
+    assert plain["zzz/deep/target.snap"] == "", "precondition: it sorts last and gets no body"
+
+    preferred = await store.read_tree("proj", max_files=5, prefer=["zzz/deep/target.snap"])
+    assert preferred["zzz/deep/target.snap"] == "the fixture that matters\n"
+    # Every path is still listed either way; only the bodies are rationed.
+    assert set(plain) == set(preferred)
+
+
+async def test_a_named_file_gets_a_larger_byte_allowance(tmp_path) -> None:
+    """One of five fixtures an agent was asked to update is 26KB. Under the ordinary
+    per-file cap it arrived named in the task and unreadable, which is the least useful
+    state a file can be in."""
+    store = GitStore(str(tmp_path))
+    big = "x" * 30_000
+    await store.ensure_repo("proj", seed_files={"big.snap": big, "small.txt": "hi\n"})
+
+    ordinary = await store.read_tree("proj", max_file_bytes=20_000)
+    assert ordinary["big.snap"] == "", "precondition: too large for the bulk budget"
+
+    named = await store.read_tree(
+        "proj", max_file_bytes=20_000, prefer=["big.snap"], prefer_file_bytes=64_000
+    )
+    assert named["big.snap"] == big
+
+    # The larger allowance is not unlimited, and it applies only to what was named.
+    still_too_big = await store.read_tree(
+        "proj", max_file_bytes=20_000, prefer=["big.snap"], prefer_file_bytes=1_000
+    )
+    assert still_too_big["big.snap"] == ""

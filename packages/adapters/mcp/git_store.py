@@ -364,6 +364,7 @@ class GitStore:
         max_files: int = 40,
         max_paths: int = 4000,
         prefer: Sequence[str] = (),
+        prefer_file_bytes: int = 64_000,
     ) -> dict[str, str]:
         """Small text files at ``ref`` as {path: content} -- codegen context. Binary or
         oversized files are listed with empty content (the path still informs the model).
@@ -385,9 +386,11 @@ class GitStore:
             # paths of a Rust workspace and answered, correctly, that the files it had
             # been asked about "were given as" empty -- then fell back to a placeholder,
             # and a reviewer rejected a pull request whose real fault was the context.
+            preferred: set[str] = set()
             if prefer:
                 wanted = [p for p in paths if any(token and token in p for token in prefer)]
-                rest = [p for p in paths if p not in set(wanted)]
+                preferred = set(wanted)
+                rest = [p for p in paths if p not in preferred]
                 paths = wanted + rest
 
             files: dict[str, str] = {}
@@ -406,9 +409,14 @@ class GitStore:
                 except GitStoreError:
                     files[path] = ""
                     continue
+                # A file the task named gets a larger allowance than the bulk fill.
+                # One of the five snapshot fixtures an agent was asked to update is
+                # 26KB: under the ordinary budget it arrived empty, named in the task
+                # and unreadable, which is the least useful state a file can be in.
+                budget = prefer_file_bytes if path in preferred else max_file_bytes
                 # Size first: decoding a 200MB blob to discover it is too large is a
                 # cost with no answer attached.
-                if len(raw) > max_file_bytes:
+                if len(raw) > budget:
                     files[path] = ""
                     continue
                 try:
