@@ -16,7 +16,11 @@ from typing import Any
 import structlog
 from sqlalchemy import select
 
-from core.agents.authoring import HISTORY_CHAR_BUDGET_KEY, merged_persona_params
+from core.agents.authoring import (
+    HISTORY_CHAR_BUDGET_KEY,
+    merged_persona_params,
+    resolve_connection_api_key,
+)
 from core.agents.models import Agent, Persona
 from core.agents.runtime import (
     _DEFAULT_MAX_TOOL_LOOP,
@@ -399,6 +403,18 @@ async def run_one_persona_turn(
                     agent=persona_agent,
                     provider=model_provider_factory(persona_agent.provider),
                     permission_service=permission_service,
+                    # Summarising is a model call and needs the connection's key like
+                    # any other. Without it every Anthropic-backed persona failed with
+                    # "Missing Anthropic API Key" -- and since a summary is only an
+                    # enrichment, that arrived as a warning nobody reads, so a long
+                    # session silently lost its history instead of failing.
+                    api_key=(
+                        await resolve_connection_api_key(
+                            tenant_id, str(persona_agent.credential_ref), encryptor=encryptor
+                        )
+                        if persona_agent.credential_ref and encryptor is not None
+                        else None
+                    ),
                 )
                 history_summary = summary.to_block()
             except Exception as exc:  # noqa: BLE001 -- a summary is an enrichment

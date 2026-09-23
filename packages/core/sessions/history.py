@@ -480,6 +480,11 @@ async def summarise_history(
     max_tokens: int,
     agent: Agent,
     provider: ModelProvider,
+    # The connection's decrypted key. Summarising history is a model call like any
+    # other; omitting this made it fail with "Missing Anthropic API Key" on every
+    # Anthropic-backed persona, and because a summary is an enrichment the failure was
+    # a warning nobody read -- so long sessions quietly lost their history instead.
+    api_key: str | None = None,
     permission_service: PermissionService,
     between_sessions_since: datetime | None = None,
 ) -> HistorySummary:
@@ -522,6 +527,7 @@ async def summarise_history(
                 purpose=_PURPOSE,
                 max_tokens=max(64, max_tokens),
                 api_base=agent.api_base,
+                api_key=api_key,
                 params=dict(agent.params or {}),
             )
             start = time.monotonic()
@@ -553,6 +559,7 @@ async def summarise_history(
             purpose=_PURPOSE,
             max_tokens=max(64, max_tokens),
             api_base=agent.api_base,
+            api_key=api_key,
             params=dict(agent.params or {}),
         )
         start = time.monotonic()

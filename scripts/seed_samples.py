@@ -428,7 +428,7 @@ async def register_repos(
     from api.encryptor_factory import get_encryptor
     from core.agents.authoring import store_provider_credential
     from core.repos.runtimes import register_runtime
-    from core.repos.service import create_repo
+    from core.repos.service import create_repo, store_key
 
     manifest = sample_dir / "repos.json"
     if not manifest.is_file():
@@ -470,6 +470,30 @@ async def register_repos(
             created_by=owner_id,
         )
         print(f"[{slug}] repo {repo.key} ({spec.get('source_url') or 'store-only'})", flush=True)
+
+        # Registering a repository creates the row; it does not fetch the code. The
+        # hosted store stays empty, and everything downstream that reads a tree fails
+        # in its own vocabulary -- repo analysis says "none of the requested repos are
+        # readable in the hosted store", which sounds like a permissions problem and is
+        # actually an empty directory. The HTTP route clones on registration; a seed
+        # that calls create_repo directly has to do the same.
+        if spec.get("source_url"):
+            from adapters.gitremote.registry import resolve_remote
+            from adapters.mcp.git_store import GitStore, default_git_root
+
+            store = GitStore(default_git_root())
+            remote = resolve_remote(str(spec["source_url"]), spec.get("provider"))
+            token = read_secret(secrets_dir, secret_name) if secret_name else None
+            try:
+                branch = await store.clone_from(
+                    store_key(tenant_id, repo.key),
+                    str(spec["source_url"]),
+                    token=token,
+                    userinfo=remote.push_userinfo(token) if remote and token else None,
+                )
+                print(f"[{slug}] cloned {repo.key} (default branch {branch})", flush=True)
+            except Exception as exc:  # noqa: BLE001 -- report; the row is still valid
+                print(f"[{slug}] clone FAILED for {repo.key}: {str(exc)[:200]}", flush=True)
 
 
 async def ensure_retrieval_models() -> None:

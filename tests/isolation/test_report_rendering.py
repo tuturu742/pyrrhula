@@ -360,3 +360,21 @@ def test_the_worker_decrypts_the_credential_rather_than_passing_the_pointer() ->
     src = inspect.getsource(reports)
     assert "resolve_connection_api_key(" in src
     assert "get_encryptor()" in src
+
+
+def test_history_summarisation_sends_the_connection_key_too() -> None:
+    """The third model call that was going out unauthenticated.
+
+    Summarising a long transcript failed with "Missing Anthropic API Key" on every
+    Anthropic-backed persona. Because a summary is an enrichment the caller logs a
+    warning and carries on, so nothing broke visibly -- a long session just quietly lost
+    its history and the turns got worse for a reason no one could see.
+    """
+    import inspect
+
+    from core.process import live_session
+    from core.sessions import history
+
+    assert "api_key: str | None = None" in inspect.getsource(history.summarise_history)
+    assert "api_key=api_key" in inspect.getsource(history)
+    assert "resolve_connection_api_key(" in inspect.getsource(live_session)
