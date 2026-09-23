@@ -227,6 +227,14 @@ fell back to a cached copy (it warns, naming both refs); or the pack loaded but 
 session started on a superseded flow version. A session resolves its phases against the
 definition row it started on, so a fix reaches *new* sessions only.
 
+**A second session in a workspace behaves as if the first never ended.** It half did.
+Entities and persona bindings are workspace-scoped and outlive the session that made them;
+only the transcript is session-scoped. A second campaign therefore opens with the first
+one's characters in context, and `entity_create` with `bind_to_self` refuses because the
+persona is still bound. Archiving the first session hides it without removing what it
+made. A clean re-run is a purge and a reseed of the tenant, not an archive — see "What a
+session carries" in [`docs/agent-guide.md`](agent-guide.md).
+
 **An imported tenant reads as empty.** Check the source's `current_version_id` — entries
 can import and publish while the source points at no version, which makes the authoring
 UI show nothing. Also check secrets: an import with no authoring principal skips every

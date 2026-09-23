@@ -200,6 +200,27 @@ Step 4 is the one worth checking twice. An imported persona with no connection p
 session that starts and then fails on its first turn, which reads as a broken flow rather
 than an unfinished setup.
 
+### Running a sample a second time
+
+A workspace keeps what its sessions made. Characters, work items, and every other entity
+are workspace-scoped, and so is a persona's binding to one — only the transcript belongs
+to the session (see "What a session carries" in
+[`docs/agent-guide.md`](agent-guide.md)). That is the right default for a table that meets
+again, and it means **re-running a sample from the top is not what a second session does**:
+the second campaign opens with the first one's characters already in context, and its
+players will read them and decline to roll new ones.
+
+Archiving the first session does not help — archiving hides a session, it does not remove
+what the session made. For a clean re-run, purge and reseed the tenant:
+
+```bash
+python -m core.tenancy.purge --tenant karsh-vale          # dry run first
+python -m core.tenancy.purge --tenant karsh-vale --yes
+python scripts/seed_samples.py --secrets-dir … --samples-dir … --samples karsh-vale
+```
+
+See [`docs/operations.md`](operations.md) for what that purge does and where to run it.
+
 ## Where to fix what
 
 | Wrong thing | Repository |

@@ -172,6 +172,42 @@ regenerate once, then safe fallback + overseer alert).
 Tenant-scoped tables carry `tenant_id` + RLS (`†` in the plan); append-only tables (`‡`) have
 no UPDATE/DELETE grant.
 
+### What a session carries, and what the workspace keeps
+
+**A persona's state lives in the workspace; only its conversation belongs to the session.**
+This is deliberate — a table's characters are still there next week, a backlog outlives the
+standup that made it — and it is the single most surprising thing about starting a second
+session in a workspace, so it is written here rather than discovered.
+
+| Workspace-scoped — every later session sees it | Session-scoped — one session only |
+|---|---|
+| `entity` (characters, work items, anything a schema defines) | `message` (the transcript) |
+| `persona`, **including its `entity_id` binding** | `session_event` (the durable log) |
+| `scope` (the visibility bands) | `resolution_record` (what the dice actually said) |
+| `secret` (private briefs) | `context_manifest` (what a turn was given) |
+| `workspace_knowledge_attachment` (sources, version pins) | `entity_state_change`‡ |
+
+So a persona starting a second session remembers nothing that was *said* and keeps
+everything it *has*. `core.entities.injection` renders entity state from
+`list_entities_for_scope`, which filters on tenant + workspace + `scope_key` and **has no
+session filter** — every entity the viewer's scopes admit is in every turn's context, for
+as long as the workspace exists.
+
+The consequences are worth stating plainly, because two of them read as model failures:
+
+- A second campaign in the same workspace opens with the first campaign's characters in
+  context, and a player who reads them will reasonably conclude it already has a sheet and
+  decline to roll a new one.
+- `persona.entity_id` survives its session, so `entity_create` with `bind_to_self` finds
+  the persona already bound and refuses.
+- Archiving a session does **not** remove the entities it created. Archiving hides the
+  session; the workspace keeps what the session made.
+
+Every entity records the session that created it (`entity.origin_session_id`), so "retire
+what that session made" is answerable — but nothing does it automatically, and there is no
+delete-entity path at all. **A genuinely fresh start means a fresh workspace (or a purged
+tenant), not an archived session.**
+
 - **Tenancy/identity:** `tenant`, `principal` (humans, service accounts, *and agents*),
   `identity`, `membership`, `workspace_membership` (steward|facilitator|participant|
   overseer|viewer — `steward` is the solo creator's combined facilitator+overseer seat and
