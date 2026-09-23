@@ -390,7 +390,9 @@ async def test_dispatch_walks_a_new_work_item_out_of_the_backlog(
         scope_key="workspace_public",
         data={"title": "Write the README", "labels": []},
     )
-    assert item.fsm_states == {}, "precondition: a new item has no stored state"
+    assert item.fsm_states == {"lifecycle": "backlog"}, (
+        "precondition: a new item starts in the lifecycle's declared initial state"
+    )
 
     async with tenant_scope(tenant_a) as session:
         viewer = await session.get(Principal, principal_id)

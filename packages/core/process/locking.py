@@ -157,8 +157,8 @@ async def refresh_claim(tenant_id: uuid.UUID, session_id: uuid.UUID, claimant_id
 
     The watchdog exists for a worker that died mid-advance, and it cannot tell that from a
     worker that is simply slow. Sizing it to the longest imaginable turn is the wrong
-    trade in both directions: too short and a live turn gets taken over (a campaign turn
-    on a local 27B model was observed at 14m48s against a 15m timeout), too long and a
+    trade in both directions: too short and a live turn gets taken over (a turn on a
+    local 27B model was observed at 14m48s against a 15m timeout), too long and a
     genuinely dead worker holds the session for that whole window.
 
     A heartbeat separates the two questions. The holder says "still here" every so often,

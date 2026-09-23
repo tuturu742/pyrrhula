@@ -163,6 +163,19 @@ async def sync_indexed_columns(schema_id: uuid.UUID, definition: EntitySchemaDef
             await drop_indexed_field_column(schema_id, field.key)
 
 
+def initial_fsm_states(definition: EntitySchemaDefinition) -> dict[str, str]:
+    """Every declared machine, in its declared ``initial`` state.
+
+    A machine's initial state is not a default the readers may assume -- it is the
+    entity's actual state from the moment it exists. Storing ``{}`` and coalescing to
+    ``machine.initial`` at each read site looked equivalent and was not: an unstarted
+    work item read as having no lifecycle at all, and the UI that lists entities by
+    their machine states (``CharactersPanel``) skips any row whose ``fsm_states`` is
+    empty -- so a freshly created entity was invisible until something transitioned it.
+    """
+    return {machine.key: machine.initial for machine in definition.state_machines}
+
+
 async def create_entity(
     tenant_id: uuid.UUID,
     workspace_id: uuid.UUID,
@@ -184,7 +197,7 @@ async def create_entity(
             name=name,
             scope_key=scope_key,
             data=dict(validated),
-            fsm_states={},
+            fsm_states=initial_fsm_states(schema_definition),
             version=1,
             origin_session_id=origin_session_id,
         )

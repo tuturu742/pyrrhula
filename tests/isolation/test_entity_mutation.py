@@ -251,7 +251,7 @@ async def test_failed_effect_rolls_back_the_whole_transition(
 
     final = await _entity_row(tenant_a, entity_row.id)
     assert final.version == 1  # untouched
-    assert final.fsm_states == {}  # never transitioned
+    assert final.fsm_states == {"risky": "start"}  # still where it started, never advanced
     assert final.data == {"zero_field": 0, "score": 0}
 
     async with tenant_scope(tenant_a) as session:
@@ -298,3 +298,57 @@ async def test_permission_denied_before_locking(two_tenants: tuple[uuid.UUID, uu
     final = await _entity_row(tenant_a, entity_row.id)
     assert final.version == 1
     assert final.data == {"name": "x"}
+
+
+async def test_a_new_entity_is_already_in_every_machine_s_initial_state(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """``fsm_states`` used to start empty, with every reader coalescing a missing key to
+    ``machine.initial``. That reads as equivalent and is not: the state was never written
+    down, so anything listing entities *by* their states -- the session Characters panel,
+    the work board's status column -- saw a row with no states at all and skipped it. A
+    character with a ``health`` machine is ``healthy`` from the moment it exists.
+    """
+    tenant_a, _tenant_b = two_tenants
+    workspace_id = await _workspace_id(tenant_a)
+
+    machine = StateMachineDef.model_validate(_ADVANCE_MACHINE_JSON)
+    definition = EntitySchemaDefinition(
+        fields=[FieldDef(key="name", type="string")], state_machines=[machine]
+    )
+    schema_row = await save_schema(tenant_a, workspace_id, "seeded-schema", 1, definition)
+    entity_row = await create_entity(
+        tenant_a,
+        workspace_id,
+        schema_row.id,
+        definition,
+        key=f"seeded-entity-{uuid.uuid4().hex[:8]}",
+        name="Seeded",
+        scope_key="workspace_public",
+        data={"name": "x"},
+    )
+
+    assert entity_row.fsm_states == {"progress": "a"}
+    assert (await _entity_row(tenant_a, entity_row.id)).fsm_states == {"progress": "a"}
+
+
+async def test_a_schema_without_machines_still_creates_an_entity(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    tenant_a, _tenant_b = two_tenants
+    workspace_id = await _workspace_id(tenant_a)
+
+    definition = EntitySchemaDefinition(fields=[FieldDef(key="name", type="string")])
+    schema_row = await save_schema(tenant_a, workspace_id, "machineless-schema", 1, definition)
+    entity_row = await create_entity(
+        tenant_a,
+        workspace_id,
+        schema_row.id,
+        definition,
+        key=f"machineless-{uuid.uuid4().hex[:8]}",
+        name="Plain",
+        scope_key="workspace_public",
+        data={"name": "x"},
+    )
+
+    assert entity_row.fsm_states == {}

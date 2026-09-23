@@ -280,8 +280,8 @@ def test_the_session_watchdog_outlasts_the_operation_it_protects() -> None:
 
 
 async def test_a_heartbeat_keeps_a_slow_turn_from_being_taken_over(db_available: None) -> None:
-    """The watchdog cannot tell a dead worker from a slow one. A live campaign turn on a
-    local 27B model was observed at 14m48s against a 15m timeout, so sizing the timeout to
+    """The watchdog cannot tell a dead worker from a slow one. A live turn on a local
+    27B model was observed at 14m48s against a 15m timeout, so sizing the timeout to
     the longest imaginable turn is a losing game in both directions. The holder says
     "still here" instead, and the timeout goes back to measuring silence."""
     import datetime as _dt
