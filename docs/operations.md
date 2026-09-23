@@ -251,6 +251,13 @@ it must be on that branch. A refusal names the field. See
 request body ends with `[scaffold]` rather than `[model]` when this happened — that
 marker is the fastest way to tell a real change from a stub.
 
+`fallback_to_scaffold` **without** a preceding `codegen.no_api_key` means the credential
+resolved and the call still failed: read the `error=` on the fallback line rather than
+assuming a missing key. A provider authentication error there points at a request built
+somewhere other than the first one — the format-repair retry, for instance, which fires
+only when a model's first answer carries no `===FILE:` blocks and so makes the whole
+thing look intermittent.
+
 **Something is slow and it might be data volume.** The tenant listing costs two queries
 per tenant, so a database carrying tens of thousands of them — a development box that has
 run the test suite for months, typically — makes any page touching it take minutes. Count
