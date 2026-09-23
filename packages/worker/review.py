@@ -217,6 +217,27 @@ async def _merge_remote(
     return await remote.merge_pull_request(repo.source_url, token, number=int(number_raw))
 
 
+async def _base_branch(
+    tenant_id: uuid.UUID, repo_id: str | None, declared: str | None = None
+) -> str:
+    """What this repository's work is branched from.
+
+    ``GitStore``'s diff helpers default to ``main``, which is a fine default and a wrong
+    answer for any repository that calls its trunk something else. A review that cannot
+    read the diff raises, the job fails, and the work item sits in ``in_review`` with no
+    verdict -- so a repository whose default branch is ``master`` had a delegation loop
+    that delivered pull requests nobody could approve. The delegation path already
+    resolves this (``worker.delegation._environment_config``); the review path did not.
+    """
+    if declared:
+        return str(declared)
+    if repo_id:
+        repo = await get_repo(tenant_id, uuid.UUID(str(repo_id)))
+        if repo is not None and repo.default_branch:
+            return str(repo.default_branch)
+    return "main"
+
+
 async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
     tenant_id = uuid.UUID(payload["tenant_id"])
     workspace_id = uuid.UUID(payload["workspace_id"])
@@ -247,10 +268,11 @@ async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
         return {"work_item_id": str(work_item_id), "skipped": entity.fsm_states.get("lifecycle")}
 
     store = GitStore(default_git_root())
+    base = await _base_branch(tenant_id, payload.get("repo_id"), payload.get("base_branch"))
     try:
-        diff = await store.diff_text(store_key, branch)
+        diff = await store.diff_text(store_key, branch, base=base)
     except GitStoreError as exc:
-        raise ValueError(f"cannot read diff for {branch}: {exc}") from exc
+        raise ValueError(f"cannot read diff for {branch} against {base}: {exc}") from exc
     pr = await store.get_pr(store_key, branch) or {}
     pr_label = f"PR {pr.get('pr_ref', branch)}" + (
         f" ({pr['html_url']})" if pr.get("html_url") else ""
@@ -466,6 +488,7 @@ async def handle_merge_order(payload: dict[str, Any]) -> dict[str, Any]:
 
     persona, profile = await _session_supervisor(tenant_id, session_id)
     store = GitStore(default_git_root())
+    base = await _base_branch(tenant_id, payload.get("repo_id"), payload.get("base_branch"))
 
     known: list[dict[str, Any]] = []
     lines: list[str] = []
@@ -473,10 +496,10 @@ async def handle_merge_order(payload: dict[str, Any]) -> dict[str, Any]:
         pr = await store.get_pr(store_key, branch) or {}
         stat: dict[str, int] = {}
         with contextlib.suppress(GitStoreError):
-            stat = await store.diff_stat(store_key, branch)
+            stat = await store.diff_stat(store_key, branch, base=base)
         files = ""
         with contextlib.suppress(GitStoreError):
-            listing = await store.diff_text(store_key, branch, max_chars=2000)
+            listing = await store.diff_text(store_key, branch, base=base, max_chars=2000)
             files = ", ".join(
                 ln.removeprefix("+++ b/") for ln in listing.splitlines() if ln.startswith("+++ b/")
             )

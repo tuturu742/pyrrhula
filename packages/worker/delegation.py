@@ -507,6 +507,10 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                 "store": skey,
                 "server_key": payload["server_key"],
                 "repo_id": payload.get("repo_id"),
+                # Carried explicitly: a delegation may have been told to branch from
+                # something other than the repo's default, and the review has to diff
+                # against whatever the work was actually branched from.
+                "base_branch": payload.get("base_branch"),
                 "review_round": 1,
             },
         )
@@ -640,6 +644,7 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                     "store": repo,
                     "server_key": server_key,
                     "repo_id": payload.get("repo_id"),
+                    "base_branch": payload.get("base_branch"),
                     "review_round": review_round + 1,
                 },
             )
