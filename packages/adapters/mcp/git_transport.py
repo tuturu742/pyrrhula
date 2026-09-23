@@ -108,6 +108,32 @@ def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
     return bool(remote.get("url")) and bool(remote.get("credential_ref"))
 
 
+_PATH_TOKEN = re.compile(r"[\w./-]*[\w-]\.[A-Za-z][\w]{0,9}")
+
+
+def _named_paths(work_item: dict[str, Any], brief: str) -> list[str]:
+    """File-ish tokens the task itself mentions, longest first.
+
+    The content budget is small and the repository is not, so something has to choose
+    which files arrive with bodies. The task's own words are the best signal available
+    without a second model call: a work item that says ``crates/loxia-tui/src/render.rs``
+    or ``header.rs`` is naming what it needs read.
+
+    Longest first because a full path is a better filter than a bare basename, and the
+    budget is spent in order.
+    """
+    text = (
+        " ".join(str(work_item.get(key, "")) for key in ("title", "description", "notes"))
+        + " "
+        + (brief or "")
+    )
+    tokens = {m.group(0).strip("./") for m in _PATH_TOKEN.finditer(text)}
+    # A bare extension ("*.snap", ".rs") matches half the tree and spends the whole
+    # budget on noise; a token needs a name in front of the dot to be a filter.
+    tokens = {t for t in tokens if len(t) > 3 and not t.startswith(".")}
+    return sorted(tokens, key=len, reverse=True)[:40]
+
+
 class GitMcpTransport:
     """``env_provider`` (an ``ExecEnvProvider``) turns delegation real: the work happens in
     an isolated per-(session, repo) environment -- clone from the store over the shared
@@ -256,7 +282,9 @@ class GitMcpTransport:
                 # wrapped in a scaffold fallback, so the agent silently produced
                 # "TODO: implement" instead of code, with nothing anywhere saying why.
                 ref = branch if reworking else base_branch
-                repo_files = await self._store.read_tree(repo, ref=ref)
+                repo_files = await self._store.read_tree(
+                    repo, ref=ref, prefer=_named_paths(work_item, brief)
+                )
                 out = await codegen(work_item, brief, repo_files, brief if reworking else None)
                 # Deliberately NOT filtered against `repo_files`. That read is capped at
                 # `read_tree`'s file limit -- 150 of this repository's 1088 -- so a filter

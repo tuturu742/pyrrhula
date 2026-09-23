@@ -22,7 +22,7 @@ import pathlib
 import re
 import shutil
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -363,6 +363,7 @@ class GitStore:
         max_file_bytes: int = 20_000,
         max_files: int = 40,
         max_paths: int = 4000,
+        prefer: Sequence[str] = (),
     ) -> dict[str, str]:
         """Small text files at ``ref`` as {path: content} -- codegen context. Binary or
         oversized files are listed with empty content (the path still informs the model).
@@ -376,11 +377,21 @@ class GitStore:
         """
         async with self._locks[repo_key]:
             listing = await self._git(repo_key, "ls-tree", "-r", "--name-only", ref)
+            paths = [p.strip() for p in listing.splitlines()[:max_paths] if p.strip()]
+
+            # The content budget goes to the files the task names, before it goes to
+            # whatever sorts first. Alphabetical order is not a relevance ranking: asked
+            # to update five snapshot fixtures, the agent was handed the first forty
+            # paths of a Rust workspace and answered, correctly, that the files it had
+            # been asked about "were given as" empty -- then fell back to a placeholder,
+            # and a reviewer rejected a pull request whose real fault was the context.
+            if prefer:
+                wanted = [p for p in paths if any(token and token in p for token in prefer)]
+                rest = [p for p in paths if p not in set(wanted)]
+                paths = wanted + rest
+
             files: dict[str, str] = {}
-            for index, path in enumerate(listing.splitlines()[:max_paths]):
-                path = path.strip()
-                if not path:
-                    continue
+            for index, path in enumerate(paths):
                 # Past the content budget the path is still reported, with no body. A
                 # path costs a line; a body costs the prompt. Truncating the *listing*
                 # to the content budget made everything past it invisible -- on a 1088
