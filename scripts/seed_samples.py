@@ -61,6 +61,9 @@ CONNECTIONS: tuple[Connection, ...] = (
     Connection("Anthropic Sonnet", "anthropic", "claude-sonnet-5", "anthropic"),
     Connection("Anthropic Opus", "anthropic", "claude-opus-5-5", "anthropic"),
     Connection("DeepSeek", "deepseek", "deepseek-chat", "deepseek"),
+    # The reasoning model, for the one seat at a table that has to hold a whole case in
+    # its head rather than answer for one person in it.
+    Connection("DeepSeek Reasoner", "deepseek", "deepseek-reasoner", "deepseek"),
     # api_base is resolved at run time -- see ollama_base_url.
     Connection("Ollama Qwen", "ollama_chat", "qwen3.8:27b", None),
 )
@@ -120,11 +123,30 @@ SWDEV_JUNIOR = ("junior", "middle", "mid", "qa", "tester", "dev")
 ASSISTANT_CONNECTION = "DeepSeek"  # informational personas, every table kind
 
 
-def connection_for(kind: str, persona_type: str, name: str, key: str) -> str:
+# Per-sample overrides, keyed on the sample rather than the tenant slug -- the slug is
+# whatever the operator called the tenant, the sample is what the cast actually is.
+#
+# hagnaryd is a mystery rather than a dice game: the suspects have to keep their own
+# accounts straight under cross-examination, and the investigator has to hold every
+# account at once and notice where two of them cannot both be true. That is a reasoning
+# job, and the local 27B was neither fast enough nor sharp enough for it -- a single turn
+# ran past ten minutes and history summarisation, which uses the persona's own model,
+# timed out at 600s and dropped the session's history on the floor.
+SAMPLE_CONNECTIONS: dict[str, dict[str, str]] = {
+    "hagnaryd-mystery": {"supervisor": "DeepSeek Reasoner", "participant": "DeepSeek"},
+}
+
+
+def connection_for(
+    kind: str, persona_type: str, name: str, key: str, sample: str | None = None
+) -> str:
     """The connection name this persona should be bound to."""
     haystack = f"{name} {key}".lower()
     if persona_type == "informational":
         return ASSISTANT_CONNECTION
+    override = SAMPLE_CONNECTIONS.get(sample or "", {}).get(persona_type)
+    if override:
+        return override
     if kind == "swdev":
         if any(word in haystack for word in SWDEV_SENIOR):
             return "Anthropic Opus"
@@ -262,7 +284,7 @@ async def seed(
             await session.execute(select(Persona).where(Persona.tenant_id == tenant_id))
         ).scalars()
         for persona in personas:
-            want = connection_for(kind, persona.persona_type, persona.name, persona.key)
+            want = connection_for(kind, persona.persona_type, persona.name, persona.key, sample)
             persona.agent_id = made[want]
             bound[want] = bound.get(want, 0) + 1
         await session.flush()
