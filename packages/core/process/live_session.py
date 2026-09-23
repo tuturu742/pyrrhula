@@ -619,8 +619,15 @@ async def run_one_persona_turn(
     # with, and said so, three runs in a row. The tool is a core one because what it does
     # is enqueue: the work itself needs an exec environment and minutes, which a model
     # turn does not have.
+    # A phase gets this only by asking for it by name. "No allowlist" means the phase
+    # declared no remote tools, not that it wants every one -- and handing an effectful
+    # dispatch tool to a phase that never asked did real damage: an investigation phase,
+    # whose whole job is reading a codebase and reporting, was given delegate_work_item
+    # and nothing else. Its bench reported "I have no tool that reads file contents --
+    # the only function available to me is delegate_work_item", which is both true and
+    # exactly backwards from what that phase needed.
     allowed_remote_tools = _phase_remote_allowlist(phase)
-    wants_delegation = allowed_remote_tools is None or DELEGATE_TOOL_NAME in allowed_remote_tools
+    wants_delegation = bool(allowed_remote_tools) and DELEGATE_TOOL_NAME in allowed_remote_tools
     if job_queue is not None and wants_delegation:
         tool_registry.register(
             ToolSpec(

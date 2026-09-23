@@ -18,6 +18,7 @@ import pytest
 
 from core.agents.tools import ToolContext
 from core.process.session_delegation_tools import (
+    DELEGATE_TOOL_NAME,
     DELEGATE_TOOL_PARAMETERS,
     make_delegate_handler,
 )
@@ -92,8 +93,36 @@ def test_the_tool_is_registered_when_a_queue_and_the_phase_allow_it() -> None:
     from core.process import live_session
 
     src = inspect.getsource(live_session)
-    assert "wants_delegation = allowed_remote_tools is None or DELEGATE_TOOL_NAME" in src
+    assert (
+        "wants_delegation = bool(allowed_remote_tools) and DELEGATE_TOOL_NAME" in src
+    ), "a phase must ask for delegation by name, not get it by declaring nothing"
     assert "if job_queue is not None and wants_delegation:" in src
+
+
+def test_a_phase_that_declares_no_remote_tools_gets_no_delegation() -> None:
+    """"No allowlist" means the phase declared none, not that it wants them all.
+
+    Treating it as "allow everything" handed an effectful dispatch tool to an
+    investigation phase whose job is to read a codebase and report. Its bench said so:
+    "I have no tool that reads file contents -- the only function available to me is
+    delegate_work_item", which was true and precisely backwards.
+    """
+    from core.process.dsl.schema import PhaseSpec
+
+    bare = {
+        "label_key": "phase.investigate",
+        "actors": [],
+        "visibility": {
+            "knowledge_classes": [],
+            "scopes": [],
+            "entity_fields": "all",
+            "secrets": "none",
+        },
+    }
+    silent = PhaseSpec.model_validate(bare)
+    asking = PhaseSpec.model_validate({**bare, "remote_tools": [DELEGATE_TOOL_NAME]})
+    assert not silent.remote_tools
+    assert asking.remote_tools == [DELEGATE_TOOL_NAME]
 
 
 def test_both_callers_dispatch_through_one_implementation() -> None:
