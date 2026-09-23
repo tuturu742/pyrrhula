@@ -140,7 +140,12 @@ SAMPLE_CONNECTIONS: dict[str, dict[str, str]] = {
     # 27B a single player turn ran past ten minutes while history summarisation, which
     # runs on the persona's own model, timed out at 600s against itself. The referee
     # stays on the table default; only the players move.
-    "karsh-vale": {"participant": "DeepSeek V4 Pro"},
+    # The referee too, and for a sharper reason than speed. On the table default it ran
+    # the "first fight" beat as a conversation in a reeve's front room and the second
+    # encounter as another one -- two combat beats, no monster, no rolls -- while the
+    # players on the stronger model were producing exact, in-character work. The beat that
+    # stages danger is the hardest seat at the table, not the easiest.
+    "karsh-vale": {"participant": "DeepSeek V4 Pro", "supervisor": "DeepSeek V4 Pro"},
 }
 
 
