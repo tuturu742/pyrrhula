@@ -38,7 +38,7 @@
           {
             "key": "status",
             "label_key": "group.project_status",
-            "field_keys": ["blockers", "owner"]
+            "field_keys": ["project_name", "blockers", "owner"]
           }
         ],
         "tabs": [{"key": "main", "label_key": "tab.main", "group_keys": ["budget", "status"]}]
