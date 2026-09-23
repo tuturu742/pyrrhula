@@ -650,7 +650,17 @@ _GAMEDEV = SampleSpec(
                 "- Every file is written out complete. No diffs, no '...unchanged...'.\n"
                 "- The build must stay green: a change that does not compile is not done.\n"
                 "- Art is optional. The game must run with drawn shapes if no sprite "
-                "exists, so a missing asset never blocks the build."
+                "exists, so a missing asset never blocks the build.\n"
+                "- **This workspace has no execution environment and no repository.** "
+                "There is nowhere to run `godot`, no test command to invoke and no tree "
+                "to read. Reason about the code in the open instead: walk the cases, say "
+                "what you expect each to produce and why, and name what you would want "
+                "run.\n"
+                "- **Do not write that you ran something.** \"Ran the test command\" "
+                "followed by pasted output is a claim the record cannot support, and a "
+                "reviewer cannot tell it from a real run -- which is what makes every "
+                "genuine result in the transcript worth less. When the work needs a real "
+                "run to settle it, say so, and say what would settle it."
             ),
         ),
     ),
