@@ -366,6 +366,14 @@ class PhaseCompletionSpec(BaseModel):
     # Entity field writes or state-machine moves recorded in this phase -- "something in
     # the world changed", as distinct from "something was rolled".
     entity_changes: int = Field(default=0, ge=0, le=1000)
+    # Entities belonging to this session that were created or written in this phase.
+    # Distinct from entity_changes, which counts state-change rows: **creating** a record
+    # writes none of those, so a beat whose whole job is to make something counted zero
+    # against entity_changes and was reported unmet while three of the things sat in the
+    # table. Measured from the row's own updated_at, which is set on insert and on every
+    # write -- so this answers "did the cast change in this beat", not "were new ones
+    # added"; there is no created_at on the row to ask the narrower question.
+    entities_touched: int = Field(default=0, ge=0, le=1000)
 
     # What to do when the actors are exhausted and the requirement is not met.
     #   repeat   -- run the phase's actors again, up to `max_repeats`, then move on
@@ -377,7 +385,13 @@ class PhaseCompletionSpec(BaseModel):
     max_repeats: int = Field(default=1, ge=0, le=10)
 
     def is_declared(self) -> bool:
-        return bool(self.resolutions or self.messages or self.tool_calls or self.entity_changes)
+        return bool(
+            self.resolutions
+            or self.messages
+            or self.tool_calls
+            or self.entity_changes
+            or self.entities_touched
+        )
 
 
 class PhaseSpec(BaseModel):

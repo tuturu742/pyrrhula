@@ -290,3 +290,24 @@ def test_a_satisfiable_requirement_validates_clean() -> None:
     from core.process.dsl.validator import validate_definition
 
     assert validate_definition(_one_phase(PhaseCompletionSpec(resolutions=1))) == []
+
+
+def test_entities_touched_is_separate_from_entity_changes() -> None:
+    """Creating a record writes no state-change row, so the two counts answer different
+    questions and a beat that makes things cannot be gated on the wrong one.
+
+    Live evidence: a character-creation beat produced three characters and reported
+    ``entity_changes: 0`` -- correctly, because nothing had been *changed* -- so the gate
+    called it unmet, gave the table another round, and passed. The gate was right; the
+    requirement was pointed at a counter that cannot see creation.
+    """
+    spec = PhaseCompletionSpec(entities_touched=1)
+    assert spec.is_declared() is True
+
+    produced = {"entity_changes": 0, "entities_touched": 3, "resolutions": 21, "messages": 8}
+    assert unmet_requirements(spec, produced) == {}
+
+    # And the other way round: the same phase gated on state changes is unmet.
+    assert unmet_requirements(PhaseCompletionSpec(entity_changes=1), produced) == {
+        "entity_changes": {"required": 1, "produced": 0}
+    }

@@ -36,6 +36,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import celpy
@@ -269,10 +270,19 @@ async def measure_phase(tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict[str
 
     from core.actions.effectful import ActionRecordRow
     from core.entities.fsm import EntityStateChangeRow
+    from core.entities.storage import EntityRow
     from core.resolution.records import ResolutionRecordRow
 
     async with tenant_scope(tenant_id) as session:
         floor = await _phase_entry_seq(session, session_id)
+        # Entities carry no event_seq, so they are floored by time instead: the moment
+        # the phase was entered.
+        entry_at = await session.scalar(
+            select(SessionEventRow.created_at).where(
+                SessionEventRow.session_id == session_id,
+                SessionEventRow.event_seq == floor,
+            )
+        ) or datetime.min.replace(tzinfo=UTC)
 
         async def _count(model: Any, seq_col: Any) -> int:
             return int(
@@ -308,6 +318,17 @@ async def measure_phase(tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict[str
             )
             or 0
         )
+        entities_touched = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(EntityRow)
+                .where(
+                    EntityRow.origin_session_id == session_id,
+                    EntityRow.updated_at >= entry_at,
+                )
+            )
+            or 0
+        )
         tool_calls = int(
             await session.scalar(
                 select(func.count())
@@ -325,13 +346,14 @@ async def measure_phase(tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict[str
         "messages": messages,
         "tool_calls": tool_calls,
         "entity_changes": entity_changes,
+        "entities_touched": entities_touched,
     }
 
 
 def unmet_requirements(spec: Any, produced: dict[str, int]) -> dict[str, dict[str, int]]:
     """Which declared requirements this phase has not reached, with both numbers."""
     shortfall: dict[str, dict[str, int]] = {}
-    for field in ("resolutions", "messages", "tool_calls", "entity_changes"):
+    for field in ("resolutions", "messages", "tool_calls", "entity_changes", "entities_touched"):
         wanted = int(getattr(spec, field, 0) or 0)
         if wanted and produced.get(field, 0) < wanted:
             shortfall[field] = {"required": wanted, "produced": produced.get(field, 0)}
