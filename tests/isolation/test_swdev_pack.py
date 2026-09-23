@@ -305,10 +305,15 @@ async def test_plan_implement_review_merge_smoke_session_runs_with_zero_core_dif
     """The process validates and boots through the unmodified interpreter -- zero branches
     in ``packages/core`` know this pack exists.
 
-    ``implement`` used to declare an ``await`` as a placeholder for delegation that did not
-    exist yet. Delegation is real now (G4.16 landed as the delegate endpoint and its worker
-    jobs), so the placeholder is gone: it parked the flow with nothing in the product to
-    satisfy it, on the phase where the engineers were meant to act."""
+    ``implement`` declares an ``await``, and the thing this guards is that something in
+    the product can satisfy it. It once declared one as a placeholder for delegation that
+    did not exist, which parked the flow forever on the phase where the engineers were
+    meant to act; the assertion then was that the await was gone. Delegation is real now
+    -- the delegate endpoint, its worker jobs, and ``worker.session_wake``, which
+    satisfies exactly a ``delegated_work`` await once the session's jobs are done -- so
+    the await is correct and its *shape* is what has to hold: a type with a waker behind
+    it, and a timeout, because an await that can only be satisfied by success is an await
+    that parks the flow the first time a delegation fails."""
     tenant_a, _tenant_b = two_tenants
     workspace_id = await _workspace_id(tenant_a)
     loaded = await load_pack(_PACK_DIR, tenant_a, workspace_id)
@@ -334,7 +339,15 @@ async def test_plan_implement_review_merge_smoke_session_runs_with_zero_core_dif
         phase_chain.append(phase_key)
         phase_key = evaluate_gates(definition.phases[phase_key], {})
     assert phase_chain == ["plan", "implement", "review", "merge"]
-    assert definition.phases["implement"].await_field is None
+
+    awaited = definition.phases["implement"].await_field
+    assert awaited is not None, "implement dispatches delegated work; it has to wait for it"
+    # `delegated_work` is the one type worker.session_wake knows how to satisfy.
+    assert awaited.type == "delegated_work"
+    assert awaited.timeout, "an await with no timeout parks the flow when a delegation dies"
+    assert awaited.on_timeout in definition.phases, (
+        f"on_timeout names {awaited.on_timeout!r}, which is not a phase of this flow"
+    )
 
 
 async def test_swdev_pack_has_zero_core_imports() -> None:

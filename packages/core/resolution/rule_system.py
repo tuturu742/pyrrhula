@@ -172,7 +172,7 @@ def resolve_outcome(
     if not outcome_bands:
         return UNJUDGED
     # Bands exist and none matched: that IS a gap in the system's own definition, and a
-    # silent fallback would hide a band table that does not cover its dice.
+    # silent fallback would hide a band table that does not cover its own randomizer.
     raise OutcomeBandingError(f"no outcome band matches total {total} and no target was given")
 
 

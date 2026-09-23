@@ -93,14 +93,14 @@ def test_the_tool_is_registered_when_a_queue_and_the_phase_allow_it() -> None:
     from core.process import live_session
 
     src = inspect.getsource(live_session)
-    assert (
-        "wants_delegation = bool(allowed_remote_tools) and DELEGATE_TOOL_NAME" in src
-    ), "a phase must ask for delegation by name, not get it by declaring nothing"
+    assert "wants_delegation = bool(allowed_remote_tools) and DELEGATE_TOOL_NAME" in src, (
+        "a phase must ask for delegation by name, not get it by declaring nothing"
+    )
     assert "if job_queue is not None and wants_delegation:" in src
 
 
 def test_a_phase_that_declares_no_remote_tools_gets_no_delegation() -> None:
-    """"No allowlist" means the phase declared none, not that it wants them all.
+    """ "No allowlist" means the phase declared none, not that it wants them all.
 
     Treating it as "allow everything" handed an effectful dispatch tool to an
     investigation phase whose job is to read a codebase and report. Its bench said so:

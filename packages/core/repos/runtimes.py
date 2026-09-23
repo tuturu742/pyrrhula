@@ -75,9 +75,7 @@ def validate_entry(key: str, image: str, setup: list[str]) -> dict[str, object]:
     if len(key) > _MAX_KEY_LEN:
         raise InvalidRuntimeError(f"runtime key is longer than {_MAX_KEY_LEN} characters")
     if not key.replace("-", "").replace("_", "").replace(".", "").isalnum():
-        raise InvalidRuntimeError(
-            "runtime key may contain letters, digits, '-', '_' and '.' only"
-        )
+        raise InvalidRuntimeError("runtime key may contain letters, digits, '-', '_' and '.' only")
 
     image = (image or "").strip()
     if not image:
@@ -86,9 +84,7 @@ def validate_entry(key: str, image: str, setup: list[str]) -> dict[str, object]:
         raise InvalidRuntimeError(f"runtime {key!r}: image must be a single reference")
 
     if len(setup) > _MAX_SETUP_CMDS:
-        raise InvalidRuntimeError(
-            f"runtime {key!r}: at most {_MAX_SETUP_CMDS} setup commands"
-        )
+        raise InvalidRuntimeError(f"runtime {key!r}: at most {_MAX_SETUP_CMDS} setup commands")
     cleaned: list[str] = []
     for cmd in setup:
         text = str(cmd).strip()

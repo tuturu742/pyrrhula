@@ -173,17 +173,13 @@ async def test_an_operation_whose_process_died_can_be_retried(db_available: None
     # A claim left behind by a process that never came back.
     async with tenant_scope(tenant_id) as session:
         session.add(
-            CompletedOperationRow(
-                idempotency_key=key, tenant_id=tenant_id, status="in_progress"
-            )
+            CompletedOperationRow(idempotency_key=key, tenant_id=tenant_id, status="in_progress")
         )
     async with tenant_scope(tenant_id) as session:
         await session.execute(
             update(CompletedOperationRow)
             .where(CompletedOperationRow.idempotency_key == key)
-            .values(
-                created_at=datetime.now(UTC) - timedelta(seconds=_CLAIM_LEASE_SECONDS + 60)
-            )
+            .values(created_at=datetime.now(UTC) - timedelta(seconds=_CLAIM_LEASE_SECONDS + 60))
         )
 
     assert await operation(tenant_id=tenant_id) == {"ran": 1}
@@ -205,9 +201,7 @@ async def test_a_live_claim_is_still_waited_for(db_available: None) -> None:
     key = f"turn:{_uuid.uuid4()}"
     async with tenant_scope(tenant_id) as session:
         session.add(
-            CompletedOperationRow(
-                idempotency_key=key, tenant_id=tenant_id, status="in_progress"
-            )
+            CompletedOperationRow(idempotency_key=key, tenant_id=tenant_id, status="in_progress")
         )
 
     assert await _reclaim_if_abandoned(key, tenant_id) is False

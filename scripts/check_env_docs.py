@@ -53,10 +53,7 @@ def _settings_defaults() -> dict[str, str]:
         default = field.default
         if default is None or repr(default) == "PydanticUndefined":
             continue
-        if isinstance(default, bool):
-            rendered = "true" if default else "false"
-        else:
-            rendered = str(default)
+        rendered = ("true" if default else "false") if isinstance(default, bool) else str(default)
         out[f"PYRRHULA_{name.upper()}"] = rendered
     return out
 

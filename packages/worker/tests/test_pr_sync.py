@@ -73,7 +73,7 @@ async def test_an_unknown_status_moves_nothing() -> None:
     assert status is None
     # The guard is a single equality against "closed", so None can never satisfy it.
     src = inspect.getsource(pr_sync.sync_pull_requests_for_tenant)
-    assert "if status is None or status.state != \"closed\":" in src
+    assert 'if status is None or status.state != "closed":' in src
 
 
 @pytest.mark.asyncio

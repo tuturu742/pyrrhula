@@ -165,7 +165,7 @@ def test_a_roll_nobody_is_judging_is_recorded_not_refused() -> None:
     assert resolve_outcome(8, None, ()) == UNJUDGED
 
 
-def test_a_band_table_that_does_not_cover_its_dice_still_raises() -> None:
+def test_a_band_table_that_does_not_cover_its_range_still_raises() -> None:
     """The permissive case is 'no bands declared', not 'bands declared and none matched'.
     The second is a gap in the system's own definition, and swallowing it would hide a
     table that cannot classify its own rolls."""

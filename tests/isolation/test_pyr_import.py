@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import pathlib
 import uuid
 import zipfile
 
@@ -523,7 +524,7 @@ async def test_scope_bands_survive_the_round_trip_and_still_gate_retrieval(
     insider = await create_persona(
         tenant_a, workspace_a, "insider", "Insider", conn.id, persona_type="participant"
     )
-    outsider = await create_persona(
+    await create_persona(
         tenant_a, workspace_a, "outsider", "Outsider", conn.id, persona_type="participant"
     )
 
