@@ -8,6 +8,12 @@ credential the installer no longer writes — is invisible until you do this.
 
 Everything here uses the documented installer. There is no second, private install path.
 
+> **"Purge" means two different things.** On this page it is the installer's `--purge`:
+> destroy the whole deployment — namespaces, volumes, database — and install it again.
+> The other one, `python -m core.tenancy.purge`, deletes *one tenant's rows* from a
+> database that keeps running, and lives in
+> [`docs/operations.md`](operations.md) with every other operator task.
+
 ## What you need
 
 | | |
@@ -190,3 +196,10 @@ deletes the deployment, and a fix that lived only there is gone with it.
 
 A pack change is not shipped when it is committed. It is shipped when the pin names it
 *and* the build fetched it: check for the stale-pack warning before believing otherwise.
+
+[`docs/packs-and-samples.md`](packs-and-samples.md) is the same two repositories described
+as capabilities rather than as a daily loop: how a pack is authored, pinned, synced and
+loaded, and what a sample declares beside its bundle.
+[`docs/operations.md`](operations.md) is everything an operator does to a deployment that
+is already running — deleting a single tenant, resetting a password, re-sealing
+credentials — and the troubleshooting entries for when a rebuild comes up wrong.

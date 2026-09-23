@@ -203,6 +203,9 @@ Running one:
 | [`docs/exec-engines.md`](docs/exec-engines.md) | Where delegated coding work builds and tests |
 | [`docs/previews.md`](docs/previews.md) | Running a build where a human can open it |
 | [`docs/portability.md`](docs/portability.md) | `.pyr` bundles: what travels, the export modes, and what import will not overwrite |
+| [`docs/packs-and-samples.md`](docs/packs-and-samples.md) | Registering workflows from `pyrrhula-workflows`, and setting tenants up from `pyrrhula-samples` |
+| [`docs/operations.md`](docs/operations.md) | Operator tasks on a running deployment: deleting a tenant, resetting a password, the admin console, troubleshooting |
+| [`docs/runbook-daily.md`](docs/runbook-daily.md) | Purging and rebuilding both deployments from those two repositories |
 
 Where this README and the code disagree, the code is what runs — and the disagreement is a
 bug in one of them.

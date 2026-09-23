@@ -12,6 +12,11 @@ reachable from a request.
 Without ``--yes`` it is a dry run: it prints what it *would* delete and changes nothing.
 ``--slug-prefix`` is the bulk path for clearing test-suite leftovers (isolation-*, sched-*,
 pd-*, ...). The reserved library tenant is always skipped.
+
+Run it inside the deployment -- ``kubectl -n pyrrhula exec deploy/pyrrhula-api --`` or
+``podman exec pyrrhula_api_1`` -- where the admin DSN already is. ``docs/operations.md``
+has that and the rest of the operator tasks, including why the admin console offers
+deactivation instead of this.
 """
 
 from __future__ import annotations

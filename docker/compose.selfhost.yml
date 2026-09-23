@@ -41,7 +41,12 @@ services:
     image: pyrrhula:latest
     command: ["migrate"]
     environment: &app_env
-      # Admin/migration DSN -- superuser, used ONLY by the migrate entrypoint (T0.2).
+      # Admin/migration DSN -- superuser. The migrate entrypoint uses it for DDL, and
+      # the api uses it at runtime for the two things the RLS-scoped app role may not
+      # do: ALTER TABLE/CREATE INDEX when a tenant defines an entity schema, and writing
+      # NULL-tenant rows when a workflow plugin syncs. It reaches every service through
+      # the anchor below, so a shell in any of these containers is a database superuser
+      # -- authorization on `exec` is the control (docs/operations.md).
       PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:${PYRRHULA_POSTGRES_PASSWORD}@postgres:5432/pyrrhula
       # App-role DSN -- non-superuser, non-BYPASSRLS `pyrrhula_app`, the only role RLS
       # actually applies to; migrate creates the role from PYRRHULA_APP_DB_PASSWORD.
