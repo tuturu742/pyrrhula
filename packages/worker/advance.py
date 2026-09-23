@@ -50,6 +50,15 @@ async def handle_advance_session(payload: dict[str, Any]) -> dict[str, Any]:
     sess = await get_session(tenant_id, session_id)
     if sess is None or sess.process_definition_id is None:
         return {"session_id": str(session_id), "advanced": False, "reason": "no definition"}
+    if sess.archived_at is not None:
+        # Archiving is documented as "not a pause", which is about the append-only record
+        # staying intact -- it was never meant to mean the session keeps running. A queued
+        # advance ran anyway, so an archived session went on spending the tenant's API
+        # budget, holding entity bindings its personas needed for the next session, and
+        # competing for a worker, none of it visible: the whole point of archiving is that
+        # it drops out of the session list, so nobody can see it still going.
+        log.info("advance.archived_session", session_id=str(session_id))
+        return {"session_id": str(session_id), "advanced": False, "reason": "archived"}
 
     definition_row = await get_definition(tenant_id, sess.process_definition_id)
     if definition_row is None:

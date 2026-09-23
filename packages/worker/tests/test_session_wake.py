@@ -103,7 +103,9 @@ async def test_a_second_worker_declines_a_session_already_being_advanced(
     tenant_id, session_id = uuid.uuid4(), uuid.uuid4()
 
     async def fake_get_session(_t, _s):  # noqa: ANN001
-        return SimpleNamespace(process_definition_id=uuid.uuid4(), status="active")
+        return SimpleNamespace(
+            process_definition_id=uuid.uuid4(), status="active", archived_at=None
+        )
 
     async def fake_get_definition(_t, _d):  # noqa: ANN001
         return SimpleNamespace(definition={"any": "thing"}, version=1, id=uuid.uuid4())
@@ -130,3 +132,31 @@ async def test_a_second_worker_declines_a_session_already_being_advanced(
     )
     assert out["advanced"] is False
     assert out["reason"] == "claimed elsewhere"
+
+
+@pytest.mark.asyncio
+async def test_an_archived_session_is_not_advanced(monkeypatch) -> None:  # noqa: ANN001
+    """Archiving drops a session out of the list, so a session that keeps advancing after
+    it is invisible while it spends the tenant's API budget and holds the entity bindings
+    its personas need for the next session. Two archived campaigns did exactly that, and
+    the only symptom was the next campaign's players finding themselves already bound to
+    characters the dice had not given them."""
+    import worker.advance as advance
+
+    async def fake_get_session(_t, _s):  # noqa: ANN001
+        return SimpleNamespace(
+            process_definition_id=uuid.uuid4(),
+            status="active",
+            archived_at="2026-09-23T07:30:00Z",
+        )
+
+    async def must_not_run(*_a, **_k):  # noqa: ANN001  -- pragma: no cover
+        raise AssertionError("an archived session must not be advanced")
+
+    monkeypatch.setattr("core.sessions.lifecycle.get_session", fake_get_session)
+    monkeypatch.setattr(advance, "claim_session", must_not_run)
+
+    out = await advance.handle_advance_session(
+        {"tenant_id": str(uuid.uuid4()), "session_id": str(uuid.uuid4())}
+    )
+    assert out == {"session_id": out["session_id"], "advanced": False, "reason": "archived"}
