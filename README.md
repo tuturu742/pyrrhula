@@ -199,6 +199,7 @@ Running one:
 | [`docs/configuration.md`](docs/configuration.md) | Every environment variable, how a setting resolves, and what deliberately is not an env var |
 | [`docs/models.md`](docs/models.md) | Model connections, per-persona sampling, and what happens when a provider refuses something |
 | [`docs/knowledge-classes.md`](docs/knowledge-classes.md) | Knowledge classes, scopes, and retrieval budgets |
+| [`docs/entities-and-state-machines.md`](docs/entities-and-state-machines.md) | Entity schemas, the optional state machines on them, and attaching one to a persona |
 | [`docs/mcp.md`](docs/mcp.md) | Attaching external tools, and the per-server limits |
 | [`docs/exec-engines.md`](docs/exec-engines.md) | Where delegated coding work builds and tests |
 | [`docs/previews.md`](docs/previews.md) | Running a build where a human can open it |

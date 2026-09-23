@@ -237,6 +237,8 @@ with it.
 
 - `docs/runbook-daily.md` — the purge-and-rebuild loop these two repositories feed
 - `docs/portability.md` — what a `.pyr` carries and what it deliberately does not
+- `docs/entities-and-state-machines.md` — the schemas a pack ships under `schemas/`, and the
+  state machines on them
 - `docs/previews.md` — the preview recipe `repos.json` can declare
 - `docs/mcp.md` — registering external tool servers
 - `AUTHORING.md` in `pyrrhula-workflows` — how to write each content kind

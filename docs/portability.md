@@ -13,13 +13,20 @@ bundle diffs in git, which is a real workflow for anyone authoring rules or lore
 | Section | Contents |
 |---|---|
 | `knowledge` | Sources, entries, chunks — with their scope keys |
-| `schemas`, `entities` | Entity schemas and the entities themselves |
+| `schemas`, `entities` | Entity schemas — fields, derived values, views and **state machines** — and the entities themselves, each with the state every machine was in |
 | `personas` | Personas, their behaviour-profile versions, and their generation params |
 | `process` | Flow definitions |
 | `vocabulary` | The overlay the workspace was authored under |
 | `secrets` | See *Secrets* below — this one is not automatic |
 | `sessions` | Transcripts, plus the resolution records that back them |
 | `connections` | **Opt-in.** Model connections *with their provider credentials* |
+
+An entity's **machine states** travel with it. A bundle that carried only field values
+exported the character sheet and dropped the situation — the traveller arrived healthy,
+the work item arrived in the backlog. Each restored machine writes an
+`entity_state_change` row with `cause='import'` and the bundle as `cause_ref`, which is
+the only thing that later explains state nobody in this deployment ever set. A machine
+the resident schema does not declare is dropped rather than stored unreadable.
 
 Also carried, and easy to miss because it is invisible until it is missing: **scope
 bands**. A restricted knowledge source is no use if the band that restricts it stays
@@ -92,6 +99,10 @@ Import is **additive and non-destructive**. It never overwrites:
 
 - A key that already exists is **forked** (`case` → `case-imported`) and the report lists
   every fork, so two imports of the same bundle cannot silently merge into one another.
+  A key that collides with nothing keeps its own name — including entity schema keys,
+  which matters because a schema is referred to *by key* by the personas, tools and flows
+  that use it. A schema renamed on the way into an empty workspace arrives attached to
+  nothing.
 - A persona key that already exists is **skipped**, and the existing one is mapped — which
   is what lets a re-import *heal* a workspace whose first import was partly refused,
   rather than producing a second cast nobody asked for.

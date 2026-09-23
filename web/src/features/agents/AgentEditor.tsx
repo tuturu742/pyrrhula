@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
 import { DraftWithAssistant } from "./DraftWithAssistant";
 import { BehaviorSliders } from "./BehaviorSliders";
@@ -48,6 +48,19 @@ export function AgentEditor({
     existingAgent?.agent_id ?? modelProfiles[0]?.id ?? "",
   );
   const [entityId, setEntityId] = useState(existingAgent?.entity_id ?? "");
+  // The record this persona acts through, picked from what the workspace actually has.
+  // This was a free-text box for a raw UUID: attaching a persona to its own sheet meant
+  // opening a second screen, copying an id out of a URL, and pasting it back.
+  const { data: workspaceEntities } = useQuery({
+    queryKey: ["workspace-entities", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/entities", {
+        params: { query: { workspace_id: workspaceId } },
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
   // Per-persona generation overrides (JSON), merged over the connection's params --
   // distinct voices on a shared connection: a temperature spread, a seed, penalties.
   const [genParams, setGenParams] = useState(() => {
@@ -201,14 +214,27 @@ export function AgentEditor({
 
       <Field
         label="Entity link"
-        hint="Link this persona to a character/entity record by id, or leave blank."
+        hint="The record this persona acts through — its state is what rules resolve against. Optional."
       >
-        <input
-          className="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        <select
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
-          placeholder="(none)"
-        />
+        >
+          <option value="">(none)</option>
+          {/* An id already stored but no longer listed -- a deleted entity, or one this
+              viewer cannot see -- must still be visible here, or saving the form would
+              silently clear it. */}
+          {entityId !== "" &&
+            !(workspaceEntities ?? []).some((e) => e.id === entityId) && (
+              <option value={entityId}>{entityId} (not in this workspace)</option>
+            )}
+          {(workspaceEntities ?? []).map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name} — {e.schema_key}
+            </option>
+          ))}
+        </select>
       </Field>
 
       {isEditing && agentRole === "informational" ? (
