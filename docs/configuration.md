@@ -86,6 +86,9 @@ in a `.env` file; the rest are read directly where they are used.
 |---|---|---|
 | `PYRRHULA_PLUGIN_DROP_DIR` | `/app/plugins-local` | Folder watched for hand-placed plugin packs — the credential-free install path. |
 | `PYRRHULA_PLUGINS_TOKEN` / `GH_TOKEN` | unset | Token for fetching plugin repos that are private. A clean install must never need one. |
+| `PYRRHULA_PLUGINS_STRICT` | `0` | `1` makes a failed plugin fetch a build failure. Without it the build falls back to whatever is cached on disk and the install reports success with the previous pack inside it. What CI should use. |
+| `PYRRHULA_COMPOSE_DNS` | unset | A nameserver for the compose containers, e.g. `1.1.1.1`. Needed on a host whose only resolver is `systemd-resolved` at `127.0.0.53` — a loopback address that means nothing inside a container namespace, so every outbound lookup fails and the symptom is an apparent Hugging Face outage. |
+| `PYRRHULA_OLLAMA_BASE` | unset | Base URL for a local Ollama, for a deployment that seats personas on one. No sample does. |
 
 ## Observability
 
