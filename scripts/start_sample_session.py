@@ -118,9 +118,8 @@ async def _resolve(
             if p.id != supervisor_id and p.persona_type in ("participant", "observer")
         ]
 
-    missing_repos = sorted(set(repo_keys) - {r for r in repo_keys if repo_ids})
     if repo_keys and not repo_ids:
-        raise SystemExit(f"no repositories matching {missing_repos or repo_keys} in {slug!r}")
+        raise SystemExit(f"no repositories matching {sorted(repo_keys)} in {slug!r}")
 
     return tenant_id, workspace_id, supervisor_id, participant_ids, definition_id, repo_ids
 

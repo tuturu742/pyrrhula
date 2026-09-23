@@ -184,9 +184,13 @@ no UPDATE/DELETE grant.
   `class` + `scope_key` for pushdown; `vector(1024)` HNSW; generated `tsv`);
   `workspace_knowledge_attachment` (version pin, scope, priority — the workspace's opinion
   lives here, not on the source).
-- **Agents:** `agent` (is a principal; role facilitator|participant|informational),
-  `model_profile` (provider, params, `credential_ref` — never the key), `behavior_profile`‡
+- **Agents:** `persona` (is a principal; `persona_type` supervisor|participant|informational),
+  `agent` (provider, params, `credential_ref` — never the key), `behavior_profile`‡
   (immutable versions), `axis_definition` (pack content; `stakes: high` requires a gate binding).
+  Two renames landed after this list was written and both moved a name onto a different
+  thing, so older prose reads as correct while naming the wrong table: what was `agent` is
+  now `persona`, and what was `model_profile` is now `agent`. There is no `model_profile`
+  table.
 - **Entities:** `entity_schema` (fields/derived/FSMs/views/constraints JSONB), `entity`
   (JSONB data + generated columns for `indexed:true` fields), `entity_state_change`‡.
 - **Scopes/secrets:** `scope`, `secret` (content, gist + embedding, `hint_text`,

@@ -98,5 +98,5 @@ the existing layout — do not invent alternative structure.
   `tests/packs/` (INV-9, from Phase 3), `tests/leak/` (from Phase 2).
 - Acceptance criteria are falsifiable on purpose. If a criterion is untestable as written,
   say so in the PR rather than quietly reinterpreting it.
-- Never commit provider API keys; `model_profile.credential_ref` points into a secret
+- Never commit provider API keys; `agent.credential_ref` points into a secret
   manager, never holds a key.

@@ -23,7 +23,7 @@ them is something code can supply:
    rather than the live repository; neither is reachable, and the delegated agent is what
    would push to it anyway.
 3. **No provider credentials.** The EM's proposal, the engineer's plan, and the reviewer's
-   critique are all model calls. `model_profile.credential_ref` points into a secret
+   critique are all model calls. `agent.credential_ref` points into a secret
    manager that holds nothing in this deployment.
 4. **No second human.** The Director's merge approval is a person's decision. It is the
    one step in the loop that cannot be automated by design, which is precisely why it is
