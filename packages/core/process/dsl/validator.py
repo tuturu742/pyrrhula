@@ -73,11 +73,54 @@ def validate_definition(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
     issues.extend(_check_gate_else_is_last(dsl))
     issues.extend(_check_budget_ratios(dsl))
     issues.extend(_check_cel_expressions(dsl))
+    issues.extend(_check_phase_requirements(dsl))
     # Reachability assumes every referenced target is real -- run it last, and skip it
     # entirely if dangling targets already exist, so one bad edge doesn't also spam
     # "unreachable" for everything downstream of it.
     if not any(i.field_path.startswith("phases.") and "to" in i.field_path for i in issues):
         issues.extend(_check_reachability(dsl))
+    return issues
+
+
+def _check_phase_requirements(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
+    """A ``requires`` block that can never be satisfied, or never fires, caught here.
+
+    Two ways to write one that looks like a rule and is not: a phase whose actors can
+    produce nothing (no ``generate`` entry) but which demands output, and a declared
+    block whose every count is zero. The first stalls or repeats pointlessly; the second
+    reads as a requirement to anyone maintaining the flow and enforces nothing.
+    """
+    issues: list[ValidationIssue] = []
+    for phase_key, phase in dsl.phases.items():
+        spec = phase.requires
+        if spec is None:
+            continue
+        path = f"phases.{phase_key}.requires"
+        if not spec.is_declared():
+            issues.append(
+                ValidationIssue(
+                    path,
+                    "every count is zero: the block requires nothing. Remove it, or say "
+                    "what the phase has to produce.",
+                )
+            )
+            continue
+        if not any(a.mode in ("generate", "generate_as") for a in phase.actors):
+            issues.append(
+                ValidationIssue(
+                    path,
+                    f"phase {phase_key!r} has no generating actor, so it cannot produce "
+                    "what this asks of it: the requirement can only repeat or hold.",
+                )
+            )
+        if spec.on_unmet == "hold" and spec.max_repeats == 0 and phase.await_field is not None:
+            issues.append(
+                ValidationIssue(
+                    path,
+                    "on_unmet 'hold' on a phase that already awaits: the phase would "
+                    "park for two different reasons and the second is unreachable.",
+                )
+            )
     return issues
 
 

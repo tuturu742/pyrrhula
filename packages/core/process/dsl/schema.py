@@ -335,6 +335,51 @@ class PacingSpec(BaseModel):
         return value
 
 
+class PhaseCompletionSpec(BaseModel):
+    """What a phase must have produced before it is allowed to move on.
+
+    A phase ends when its actor entries are used up, which says the turns were spent and
+    nothing about whether the work happened. Observed on a live eight-beat run: the
+    referee opened a fight, the fight was good, and it kept going while the flow slid
+    underneath it -- four beats advanced on turn budget while the fiction never left the
+    first encounter. The beat that was supposed to stage a different enemy was spent on
+    more rounds of the previous one, and nothing anywhere reported a problem.
+
+    The requirements are deliberately *counts over what this phase itself recorded*, not
+    CEL over the world. A predicate that could read anything would make validation
+    undecidable and make resume depend on re-evaluating state; a count of rows written
+    since the phase began is cheap, total, and means the same thing on a replay.
+
+    Every field is optional and defaults to "no requirement", so a phase that declares
+    nothing behaves exactly as it always has.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Deterministic results (dice, checks, scored outcomes) recorded in this phase.
+    # `1` is the useful value for "this beat must actually resolve something".
+    resolutions: int = Field(default=0, ge=0, le=1000)
+    # Turns that actually landed a message in this phase.
+    messages: int = Field(default=0, ge=0, le=1000)
+    # Side-effecting tool calls recorded in this phase.
+    tool_calls: int = Field(default=0, ge=0, le=1000)
+    # Entity field writes or state-machine moves recorded in this phase -- "something in
+    # the world changed", as distinct from "something was rolled".
+    entity_changes: int = Field(default=0, ge=0, le=1000)
+
+    # What to do when the actors are exhausted and the requirement is not met.
+    #   repeat   -- run the phase's actors again, up to `max_repeats`, then move on
+    #   hold     -- the same, but pause the session for a human when repeats run out
+    #   warn     -- record that it was unmet and move on regardless
+    # Moving on is the default end state in every case except `hold`: a campaign stuck
+    # forever on a beat nobody can satisfy is a worse failure than a thin beat.
+    on_unmet: Literal["repeat", "hold", "warn"] = "repeat"
+    max_repeats: int = Field(default=1, ge=0, le=10)
+
+    def is_declared(self) -> bool:
+        return bool(self.resolutions or self.messages or self.tool_calls or self.entity_changes)
+
+
 class PhaseSpec(BaseModel):
     """One phase of a ProcessDefinition. ``budget`` is optional -- a pure-await phase like
     the plan's ``feedback_loop`` example generates no agent turn and needs no context
@@ -366,6 +411,9 @@ class PhaseSpec(BaseModel):
     effects: list[EffectSpec] = Field(default_factory=list)
     await_field: AwaitSpec | None = Field(default=None, alias="await")
     flags: list[str] = Field(default_factory=list)
+    # What this phase must have produced before it may transition. Absent = no
+    # requirement, which is what every phase did before this existed.
+    requires: PhaseCompletionSpec | None = None
     tools: list[str] = Field(default_factory=list)
     # Which registered remote MCP tools the ACTING persona may use in this phase, by
     # tool name. None (the default) keeps the legacy behaviour -- every workspace

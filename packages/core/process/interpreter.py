@@ -40,7 +40,7 @@ from typing import Any
 
 import celpy
 from celpy.adapter import json_to_cel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.actions.idempotency import idempotent
@@ -237,6 +237,189 @@ async def _pause_with_fault(tenant_id: uuid.UUID, session_id: uuid.UUID, message
 class _TransitionOutcome:
     new_phase_key: str
     terminal: bool
+
+
+async def _phase_entry_seq(session: AsyncSession, session_id: uuid.UUID) -> int:
+    """The event_seq of the transition that entered the current phase, or 0.
+
+    Counting "what this phase produced" needs a floor, and the phase's own entry event is
+    the honest one: it is written in the same transaction that set ``current_phase``, so
+    nothing can land between them.
+    """
+    seq = await session.scalar(
+        select(SessionEventRow.event_seq)
+        .where(
+            SessionEventRow.session_id == session_id,
+            SessionEventRow.kind == "phase_transition",
+        )
+        .order_by(SessionEventRow.event_seq.desc())
+        .limit(1)
+    )
+    return int(seq or 0)
+
+
+async def measure_phase(tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict[str, int]:
+    """How much this phase has actually produced, by kind.
+
+    Counts rows written at or after the phase's entry event. Deliberately cheap and
+    deliberately dumb: four counts, no interpretation. What they are *worth* is the
+    flow author's call, declared in ``requires``.
+    """
+    from sqlalchemy import func
+
+    from core.actions.effectful import ActionRecordRow
+    from core.entities.fsm import EntityStateChangeRow
+    from core.resolution.records import ResolutionRecordRow
+
+    async with tenant_scope(tenant_id) as session:
+        floor = await _phase_entry_seq(session, session_id)
+
+        async def _count(model: Any, seq_col: Any) -> int:
+            return int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(model)
+                    .where(model.session_id == session_id, seq_col >= floor)
+                )
+                or 0
+            )
+
+        resolutions = await _count(ResolutionRecordRow, ResolutionRecordRow.event_seq)
+        entity_changes = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(EntityStateChangeRow)
+                .where(
+                    EntityStateChangeRow.session_id == session_id,
+                    EntityStateChangeRow.event_seq >= floor,
+                )
+            )
+            or 0
+        )
+        messages = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(SessionEventRow)
+                .where(
+                    SessionEventRow.session_id == session_id,
+                    SessionEventRow.kind == "message",
+                    SessionEventRow.event_seq >= floor,
+                )
+            )
+            or 0
+        )
+        tool_calls = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(ActionRecordRow)
+                .where(
+                    ActionRecordRow.session_id == session_id,
+                    ActionRecordRow.event_seq >= floor,
+                )
+            )
+            or 0
+        )
+
+    return {
+        "resolutions": resolutions,
+        "messages": messages,
+        "tool_calls": tool_calls,
+        "entity_changes": entity_changes,
+    }
+
+
+def unmet_requirements(spec: Any, produced: dict[str, int]) -> dict[str, dict[str, int]]:
+    """Which declared requirements this phase has not reached, with both numbers."""
+    shortfall: dict[str, dict[str, int]] = {}
+    for field in ("resolutions", "messages", "tool_calls", "entity_changes"):
+        wanted = int(getattr(spec, field, 0) or 0)
+        if wanted and produced.get(field, 0) < wanted:
+            shortfall[field] = {"required": wanted, "produced": produced.get(field, 0)}
+    return shortfall
+
+
+async def _enforce_phase_requirements(
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    phase_key: str,
+    phase: PhaseSpec,
+    on_event: OnEvent | None,
+) -> str:
+    """Decide whether this phase may leave, and record why either way.
+
+    Returns ``"repeat"`` (run the actors again), ``"hold"`` (park for a person) or
+    ``"pass"`` (transition normally). Every outcome writes a ``phase_requirement`` event:
+    a beat that was let through thin is exactly the thing nobody notices, so it says so
+    in the transcript rather than only in a log line.
+    """
+    spec = phase.requires
+    assert spec is not None
+    produced = await measure_phase(tenant_id, session_id)
+    shortfall = unmet_requirements(spec, produced)
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(SessionRow, session_id)
+        assert row is not None
+        # Derived, not stored. The scheduler rewrites ``actor_cursor`` wholesale on its
+        # next call, so a counter kept there is erased by the very rotation it is meant
+        # to bound -- which showed up as a phase repeating until max_steps. The decisions
+        # are already in the event log and the phase entry is already the floor, so the
+        # count is a question the record can answer.
+        floor = await _phase_entry_seq(session, session_id)
+        repeats = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(SessionEventRow)
+                .where(
+                    SessionEventRow.session_id == session_id,
+                    SessionEventRow.kind == "phase_requirement",
+                    SessionEventRow.event_seq >= floor,
+                    SessionEventRow.payload["decision"].astext == "repeat",
+                )
+            )
+            or 0
+        )
+
+        if not shortfall:
+            decision = "met"
+        elif spec.on_unmet == "warn":
+            decision = "passed_unmet"
+        elif repeats < spec.max_repeats:
+            decision = "repeat"
+        elif spec.on_unmet == "hold":
+            decision = "hold"
+        else:
+            decision = "passed_unmet"
+
+        if decision == "repeat":
+            # A fresh rotation: the scheduler starts a phase over when the cursor does
+            # not name it, so every seat gets another pass at the beat it did not finish.
+            row.actor_cursor = {}
+
+        event_seq = await _next_event_seq(session, session_id)
+        payload: dict[str, Any] = {
+            "phase": phase_key,
+            "decision": decision,
+            "produced": produced,
+            "unmet": shortfall,
+            "repeat": repeats + (1 if decision == "repeat" else 0),
+            "max_repeats": spec.max_repeats,
+        }
+        session.add(
+            SessionEventRow(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                event_seq=event_seq,
+                kind="phase_requirement",
+                payload=payload,
+            )
+        )
+        await session.flush()
+
+    if on_event is not None:
+        await on_event(event_seq, "phase_requirement", payload)
+
+    return {"repeat": "repeat", "hold": "hold"}.get(decision, "pass")
 
 
 async def _transition(
@@ -563,6 +746,22 @@ async def advance_session(
                                 assert row is not None
                                 row.status = "awaiting"
                         return AdvanceResult("awaiting", steps, phase_key, tuple(phase.flags))
+
+                    if phase.requires is not None and phase.requires.is_declared():
+                        held = await _enforce_phase_requirements(
+                            tenant_id, session_id, phase_key, phase, on_event
+                        )
+                        if held == "repeat":
+                            # The actors go round again. Clearing the cursor is what
+                            # makes that mean anything: the rotation resolves afresh, so
+                            # every seat gets another pass at the beat it did not finish.
+                            continue
+                        if held == "hold":
+                            async with tenant_scope(tenant_id) as session:
+                                row = await session.get(SessionRow, session_id)
+                                assert row is not None
+                                row.status = "awaiting"
+                            return AdvanceResult("awaiting", steps, phase_key, tuple(phase.flags))
 
                     outcome = await _transition(
                         tenant_id,
