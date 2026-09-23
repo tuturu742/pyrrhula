@@ -13,6 +13,7 @@ Returning there abandons the session mid-flow.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import uuid
 from typing import Any
@@ -27,6 +28,7 @@ from core.process.locking import (
     SessionConflictError,
     claim_session,
     commit_advance,
+    refresh_claim,
     release_claim,
 )
 from worker.embedding_provider_factory import get_embedding_provider
@@ -39,6 +41,19 @@ from worker.permission_service_factory import get_permission_service
 log = structlog.get_logger()
 
 _MAX_CONTINUATIONS = 12
+# Far below the claim watchdog, so a live holder never looks silent. The watchdog then
+# measures silence rather than duration, which is the thing it was always trying to ask.
+_HEARTBEAT_SECONDS = 30
+
+
+async def _beat(tenant_id: uuid.UUID, session_id: uuid.UUID, claimant: str) -> None:
+    """Say "still here" until cancelled. A lost claim ends the loop rather than fighting
+    for it back: whoever holds it now is the one advancing this session."""
+    while True:
+        await asyncio.sleep(_HEARTBEAT_SECONDS)
+        if not await refresh_claim(tenant_id, session_id, claimant):
+            log.warning("advance.claim_lost", session_id=str(session_id))
+            return
 
 
 async def handle_advance_session(payload: dict[str, Any]) -> dict[str, Any]:
@@ -72,6 +87,7 @@ async def handle_advance_session(payload: dict[str, Any]) -> dict[str, Any]:
     claimant = f"worker:{uuid.uuid4().hex[:8]}"
     try:
         async with claim_session(tenant_id, session_id, claimant) as observed_version:
+            heartbeat = asyncio.create_task(_beat(tenant_id, session_id, claimant))
             try:
                 for _ in range(_MAX_CONTINUATIONS):
                     result = await run_process_definition_session(
@@ -96,6 +112,10 @@ async def handle_advance_session(payload: dict[str, Any]) -> dict[str, Any]:
                 # the claim for the whole watchdog window before anyone may retry.
                 await release_claim(tenant_id, session_id)
                 raise
+            finally:
+                heartbeat.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await heartbeat
     except SessionClaimTimeoutError as exc:
         # Not an error: another worker has this session. Say so and let it finish --
         # whatever enqueued this will enqueue again when there is more to do.

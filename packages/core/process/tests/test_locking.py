@@ -277,3 +277,28 @@ def test_the_session_watchdog_outlasts_the_operation_it_protects() -> None:
     from core.process.locking import _CLAIM_TIMEOUT_SECONDS
 
     assert _CLAIM_TIMEOUT_SECONDS >= CLAIM_LEASE_SECONDS
+
+
+async def test_a_heartbeat_keeps_a_slow_turn_from_being_taken_over(db_available: None) -> None:
+    """The watchdog cannot tell a dead worker from a slow one. A live campaign turn on a
+    local 27B model was observed at 14m48s against a 15m timeout, so sizing the timeout to
+    the longest imaginable turn is a losing game in both directions. The holder says
+    "still here" instead, and the timeout goes back to measuring silence."""
+    import datetime as _dt
+
+    from core.process.locking import refresh_claim
+    from core.tenancy.scope import tenant_scope
+
+    tenant_id, _workspace_id, session_id = await _setup("lock-heartbeat")
+
+    async with claim_session(tenant_id, session_id, "worker-alpha"):
+        async with tenant_scope(tenant_id) as db:
+            row = await db.get(SessionRow, session_id)
+            row.claimed_at = _dt.datetime.now(_dt.UTC) - _dt.timedelta(seconds=600)
+        stale = (await _get_session(tenant_id, session_id)).claimed_at
+
+        assert await refresh_claim(tenant_id, session_id, "worker-alpha") is True
+        assert (await _get_session(tenant_id, session_id)).claimed_at > stale
+
+        # Somebody else's heartbeat must not revive a claim they do not hold.
+        assert await refresh_claim(tenant_id, session_id, "worker-beta") is False

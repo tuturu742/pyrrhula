@@ -152,6 +152,28 @@ async def commit_advance(
             row.awaiting = awaiting
 
 
+async def refresh_claim(tenant_id: uuid.UUID, session_id: uuid.UUID, claimant_id: str) -> bool:
+    """Push the claim's timestamp forward while its holder is still working.
+
+    The watchdog exists for a worker that died mid-advance, and it cannot tell that from a
+    worker that is simply slow. Sizing it to the longest imaginable turn is the wrong
+    trade in both directions: too short and a live turn gets taken over (a campaign turn
+    on a local 27B model was observed at 14m48s against a 15m timeout), too long and a
+    genuinely dead worker holds the session for that whole window.
+
+    A heartbeat separates the two questions. The holder says "still here" every so often,
+    so the timeout can be sized to *silence* rather than to the longest turn. Returns
+    False when the claim is gone or has been taken by someone else -- the caller has lost
+    it and should not pretend otherwise.
+    """
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(SessionRow, session_id)
+        if row is None or row.claimed_by != claimant_id:
+            return False
+        row.claimed_at = datetime.now(UTC)
+        return True
+
+
 async def release_claim(tenant_id: uuid.UUID, session_id: uuid.UUID) -> None:
     """Best-effort release without bumping version -- used on the failure path (the
     advance itself raised) so a failed attempt doesn't hold the claim for the full
