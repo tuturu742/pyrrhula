@@ -171,9 +171,13 @@ assistant cannot answer a question about the repository. Neither reports an erro
 because an empty graph is a valid empty graph. Check it landed:
 
 ```sql
-select status, result->>'nodes' from job
+select status, result->>'node_count', result->>'edge_count' from job
  where kind = 'analyze_workspace_repos' order by created_at desc limit 1;
 ```
+
+`done` with a non-zero `node_count` is the only green. A `done` with zero nodes means the
+job ran against an empty hosted store — the repository row exists and the code was never
+cloned into it.
 
 ### Starting a session in a seeded tenant
 

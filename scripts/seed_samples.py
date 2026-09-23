@@ -296,6 +296,10 @@ async def seed(
     if skipped_secrets:
         raise SystemExit(f"[{slug}] secrets did not import: {skipped_secrets}")
 
+    # What ruleset the bundle pointed each tool at, before the pack load below can
+    # overwrite it. See `restore_tool_bindings`.
+    imported_tool_bindings = await tool_bindings(tenant_id)
+
     # Step "point the cast at your connection" -- the one the README makes you do by
     # hand for every persona, which is where a six-agent sample loses people.
     bound: dict[str, int] = {}
@@ -369,6 +373,7 @@ async def seed(
     await register_repos(slug, tenant_id, workspace_id, owner_id, config_dir, secrets_dir)
     await register_mcp_servers(slug, tenant_id, workspace_id, config_dir)
     await load_packs(slug, tenant_id, workspace_id, kind)
+    await restore_tool_bindings(slug, tenant_id, imported_tool_bindings)
 
 
 # Which pack each kind of table needs loaded on top of its bundle. A bundle carries the
@@ -415,6 +420,59 @@ async def register_mcp_servers(
             + (f" (max {budget}/session)" if budget else ""),
             flush=True,
         )
+
+
+async def tool_bindings(tenant_id: uuid.UUID) -> dict[str, str]:
+    """Which rule system each tool definition currently validates against."""
+    from sqlalchemy import select as _select
+
+    from core.resolution.registry import ToolDefinitionRow
+    from core.tenancy.scope import tenant_scope
+
+    async with tenant_scope(tenant_id) as session:
+        rows = (
+            await session.execute(
+                _select(ToolDefinitionRow).where(ToolDefinitionRow.tenant_id == tenant_id)
+            )
+        ).scalars()
+        return {row.key: row.validation_ref for row in rows if row.validation_ref}
+
+
+async def restore_tool_bindings(slug: str, tenant_id: uuid.UUID, imported: dict[str, str]) -> None:
+    """Put back the ruleset the bundle bound each tool to.
+
+    A pack ships a generic tool and a generic ruleset; a sample ships a specific one and
+    a tool bound to it. Both register the same key, and the pack load runs last, so
+    ``register_tool_definition``'s upsert quietly replaced the sample's binding with the
+    pack's.
+
+    The damage is invisible until somebody reads a roll. In karsh-vale the players rolled
+    3d6 for ability scores against the generic d20 ruleset, which resolves an ability
+    modifier for the check type, so a roll of [5, 6, 6] was recorded as **19** -- a score
+    3d6 cannot produce. A player noticed, refused to write it on a sheet, and asked the
+    referee which check type to use. She was right, and there was no answer that would
+    have helped: the tool was pointed at the wrong ruleset.
+    """
+    from sqlalchemy import select as _select
+
+    from core.resolution.registry import ToolDefinitionRow
+    from core.tenancy.scope import tenant_scope
+
+    restored: list[str] = []
+    async with tenant_scope(tenant_id) as session:
+        rows = (
+            await session.execute(
+                _select(ToolDefinitionRow).where(ToolDefinitionRow.tenant_id == tenant_id)
+            )
+        ).scalars()
+        for row in rows:
+            want = imported.get(row.key)
+            if want and row.validation_ref != want:
+                restored.append(f"{row.key}: {row.validation_ref} -> {want}")
+                row.validation_ref = want
+        await session.flush()
+    if restored:
+        print(f"[{slug}] tool bindings restored after pack load: {restored}", flush=True)
 
 
 async def load_packs(slug: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> None:
