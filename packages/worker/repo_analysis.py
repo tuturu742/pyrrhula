@@ -328,7 +328,7 @@ async def _run_analysis(
         {"tenant_id": str(tenant_id), "knowledge_source_id": str(source_id)},
     )
 
-    return {
+    result = {
         "source_id": str(source_id),
         "version_id": str(version_id),
         "repos": {k: head_shas[k] for k in repo_keys},
@@ -337,6 +337,24 @@ async def _run_analysis(
         "ingested_sources": ingested_sources,
         "fallbacks": fallbacks,
     }
+
+    # This job is idempotent on content -- workspace plus HEAD SHAs -- so a result is
+    # cached until the repository itself changes. That is right for a good analysis and
+    # a trap for a degraded one: when every prose step fell back (a misconfigured
+    # assistant model, a provider outage), the cache pinned a graph of bare file listings
+    # in place, and fixing the cause changed nothing because the re-run never ran. A
+    # bench then plans against a file listing and cannot tell.
+    #
+    # An analysis that produced no prose at all is not a result worth keeping. Raising
+    # here leaves it retryable rather than recorded as done.
+    if fallbacks and not any(step not in fallbacks for step in ("overview", "graph")):
+        raise RuntimeError(
+            "repo analysis produced no model-written summaries "
+            f"(every step fell back: {sorted(set(fallbacks))}). "
+            "Check the workspace assistant has a model profile with a provider and a "
+            "model set; the graph is a file listing without it."
+        )
+    return result
 
 
 async def handle_analyze_workspace_repos(payload: dict[str, Any]) -> dict[str, Any]:
