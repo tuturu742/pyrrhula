@@ -36,6 +36,7 @@ this need admin", the same scrutiny ``unscoped_session()``'s own exception list 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -59,6 +60,28 @@ _admin_engine_loop: asyncio.AbstractEventLoop | None = None
 _admin_sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
+def _release_abandoned(engine: AsyncEngine | None, loop: asyncio.AbstractEventLoop | None) -> None:
+    """Close the pool of an engine whose event loop has gone.
+
+    Rebinding drops the old engine on the floor, and a dropped ``AsyncEngine`` keeps its
+    pooled sockets until garbage collection gets round to it. In production that never
+    happens -- one loop, one engine, for the life of the process. Under pytest the loop
+    changes constantly, so the abandoned pools accumulate for the whole run: a full suite
+    was sitting at 89 of Postgres's 100 connection slots and tipping over into
+    ``TooManyConnectionsError`` at whichever test happened to be next, which reads as a
+    flaky test rather than as a leak.
+
+    Only ever called for a loop that is not the running one, so the connections cannot be
+    in use. ``sync_engine.dispose()`` is the synchronous half of the same disposal
+    ``dispose_engine`` does; closing an asyncpg socket whose loop is gone can raise, and a
+    failure to tidy up must not fail the caller that was merely asking for a session.
+    """
+    if engine is None or loop is asyncio.get_running_loop():
+        return
+    with contextlib.suppress(Exception):
+        engine.sync_engine.dispose()
+
+
 def _get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     """Rebinds to a fresh engine whenever the running event loop changes.
 
@@ -71,6 +94,7 @@ def _get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     global _engine, _engine_loop, _sessionmaker
     current_loop = asyncio.get_running_loop()
     if _sessionmaker is None or _engine_loop is not current_loop:
+        _release_abandoned(_engine, _engine_loop)
         settings = get_settings()
         _engine = create_async_engine(settings.app_database_url, pool_pre_ping=True)
         _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
@@ -116,6 +140,7 @@ def _get_admin_sessionmaker() -> async_sessionmaker[AsyncSession]:
     global _admin_engine, _admin_engine_loop, _admin_sessionmaker
     current_loop = asyncio.get_running_loop()
     if _admin_sessionmaker is None or _admin_engine_loop is not current_loop:
+        _release_abandoned(_admin_engine, _admin_engine_loop)
         settings = get_settings()
         _admin_engine = create_async_engine(settings.database_url, pool_pre_ping=True)
         _admin_sessionmaker = async_sessionmaker(_admin_engine, expire_on_commit=False)

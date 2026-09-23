@@ -27,13 +27,23 @@ from core.tenancy.scope import admin_purge_session, dispose_engine, unscoped_ses
 
 async def existing_tenant_ids() -> set[str]:
     """Every non-library tenant id, or an empty set when there is no database at all
-    (the same "skip rather than fail" posture the db_available fixtures take)."""
+    (the same "skip rather than fail" posture the db_available fixtures take).
+
+    Disposes the engine it opened. The engine is a module global keyed by event loop, and
+    this runs on the *session-scoped* loop while every test runs on its own -- so the
+    engine created here is replaced by the first test's and never disposed, holding its
+    pool open for the length of the run. One leaked pool plus the run's own churn is
+    enough to exhaust a default `max_connections` of 100, which surfaces as
+    ``TooManyConnectionsError`` at the setup of whichever test happens to be next.
+    """
     try:
         async with unscoped_session() as session:
             rows = await session.execute(text("SELECT id FROM tenant WHERE NOT is_library"))
             return {str(row[0]) for row in rows}
     except (SQLAlchemyError, OSError):
         return set()
+    finally:
+        await dispose_engine()
 
 
 async def purge_tenants(tenant_ids: set[str]) -> int:

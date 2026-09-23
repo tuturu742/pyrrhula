@@ -40,6 +40,7 @@ from api.routes import (
     workspaces,
 )
 from core.observability.otel import configure_tracing
+from core.tenancy.scope import dispose_engine
 from core.usage_limits import UsageLimitExceededError
 
 log = structlog.get_logger()
@@ -74,6 +75,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("api.startup")
     yield
     await close_redis()
+    # Symmetrical with Redis, and for the same reason: a shutdown that leaves its pool
+    # open leaves Postgres connections for the server to reap. It is invisible in
+    # production, where the process exits and takes them with it, and cumulative under
+    # test -- every `TestClient(app)` context builds the engine on its own internal loop
+    # and abandoned it here, so an API suite marched a hundred pools towards Postgres's
+    # connection limit and failed whichever test happened to be running when it arrived.
+    await dispose_engine()
     log.info("api.shutdown")
 
 
