@@ -656,7 +656,7 @@ _GAMEDEV = SampleSpec(
                 "to read. Reason about the code in the open instead: walk the cases, say "
                 "what you expect each to produce and why, and name what you would want "
                 "run.\n"
-                "- **Do not write that you ran something.** \"Ran the test command\" "
+                '- **Do not write that you ran something.** "Ran the test command" '
                 "followed by pasted output is a claim the record cannot support, and a "
                 "reviewer cannot tell it from a real run -- which is what makes every "
                 "genuine result in the transcript worth less. When the work needs a real "
@@ -1126,6 +1126,16 @@ _BFRPG_RULE_SYSTEM = {
         # read it from.
         "ability_score_roll",
         "hit_die",
+        # The rolls the shipped rulebook actually asks for, which the check-type list did
+        # not carry. "Initiative and the Combat Round" says every combatant rolls 1d6 for
+        # initiative; the referee tried it four times in a live first encounter and was
+        # refused four times, so the fight could not start and the beat played as talk.
+        # "Attack Rolls" ends "and damage is rolled", and distinguishes the Strength bonus
+        # for melee from the Dexterity bonus for missiles -- one check type could not do
+        # both.
+        "initiative",
+        "damage",
+        "missile_attack",
         "strength_check",
         "dexterity_check",
         "constitution_check",
@@ -1145,6 +1155,21 @@ _BFRPG_RULE_SYSTEM = {
     "modifier_resolver": {
         "ability_score_roll": "0",
         "hit_die": "0",
+        # 1d6 adjusted by the Dexterity bonus, per the rulebook entry.
+        "initiative": "has(fields.dexterity) ? (fields.dexterity<=3 ? -3 "
+        ": (fields.dexterity<=5 ? -2 : "
+        "(fields.dexterity<=8 ? -1 : (fields.dexterity<=12 "
+        "? 0 : (fields.dexterity<=15 ? 1 : "
+        "(fields.dexterity<=17 ? 2 : 3)))))) : 0",
+        # The weapon's die. The shipped text says damage is rolled; it does not add an
+        # ability bonus to it, and a resolver must not invent a rule the rulebook in the
+        # bundle does not state.
+        "damage": "0",
+        "missile_attack": "(has(fields.attack_bonus) ? fields.attack_bonus : 0) "
+        "+ (has(fields.dexterity) ? (fields.dexterity<=3 ? -3 : "
+        "(fields.dexterity<=5 ? -2 : (fields.dexterity<=8 ? -1 : "
+        "(fields.dexterity<=12 ? 0 : (fields.dexterity<=15 ? 1 : "
+        "(fields.dexterity<=17 ? 2 : 3)))))) : 0)",
         "strength_check": "has(fields.strength) ? (fields.strength<=3 ? -3 : "
         "(fields.strength<=5 ? -2 : (fields.strength<=8 ? "
         "-1 : (fields.strength<=12 ? 0 : "
