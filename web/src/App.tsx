@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { WorkflowsPage } from "@/features/workflows/WorkflowsPage";
 import { OrganizationPage } from "@/features/organization/OrganizationPage";
 import { EntitySheetPage } from "@/features/entity-sheets/EntitySheetPage";
+import { EntityListPage } from "@/features/entity-sheets/EntityListPage";
 import { PersonasEntryPage } from "@/features/agents/PersonasEntryPage";
 import { ReposPage } from "@/features/repos/ReposPage";
 import { RepoGraphPage } from "@/features/repos/RepoGraphPage";
@@ -74,6 +75,7 @@ export function App() {
               <Route path="/workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
               <Route path="/workspaces/:workspaceId/repo-graph" element={<RepoGraphPage />} />
               <Route path="/workspaces/:workspaceId/agents" element={<AgentManagementPage />} />
+              <Route path="/workspaces/:workspaceId/entities" element={<EntityListPage />} />
               <Route path="/workspaces/:workspaceId/entities/:entityId" element={<EntitySheetPage />} />
               <Route path="/workspaces/:workspaceId/secrets" element={<SecretListPage />} />
               <Route path="/workspaces/:workspaceId/export" element={<ExportDialog />} />

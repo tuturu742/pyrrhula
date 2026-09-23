@@ -172,6 +172,12 @@ export function WorkspaceDetailPage() {
             Manage personas
           </Link>
           <Link
+            to={`/workspaces/${workspaceId}/entities`}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            Entities
+          </Link>
+          <Link
             to={`/workspaces/${workspaceId}/secrets`}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >

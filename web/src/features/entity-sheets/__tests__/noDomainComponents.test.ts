@@ -16,6 +16,7 @@ const ALLOWED_FILES = new Set([
   "SheetView.tsx",
   "EntitySheetContainer.tsx",
   "EntitySheetPage.tsx", // route mount -- generic, takes ids from the URL
+  "EntityListPage.tsx", // route mount -- lists a workspace's entities by schema key
   "widgets/ResourceBar.tsx",
   "widgets/StatusChipRow.tsx",
   "widgets/AttributeBlock.tsx",
