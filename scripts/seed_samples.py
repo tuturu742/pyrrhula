@@ -64,6 +64,8 @@ CONNECTIONS: tuple[Connection, ...] = (
     # The reasoning model, for the one seat at a table that has to hold a whole case in
     # its head rather than answer for one person in it.
     Connection("DeepSeek Reasoner", "deepseek", "deepseek-reasoner", "deepseek"),
+    # The current generation, for the table that has to hold eight beats together.
+    Connection("DeepSeek V4 Pro", "deepseek", "deepseek-v4-pro", "deepseek"),
     # api_base is resolved at run time -- see ollama_base_url.
     Connection("Ollama Qwen", "ollama_chat", "qwen3.8:27b", None),
 )
@@ -134,6 +136,11 @@ ASSISTANT_CONNECTION = "DeepSeek"  # informational personas, every table kind
 # timed out at 600s and dropped the session's history on the floor.
 SAMPLE_CONNECTIONS: dict[str, dict[str, str]] = {
     "hagnaryd-mystery": {"supervisor": "DeepSeek Reasoner", "participant": "DeepSeek"},
+    # The campaign is eight beats -- the longest session in the suite -- and on the local
+    # 27B a single player turn ran past ten minutes while history summarisation, which
+    # runs on the persona's own model, timed out at 600s against itself. The referee
+    # stays on the table default; only the players move.
+    "karsh-vale": {"participant": "DeepSeek V4 Pro"},
 }
 
 
