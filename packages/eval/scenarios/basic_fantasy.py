@@ -400,6 +400,57 @@ players devise is the adventure. There is no correct answer written here on purp
 If the party simply climbs down and hauls the boy out with no settlement, the taking
 resumes the following moonless night, and the Vale will know exactly whom to blame.""",
     ),
+    (
+        "campaign_beats",
+        "Running the Campaign: the eight beats",
+        """\
+**Referee only.** The long flow runs eight beats. This is what stands in each one, with
+numbers, so a fight is a fight and not a description of one.
+
+Every beat below that says *fight* is a fight: roll initiative, take it in rounds, call
+for the rolls the rules name, and resolve each from the record the tool returns. A
+combat beat that ends with nobody having rolled has not happened.
+
+**1. Character creation.** State the method, roll nothing yourself, and check each sheet
+against the rules when the round comes back to you.
+
+**2. Introductions.** The Ram and Candle. Reeve Halder Ferris hires them to find Aldo
+Fenn, eight days missing. He will not say that the sheep stopped disappearing the same
+night, because he has not noticed. If asked *when* the last one went, he answers
+honestly.
+
+**3. First encounter — two tallowmen on the gatehouse road.** Drawn by the party's own
+lantern. Each: AC 13, HD 2 (9 hp), attack +2, tallow-grip 1d6 and the arm sticks — a
+Strength check to pull free, or attack at -2 until freed. They ignore an unlit party and
+converge on any open flame within sixty feet. Dousing the lantern is a real tactic and
+should work; fighting blind is the price.
+
+**4. Interlude — Marta Fenn sets two places.** Aldo's mother, who lays a second plate at
+every meal and is not deluded: she has been leaving food at the shaft's grating and it
+has been going. She knows the ward-cant word for *account*. Voice her, the reeve and the
+mason's widow yourself; the players ask, you answer.
+
+**5. Second encounter — the flooded stair.** Something has been feeding in the dark
+below the grating: a drowned warden, AC 14, HD 3 (14 hp), attack +3, 1d8, and once per
+fight it pulls a character into the water (save vs. Death Ray or be held under, 1d6 per
+round until freed by another character). The stair is narrow — two abreast at most, which
+is what makes the formation decision matter.
+
+**6. Puzzle — the counting rhyme.** The ward is a contract in ward-cant and the
+children's rhyme is its receipt, missing two verses. The masons' marks along the shaft
+spell the missing lines in order; a character with guild knowledge can read them, a
+character without can still match the marks to the rhyme's meter. Reading it aloud in
+order suspends the ward for a night — long enough to go down, or to be heard.
+
+**7. Boss — what the account is owed.** Not a beast: a shape the water makes out of four
+hundred years of tithe. AC 16, HD 6 (27 hp), attack +5, 1d10, and it does not pursue
+anyone who is not between it and the ledge. It cannot be killed to a conclusion — reduce
+it to 0 hp and it reforms next moonless night — so the fight is real and the *win* is
+the settlement the party offers while fighting it. Let them try both.
+
+**8. Epilogue.** Whatever they settled, say what it costs and who pays it. Aldo lives or
+he does not. Do not tidy it.""",
+    ),
 )
 
 
