@@ -192,7 +192,15 @@ async def _await_result(
             if row.status == "done":
                 return row.result or {}
             if row.status == "failed":
-                raise OperationFailedError(key)
+                # The key alone told a reader nothing: a worker log line reading
+                # "error=turn:<uuid>:6" names the operation and not the problem, and
+                # sends whoever reads it looking for a turn rather than for the
+                # recorded failure of one.
+                raise OperationFailedError(
+                    f"{key}: a previous attempt failed and the failure is recorded. "
+                    f"Clear it with clear_failed_operation to retry "
+                    f"(resume_session does this for the turn it retries)."
+                )
         await asyncio.sleep(poll_interval)
     raise OperationTimeoutError(
         f"{key}: still in progress after {timeout}s. Another caller holds this "
