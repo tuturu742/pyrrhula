@@ -330,3 +330,33 @@ async def test_review_gate_blocks_unreviewed_downloads(
 
     final = with_draft_notice(reviewed.content_md, reviewed=True, requires_review=True)
     assert DRAFT_NOTICE not in final
+
+
+def test_a_report_sends_the_connection_key_like_every_other_model_call() -> None:
+    """A report is a model call, and it was the only one going out without a key.
+
+    GenerationRequest has carried an api_key field all along; the report path never
+    filled it. So a deployment whose provider needs a key got an authentication error
+    from a connection that had just run a whole session successfully, with the sealed
+    credential sitting unread two fields away on the same agent row. Nothing in the
+    error pointed at the report path -- it looked like a bad key.
+    """
+    import inspect
+
+    from core.reporting import pipeline
+
+    src = inspect.getsource(pipeline)
+    assert "api_key=api_key" in src, "the request must carry the key"
+    assert "api_key: str | None = None" in src, "generate_report must accept one"
+
+
+def test_the_worker_decrypts_the_credential_rather_than_passing_the_pointer() -> None:
+    """credential_ref points into the secret manager and is never itself a key.
+    Resolution belongs to the composition root that holds the encryptor."""
+    import inspect
+
+    from worker import reports
+
+    src = inspect.getsource(reports)
+    assert "resolve_connection_api_key(" in src
+    assert "get_encryptor()" in src

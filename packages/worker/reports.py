@@ -19,12 +19,14 @@ from typing import Any
 
 from adapters.permission.role_permission import RolePermissionService
 from core.actions.idempotency import idempotent
+from core.agents.authoring import resolve_connection_api_key
 from core.agents.models import Agent
 from core.process.dsl.schema import PhaseSpec
 from core.reporting.pipeline import generate_report
 from core.reporting.templates import get_template
 from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
+from worker.encryptor_factory import get_encryptor
 from worker.model_provider_factory import get_model_provider
 
 
@@ -70,6 +72,14 @@ async def run_report_job(
         agent=agent,
         provider=get_model_provider(agent.provider),
         permission_service=RolePermissionService(),
+        # The connection's key, decrypted here and nowhere else -- the same resolution
+        # every turn does. Without it the report's model call went out unauthenticated
+        # and failed on a connection that had just run a whole session.
+        api_key=await resolve_connection_api_key(
+            tenant_id, str(agent.credential_ref), encryptor=get_encryptor()
+        )
+        if agent.credential_ref
+        else None,
     )
     return {
         "report_id": str(result.report_id),

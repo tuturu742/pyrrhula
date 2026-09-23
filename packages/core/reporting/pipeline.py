@@ -178,6 +178,11 @@ async def generate_report(
     agent: Agent,
     provider: ModelProvider,
     permission_service: PermissionService,
+    # The connection's decrypted key. A report is a model call like any other and was
+    # the one that went out without one: every deployment whose provider needs a key got
+    # an authentication error from a connection that worked perfectly for turns, and the
+    # sealed credential sat unread two fields away.
+    api_key: str | None = None,
 ) -> ReportResult:
     """Runs the template's pipeline and writes the `report` row.
 
@@ -206,7 +211,9 @@ async def generate_report(
     narrative = ""
     metering: list[tuple[int, int, int]] = []
     if visible_prose and any(s.kind in ("chunk_summarise", "reduce") for s in template.pipeline):
-        narrative = await _summarise(tenant_id, template, visible_prose, agent, provider, metering)
+        narrative = await _summarise(
+            tenant_id, template, visible_prose, agent, provider, metering, api_key
+        )
     if metering:
         await _meter(tenant_id, workspace_id, agent, metering)
 
@@ -273,6 +280,7 @@ async def _summarise(
     agent: Agent,
     provider: ModelProvider,
     metering: list[tuple[int, int, int]],
+    api_key: str | None = None,
 ) -> str:
     """Map-reduce, with the template's own budgets. ``purpose='report'`` on every call, so
     a tenant whose egress policy pins reporting to local models gets that enforced inside
@@ -296,6 +304,7 @@ async def _summarise(
                     chunk_step.max_tokens,
                     _PhaseSummary,
                     metering,
+                    api_key,
                 )
             )
     else:
@@ -313,6 +322,7 @@ async def _summarise(
         reduce_step.max_tokens,
         _Narrative,
         metering,
+        api_key,
     )
 
 
@@ -326,6 +336,7 @@ async def _call(
     max_tokens: int,
     schema: type[_PhaseSummary] | type[_Narrative],
     metering: list[tuple[int, int, int]],
+    api_key: str | None = None,
 ) -> str:
     req = GenerationRequest(
         egress_policy=await load_egress_policy(tenant_id),
@@ -337,6 +348,7 @@ async def _call(
         purpose=_PURPOSE,
         max_tokens=max(64, max_tokens),
         api_base=agent.api_base,
+        api_key=api_key,
         params=dict(agent.params or {}),
     )
     start = time.monotonic()
