@@ -146,7 +146,9 @@ async def clear_failed_operation(tenant_id: uuid.UUID, idempotency_key: str) -> 
 # has to exceed the longest legitimate operation -- a model turn with a tool loop -- or a
 # slow turn gets executed twice. Fifteen minutes is well past any single turn and well
 # short of a person noticing a stuck session.
-_CLAIM_LEASE_SECONDS = 900
+CLAIM_LEASE_SECONDS = 900
+# Kept as the private spelling this module already used everywhere.
+_CLAIM_LEASE_SECONDS = CLAIM_LEASE_SECONDS
 
 
 async def _reclaim_if_abandoned(key: str, tenant_id: uuid.UUID) -> bool:

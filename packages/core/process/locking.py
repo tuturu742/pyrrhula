@@ -40,6 +40,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from core.actions.idempotency import CLAIM_LEASE_SECONDS
 from core.observability.otel import get_tracer
 from core.process.dsl.schema import ProcessDefinitionDSL
 from core.process.interpreter import (
@@ -57,7 +58,19 @@ from core.tenancy.scope import tenant_scope
 
 _tracer = get_tracer(__name__)
 
-_CLAIM_TIMEOUT_SECONDS = 30
+# The session claim's watchdog has to outlast the operation claim it protects. At 30
+# seconds it did not: a live turn is a model call with a tool loop and routinely runs for
+# minutes, so the claim read as abandoned long before the turn finished, a second worker
+# took it legitimately, and the two then collided on the turn's idempotency key -- which
+# is leased for fifteen minutes and correctly refused. Two guards fighting rather than
+# complementing each other, and the visible result was a failed job on a session that was
+# advancing perfectly well.
+#
+# Deriving it from that lease is what keeps them from drifting apart again. A heartbeat
+# that refreshed the claim while the turn ran would be better still -- it would let a
+# genuinely dead worker be taken over in seconds rather than minutes -- but a claim that
+# outlives what it guards is the property that has to hold first.
+_CLAIM_TIMEOUT_SECONDS = CLAIM_LEASE_SECONDS
 
 
 class SessionConflictError(Exception):

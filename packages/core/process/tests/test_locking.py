@@ -262,3 +262,18 @@ async def test_a_slow_turn_on_one_session_does_not_block_advancing_another(
     assert fast_elapsed < 0.2  # session B advanced without waiting on session A's stall
 
     await slow_task
+
+
+def test_the_session_watchdog_outlasts_the_operation_it_protects() -> None:
+    """Two guards, one property: a session claim that expires before the turn's
+    idempotency lease does not protect anything -- it hands the session to a second
+    worker which then collides on the turn key and fails, on a session that was
+    advancing perfectly well.
+
+    At 30 seconds against a 900-second lease that was not a rare race, it was the normal
+    outcome for any turn involving a model call.
+    """
+    from core.actions.idempotency import CLAIM_LEASE_SECONDS
+    from core.process.locking import _CLAIM_TIMEOUT_SECONDS
+
+    assert _CLAIM_TIMEOUT_SECONDS >= CLAIM_LEASE_SECONDS
