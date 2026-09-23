@@ -366,7 +366,7 @@ async def seed(
     config_dir = samples_dir / slug if (samples_dir / slug).is_dir() else bundle.parent
     if config_dir != bundle.parent:
         print(f"[{slug}] extra configuration from {config_dir}", flush=True)
-    await register_repos(slug, tenant_id, owner_id, config_dir, secrets_dir)
+    await register_repos(slug, tenant_id, workspace_id, owner_id, config_dir, secrets_dir)
     await register_mcp_servers(slug, tenant_id, workspace_id, config_dir)
     await load_packs(slug, tenant_id, workspace_id, kind)
 
@@ -478,6 +478,7 @@ async def load_packs(slug: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID, k
 async def register_repos(
     slug: str,
     tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
     owner_id: uuid.UUID,
     sample_dir: pathlib.Path,
     secrets_dir: pathlib.Path,
@@ -502,6 +503,7 @@ async def register_repos(
         return
     declared = json.loads(manifest.read_text())
     encryptor = get_encryptor()
+    registered: list[uuid.UUID] = []
 
     for spec in declared:
         # Runtimes first: a repo naming one that is not registered yet is refused, and
@@ -563,6 +565,31 @@ async def register_repos(
                 print(f"[{slug}] cloned {repo.key} (default branch {branch})", flush=True)
             except Exception as exc:  # noqa: BLE001 -- report; the row is still valid
                 print(f"[{slug}] clone FAILED for {repo.key}: {str(exc)[:200]}", flush=True)
+
+        registered.append(repo.id)
+
+    if registered:
+        # The knowledge graph is not a side effect of registering a repository; it is a
+        # job somebody asks for, normally by pressing Analyze on the repo-graph page. A
+        # purge takes the graph with everything else, so a daily loop that never asks
+        # rebuilds a deployment where the planning phases retrieve nothing about the
+        # code and the workspace assistant cannot answer a question about the repository
+        # -- with no error anywhere, because an empty graph is a valid empty graph.
+        from api.job_queue_factory import get_job_queue
+
+        job_id = await get_job_queue().enqueue(
+            tenant_id,
+            "analyze_workspace_repos",
+            {
+                "tenant_id": str(tenant_id),
+                "workspace_id": str(workspace_id),
+                "repo_ids": [str(rid) for rid in registered],
+            },
+        )
+        print(
+            f"[{slug}] repo graph analysis queued for {len(registered)} repo(s): {job_id}",
+            flush=True,
+        )
 
 
 async def ensure_retrieval_models() -> None:

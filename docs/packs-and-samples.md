@@ -150,7 +150,8 @@ python scripts/seed_samples.py \
 
 Per tenant this creates the model connections, imports the bundle, binds every persona to
 the connection its **role** calls for, seats them in the workspace, registers whatever
-`repos.json` and `mcp.json` declare, and loads the pack. It is the scripted form of the
+`repos.json` and `mcp.json` declare, clones each repository into the hosted store, queues
+the **repo knowledge-graph analysis** for them, and loads the pack. It is the scripted form of the
 README, not a second path: a rebuild that takes forty clicks does not happen daily.
 
 `slug=sample` names the tenant differently from the sample it borrows: `loxia=pyrrhula`
@@ -161,6 +162,18 @@ repository while borrowing someone else's cast.
 
 The script needs the same environment the API has (`PYRRHULA_APP_DATABASE_URL`, the
 encryption key), so run it inside the api container or with that environment exported.
+
+**The repo graph is a job, not a side effect of registration.** Normally somebody presses
+*Analyze* on the repo-graph page; a purge takes the graph with everything else, so the
+scripted path queues it too. Without it the deployment looks complete and two things are
+quietly empty: the planning phases retrieve nothing about the code, and the workspace
+assistant cannot answer a question about the repository. Neither reports an error,
+because an empty graph is a valid empty graph. Check it landed:
+
+```sql
+select status, result->>'nodes' from job
+ where kind = 'analyze_workspace_repos' order by created_at desc limit 1;
+```
 
 ### Starting a session in a seeded tenant
 
