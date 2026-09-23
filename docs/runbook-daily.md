@@ -93,6 +93,16 @@ kubectl -n pyrrhula exec "$POD" -- python /tmp/seed_samples.py \
   --samples hagnaryd-mystery,mice-invaders
 ```
 
+```bash
+# Compose (run inside the api container, for the same reason):
+podman cp scripts/seed_samples.py pyrrhula_api_1:/tmp/seed_samples.py
+podman cp ~/code/pyrrhula-samples pyrrhula_api_1:/tmp/samples
+podman cp ~/code/lets_finish_it pyrrhula_api_1:/tmp/secrets
+podman exec pyrrhula_api_1 python /tmp/seed_samples.py \
+  --secrets-dir /tmp/secrets --samples-dir /tmp/samples \
+  --samples karsh-vale,coffee-campaign,pyrrhula
+```
+
 Each sample name becomes a tenant of the same slug; `slug=sample` names it differently
 (`loxia=pyrrhula` seeds a tenant called `loxia` from the `pyrrhula` bundle's cast).
 
@@ -152,10 +162,19 @@ persona still gets a model:
 |---|---|---|
 | software | lead, architect, senior, staff | `claude-opus-5-5` |
 | software | junior, middle, QA | `claude-sonnet-5` |
-| tabletop | referee (supervisor) | `deepseek-chat` |
-| tabletop | players | `qwen3.8:27b` (local Ollama) |
+| tabletop | referee and players | `deepseek-chat` |
+| tabletop | karsh-vale, every seat | `deepseek-v4-pro` |
+| mystery | hagnaryd investigator | `deepseek-reasoner` |
+| mystery | hagnaryd suspects | `deepseek-chat` |
 | enterprise | everyone | `deepseek-chat` |
 | any | assistant (informational) | `deepseek-chat` |
+
+The local Ollama connection (`qwen3.8:27b`) is still registered and no seat is bound to
+it. A single player turn ran past ten minutes on it, and history summarisation — which
+runs on the persona's own model — timed out at 600s against itself and dropped the
+session's history. Per-sample seating lives in `SAMPLE_CONNECTIONS` in the script, keyed
+on the sample rather than the tenant slug, because the slug is whatever the operator
+called the tenant and the sample is what the cast actually is.
 
 ## Verifying a rebuild actually worked
 

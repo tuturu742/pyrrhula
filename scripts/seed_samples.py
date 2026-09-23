@@ -145,6 +145,12 @@ SAMPLE_CONNECTIONS: dict[str, dict[str, str]] = {
     # encounter as another one -- two combat beats, no monster, no rolls -- while the
     # players on the stronger model were producing exact, in-character work. The beat that
     # stages danger is the hardest seat at the table, not the easiest.
+    #
+    # The model was not the whole story, and this comment said it was for a while: those
+    # phases also gave each player exactly one turn, because a declared actor entry walks
+    # the roster once and `max_turns` caps that walk rather than repeating it. A fight
+    # with one action per player is not a fight on any model. The flow writes its rounds
+    # out now; the seating below is the other half.
     "karsh-vale": {"participant": "DeepSeek V4 Pro", "supervisor": "DeepSeek V4 Pro"},
 }
 
@@ -167,10 +173,12 @@ def connection_for(
         # A supervisor with an unfamiliar title still leads the table.
         return "Anthropic Opus" if persona_type == "supervisor" else "Anthropic Sonnet"
     if kind == "rpg":
-        # A mix on purpose: the referee carries the scene and the rules, the players
-        # answer to it, and running every seat on one model makes a table that agrees
-        # with itself.
-        return "DeepSeek" if persona_type == "supervisor" else "Ollama Qwen"
+        # The local 27B is no longer the default for any seat: a single player turn ran
+        # past ten minutes, and history summarisation -- which runs on the persona's own
+        # model -- timed out at 600s against itself and dropped the session's history.
+        # The connection stays registered for a deployment that wants it; nothing is
+        # seated on it.
+        return "DeepSeek"
     # enterprise
     return "DeepSeek"
 
