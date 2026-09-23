@@ -108,6 +108,11 @@ class ActorSpec(BaseModel):
     # a roster.
     order: Literal["declared", "initiative", "free", "addressed", "reactive"] = "declared"
     from_field: str | None = Field(default=None, alias="from")
+    # A CAP on this entry, not a round count. "declared"/"initiative" resolve the
+    # roster once and walk it once, so an entry in front of three actors gives three
+    # turns whatever this says; "reactive"/"free" re-pick every turn, so there it is
+    # the turn count. A phase that wants three rounds writes the entry three times --
+    # which is also what lets a supervisor entry sit between them.
     max_turns: int | None = None
 
     @model_validator(mode="after")
