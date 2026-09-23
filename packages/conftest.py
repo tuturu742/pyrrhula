@@ -5,6 +5,11 @@ don't need them, while tests that do (permission, job queue, vector store, audit
 idempotency, auth, rate limiting, ...) get exercised for real whenever one is reachable —
 including in the ``isolation``/``test`` CI jobs that provision them. Lives at the
 ``packages/`` root so ``core``, ``adapters``, and ``api`` test suites all pick it up.
+
+``purge_tenants_this_run_created`` keeps the suite runnable: nearly every test here
+seeds its own tenant and nothing ever removed one, so a shared development database
+accumulated them run after run until a ``count(*)`` inside a test took minutes. See
+``core.tenancy.tenant_cleanup`` for why it deletes only what the run itself created.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.tenancy.scope import dispose_engine, unscoped_session
+from core.tenancy.tenant_cleanup import existing_tenant_ids, purge_tenants
 
 
 @pytest_asyncio.fixture
@@ -41,3 +47,11 @@ async def redis_available() -> AsyncIterator[None]:
         pytest.skip(f"no reachable Redis for rate-limit/streaming tests: {exc}")
     yield
     await close_redis()
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def purge_tenants_this_run_created() -> AsyncIterator[None]:
+    """See ``core.tenancy.tenant_cleanup``."""
+    before = await existing_tenant_ids()
+    yield
+    await purge_tenants(await existing_tenant_ids() - before)
