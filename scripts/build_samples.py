@@ -1605,19 +1605,23 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
         )
         await session.flush()
         builder_id = builder.id
+        workspace = await session.get(Workspace, workspace_id)
+        assert workspace is not None
+        settings = dict(workspace.settings)
         if spec.conduct_rules:
-            workspace = await session.get(Workspace, workspace_id)
-            assert workspace is not None
-            workspace.settings = {
-                **dict(workspace.settings),
-                "conduct_rules": spec.conduct_rules,
-                # Travels in workspace.json and is applied additively on import: without
-                # it a fresh import ran in the leak-proof default (secrets excluded from
-                # everyone's context) and the whole cast played with nothing to hide.
-                # "trust" = the holder's own briefs enter its context, no extra calls;
-                # the README says when to switch the workspace to "gate" instead.
-                "secret_mode": "trust",
-            }
+            settings["conduct_rules"] = spec.conduct_rules
+        # Travels in workspace.json and is applied additively on import: without it a
+        # fresh import ran in the leak-proof default (secrets excluded from everyone's
+        # context) and the whole cast played with nothing to hide. "trust" = the holder's
+        # own briefs enter its context, no extra calls; the README says when to switch the
+        # workspace to "gate" instead.
+        #
+        # Unconditional, and it was not: this sat inside the conduct-rules branch, so a
+        # sample with secrets and no conduct rules -- coffee-campaign, which has two
+        # confidential facts the whole session turns on -- shipped without the one
+        # setting its own README says to turn on, and imported as an ordinary meeting.
+        settings["secret_mode"] = "trust"
+        workspace.settings = settings
 
     # A bundle never carries credentials, so this connection exists only to satisfy the
     # persona FK here; on import each persona binds to the reader's own placeholder until
