@@ -250,6 +250,29 @@ Never fix content by editing rows in a running deployment. The daily rebuild
 (`docs/runbook-daily.md`) deletes that deployment, and a fix that lived only there goes
 with it.
 
+### When a pack and a bundle both define the same thing
+
+A pack ships generic content; a sample ships specific content. Both register by **key**,
+and the scripted seed loads the pack *after* importing the bundle — so for anything they
+both define, the pack's version is the one left standing.
+
+That is usually harmless and once was not. The `rpg` pack ships a `randomizer` tool bound
+to the generic d20 ruleset; karsh-vale ships the same key bound to its own Basic Fantasy
+system. The pack load replaced the sample's binding, and nothing said so: the tool still
+worked, still wrote an honest hash-chained record, and resolved every roll under the wrong
+rules. A 3d6 ability score came back as 19 because the generic system resolves an ability
+modifier for the check type.
+
+`seed_samples.py` records each tool's binding after the import and restores it after the
+pack load, naming what it put back:
+
+```
+[karsh-vale] tool bindings restored after pack load: ['randomizer: generic_d20 -> basic_fantasy']
+```
+
+Worth knowing when you author either side: if a sample needs its own ruleset, it must bind
+the tool to it, and that binding has to survive whatever the pack does afterwards.
+
 ## See also
 
 - `docs/runbook-daily.md` — the purge-and-rebuild loop these two repositories feed
