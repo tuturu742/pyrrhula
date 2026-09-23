@@ -299,6 +299,21 @@ async def seed(
         await session.flush()
     print(f"[{slug}] seated personas: {seated or 'already seated'}", flush=True)
 
+    # The workspace assistant is created on demand -- by repo analysis, by the assist
+    # widget -- with an empty model profile for an operator to fill in. Nothing here
+    # fills it, so the first thing to need it got provider "" and model "", and the call
+    # went out as model="/". Repo analysis then fell back on every step and produced a
+    # graph with no summaries in it, reporting success.
+    from core.agents.assistant import ensure_workspace_assistant
+
+    assistant = await ensure_workspace_assistant(tenant_id, workspace_id)
+    async with tenant_scope(tenant_id) as session:
+        live = await session.get(Persona, assistant.id)
+        if live is not None and live.agent_id != made[ASSISTANT_CONNECTION]:
+            live.agent_id = made[ASSISTANT_CONNECTION]
+            await session.flush()
+    print(f"[{slug}] assistant -> {ASSISTANT_CONNECTION}", flush=True)
+
     await register_repos(slug, tenant_id, owner_id, bundle.parent, secrets_dir)
     await register_mcp_servers(slug, tenant_id, workspace_id, bundle.parent)
     await load_packs(slug, tenant_id, workspace_id, kind)
