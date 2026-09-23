@@ -150,7 +150,14 @@ async def create_preview_endpoint(
     from core.previews.recipe import PreviewRecipeError, read_repo_manifest, resolve_recipe
 
     try:
-        manifest = await read_repo_manifest(store_key(ctx.tenant_id, repo.key))
+        # At the ref being previewed, not at a fixed "main". A repository whose default
+        # branch is named anything else -- loxia's is `master` -- would otherwise have
+        # its own `pyrrhula-preview.json` read from a branch that does not exist, so the
+        # manifest layer silently never applied and the static-site default won.
+        manifest = await read_repo_manifest(
+            store_key(ctx.tenant_id, repo.key),
+            ref=body.git_ref or repo.default_branch or "main",
+        )
         recipe = resolve_recipe(
             default_image=settings.preview_image,
             repo_overrides={

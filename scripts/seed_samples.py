@@ -110,6 +110,7 @@ def ollama_base_url() -> str | None:
             probe.close()
     return None
 
+
 # Which connection a persona gets, by table kind and seniority. Seniority is read from
 # the persona's own name/key because that is where the samples express it; anything
 # unmatched falls to the table's default, so a new persona is never left without a model.
@@ -314,8 +315,17 @@ async def seed(
             await session.flush()
     print(f"[{slug}] assistant -> {ASSISTANT_CONNECTION}", flush=True)
 
-    await register_repos(slug, tenant_id, owner_id, bundle.parent, secrets_dir)
-    await register_mcp_servers(slug, tenant_id, workspace_id, bundle.parent)
+    # `slug=sample` means "a tenant called <slug>, from <sample>'s cast" -- the loxia
+    # sample is exactly that, borrowing the pyrrhula bundle's bench and bringing only its
+    # own repository. Its `repos.json` therefore lives in `loxia/`, not beside the bundle,
+    # and looking only beside the bundle silently registered no repository at all: the
+    # tenant came up complete except for the one thing the sample is about, which then had
+    # to be added by hand and did not survive the next purge.
+    config_dir = samples_dir / slug if (samples_dir / slug).is_dir() else bundle.parent
+    if config_dir != bundle.parent:
+        print(f"[{slug}] extra configuration from {config_dir}", flush=True)
+    await register_repos(slug, tenant_id, owner_id, config_dir, secrets_dir)
+    await register_mcp_servers(slug, tenant_id, workspace_id, config_dir)
     await load_packs(slug, tenant_id, workspace_id, kind)
 
 
@@ -464,9 +474,7 @@ async def register_repos(
         secret_name = spec.get("credential_secret")
         if secret_name:
             token = read_secret(secrets_dir, secret_name)
-            credential_ref = await store_provider_credential(
-                tenant_id, token, encryptor=encryptor
-            )
+            credential_ref = await store_provider_credential(tenant_id, token, encryptor=encryptor)
 
         repo = await create_repo(
             tenant_id,
@@ -482,6 +490,10 @@ async def register_repos(
             test_cmd=spec.get("test_cmd"),
             build_cmd=spec.get("build_cmd"),
             artifact_name=spec.get("artifact_name"),
+            preview_image=spec.get("preview_image"),
+            preview_cmd=spec.get("preview_cmd"),
+            preview_port=spec.get("preview_port"),
+            preview_env={str(k): str(v) for k, v in (spec.get("preview_env") or {}).items()},
             created_by=owner_id,
         )
         print(f"[{slug}] repo {repo.key} ({spec.get('source_url') or 'store-only'})", flush=True)

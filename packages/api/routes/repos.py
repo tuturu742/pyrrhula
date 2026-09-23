@@ -387,6 +387,10 @@ async def create_repo_endpoint(
             test_cmd=body.test_cmd,
             build_cmd=body.build_cmd,
             artifact_name=body.artifact_name,
+            preview_image=_checked_image(body.preview_image, field="preview_image"),
+            preview_cmd=body.preview_cmd,
+            preview_port=body.preview_port,
+            preview_env=body.preview_env,
             created_by=ctx.principal_id,
         )
     except InvalidRepoError as exc:

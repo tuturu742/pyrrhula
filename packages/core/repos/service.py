@@ -280,6 +280,15 @@ async def create_repo(
     test_cmd: str | None = None,
     build_cmd: str | None = None,
     artifact_name: str | None = None,
+    # The serving half of the pipeline, settable at registration for the same reason the
+    # building half is: a sample (or any scripted setup) that can declare how its build
+    # is run but not how it is previewed has to be finished by hand in the UI, and a
+    # preview left at the static-site default silently serves a directory listing for a
+    # project that has a process behind it.
+    preview_image: str | None = None,
+    preview_cmd: str | None = None,
+    preview_port: int | None = None,
+    preview_env: dict[str, str] | None = None,
     created_by: uuid.UUID | None = None,
 ) -> RepoRow:
     if not _KEY_RE.fullmatch(key):
@@ -298,6 +307,17 @@ async def create_repo(
         raise InvalidRepoError(
             f"unknown git provider {provider!r}; pick one of {sorted(GIT_PROVIDERS)}"
         )
+    # Validated here, with the same rules the preview start applies, so a bad recipe is
+    # refused by whoever wrote it instead of by a container nobody is watching.
+    if preview_cmd or preview_port is not None or preview_env:
+        from core.previews.recipe import PreviewRecipeError, validate_recipe_fields
+
+        try:
+            validate_recipe_fields(
+                cmd=preview_cmd, port=preview_port, env=preview_env, where="repo settings"
+            )
+        except PreviewRecipeError as exc:
+            raise InvalidRepoError(str(exc)) from exc
     async with tenant_scope(tenant_id) as session:
         row = RepoRow(
             tenant_id=tenant_id,
@@ -315,6 +335,10 @@ async def create_repo(
             test_cmd=test_cmd,
             build_cmd=build_cmd,
             artifact_name=artifact_name,
+            preview_image=(preview_image or "").strip() or None,
+            preview_cmd=(preview_cmd or "").strip() or None,
+            preview_port=preview_port,
+            preview_env=dict(preview_env or {}),
             created_by=created_by,
         )
         session.add(row)

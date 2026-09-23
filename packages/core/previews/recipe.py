@@ -130,6 +130,26 @@ def _validated_env(value: Any, *, where: str) -> dict[str, str]:
     return out
 
 
+def validate_recipe_fields(
+    *,
+    cmd: str | None = None,
+    port: int | None = None,
+    env: dict[str, str] | None = None,
+    where: str,
+) -> None:
+    """Apply the recipe rules to fields on their way into storage.
+
+    ``resolve_recipe`` already validates at start time, which is too late to help the
+    person who typed the value: the refusal arrives as a container that did not come up.
+    Same rules, same messages, applied where the author still is."""
+    if cmd:
+        _validated_cmd(cmd, where=where)
+    if port is not None:
+        _validated_port(port, where=where)
+    if env:
+        _validated_env(env, where=where)
+
+
 def resolve_recipe(
     *,
     default_image: str,
