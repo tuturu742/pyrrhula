@@ -300,6 +300,7 @@ async def seed(
     print(f"[{slug}] seated personas: {seated or 'already seated'}", flush=True)
 
     await register_repos(slug, tenant_id, owner_id, bundle.parent, secrets_dir)
+    await register_mcp_servers(slug, tenant_id, workspace_id, bundle.parent)
     await load_packs(slug, tenant_id, workspace_id, kind)
 
 
@@ -307,6 +308,46 @@ async def seed(
 # flow it was authored with; the pack carries the rest, including flows written after the
 # bundle was exported.
 PACKS = {"rpg": "rpg", "swdev": "swdev", "enterprise": None}
+
+
+async def register_mcp_servers(
+    slug: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID, sample_dir: pathlib.Path
+) -> None:
+    """Attach the MCP servers a sample declares in ``mcp.json``, if it has one.
+
+    A bundle is content and never code, so a sample whose case depends on an external
+    tool ships the tool beside it and the registration here. The workspace allowlist is
+    the egress control, which is why this is a deployment step rather than something the
+    bundle could carry: what a tenant may call out to is not the bundle author's
+    decision.
+
+    The server itself still has to be running -- see the sample's README. Registering a
+    url nothing answers on costs a failed tool call at the table, not a failed import.
+    """
+    import json
+
+    from core.mcp.registry import register_server
+
+    manifest = sample_dir / "mcp.json"
+    if not manifest.is_file():
+        return
+    for spec in json.loads(manifest.read_text()):
+        await register_server(
+            tenant_id,
+            workspace_id,
+            str(spec["key"]),
+            str(spec["url"]),
+            enabled_tools=[str(t) for t in spec.get("enabled_tools") or []],
+            effectful_tools=[str(t) for t in spec.get("effectful_tools") or []],
+            require_confirmation=bool(spec.get("require_confirmation", False)),
+            max_calls_per_session=spec.get("max_calls_per_session"),
+        )
+        budget = spec.get("max_calls_per_session")
+        print(
+            f"[{slug}] mcp {spec['key']} -> {spec['url']}"
+            + (f" (max {budget}/session)" if budget else ""),
+            flush=True,
+        )
 
 
 async def load_packs(slug: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID, kind: str) -> None:

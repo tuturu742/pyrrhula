@@ -90,6 +90,35 @@ kubectl -n pyrrhula exec "$POD" -- python /tmp/seed_samples.py \
 Each sample name becomes a tenant of the same slug; `slug=sample` names it differently
 (`loxia=pyrrhula` seeds a tenant called `loxia` from the `pyrrhula` bundle's cast).
 
+### Servers a sample brings with it
+
+A sample whose case depends on an external tool ships the tool beside its bundle, because
+a `.pyr` is content and never code. The hagnaryd case needs its forensic lab running
+*before* the session starts:
+
+```bash
+cd ~/code/pyrrhula-samples/hagnaryd-mystery
+kubectl -n pyrrhula create configmap evidence-server --from-file=evidence-server.py \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f evidence-server.k8s.yaml
+```
+
+A purge deletes it with everything else in the namespace, so this is a rebuild step and
+not a one-time setup. `seed_samples.py` registers what the sample declares in `mcp.json`
+— the url, the tool, and the per-session budget — but it cannot start the server, and
+registering a url nothing answers on costs a failed tool call at the table rather than a
+failed import. Check it answers:
+
+```bash
+kubectl -n pyrrhula exec "$POD" -- python -c "import urllib.request,json; \
+  print(urllib.request.urlopen(urllib.request.Request('http://evidence-lab:8765/', \
+  data=json.dumps({'jsonrpc':'2.0','id':1,'method':'tools/list'}).encode(), \
+  headers={'Content-Type':'application/json'}), timeout=10).read()[:120])"
+```
+
+The two-request budget lives in the pod's memory. `kubectl -n pyrrhula rollout restart
+deploy/evidence-lab` resets it between sessions.
+
 ### The embedding model
 
 A purge takes the model cache with it, and the installer deliberately does not download
