@@ -146,6 +146,31 @@ Speak briefly, in your own voice. Declare what Pip tries; the Referee rolls.""",
 # Abridged from Basic Fantasy RPG r142, CC BY-SA 4.0. See the module docstring.
 RULES: tuple[tuple[str, str, str], ...] = (
     (
+        "calling_for_a_roll",
+        "Calling for a Roll",
+        """\
+The table's dice are a tool, and the ruleset decides what a roll means. Two things it
+does for you, and one it will refuse.
+
+**Roll the bare dice.** Write the expression the rules give and nothing else --
+`1d20`, `1d6`, `3d6`. Do not add a bonus to it. The ruleset reads the actor's own sheet
+and applies the right modifier itself, which is what makes the record worth reading: a
+total nobody could have inflated.
+
+**Name the check exactly.** The legal names are `ability_score_roll`, `hit_die`,
+`initiative`, `attack_roll`, `missile_attack`, `damage`, `strength_check`,
+`dexterity_check`, `constitution_check`, `intelligence_check`, `wisdom_check`,
+`charisma_check`, `save_death_ray`, `save_magic_wands`, `save_paralysis`,
+`save_dragon_breath`, `save_spells`, `thief_skill` and `morale`. A near miss --
+`attack` for `attack_roll` -- is refused, and the refusal costs a call.
+
+**A claimed modifier is checked against the sheet.** Write `1d20+2` when the character's
+bonus is +1 and the roll is refused with `modifier_mismatch`, naming both numbers. This
+is deliberate: a bonus a character does not have cannot be talked into the record. Asking
+for the bare die is always correct, so there is never a reason to state one.
+""",
+    ),
+    (
         "abilities",
         "Ability Scores and Bonuses",
         """\
