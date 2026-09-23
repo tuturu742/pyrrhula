@@ -9,6 +9,11 @@ had asked for existed.
 from __future__ import annotations
 
 import inspect
+import uuid
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+
+import pytest
 
 from core.process.dsl.schema import AwaitSpec
 from worker import advance, session_wake
@@ -73,3 +78,55 @@ def test_a_resumed_advance_keeps_going_while_there_is_more_to_do() -> None:
     src = inspect.getsource(advance.handle_advance_session)
     assert 'if result.status != "active" or result.steps_taken == 0:' in src
     assert "for _ in range(_MAX_CONTINUATIONS)" in src
+
+
+# ── two workers, one session ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_second_worker_declines_a_session_already_being_advanced(
+    monkeypatch,  # noqa: ANN001
+) -> None:
+    """`core.process.locking` was written to make exactly this safe and had no caller, so
+    the worker advanced without claiming. One worker is fine; the deployment scales the
+    worker Deployment and the queue is SKIP LOCKED precisely so it can. Two advances of
+    the same session then collide on the turn's idempotency key, and the guard there does
+    its job -- it refuses rather than double-charging the tenant's API key -- but the
+    outcome is a failed job and a session that stopped.
+
+    Declining is the whole behaviour: the worker that holds the claim is still going, and
+    whatever enqueued this will enqueue again when there is more to do.
+    """
+    import worker.advance as advance
+    from core.process.locking import SessionClaimTimeoutError
+
+    tenant_id, session_id = uuid.uuid4(), uuid.uuid4()
+
+    async def fake_get_session(_t, _s):  # noqa: ANN001
+        return SimpleNamespace(process_definition_id=uuid.uuid4(), status="active")
+
+    async def fake_get_definition(_t, _d):  # noqa: ANN001
+        return SimpleNamespace(definition={"any": "thing"}, version=1, id=uuid.uuid4())
+
+    def fake_validate(_raw):  # noqa: ANN001
+        return SimpleNamespace(phases={}), []
+
+    @asynccontextmanager
+    async def refusing_claim(_t, _s, _c):  # noqa: ANN001
+        raise SessionClaimTimeoutError("claimed by worker:deadbeef (0.2s ago)")
+        yield  # pragma: no cover
+
+    async def must_not_run(*_a, **_k):  # noqa: ANN001  -- pragma: no cover
+        raise AssertionError("a declined advance must not run a turn")
+
+    monkeypatch.setattr("core.sessions.lifecycle.get_session", fake_get_session)
+    monkeypatch.setattr(advance, "get_definition", fake_get_definition)
+    monkeypatch.setattr(advance, "validate_raw", fake_validate)
+    monkeypatch.setattr(advance, "claim_session", refusing_claim)
+    monkeypatch.setattr(advance, "run_process_definition_session", must_not_run)
+
+    out = await advance.handle_advance_session(
+        {"tenant_id": str(tenant_id), "session_id": str(session_id)}
+    )
+    assert out["advanced"] is False
+    assert out["reason"] == "claimed elsewhere"

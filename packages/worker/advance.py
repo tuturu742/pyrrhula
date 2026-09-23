@@ -13,6 +13,7 @@ Returning there abandons the session mid-flow.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import Any
 
@@ -21,6 +22,13 @@ import structlog
 from core.process.authoring import get_definition
 from core.process.dsl.validator import validate_raw
 from core.process.live_session import run_process_definition_session
+from core.process.locking import (
+    SessionClaimTimeoutError,
+    SessionConflictError,
+    claim_session,
+    commit_advance,
+    release_claim,
+)
 from worker.embedding_provider_factory import get_embedding_provider
 from worker.encryptor_factory import get_encryptor
 from worker.job_queue_factory import get_job_queue
@@ -52,24 +60,44 @@ async def handle_advance_session(payload: dict[str, Any]) -> dict[str, Any]:
 
     steps = 0
     status = sess.status
-    for _ in range(_MAX_CONTINUATIONS):
-        result = await run_process_definition_session(
-            tenant_id,
-            session_id,
-            dsl,
-            model_provider_factory=get_model_provider,
-            embedding_provider=get_embedding_provider(),
-            encryptor=get_encryptor(),
-            permission_service=get_permission_service(),
-            mcp_transport=get_mcp_transport(),
-            job_queue=get_job_queue(),
-        )
-        steps += result.steps_taken
-        status = result.status
-        # Any status but 'active' is a real stop, and 'active' with no progress would
-        # spin.
-        if result.status != "active" or result.steps_taken == 0:
-            break
+    claimant = f"worker:{uuid.uuid4().hex[:8]}"
+    try:
+        async with claim_session(tenant_id, session_id, claimant) as observed_version:
+            try:
+                for _ in range(_MAX_CONTINUATIONS):
+                    result = await run_process_definition_session(
+                        tenant_id,
+                        session_id,
+                        dsl,
+                        model_provider_factory=get_model_provider,
+                        embedding_provider=get_embedding_provider(),
+                        encryptor=get_encryptor(),
+                        permission_service=get_permission_service(),
+                        mcp_transport=get_mcp_transport(),
+                        job_queue=get_job_queue(),
+                    )
+                    steps += result.steps_taken
+                    status = result.status
+                    # Any status but 'active' is a real stop, and 'active' with no
+                    # progress would spin.
+                    if result.status != "active" or result.steps_taken == 0:
+                        break
+            except Exception:
+                # Release without bumping the version, so a failed attempt does not hold
+                # the claim for the whole watchdog window before anyone may retry.
+                await release_claim(tenant_id, session_id)
+                raise
+    except SessionClaimTimeoutError as exc:
+        # Not an error: another worker has this session. Say so and let it finish --
+        # whatever enqueued this will enqueue again when there is more to do.
+        log.info("advance.already_claimed", session_id=str(session_id), detail=str(exc)[:160])
+        return {"session_id": str(session_id), "advanced": False, "reason": "claimed elsewhere"}
+
+    with contextlib.suppress(SessionConflictError):
+        # The claim is exclusive, so a version move here should be impossible; treat it
+        # as someone else having legitimately committed rather than failing a turn that
+        # already happened.
+        await commit_advance(tenant_id, session_id, observed_version)
 
     log.info(
         "advance.resumed_session",
