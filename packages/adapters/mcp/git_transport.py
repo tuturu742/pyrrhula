@@ -109,6 +109,12 @@ def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
 
 
 _PATH_TOKEN = re.compile(r"[\w./-]*[\w-]\.[A-Za-z][\w]{0,9}")
+# Generated files are routinely named after the thing they belong to rather than after
+# the source that produces them: a snapshot fixture for `render::tests::layout_snapshot_80x24`
+# is `..._render__tests__layout_snapshot_80x24.snap`, and a task that names the test has
+# named the file without writing a path. Long snake_case identifiers are the portable
+# form of that: they are what such files are called, in every language that does this.
+_IDENT_TOKEN = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+){2,}")
 
 
 def _named_paths(work_item: dict[str, Any], brief: str) -> list[str]:
@@ -127,11 +133,15 @@ def _named_paths(work_item: dict[str, Any], brief: str) -> list[str]:
         + " "
         + (brief or "")
     )
-    tokens = {m.group(0).strip("./") for m in _PATH_TOKEN.finditer(text)}
+    paths = {m.group(0).strip("./") for m in _PATH_TOKEN.finditer(text)}
     # A bare extension ("*.snap", ".rs") matches half the tree and spends the whole
     # budget on noise; a token needs a name in front of the dot to be a filter.
-    tokens = {t for t in tokens if len(t) > 3 and not t.startswith(".")}
-    return sorted(tokens, key=len, reverse=True)[:40]
+    paths = {t for t in paths if len(t) > 3 and not t.startswith(".")}
+    idents = {m.group(0) for m in _IDENT_TOKEN.finditer(text) if len(m.group(0)) >= 12}
+    # Paths first: a path is a better filter than an identifier, and the budget is spent
+    # in order. Preference only reorders -- nothing is excluded by guessing wrong.
+    ordered = sorted(paths, key=len, reverse=True) + sorted(idents, key=len, reverse=True)
+    return ordered[:40]
 
 
 class GitMcpTransport:
