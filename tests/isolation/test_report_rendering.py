@@ -378,3 +378,31 @@ def test_history_summarisation_sends_the_connection_key_too() -> None:
     assert "api_key: str | None = None" in inspect.getsource(history.summarise_history)
     assert "api_key=api_key" in inspect.getsource(history)
     assert "resolve_connection_api_key(" in inspect.getsource(live_session)
+
+
+def test_reviewing_a_report_does_not_reuse_the_draft_render() -> None:
+    """The draft notice and the idempotency guard are both right, and wired together one
+    defeated the other.
+
+    ``render_report`` was keyed on ``(report, format)``. So: render a review-required
+    report, get a PDF stamped DRAFT, review it, ask for the PDF again -- and the second
+    call returned the first call's recorded result without rendering anything. The stored
+    artifact stayed stamped DRAFT permanently, while the review gate opened the download.
+    What a reviewer unlocked was a file saying it had not been reviewed.
+
+    The review state belongs in the key because it changes the artifact.
+    """
+    from worker.render_reports import _render_job_key
+
+    report_id = uuid.uuid4()
+    draft_key = _render_job_key(report_id=report_id, output_format="pdf", reviewed=False)
+    reviewed_key = _render_job_key(report_id=report_id, output_format="pdf", reviewed=True)
+
+    assert draft_key != reviewed_key
+
+    # Still idempotent within a state: asking twice for the same thing is one operation.
+    assert draft_key == _render_job_key(report_id=report_id, output_format="pdf", reviewed=False)
+    # And still per-format.
+    assert reviewed_key != _render_job_key(
+        report_id=report_id, output_format="markdown", reviewed=True
+    )
