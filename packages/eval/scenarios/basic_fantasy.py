@@ -168,6 +168,19 @@ total nobody could have inflated.
 bonus is +1 and the roll is refused with `modifier_mismatch`, naming both numbers. This
 is deliberate: a bonus a character does not have cannot be talked into the record. Asking
 for the bare die is always correct, so there is never a reason to state one.
+
+**Damage changes the sheet, and you have to write it.** A status track reacts to the
+numbers on the character, so pulling its trigger is not enough on its own: send the new
+hit-point total with the trigger, in the same call. Roll 7 against a character on 5 and
+set `hit_points` to `-2` while triggering `damage_taken`; the track reads the field it
+was given and moves. Trigger it without setting the field and the field still says 5,
+the guard finds the character unhurt, and the answer comes back `"transitioned": false,
+"new_state": "healthy"` -- which is true, correct, and not what happened in the fiction.
+
+That reply is worth reading closely every time. It is the table telling you what the
+record now says. `"transitioned": false` after a hit means the blow did not land on the
+sheet, whatever it did in the story, and the next session will open with a character who
+was never hurt.
 """,
     ),
     (
