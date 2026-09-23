@@ -99,7 +99,6 @@ def _slug(text: str) -> str:
     return s or "work-item"
 
 
-
 def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
     """Was a host configured for this call? Distinguishes a store-only repo, where no
     pull request was ever expected, from a repo whose pull request failed to open."""
@@ -199,13 +198,32 @@ class GitMcpTransport:
         if not profile or not profile.get("model"):
             return None
         api_key = None
-        if self._token_resolver is not None and profile.get("credential_ref"):
+        why_keyless: str | None = None
+        if self._token_resolver is None:
+            why_keyless = "no token resolver wired"
+        elif not profile.get("credential_ref"):
+            why_keyless = "connection has no credential_ref"
+        else:
             try:
                 api_key = await self._token_resolver(
                     profile.get("tenant_id"), str(profile["credential_ref"])
                 )
-            except Exception:  # noqa: BLE001 -- keyless attempt, fallback covers failure
-                api_key = None
+                if not api_key:
+                    why_keyless = "credential_ref resolved to nothing"
+            except Exception as exc:  # noqa: BLE001 -- keyless attempt, fallback covers it
+                why_keyless = f"{type(exc).__name__}: {str(exc)[:160]}"
+        if why_keyless is not None:
+            # A keyless call to a hosted provider fails with the provider's own
+            # authentication error and lands in the scaffold fallback, where it reads as
+            # "the model declined". Say which link actually broke, here, once.
+            import structlog
+
+            structlog.get_logger().warning(
+                "codegen.no_api_key",
+                model=str(profile["model"]),
+                credential_ref=str(profile.get("credential_ref") or ""),
+                reason=why_keyless,
+            )
         from adapters.mcp.codegen import make_model_codegen
 
         return make_model_codegen(
@@ -693,8 +711,7 @@ class GitMcpTransport:
         lines += [
             # No `git add` here: the index was built before the test and build steps, so
             # what they left in the working tree stays out of history.
-            f"(git commit -q -m {q(message)} "
-            f"|| git commit -q --allow-empty -m {q(message)})",
+            f"(git commit -q -m {q(message)} || git commit -q --allow-empty -m {q(message)})",
             f"git push -q origin {q(branch)}",
             'echo "PYR_TEST_RC=$PYR_TEST_RC"',
         ]

@@ -109,9 +109,16 @@ def _rejects_schema_constrained_output(exc: Exception) -> bool:
     response_format type is unavailable now" for `json_schema` while accepting
     `json_object`. Match on the parameter rather than one vendor's sentence, so the next
     provider with the same gap does not need its own special case.
+
+    `tool_choice` belongs here too, and does not look like it should. LiteLLM implements
+    a schema on Anthropic by translating it into a forced tool call, so the model's
+    refusal names `tool_choice` and never mentions `response_format` at all -- which is
+    why every structured call on `claude-opus-5-5` raised instead of falling back, and
+    delegation quietly stopped choosing an assignee by seniority and took the roster's
+    first name instead.
     """
     text = str(exc).lower()
-    return "response_format" in text or "json_schema" in text
+    return "response_format" in text or "json_schema" in text or "tool_choice" in text
 
 
 def _schema_in_the_prompt(
@@ -517,11 +524,21 @@ class LiteLLMModelProvider:
             # contract is a validated instance, not a particular wire parameter. Without
             # this, every structured call on such a provider failed: persona drafting,
             # knowledge drafting, anything using generate_structured.
-            response = await litellm.acompletion(
-                messages=_schema_in_the_prompt(messages, schema),
-                response_format={"type": "json_object"},
-                **common,
-            )
+            asked_in_words = _schema_in_the_prompt(messages, schema)
+            try:
+                response = await litellm.acompletion(
+                    messages=asked_in_words,
+                    response_format={"type": "json_object"},
+                    **common,
+                )
+            except Exception as retry_exc:
+                if not _rejects_schema_constrained_output(retry_exc):
+                    raise
+                # Some providers (Anthropic) have no `response_format` at all, so even
+                # `json_object` is refused. The schema is already in the prompt and the
+                # result is validated here either way -- the wire parameter was only ever
+                # an optimisation, and dropping it is the last rung, not a new contract.
+                response = await litellm.acompletion(messages=asked_in_words, **common)
         content = response.choices[0].message.content
         return schema.model_validate_json(_first_json_object(content))
 
