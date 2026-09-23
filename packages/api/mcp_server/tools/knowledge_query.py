@@ -19,6 +19,7 @@ from api.mcp_server.tokens import McpTokenClaims
 from core.assembler.visibility import EXPORT, scopes_for
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
 from core.knowledge.retrieval.sparse import search_sparse
+from core.knowledge.retrieval.versions import effective_version_ids
 
 _DEFAULT_LIMIT = 10
 _MAX_LIMIT = 50
@@ -37,10 +38,18 @@ async def _knowledge_query(claims: McpTokenClaims, arguments: dict[str, Any]) ->
         # and an empty scope set means an empty result -- never "unfiltered".
         return {"query": query_text, "class": class_, "hits": []}
 
+    # Resolved from the workspace's attachments for the same reason the scope set is
+    # resolved from the token: a caller who could name a version could name a superseded
+    # one, and read text this workspace has already replaced.
+    version_ids = await effective_version_ids(claims.tenant_id, claims.workspace_id)
+    if not version_ids:
+        return {"query": query_text, "class": class_, "hits": []}
+
     hits = await search_sparse(
         tenant_id=claims.tenant_id,
         scope_keys=scope_set,
         class_=class_,
+        version_ids=version_ids,
         query_text=query_text,
         k=limit,
     )

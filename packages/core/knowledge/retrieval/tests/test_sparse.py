@@ -8,7 +8,11 @@ import pytest
 from sqlalchemy import text
 
 from core.knowledge.retrieval.sparse import SPARSE_SEARCH_SQL, search_sparse
-from core.knowledge.retrieval.tests.conftest import seed_chunk, seed_tenant_and_source
+from core.knowledge.retrieval.tests.conftest import (
+    seed_chunk,
+    seed_tenant_and_source,
+    versions_of,
+)
 from core.ports.scope import ScopeSet
 from core.tenancy.scope import tenant_scope
 
@@ -36,6 +40,7 @@ async def test_keyword_match_ranks_above_unrelated_text(db_available: None) -> N
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_text="grappling strength check",
     )
 
@@ -68,6 +73,7 @@ async def test_out_of_scope_chunk_never_appears_despite_matching_keywords(
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_text="grappling",
     )
 
@@ -99,6 +105,7 @@ async def test_class_filter_excludes_other_classes(db_available: None) -> None:
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_text="grappling",
     )
     assert {h.chunk_id for h in hits} == {rules_chunk}
@@ -119,6 +126,7 @@ async def test_no_match_returns_empty(db_available: None) -> None:
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_text="xyzzyunmatchedterm",
     )
     assert hits == []
@@ -131,6 +139,7 @@ async def test_empty_scope_keys_raises(db_available: None) -> None:
             tenant_id=tenant_id,
             scope_keys=ScopeSet(),
             class_="rules",
+            version_ids=await versions_of(tenant_id),
             query_text="grappling",
         )
 
@@ -154,6 +163,7 @@ async def test_scope_and_class_pushdown_is_in_the_query_plan(db_available: None)
                     "tenant_id": tenant_id,
                     "scope_keys": ["workspace_public"],
                     "class_": "rules",
+                    "version_ids": list(await versions_of(tenant_id)),
                     "query_text": "grappling",
                     "k": 64,
                 },
@@ -164,3 +174,4 @@ async def test_scope_and_class_pushdown_is_in_the_query_plan(db_available: None)
     assert "scope_key" in plan_text
     assert "class" in plan_text
     assert "tenant_id" in plan_text
+    assert "version_id" in plan_text

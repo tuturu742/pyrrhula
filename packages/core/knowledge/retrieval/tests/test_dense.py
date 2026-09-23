@@ -12,6 +12,7 @@ from core.knowledge.retrieval.tests.conftest import (
     seed_chunk,
     seed_tenant_and_source,
     unit_vector,
+    versions_of,
 )
 from core.ports.scope import ScopeSet
 from core.tenancy.scope import tenant_scope
@@ -42,6 +43,7 @@ async def test_exact_match_ranks_first_and_scores_near_one(db_available: None) -
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_embedding=unit_vector(0),
     )
 
@@ -79,6 +81,7 @@ async def test_out_of_scope_chunk_never_appears_even_as_exact_match(
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_embedding=unit_vector(0),  # identical to the out-of-scope chunk's vector
     )
 
@@ -112,6 +115,7 @@ async def test_class_filter_excludes_other_classes(db_available: None) -> None:
         tenant_id=tenant_id,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        version_ids=await versions_of(tenant_id),
         query_embedding=unit_vector(0),
     )
 
@@ -125,6 +129,7 @@ async def test_empty_scope_keys_raises(db_available: None) -> None:
             tenant_id=tenant_id,
             scope_keys=ScopeSet(),
             class_="rules",
+            version_ids=await versions_of(tenant_id),
             query_embedding=unit_vector(0),
         )
 
@@ -155,6 +160,9 @@ async def test_second_tenant_cannot_see_first_tenants_chunks(db_available: None)
         tenant_id=tenant_a,
         scope_keys=ScopeSet({"workspace_public"}),
         class_="rules",
+        # Both tenants' versions, deliberately: a version id is not a secret, and naming
+        # tenant B's must not make tenant B's chunk reachable.
+        version_ids=await versions_of(tenant_a) | await versions_of(tenant_b),
         query_embedding=unit_vector(0),
     )
     assert {h.chunk_id for h in hits} == {chunk_a}
@@ -184,6 +192,7 @@ async def test_scope_and_class_pushdown_is_in_the_query_plan(db_available: None)
                     "tenant_id": tenant_id,
                     "scope_keys": ["workspace_public"],
                     "class_": "rules",
+                    "version_ids": list(await versions_of(tenant_id)),
                     "qvec": vector_literal,
                     "k": 64,
                 },
@@ -194,3 +203,4 @@ async def test_scope_and_class_pushdown_is_in_the_query_plan(db_available: None)
     assert "scope_key" in plan_text
     assert "class" in plan_text
     assert "tenant_id" in plan_text
+    assert "version_id" in plan_text

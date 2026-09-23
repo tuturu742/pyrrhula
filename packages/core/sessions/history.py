@@ -363,8 +363,15 @@ async def collect_prose_by_phase(
     """Walks the session log forward, tracking the current phase from ``phase_transition``
     events and attributing each ``message`` event to it -- the log is the source of truth
     (§5.4), so the chunk boundaries come from the log rather than from a phase column the
-    ``message`` table doesn't have. Returns ``[(phase_key, [message text, ...]), ...]`` in
-    chronological order, one entry per contiguous run of a phase."""
+    ``message`` table doesn't have. Returns ``[(phase_key, ["<speaker>: text", ...]), ...]``
+    in chronological order, one entry per contiguous run of a phase.
+
+    The speaker is part of the text because a summary of a table has to say who did what.
+    Joining the prose without it hands the summariser a monologue assembled from six
+    people and asks it to narrate the session: it cannot attribute an action to whoever
+    took it, so the returning summary says "the party" and "someone" where the record
+    knows the name. The log already carries the author on every ``message`` event.
+    """
     async with tenant_scope(tenant_id) as session:
         rows = list(
             (
@@ -393,6 +400,9 @@ async def collect_prose_by_phase(
         content = row.payload.get("content")
         if not isinstance(content, str) or not content.strip():
             continue
+        author = row.payload.get("author")
+        if isinstance(author, str) and author.strip():
+            content = f"{author.strip()}: {content}"
         phase_of_event = row.payload.get("phase")
         phase_key = phase_of_event if isinstance(phase_of_event, str) else current_phase
         if groups and groups[-1][0] == phase_key:

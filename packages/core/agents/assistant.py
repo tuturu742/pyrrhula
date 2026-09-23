@@ -31,6 +31,7 @@ from core.config import get_settings
 from core.knowledge.retrieval.assemble import search_and_budget
 from core.knowledge.retrieval.priority import class_priority_weights
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
+from core.knowledge.retrieval.versions import effective_version_ids
 from core.ports.embedding import EmbeddingProvider, EmbedRequest
 from core.ports.model_provider import GenerationRequest, ModelProvider
 from core.settings.resolve import resolved_setting
@@ -207,6 +208,7 @@ async def _workspace_context(
         # split is the same everywhere, which is wrong in the direction that hurts most:
         # a repository puts every source file in `misc`, the class with the smallest share.
         priority_weights=await class_priority_weights(tenant_id, workspace_id),
+        version_set=await effective_version_ids(tenant_id, workspace_id),
     )
     if not chunks:
         return "", []

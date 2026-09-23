@@ -19,6 +19,7 @@ from core.knowledge.retrieval.tests.conftest import (
     seed_chunk,
     seed_tenant_and_source,
     unit_vector,
+    versions_of,
 )
 from core.ports.scope import ScopeSet
 from core.tenancy.scope import tenant_scope
@@ -62,6 +63,7 @@ async def test_cache_hit_survives_the_underlying_chunks_being_deleted(
         "query_text": "grapple check strength",
         "class_ratios": {"rules": 1.0},
         "max_tokens": 100,
+        "version_set": await versions_of(tenant_id),
         "cache": cache,
     }
 
@@ -98,6 +100,7 @@ async def test_different_scope_keys_never_share_a_cached_result(
         query_text="grapple check strength",
         class_ratios={"rules": 1.0},
         max_tokens=100,
+        version_set=await versions_of(tenant_id),
         cache=cache,
     )
     assert [c.entry_key for c in gm_result] == ["gm-secret"]
@@ -109,6 +112,7 @@ async def test_different_scope_keys_never_share_a_cached_result(
         query_text="grapple check strength",
         class_ratios={"rules": 1.0},
         max_tokens=100,
+        version_set=await versions_of(tenant_id),
         cache=cache,
     )
     # Different scope_set -> different cache key -> a real (miss) search, which correctly

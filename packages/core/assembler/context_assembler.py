@@ -80,6 +80,7 @@ from core.knowledge.retrieval.budget import BudgetedChunk
 from core.knowledge.retrieval.cache import RetrievalCache
 from core.knowledge.retrieval.priority import class_priority_weights
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
+from core.knowledge.retrieval.versions import effective_version_ids
 from core.observability.otel import get_tracer
 from core.ports.reranker import Reranker
 from core.ports.scope import ScopeSet
@@ -237,12 +238,56 @@ class HistoryBudgetExceededError(Exception):
     summary built against a different budget than the one it is now being placed in."""
 
 
+async def _speaker_names(
+    tenant_id: uuid.UUID, principal_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """Who each message's author is, by name.
+
+    A session is a table, and a transcript that renders every agent turn as ``assistant``
+    tells the model there is one. Six seats collapsed into one label is not a cosmetic
+    problem: the model cannot see whose turn was whose, so it invents speaker labels, it
+    writes other people's turns, and it loses track of whether the last turn was its own.
+    A referee wrote a player's entire action and then narrated the result of it; a player
+    answered in the referee's voice. Both read as a model behaving badly, and both were
+    this: a transcript that never said who spoke.
+
+    Persona name first (that is the name the table uses and the UI shows), the principal's
+    display name otherwise -- a human at the table has one too.
+    """
+    if not principal_ids:
+        return {}
+    from core.agents.models import Persona
+
+    names: dict[uuid.UUID, str] = {}
+    async with tenant_scope(tenant_id) as session:
+        for principal_id, name in (
+            await session.execute(
+                select(Persona.principal_id, Persona.name).where(
+                    Persona.principal_id.in_(principal_ids)
+                )
+            )
+        ).all():
+            names[principal_id] = str(name)
+        missing = principal_ids - set(names)
+        if missing:
+            for principal_id, display_name in (
+                await session.execute(
+                    select(Principal.id, Principal.display_name).where(Principal.id.in_(missing))
+                )
+            ).all():
+                names[principal_id] = str(display_name)
+    return names
+
+
 async def _render_history(
     tenant_id: uuid.UUID, session_id: uuid.UUID, max_tokens: int, *, after_event_seq: int | None
 ) -> tuple[str, int]:
     """Walks backward from the newest message, stopping at the token cap, then renders
     oldest-to-newest so the transcript reads naturally -- the most recent turns are kept,
     not the earliest, when the window doesn't fit everything.
+
+    Each line is prefixed with the speaker's name rather than the message's role -- see
+    ``_speaker_names`` for why that is load-bearing rather than decorative.
 
     ``after_event_seq`` (G4.1) excludes messages a resume summary already covers: including
     them verbatim *and* in the summary would double-charge the same history against the
@@ -254,17 +299,25 @@ async def _render_history(
             stmt = stmt.where(MessageRow.event_seq > after_event_seq)
         rows = list((await session.execute(stmt.order_by(MessageRow.event_seq.desc()))).scalars())
 
-    included: list[MessageRow] = []
+    names = await _speaker_names(tenant_id, {r.author_principal_id for r in rows})
+
+    def speaker(row: MessageRow) -> str:
+        # `system` is the transcript's own voice (phase notes, tool records) and has no
+        # person behind it; naming a principal there would invent one.
+        return row.role if row.role == "system" else names.get(row.author_principal_id, row.role)
+
+    included: list[tuple[MessageRow, str]] = []
     used = 0
     for row in rows:
-        cost = token_proxy(row.content_md)
+        line = f"{speaker(row)}: {row.content_md}"
+        cost = token_proxy(line)
         if used + cost > max_tokens:
             break
-        included.append(row)
+        included.append((row, line))
         used += cost
 
     included.reverse()
-    rendered = "\n".join(f"{m.role}: {m.content_md}" for m in included)
+    rendered = "\n".join(line for _row, line in included)
     return rendered, used
 
 
@@ -549,6 +602,10 @@ async def assemble(
                     # what this *workspace* attached and how much it is worth here. Both
                     # matter, and only the first was ever applied.
                     priority_weights=await class_priority_weights(tenant_id, workspace_id),
+                    # Which published version of each attached source this workspace
+                    # reads. Retrieval cannot infer it -- knowledge_chunk holds every
+                    # version at once -- and without it a superseded entry stays citable.
+                    version_set=await effective_version_ids(tenant_id, workspace_id),
                     spill=phase.budget.spill,
                     reranker=reranker,
                     cache=cache,

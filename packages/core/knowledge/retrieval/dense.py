@@ -14,9 +14,14 @@ a single query's ordered result list exists. The port/adapter still stand for an
 non-knowledge vector-store consumer; this is a dedicated, richer-shaped read path built
 specifically for the knowledge retrieval pipeline.
 
-``version_id`` on a hit reflects whatever the chunk's owning entry currently has (usually
-``NULL`` — the mutable draft, A1.2) — resolving "which version does this workspace's
-session actually read" is A1.8's pin-vs-follow job, not retrieval's.
+``version_ids`` is required and pushed down for the same reason ``scope_keys`` is.
+``knowledge_chunk`` holds every published version at once — publishing inserts new rows
+and leaves the old ones — so "which version does this workspace read" (A1.8's
+pin-vs-follow) has to be answered *before* the query rather than after it. Retrieval used
+to leave that to the caller and no caller ever applied it, which meant a corrected entry
+went on being citable in its original wording: the agent cites `k9`, `k9` says what it
+says, and nothing in the trace mentions that the text is a version old. Resolve the set
+with ``core.knowledge.retrieval.versions.effective_version_ids``.
 
 ``entry_key``/``token_count`` were added to ``RetrievalHit`` for A1.6: WRRF fusion and
 bucket-fill need ``token_count`` to know how much budget a hit costs and ``entry_key`` for
@@ -49,6 +54,7 @@ DENSE_SEARCH_SQL = (
     "WHERE c.tenant_id = :tenant_id "
     "AND c.scope_key = ANY(:scope_keys) "
     "AND c.class = :class_ "
+    "AND c.version_id = ANY(:version_ids) "
     "AND c.embedding IS NOT NULL "
     # G4.6: quarantined content is *absent* from retrieval, not merely flagged in it.
     "AND NOT c.quarantined "
@@ -78,6 +84,7 @@ async def search_dense(
     tenant_id: uuid.UUID,
     scope_keys: ScopeSet,
     class_: str,
+    version_ids: frozenset[uuid.UUID],
     query_embedding: Sequence[float],
     k: int = _DEFAULT_K,
 ) -> list[RetrievalHit]:
@@ -85,6 +92,10 @@ async def search_dense(
         # INV-4: required AND non-empty -- an empty set is indistinguishable from "no
         # filter" if it were allowed through.
         raise ValueError("scope_keys must be a non-empty set (INV-4)")
+    if not version_ids:
+        # Same reasoning as the scope set: empty would read as "every version", which is
+        # the one answer that must never be reachable by omission.
+        raise ValueError("version_ids must be a non-empty set")
 
     vector_literal = _vector_literal(query_embedding)
     async with tenant_scope(tenant_id) as session:
@@ -95,6 +106,7 @@ async def search_dense(
                     "tenant_id": tenant_id,
                     "scope_keys": list(scope_keys),
                     "class_": class_,
+                    "version_ids": list(version_ids),
                     "qvec": vector_literal,
                     "k": k,
                 },

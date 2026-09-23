@@ -13,6 +13,7 @@ from core.knowledge.retrieval.tests.conftest import (
     seed_chunk,
     seed_tenant_and_source,
     unit_vector,
+    versions_of,
 )
 from core.ports.scope import ScopeSet
 
@@ -58,6 +59,7 @@ async def test_reranking_does_not_change_bucket_token_allocation(db_available: N
         "query_text": "grapple check strength",
         "class_ratios": {"rules": 0.75, "lore": 0.25},
         "max_tokens": 100,
+        "version_set": await versions_of(tenant_id),
     }
 
     without_rerank = await search_and_budget(**common_kwargs)
@@ -108,6 +110,7 @@ async def test_reranking_changes_within_bucket_order(db_available: None) -> None
         query_text="grapple check strength",
         class_ratios={"rules": 1.0},
         max_tokens=1000,
+        version_set=await versions_of(tenant_id),
         reranker=StubReranker(),
     )
 

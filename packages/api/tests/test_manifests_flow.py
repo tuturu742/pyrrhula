@@ -17,7 +17,11 @@ from core.agents.seed import seed_dev_agent
 from core.assembler.context_assembler import ContextManifest, assemble
 from core.assembler.manifest import write_context_manifest
 from core.knowledge.authoring import create_source
-from core.knowledge.retrieval.tests.conftest import seed_chunk, unit_vector
+from core.knowledge.retrieval.tests.conftest import (
+    attach_to_workspace,
+    seed_chunk,
+    unit_vector,
+)
 from core.process.dsl.schema import ActorSpec, BudgetSpec, PhaseSpec, VisibilitySpec
 from core.process.skeleton import create_session
 from core.sessions.models import MessageRow
@@ -175,6 +179,7 @@ async def test_manifest_entries_round_trip_class_bucket_rank_score_why_over_http
     sess = await create_session(tenant_id, workspace_id, persona_id)
 
     source = await create_source(tenant_id, key="core-rules", name="Core Rules", class_="rules")
+    await attach_to_workspace(tenant_id, workspace_id, source.id)
     await seed_chunk(
         tenant_id,
         source.id,

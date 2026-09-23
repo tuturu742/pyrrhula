@@ -10,6 +10,7 @@ from core.knowledge.retrieval.tests.conftest import (
     seed_chunk,
     seed_tenant_and_source,
     unit_vector,
+    versions_of,
 )
 from core.ports.scope import ScopeSet
 
@@ -57,6 +58,7 @@ async def test_budget_ratio_change_produces_different_included_sets(
         "query_embedding": unit_vector(0),
         "query_text": "word0",
         "max_tokens": 40,
+        "version_set": await versions_of(tenant_id),
     }
 
     rules_heavy = await search_and_budget(
@@ -117,6 +119,7 @@ async def test_rules_and_lore_chunks_never_compete_for_the_same_slot(
         query_text="word0",
         class_ratios={"rules": 0.5, "lore": 0.5},
         max_tokens=40,
+        version_set=await versions_of(tenant_id),
     )
 
     by_class = {"rules": 0, "lore": 0}

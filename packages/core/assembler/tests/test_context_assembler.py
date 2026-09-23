@@ -16,7 +16,11 @@ from core.assembler.context_assembler import (
 )
 from core.knowledge.activation import ActivatedEntry
 from core.knowledge.authoring import create_source
-from core.knowledge.retrieval.tests.conftest import seed_chunk, unit_vector
+from core.knowledge.retrieval.tests.conftest import (
+    attach_to_workspace,
+    seed_chunk,
+    unit_vector,
+)
 from core.process.dsl.schema import ActorSpec, BudgetSpec, PhaseSpec, VisibilitySpec
 from core.process.skeleton import create_session, submit_user_message
 from core.tenancy.models import Principal, WorkspaceMembership
@@ -43,6 +47,11 @@ async def _setup(slug_prefix: str) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, Pri
         slug=f"{slug_prefix}-{uuid.uuid4().hex[:8]}"
     )
     source = await create_source(tenant_id, key="core-rules", name="Core Rules", class_="rules")
+    # A source a workspace has not attached is not that workspace's knowledge: the
+    # assembler resolves which version to read from the attachment, so an unattached
+    # source retrieves nothing. Seeded and imported tenants always attach; the fixture
+    # only ever skipped it because retrieval used to ignore versions entirely.
+    await attach_to_workspace(tenant_id, workspace_id, source.id)
 
     async with tenant_scope(tenant_id) as session:
         viewer = Principal(tenant_id=tenant_id, kind="human", display_name="viewer")
@@ -644,3 +653,80 @@ def test_stable_prefix_plus_volatile_suffix_reconstructs_rendered_context() -> N
 
     sections = LayoutSections(stable=("stable stuff",), volatile=("volatile stuff",))
     assert sections.stable_text + "\n\n" + sections.volatile_text == sections.render()
+
+
+# ── who spoke: history is a transcript of a table, not one voice ────────────────────
+
+
+async def test_history_names_each_speaker_rather_than_their_role(db_available: None) -> None:
+    """Every agent turn used to render as ``assistant``, which tells a model at a
+    six-seat table that there is one seat. The observed cost was not cosmetic: a referee
+    wrote a player's whole action and narrated its result, and a player answered in the
+    referee's voice -- both of which look like a model behaving badly and were the
+    transcript refusing to say who spoke."""
+    tenant_id, workspace_id, source_id, viewer = await _setup("ctx-speakers")
+    session_id = await _session_for(tenant_id, workspace_id, viewer)
+
+    async with tenant_scope(tenant_id) as session:
+        other = Principal(tenant_id=tenant_id, kind="human", display_name="Grace")
+        session.add(other)
+        await session.flush()
+        session.add(
+            WorkspaceMembership(
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                principal_id=other.id,
+                role="participant",
+            )
+        )
+        other_id = other.id
+
+    await submit_user_message(tenant_id, session_id, viewer.id, "the door was already open")
+    await submit_user_message(tenant_id, session_id, other_id, "then somebody opened it")
+
+    manifest = await assemble(
+        viewer,
+        _phase(["workspace_public"], {"rules": 1.0}, 0),
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        query_text="",
+        query_embedding=unit_vector(0),
+        history_max_tokens=1000,
+    )
+
+    assert "viewer: the door was already open" in manifest.rendered_context
+    assert "Grace: then somebody opened it" in manifest.rendered_context
+
+
+async def test_a_persona_is_named_by_its_persona_name(db_available: None) -> None:
+    """A persona and the principal behind it can carry different names, and the one the
+    table uses -- the one the UI shows against the turn -- is the persona's."""
+    from core.agents.models import Persona as PersonaRow
+
+    tenant_id, workspace_id, _source_id, viewer = await _setup("ctx-persona-name")
+    persona_id = await seed_dev_agent(tenant_id, workspace_id, key="referee", name="The Referee")
+    async with tenant_scope(tenant_id) as session:
+        persona = await session.get(PersonaRow, persona_id)
+        principal_id = persona.principal_id
+        # The principal keeps the name it was created with; the persona is renamed the
+        # way a workspace renames a seat.
+        persona.name = "Kriminalinspektör Lind"
+        await session.flush()
+
+    session_id = await _session_for(tenant_id, workspace_id, viewer)
+    await submit_user_message(tenant_id, session_id, principal_id, "nobody leaves this room")
+
+    manifest = await assemble(
+        viewer,
+        _phase(["workspace_public"], {"rules": 1.0}, 0),
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        query_text="",
+        query_embedding=unit_vector(0),
+        history_max_tokens=1000,
+    )
+
+    assert "Kriminalinspektör Lind: nobody leaves this room" in manifest.rendered_context
+    assert "assistant: nobody leaves this room" not in manifest.rendered_context

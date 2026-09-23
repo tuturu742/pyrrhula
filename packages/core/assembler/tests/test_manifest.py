@@ -18,7 +18,11 @@ from core.assembler.manifest import (
     write_context_manifest,
 )
 from core.knowledge.authoring import create_source
-from core.knowledge.retrieval.tests.conftest import seed_chunk, unit_vector
+from core.knowledge.retrieval.tests.conftest import (
+    attach_to_workspace,
+    seed_chunk,
+    unit_vector,
+)
 from core.process.dsl.schema import ActorSpec, BudgetSpec, PhaseSpec, VisibilitySpec
 from core.process.skeleton import create_session
 from core.sessions.models import MessageRow
@@ -116,6 +120,7 @@ async def _write_manifest_and_message(
 async def test_write_and_read_manifest_via_real_assemble_output(db_available: None) -> None:
     tenant_id, workspace_id, session_id, viewer, _other = await _setup("manifest-write")
     source = await create_source(tenant_id, key="core-rules", name="Core Rules", class_="rules")
+    await attach_to_workspace(tenant_id, workspace_id, source.id)
     await seed_chunk(
         tenant_id,
         source.id,

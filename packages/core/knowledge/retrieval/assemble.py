@@ -18,10 +18,14 @@ class, version_set)``. That means a cache hit can reflect a slightly stale activ
 state (sticky/cooldown windows) for up to the cache's TTL, a deliberate, bounded
 trade-off: within a scene, activation state is itself usually stable turn-to-turn, and the
 whole point of a short TTL is trading a little staleness for not re-running the expensive
-dense+sparse cascade on every turn. ``version_set`` is the caller's responsibility to
-resolve (e.g. via A1.8's ``resolve_effective_version_id`` per attached source) — publishing
-a new version changes it, which changes the cache key, which is what makes a stale read
-structurally impossible rather than merely unlikely.
+dense+sparse cascade on every turn.
+
+``version_set`` is required and does two jobs: it is the SQL predicate dense and sparse
+filter on, and it is part of the cache key. Publishing a new version changes it, which
+changes both — so a stale read is structurally impossible rather than merely unlikely.
+Resolve it with ``versions.effective_version_ids(tenant_id, workspace_id)``. An empty set
+means the workspace has nothing attached: there is nothing to retrieve, and this returns
+nothing rather than everything.
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ from core.knowledge.retrieval.budget import (
     to_budgeted_chunks,
 )
 from core.knowledge.retrieval.cache import CacheKey, RetrievalCache, make_query_hash
-from core.knowledge.retrieval.dense import search_dense
+from core.knowledge.retrieval.dense import RetrievalHit, search_dense
 from core.knowledge.retrieval.keyed import expand_activated_entries_to_chunks
 from core.knowledge.retrieval.rerank import fetch_chunk_texts, rerank_bucket
 from core.knowledge.retrieval.sparse import search_sparse
@@ -58,6 +62,7 @@ async def search_and_budget(
     query_text: str,
     class_ratios: dict[str, float],
     max_tokens: int,
+    version_set: frozenset[uuid.UUID],
     activated_entries_by_class: dict[str, list[ActivatedEntry]] | None = None,
     priority_weights: dict[str, float] | None = None,
     spill: str = DEFAULT_SPILL,
@@ -66,7 +71,6 @@ async def search_and_budget(
     list_weights: dict[str, float] | None = None,
     reranker: Reranker | None = None,
     cache: RetrievalCache | None = None,
-    version_set: frozenset[uuid.UUID | None] | None = None,
 ) -> list[BudgetedChunk]:
     ratios = class_ratios
     if priority_weights:
@@ -91,25 +95,33 @@ async def search_and_budget(
                 query_hash=make_query_hash(query_text),
                 scope_set=scope_keys,
                 class_=class_,
-                version_set=version_set or frozenset(),
+                version_set=frozenset(version_set),
             )
             fused = await cache.get(tenant_id, cache_key)
 
         if fused is None:
-            dense_hits = await search_dense(
-                tenant_id=tenant_id,
-                scope_keys=scope_keys,
-                class_=class_,
-                query_embedding=query_embedding,
-                k=k_per_list,
-            )
-            sparse_hits = await search_sparse(
-                tenant_id=tenant_id,
-                scope_keys=scope_keys,
-                class_=class_,
-                query_text=query_text,
-                k=k_per_list,
-            )
+            # Nothing attached means nothing published to search. The keyed list is built
+            # from the same attachments, so it is empty too; fusing the three empty lists
+            # keeps one code path rather than two.
+            dense_hits: list[RetrievalHit] = []
+            sparse_hits: list[RetrievalHit] = []
+            if version_set:
+                dense_hits = await search_dense(
+                    tenant_id=tenant_id,
+                    scope_keys=scope_keys,
+                    class_=class_,
+                    version_ids=version_set,
+                    query_embedding=query_embedding,
+                    k=k_per_list,
+                )
+                sparse_hits = await search_sparse(
+                    tenant_id=tenant_id,
+                    scope_keys=scope_keys,
+                    class_=class_,
+                    version_ids=version_set,
+                    query_text=query_text,
+                    k=k_per_list,
+                )
             fused = fuse(
                 {"dense": dense_hits, "sparse": sparse_hits, "keyed": keyed_hits},
                 k=wrrf_k,
