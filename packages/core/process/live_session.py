@@ -257,6 +257,9 @@ async def run_one_persona_turn(
         persona_type = persona.persona_type
         persona_name = persona.name
         persona_web_search = persona.web_search
+        # Read here with the rest of them: `persona` belongs to this scope's session and
+        # is detached by the time the turn's system blocks are built.
+        persona_brief = (persona.persona_md or "").strip()
         principal_id = persona.principal_id
         viewer_principal = await session.get(Principal, principal_id)
         assert viewer_principal is not None
@@ -674,7 +677,27 @@ async def run_one_persona_turn(
                 ),
             )
 
-    system_blocks = [manifest.rendered_context]
+    # WHO THIS IS, before what it knows.
+    #
+    # `persona_md` is the brief a persona is written with -- the thing the UI calls the
+    # persona and every sample author spends their words on -- and it reached the model
+    # in exactly two places in this codebase, both of them in the delegation reviewer.
+    # A live turn got the persona's NAME and nothing else, so a cast's character came
+    # only from its knowledge entries, its phase prompt and its behaviour axes.
+    #
+    # That is survivable for a sample whose character lives in its lore, which is why it
+    # went unnoticed: a well-written table compensates without anyone seeing the brief is
+    # inert. It is not survivable for a brief that carries a FACT -- a newsroom whose
+    # editor is told the names of its two reporters invented two others, and the obvious
+    # response was to rewrite a brief the model had never been shown.
+    #
+    # Sent whole. Truncating an author's own words at some byte count is how the
+    # important half goes missing quietly; a brief long enough to crowd the context is a
+    # thing its author can see and shorten.
+    system_blocks: list[str] = []
+    if persona_brief:
+        system_blocks.append(persona_brief)
+    system_blocks.append(manifest.rendered_context)
     # The phase's own task instruction (DSL `prompt`): what this turn is FOR and what
     # shape its output should take -- without it the model only knows who it is, not
     # what the flow wants from it here.

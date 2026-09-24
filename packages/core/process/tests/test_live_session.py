@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import pytest
 from sqlalchemy import select
 
+from core.agents.models import Persona
 from core.agents.seed import seed_dev_agent
 from core.assembler.models import ContextManifestRow
 from core.ports.model_provider import Capabilities, Chunk, GenerationRequest, ToolCall
@@ -319,3 +320,59 @@ def test_phase_remote_allowlist_gates_by_phase() -> None:
     assert _phase_remote_allowlist(phase(None)) is None, "legacy allow-all"
     assert _phase_remote_allowlist(phase([])) == []
     assert _phase_remote_allowlist(phase(["evidence_check"])) == ["evidence_check"]
+
+
+async def test_a_personas_own_brief_reaches_its_turn(db_available: None) -> None:
+    """The persona's written prose must be in front of the model that speaks as it.
+
+    It was not. `assemble()` takes the viewer, the phase, knowledge, secrets, history and
+    behaviour-axis directives, and `persona_md` reached a model in exactly two places in
+    this codebase -- both in the delegation reviewer. A live turn got the persona's NAME
+    and nothing else, so a cast's character came only from its knowledge entries, its
+    phase prompt and its axes.
+
+    That is survivable where the character lives in the lore, which is why it went
+    unnoticed for so long. It is not survivable where the brief carries a FACT: a
+    newsroom editor told the names of its two reporters addressed two others it had
+    invented, and the obvious response was to rewrite a brief the model had never seen.
+    """
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=f"brief-{uuid.uuid4().hex[:8]}")
+    persona_id = await seed_dev_agent(
+        tenant_id, workspace_id, key="facilitator", persona_type="supervisor"
+    )
+
+    brief = "You are Marit Halvorsen. Your two reporters are Aksel Rygg and Nadia Brekke."
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(Persona, persona_id)
+        row.persona_md = brief
+
+    sess = await create_session(tenant_id, workspace_id, persona_id)
+    flow = _flow_with_randomizer_on_resolve()
+    definition_row = await create_definition(tenant_id, "brief-flow", "Brief", flow)
+    dsl, issues = validate_raw(flow)
+    assert dsl is not None and not issues, issues
+    await start_session(tenant_id, sess.id, dsl, definition_row.id, definition_row.version)
+
+    seen: list[GenerationRequest] = []
+
+    class _Capturing(_ScriptedProvider):
+        async def generate(self, req: GenerationRequest):  # type: ignore[override]
+            seen.append(req)
+            async for chunk in super().generate(req):
+                yield chunk
+
+    provider = _Capturing(turns=[_ScriptedTurn(text="Beats assigned.")])
+    await run_process_definition_session(
+        tenant_id,
+        sess.id,
+        dsl,
+        model_provider_factory=lambda _p: provider,
+        embedding_provider=_stub_embedding_provider(),
+    )
+
+    assert seen, "no generation happened"
+    system_text = "\n".join(
+        str(m.get("content") or "") for m in seen[0].messages if m.get("role") == "system"
+    )
+    assert "Aksel Rygg" in system_text, "the persona's own brief never reached the model"
+    assert "Nadia Brekke" in system_text
