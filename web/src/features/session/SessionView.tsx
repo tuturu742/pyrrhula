@@ -172,6 +172,11 @@ export function SessionView() {
   const [agendaDraft, setAgendaDraft] = useState("");
   const [inspecting, setInspecting] = useState<Set<string>>(new Set());
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
+  // Off by default. Comparing what two turns were each given is a real diagnostic --
+  // it is how you check that the assembler excluded what it should -- but it is a
+  // thing you go looking for, and a tickbox on every single message made the
+  // transcript read like a form rather than a conversation.
+  const [compareMode, setCompareMode] = useState(false);
   const [comparing, setComparing] = useState<[string, string] | null>(null);
   const t = useLabel();
 
@@ -549,7 +554,22 @@ export function SessionView() {
         </div>
       )}
 
-      {compareSelection.length === 2 && (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => {
+            setCompareMode((on) => !on);
+            setCompareSelection([]);
+            setComparing(null);
+          }}
+          className="rounded-md border border-border px-2 py-0.5"
+        >
+          {compareMode ? "Done comparing" : "Compare turns' context"}
+        </button>
+        {compareMode && <span>pick two turns below</span>}
+      </div>
+
+      {compareMode && compareSelection.length === 2 && (
         <button
           type="button"
           onClick={() => setComparing([compareSelection[0], compareSelection[1]])}
@@ -589,6 +609,7 @@ export function SessionView() {
             workspaceId={session?.workspace_id ?? null}
             inspecting={inspecting}
             onToggleInspect={toggleInspect}
+            compareMode={compareMode}
             compareSelection={compareSelection}
             onToggleCompareSelect={toggleCompareSelect}
           />
@@ -927,6 +948,7 @@ function TimelineEvent({
   sessionId,
   inspecting,
   onToggleInspect,
+  compareMode,
   compareSelection,
   onToggleCompareSelect,
   assetOrigins,
@@ -937,6 +959,7 @@ function TimelineEvent({
   sessionId: string;
   inspecting: Set<string>;
   onToggleInspect: (messageId: string) => void;
+  compareMode: boolean;
   compareSelection: string[];
   onToggleCompareSelect: (messageId: string) => void;
   assetOrigins: Array<{ origin: string; key: string }>;
@@ -984,14 +1007,16 @@ function TimelineEvent({
                 >
                   {inspecting.has(m.id) ? "Hide context" : "Inspect context"}
                 </button>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={compareSelection.includes(m.id)}
-                    onChange={() => onToggleCompareSelect(m.id!)}
-                  />
-                  compare
-                </label>
+                {compareMode && (
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={compareSelection.includes(m.id)}
+                      onChange={() => onToggleCompareSelect(m.id!)}
+                    />
+                    compare
+                  </label>
+                )}
               </div>
               {inspecting.has(m.id) && <ContextInspectorPanel messageId={m.id} />}
             </div>
@@ -1212,7 +1237,12 @@ function RepoPreviewRow({
   // preview being broken. Hiding the un-buildable ones instead would be worse -- a session
   // with six pull requests and no builds yet would show no selector at all, which reads as
   // the feature being missing rather than as the builds not having run.
-  const choices = pullRequests ?? [];
+  // Previewable first: the ones that can actually be chosen are the point, and on a
+  // repository with several rounds of review the buildable branch was buried under the
+  // ones still waiting for a green suite.
+  const choices = [...(pullRequests ?? [])].sort(
+    (a, b) => Number(Boolean(b.previewable)) - Number(Boolean(a.previewable)),
+  );
   const preview = previews.find(
     (p) => p.repo_id === repo.id && (p.git_ref ?? "") === gitRef,
   );
@@ -1275,24 +1305,46 @@ function RepoPreviewRow({
       {choices.length > 0 && (
         <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           Preview
+          {/*
+            A native select sizes itself to its widest option, and these labels carry a
+            work item's title -- which for a real repository runs to a sentence with a
+            file path in it. Unbounded, one branch stretched the control past the page.
+            The width is capped here and the label is shortened below; the full text
+            stays in the option's own tooltip.
+          */}
           <select
             value={gitRef}
             onChange={(e) => setGitRef(e.target.value)}
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+            className="w-full max-w-xs truncate rounded-md border border-border bg-background px-2 py-1 text-xs sm:w-auto"
           >
             <option value="">the latest build</option>
-            {choices.map((pr) => (
-              <option key={pr.branch} value={pr.branch} disabled={!pr.previewable}>
-                {pr.pr_ref || pr.branch} — {pr.title || pr.branch}
-                {pr.previewable ? "" : "  (no build yet)"}
-              </option>
-            ))}
+            {choices.map((pr) => {
+              const label = pr.title || pr.branch;
+              return (
+                <option
+                  key={pr.branch}
+                  value={pr.branch}
+                  disabled={!pr.previewable}
+                  title={`${pr.pr_ref || pr.branch} — ${label}`}
+                >
+                  {pr.pr_ref || pr.branch} — {shorten(label)}
+                  {pr.previewable ? "" : "  (no build yet)"}
+                </option>
+              );
+            })}
           </select>
           {gitRef && !preview && <span>not deployed yet</span>}
         </label>
       )}
     </div>
   );
+}
+
+/** A one-line label for a dropdown. Work item titles are sentences; a native select
+ * cannot ellipsise its own options, so the text is cut before it reaches one. */
+function shorten(text: string, max = 52): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 }
 
 /**
