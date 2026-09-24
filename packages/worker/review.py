@@ -62,11 +62,19 @@ _REVIEW_SYSTEM = (
     "body as evidence that nothing else changed, and do not withhold a verdict merely "
     "because the contents are cut: say which part of your judgement the truncation "
     "limits.\n\n"
-    "The build result for this branch is stated above the diff. A branch whose tests "
-    "failed is 'request_changes', whatever the diff looks like -- name the failing "
-    "tests and stop there. A scope-correct one-file change that leaves the suite red is "
-    "still red, and approving it is the one review error that cannot be caught "
-    "downstream: the merge order is planned from approvals."
+    "The build result for this branch is stated above the diff, and it outranks how "
+    "reasonable the diff looks. Decide against the work item's own acceptance "
+    "condition: if the test or behaviour THIS item exists to fix is still failing, the "
+    "verdict is 'request_changes' however scope-correct the change is -- approving that "
+    "is the one review error nothing downstream can catch, because the merge order is "
+    "planned from approvals.\n\n"
+    "Judge the remaining failures rather than counting them. Some suites are already red "
+    "before the change lands, and a failure this item was never asked to fix, and that "
+    "the diff cannot plausibly have caused, is not grounds to refuse it -- name those, "
+    "say they are pre-existing and out of scope, and let the item stand or fall on its "
+    "own condition. A failure the diff could have caused is this item's problem whether "
+    "or not it was named in the work item. Always list the failing tests you were given "
+    "and say which of the two they are."
 )
 
 
@@ -78,6 +86,12 @@ def _build_line(pr: dict[str, Any]) -> str:
     useless for the one rule the sample exists to demonstrate: it approved a
     scope-correct one-file change on a branch whose suite was red, because nothing in
     front of it said the suite was red.
+
+    States the result and leaves the judgement to the prompt. An earlier version said
+    "This is request_changes" here, which is right for the failure that matters and
+    wrong for every other one: a suite that is already red on the trunk would then make
+    every work item against it unapprovable forever, including one that does fix its
+    own test.
     """
     status = str(pr.get("ci_status") or "").strip().lower()
     if status == "passed":
@@ -88,7 +102,10 @@ def _build_line(pr: dict[str, Any]) -> str:
         # empty string that looks like "no detail available".
         summary = str(pr.get("summary") or "").strip()
         tail = f"\n{summary[:1500]}" if summary else ""
-        return f"Build: tests FAILED on this branch. This is request_changes.{tail}"
+        return (
+            "Build: tests FAILED on this branch. Check whether this work item's own "
+            "target is among the failures before deciding." + tail
+        )
     return "Build: no test result recorded for this branch — say so in your verdict."
 
 

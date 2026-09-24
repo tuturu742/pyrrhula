@@ -16,7 +16,7 @@ from __future__ import annotations
 from worker.review import _REVIEW_SYSTEM, _build_line
 
 
-def test_a_failed_build_is_stated_as_the_verdict() -> None:
+def test_a_failed_build_is_put_in_front_of_the_reviewer() -> None:
     line = _build_line(
         {
             "ci_status": "failed",
@@ -25,9 +25,20 @@ def test_a_failed_build_is_stated_as_the_verdict() -> None:
         }
     )
     assert "FAILED" in line
-    assert "request_changes" in line
     # The failing-test tail travels with it, so the reviewer can name them.
     assert "364 passed; 5 failed" in line
+
+
+def test_a_red_suite_is_not_by_itself_declared_the_verdict() -> None:
+    """This line states a fact; the prompt weighs it. It used to say "This is
+    request_changes", which is correct when the item's own target is what failed and
+    wrong for everything else -- against a trunk that is already red (loxia ships five
+    failing fixtures on purpose) it made every work item unapprovable forever, including
+    one that genuinely fixed its own test. That is the approve half of the review loop
+    silently switched off."""
+    line = _build_line({"ci_status": "failed", "summary": "tests failed"})
+    assert "request_changes" not in line
+    assert "own target" in line
 
 
 def test_a_passing_build_says_so_plainly() -> None:
