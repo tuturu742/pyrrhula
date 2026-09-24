@@ -508,6 +508,14 @@ async def _import_personas(
             persona_md=record.get("persona_md", ""),
             params=dict(record.get("params") or {}),
         )
+        # Older bundles predate the switch and default to off, which is the safe way for
+        # this one to be missing: a persona that should not search but does is an egress
+        # decision made by a file rather than by the importing operator.
+        if record.get("web_search"):
+            async with tenant_scope(tenant_id) as session:
+                row = await session.get(Persona, persona.id)
+                if row is not None:
+                    row.web_search = True
         report.id_map[str(record["id"])] = str(persona.id)
         report.persona_principals[str(record["id"])] = persona.principal_id
         report.imported.append(f"persona:{record['key']}")

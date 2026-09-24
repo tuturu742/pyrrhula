@@ -511,6 +511,11 @@ async def _add_agents(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: 
                 "persona_type": agent.persona_type,
                 "persona_md": agent.persona_md,
                 "params": dict(agent.params or {}),
+                # Whether this persona may reach the internet. A bundle that leaves it
+                # out imports a cast that cannot search, which for a sample built around
+                # research is the whole sample missing -- and silently, since a persona
+                # with no search tool simply writes from memory.
+                "web_search": bool(agent.web_search),
                 "model_profile_ref": str(agent.agent_id),
                 "behavior_profile_versions": [
                     {

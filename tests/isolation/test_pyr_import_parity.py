@@ -514,3 +514,64 @@ async def test_a_schema_keeps_its_key_on_the_way_into_an_empty_workspace(
     await _import_into(result.data, tenant_b, workspace_b, importer.id)
     keys = {row.key for row in await list_latest_schemas(tenant_b, workspace_b)}
     assert "traveller-imported" in keys, f"the second copy did not fork: {sorted(keys)}"
+
+
+@pytest.mark.asyncio
+async def test_a_persona_that_may_search_the_internet_still_may_after_importing(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The search switch is per persona, and it has to travel.
+
+    A bundle built around research -- a newsroom, a desk that has to check what happened
+    today -- imports a cast that writes from memory if this is dropped, and says nothing
+    about it: a persona with no search tool does not fail, it just answers. That is the
+    same silent shape this file was written for.
+    """
+    tenant_a, tenant_b = two_tenants
+    workspace_a, referee, persona_a = await _case_workspace(tenant_a)
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    importer = await _member(tenant_b, workspace_b, "facilitator")
+
+    async with tenant_scope(tenant_a) as session:
+        row = await session.get(Persona, persona_a.id)
+        row.web_search = True
+
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    await _import_into(result.data, tenant_b, workspace_b, importer.id)
+
+    async with tenant_scope(tenant_b) as session:
+        landed = (
+            await session.execute(
+                select(Persona).where(Persona.workspace_id == workspace_b, Persona.key == "elin")
+            )
+        ).scalar_one()
+        assert landed.web_search is True, "the imported persona cannot reach the internet"
+
+
+@pytest.mark.asyncio
+async def test_a_persona_without_the_switch_does_not_gain_it_on_import(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The other direction, which matters more: egress is the importing operator's
+    decision, and a bundle must not be able to turn it on by omission or by default."""
+    tenant_a, tenant_b = two_tenants
+    workspace_a, referee, _persona_a = await _case_workspace(tenant_a)
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    importer = await _member(tenant_b, workspace_b, "facilitator")
+
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    await _import_into(result.data, tenant_b, workspace_b, importer.id)
+
+    async with tenant_scope(tenant_b) as session:
+        landed = (
+            await session.execute(
+                select(Persona).where(Persona.workspace_id == workspace_b, Persona.key == "elin")
+            )
+        ).scalar_one()
+        assert landed.web_search is False

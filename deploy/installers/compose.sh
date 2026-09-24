@@ -179,11 +179,19 @@ say "building and starting (first build takes a few minutes)"
 if [ -n "${PYRRHULA_COMPOSE_DNS:-}" ]; then
   # compose has no portable "set a resolver" switch, so this goes in as an override file
   # rather than being edited into the shipped compose file.
+  # Every container that talks to something outside the deployment. `searxng` is on this
+  # list because it is the one that talks to the most: it was left off, so on a host
+  # needing this override the search engine could not resolve a single upstream and every
+  # web search returned zero results with HTTP 200 -- a silent nothing, not an error, so
+  # agent web search looked like a model that never searched rather than a broken
+  # resolver.
   cat > docker/compose.dns.yml <<YAML
 services:
   api:     { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
   worker:  { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
   migrate: { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
+  admin:   { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
+  searxng: { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
 YAML
   CARGS+=(-f docker/compose.dns.yml)
   say "using DNS ${PYRRHULA_COMPOSE_DNS} inside the containers"
