@@ -415,3 +415,52 @@ async def test_the_tool_definitions_validation_ref_binds_when_no_selector_is_giv
 
 async def _fixed_fields(_actor_entity_id: uuid.UUID | None) -> dict[str, object]:
     return {"strength": 16, "dexterity": 14}
+
+
+async def test_a_malformed_actor_id_costs_the_call_and_not_the_session(
+    db_available: None,
+) -> None:
+    """Every argument here is model output, so every one is a thing a model can get
+    wrong. Unguarded, a mistyped id raised out of the handler, failed the advance job,
+    and recorded the turn as failed -- after which the idempotency guard correctly
+    refused to retry it. A campaign died at its boss fight that way, ninety minutes in,
+    on one malformed uuid.
+    """
+    tenant_id, session_id, rule_system, rule_system_id = await _setup("resolve-bad-actor")
+    handler = make_randomizer_handler(
+        rule_system=rule_system,
+        rule_system_id=rule_system_id,
+        legal_check_types=None,
+        actor_fields_resolver=_fixed_fields,
+    )
+    ctx = ToolContext(tenant_id=tenant_id, persona_id=uuid.uuid4(), session_id=session_id)
+
+    result = await handler(
+        {
+            "expression": "1d20",
+            "check_type": sorted(rule_system.check_types)[0],
+            "actor_entity_id": "not-a-uuid",
+        },
+        ctx,
+    )
+
+    payload = json.loads(result.content)
+    assert payload["error"] == "invalid_args"
+    assert "not a uuid" in payload["message"]
+
+
+async def test_a_missing_expression_is_answered_not_raised(db_available: None) -> None:
+    tenant_id, session_id, rule_system, rule_system_id = await _setup("resolve-no-expr")
+    handler = make_randomizer_handler(
+        rule_system=rule_system,
+        rule_system_id=rule_system_id,
+        legal_check_types=None,
+        actor_fields_resolver=_fixed_fields,
+    )
+    ctx = ToolContext(tenant_id=tenant_id, persona_id=uuid.uuid4(), session_id=session_id)
+
+    payload = json.loads(
+        (await handler({"check_type": sorted(rule_system.check_types)[0]}, ctx)).content
+    )
+    assert payload["error"] == "missing_args"
+    assert "expression" in payload["message"]

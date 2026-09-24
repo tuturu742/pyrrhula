@@ -255,12 +255,48 @@ def make_randomizer_handler(
                 )
             )
 
+        # A tool argument is model output, so every one of these is a thing a model can
+        # get wrong, and getting it wrong must cost the call rather than the session.
+        # Unguarded, a mistyped entity id raised out of the handler, failed the advance,
+        # and recorded the turn as failed -- after which the idempotency guard correctly
+        # refused to retry it. A campaign died at its boss fight that way, ninety minutes
+        # in, on one malformed uuid.
+        missing = [k for k in ("expression", "check_type") if not str(args.get(k) or "").strip()]
+        if missing:
+            return ToolResult(
+                content=json.dumps(
+                    {"error": "missing_args", "message": f"required: {', '.join(missing)}"}
+                )
+            )
         expression = str(args["expression"])
         check_type = str(args["check_type"])
-        actor_entity_id = (
-            uuid.UUID(str(args["actor_entity_id"])) if args.get("actor_entity_id") else None
-        )
-        target = int(str(args["target"])) if args.get("target") is not None else None
+        try:
+            actor_entity_id = (
+                uuid.UUID(str(args["actor_entity_id"])) if args.get("actor_entity_id") else None
+            )
+        except ValueError:
+            return ToolResult(
+                content=json.dumps(
+                    {
+                        "error": "invalid_args",
+                        "message": (
+                            f"actor_entity_id {args.get('actor_entity_id')!r} is not a uuid; "
+                            "omit it to roll for nobody in particular"
+                        ),
+                    }
+                )
+            )
+        try:
+            target = int(str(args["target"])) if args.get("target") is not None else None
+        except ValueError:
+            return ToolResult(
+                content=json.dumps(
+                    {
+                        "error": "invalid_args",
+                        "message": f"target {args.get('target')!r} is not a number",
+                    }
+                )
+            )
 
         requested_key = str(args["rule_system"]) if args.get("rule_system") else None
         try:
