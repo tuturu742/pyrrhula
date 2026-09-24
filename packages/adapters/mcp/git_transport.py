@@ -110,7 +110,26 @@ def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
 
 # How much of the test step's output is kept. Big enough to carry the failures
 # themselves (diffs, assertion messages), not just the count at the end.
-_TEST_OUTPUT_CHARS = 6000
+_TEST_OUTPUT_CHARS = 12000
+
+
+def _both_ends(text: str, budget: int) -> str:
+    """Keep the start and the end of a long run, not just the end.
+
+    Runners print failures as they happen and the tally afterwards, so a plain tail drops
+    the earliest failures first -- the reviewer said so in as many words: "the build log
+    is cut off at the top, I can't see whether the other three also fail". Both ends
+    together answer "what failed" and "how many", which no single end does.
+    """
+    if len(text) <= budget:
+        return text
+    head = budget * 2 // 3
+    tail = budget - head
+    dropped = len(text) - head - tail
+    return (
+        f"{text[:head]}\n\n[... {dropped} characters of test output omitted ...]\n\n{text[-tail:]}"
+    )
+
 
 _PATH_TOKEN = re.compile(r"[\w./-]*[\w-]\.[A-Za-z][\w]{0,9}")
 # Generated files are routinely named after the thing they belong to rather than after
@@ -849,9 +868,10 @@ class GitMcpTransport:
                 # the bytes the renderer produces, and every attempt in the loxia sample
                 # duly guessed wrong. Failure detail prints before the summary, so a
                 # larger tail carries both.
-                test_tail = result.output[idx + len(marker) : end if end != -1 else None][
-                    -_TEST_OUTPUT_CHARS:
-                ]
+                test_tail = _both_ends(
+                    result.output[idx + len(marker) : end if end != -1 else None],
+                    _TEST_OUTPUT_CHARS,
+                )
         return ci_status, test_tail
 
     async def _get_branch(self, repo: str, branch: str) -> McpToolResult:

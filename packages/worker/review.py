@@ -101,7 +101,7 @@ def _build_line(pr: dict[str, Any]) -> str:
         # label and is all that older records carry. Fall back to it rather than to an
         # empty string that reads as "no detail available".
         detail = str(pr.get("test_output") or pr.get("summary") or "").strip()
-        tail = f"\n{detail[:2500]}" if detail else ""
+        tail = f"\n{detail[:4000]}" if detail else ""
         return (
             "Build: tests FAILED on this branch. Check whether this work item's own "
             "target is among the failures before deciding." + tail

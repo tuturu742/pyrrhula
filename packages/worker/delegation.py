@@ -527,7 +527,7 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_REWORK_TEST_OUTPUT_CHARS = 4000
+_REWORK_TEST_OUTPUT_CHARS = 8000
 
 
 def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:
@@ -550,7 +550,7 @@ def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:
         f"{comment}\n\nBuild: the tests FAILED on this branch. This is what they printed "
         f"-- fix what it shows rather than guessing at it. You cannot run the suite "
         f"yourself, so this output is the only record of what the code actually "
-        f"produced:\n\n{detail[-_REWORK_TEST_OUTPUT_CHARS:]}"
+        f"produced:\n\n{detail[:_REWORK_TEST_OUTPUT_CHARS]}"
     )
 
 
