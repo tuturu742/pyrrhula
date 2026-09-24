@@ -53,13 +53,28 @@ class Connection:
     model: str
     secret_file: str | None = None  # None -> a local provider that needs no key
     api_base: str | None = None
+    # Provider params, stored on the connection. `max_tokens` is the one that matters
+    # here: codegen falls back to 12000 when a connection says nothing, which is a safe
+    # floor and well under what the hosted models will actually emit. A coding task whose
+    # answer is several whole files hits that floor and simply stops mid-file -- observed
+    # against loxia, where regenerating five terminal-grid snapshot fixtures needs more
+    # output than the floor allows, so the agent could only ever deliver one per round.
+    params: dict[str, object] | None = None
 
 
 # The deployment's connections. Ollama needs no key and is reached over the host network;
 # the two hosted providers read their key from the secrets directory at run time.
 CONNECTIONS: tuple[Connection, ...] = (
-    Connection("Anthropic Sonnet", "anthropic", "claude-sonnet-5", "anthropic"),
-    Connection("Anthropic Opus", "anthropic", "claude-opus-5-5", "anthropic"),
+    Connection(
+        "Anthropic Sonnet",
+        "anthropic",
+        "claude-sonnet-5",
+        "anthropic",
+        params={"max_tokens": 32000},
+    ),
+    Connection(
+        "Anthropic Opus", "anthropic", "claude-opus-5-5", "anthropic", params={"max_tokens": 32000}
+    ),
     Connection("DeepSeek", "deepseek", "deepseek-chat", "deepseek"),
     # The reasoning model, for the one seat at a table that has to hold a whole case in
     # its head rather than answer for one person in it.
@@ -270,6 +285,7 @@ async def seed(
             conn.model,
             api_key=key,
             api_base=api_base,
+            params=conn.params,
             encryptor=encryptor,
         )
         made[conn.name] = agent.id
