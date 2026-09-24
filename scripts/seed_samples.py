@@ -429,6 +429,10 @@ async def register_mcp_servers(
             effectful_tools=[str(t) for t in spec.get("effectful_tools") or []],
             require_confirmation=bool(spec.get("require_confirmation", False)),
             max_calls_per_session=spec.get("max_calls_per_session"),
+            # Per-server knobs the sample knows and the platform cannot: which search
+            # engines this instance can actually reach, for one. Passing them through is
+            # what lets a sample ship a working search without a core change.
+            options=dict(spec.get("options") or {}),
         )
         budget = spec.get("max_calls_per_session")
         print(

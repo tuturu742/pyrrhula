@@ -26,16 +26,32 @@ SEARCH_TOOL = McpToolSpec(
     ),
     parameters={
         "type": "object",
-        "properties": {"query": {"type": "string", "description": "what to search for"}},
+        "properties": {
+            "query": {"type": "string", "description": "what to search for"},
+            "recency": {
+                "type": "string",
+                "enum": ["day", "week", "month", "year", "any"],
+                "description": (
+                    "only results published within this window. Use 'week' or 'day' for "
+                    "news -- without it the top results are whatever ranks best, which "
+                    "for a well-covered subject is usually years old."
+                ),
+            },
+        },
         "required": ["query"],
     },
 )
 
-# The default engine set favours reliability over breadth: big engines CAPTCHA-block fresh
-# self-hosted SearXNG IPs quickly; bing tolerates them. A registration overrides it with
-# `options: {"engines": "..."}` -- which engines an instance can actually use is a fact
-# about that instance, and two tenants running two instances share no such fact.
-_DEFAULT_ENGINES = "bing"
+# Which engines an instance can actually use is a fact about that instance, so a
+# registration overrides this with `options: {"engines": "..."}` and two tenants running
+# two instances share no such fact.
+#
+# The default was `bing`, on the reasoning that the big engines CAPTCHA-block a fresh
+# self-hosted address and bing tolerates it. Measured here, bing returns nothing at all,
+# and a search that returns nothing is indistinguishable from a model that did not
+# search. Empty is the honest default: it means "whatever this instance has enabled",
+# which is the instance's own decision and is at least visible in its settings.
+_DEFAULT_ENGINES = ""
 _MAX_RESULTS = 5
 
 
@@ -57,6 +73,13 @@ class SearxngSearchTransport:
                 f"web_search server {server.key!r} has no usable url ({server.url!r})"
             )
         params = {"q": query, "format": "json"}
+        # SearXNG's own filter, so the engine does the narrowing rather than the caller
+        # reading dates off a page of stale hits. Observed: an unfiltered query for a
+        # well-covered subject returned results spanning ten years, and the model picked
+        # from the top; the same query with a week's window returned that day's.
+        recency = str(arguments.get("recency") or "").strip().lower()
+        if recency and recency != "any":
+            params["time_range"] = recency
         engines = str(server.options.get("engines") or _DEFAULT_ENGINES)
         if engines:
             params["engines"] = engines

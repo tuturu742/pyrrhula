@@ -579,7 +579,15 @@ async def run_one_persona_turn(
                 parameters={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "what to search for"}
+                        "query": {"type": "string", "description": "what to search for"},
+                        "recency": {
+                            "type": "string",
+                            "enum": ["day", "week", "month", "year", "any"],
+                            "description": (
+                                "only results published within this window. Ask for "
+                                "'week' or 'day' when you need what happened recently"
+                            ),
+                        },
                     },
                     "required": ["query"],
                 },

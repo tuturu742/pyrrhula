@@ -80,7 +80,7 @@ def make_web_search_handler(*, workspace_id: uuid.UUID, transport: McpTransport)
                 _search_phase(),
                 WEB_SEARCH_SERVER_KEY,
                 "search",
-                {"query": query},
+                {"query": query, "recency": str(args.get("recency") or "")},
                 transport=transport,
             )
         except (McpTransportError, ToolNotAvailableError) as exc:
