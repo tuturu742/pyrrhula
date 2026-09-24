@@ -28,6 +28,7 @@ from core.previews.service import (
     set_status,
 )
 from core.repos.service import mint_artifact_read_token
+from worker.blob_store_factory import get_blob_store
 from worker.preview_factory import get_preview_provider
 
 log = structlog.get_logger()
@@ -64,6 +65,30 @@ async def handle_start_preview(payload: dict[str, Any]) -> dict[str, Any]:
     row = await get_preview(tenant_id, preview_id)
     if row is None:
         return {"preview_id": str(preview_id), "outcome": "not_found"}
+
+    # A preview serves an artifact, and the artifact is produced by a delegation whose
+    # tests passed -- there is no button that builds a repository on its own. Started
+    # against a branch that has never had a green build, the container came up, asked for
+    # the artifact, got a 404 and died, and what the operator saw was a preview that
+    # failed for no stated reason. The sample most likely to be previewed first is the one
+    # whose trunk is red on purpose, so this is the common case, not the edge.
+    if row.artifact_name:
+        from core.repos.service import artifact_blob_key
+
+        key = artifact_blob_key(store_key, row.artifact_name, row.git_ref or "")
+        legacy = artifact_blob_key(store_key, row.artifact_name, "")
+        store = get_blob_store()
+        if not await store.exists(key) and not await store.exists(legacy):
+            reason = (
+                f"no {row.artifact_name} has been built for {row.git_ref or 'this branch'}. "
+                "An artifact is produced by a delegation on the branch: the agent's "
+                "container runs the test command, then the build command, and uploads the "
+                "artifact only when the build exits clean. Get a green build on this "
+                "branch first, then start the preview."
+            )
+            await mark_failed(tenant_id, preview_id, reason)
+            log.info("preview.no_artifact", preview_id=str(preview_id), ref=row.git_ref)
+            return {"preview_id": str(preview_id), "outcome": "failed", "error": reason}
 
     provider = get_preview_provider(row.engine_key)
     # The recipe the API resolved (repo overrides over pyrrhula-preview.json over the

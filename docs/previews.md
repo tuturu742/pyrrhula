@@ -25,6 +25,13 @@ artifact store and is what the preview container downloads.
 A `.tar.gz` is the shape the default static server expects (it unpacks it and looks for
 `index.html`). A recipe can take any shape it knows how to run.
 
+A preview started against a branch that has never had a green build is refused before any
+container starts, naming the artifact and the branch, because the alternative is a
+container that comes up, asks for the artifact, receives a 404 and dies with nothing
+saying why. If you see that refusal, the branch needs a delegation whose tests pass —
+the build command runs only after the test command succeeds, and the artifact is uploaded
+only when the build exits clean.
+
 ## What a preview runs
 
 By default: your artifact, extracted, served as a static site. That covers a web build —
