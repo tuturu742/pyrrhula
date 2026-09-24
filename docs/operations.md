@@ -293,7 +293,23 @@ it did not receive the files it was asked about (a context problem — the task 
 them, by path or by the identifier the file is generated from); or it received them and
 says it cannot write that much, which means the work is larger than one delegation's
 output budget (`_DEFAULT_CODEGEN_MAX_TOKENS`, 12000) and belongs in several work items.
-Rewriting five 10KB fixtures in one item is past it; one item per fixture is not. A provider authentication error there points at a request built
+Rewriting five 10KB fixtures in one item is past it; one item per fixture is not.
+
+A third shape, seen once: the task names two very large files, they are *both* read —
+each is inside the per-file allowance — and the model still reports them truncated. The
+per-file budget is `prefer_file_bytes`; **nothing caps the total**, so a work item naming
+a 30KB source and a 27KB fixture asks for 57KB of preferred content on top of the rest of
+the tree. Four sibling items naming smaller files succeeded in the same run. Split by
+file size as well as by count when an item names something unusually large.
+
+**An agent cannot regenerate machine output by reasoning.** Snapshot fixtures, golden
+files and recorded terminal grids are produced by *running* the code. Given the fixture
+and the renderer, a model writes a plausible one — and plausible is wrong: in one run it
+rendered a timer as `01:00` where the code emits `00:00`, a keybinding as `[H]` where the
+code emits `[unbound]`, and dropped style rows the renderer writes. An approximate
+snapshot is worse than the failing test, because it makes a real regression permanent and
+invisible. Regenerate those with the tool that produces them (`cargo insta accept` and
+its equivalents), in the build, and give agents the work that needs judgement. A provider authentication error there points at a request built
 somewhere other than the first one — the format-repair retry, for instance, which fires
 only when a model's first answer carries no `===FILE:` blocks and so makes the whole
 thing look intermittent.
