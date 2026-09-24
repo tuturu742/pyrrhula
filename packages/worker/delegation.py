@@ -527,7 +527,7 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-_REWORK_TEST_OUTPUT_CHARS = 8000
+_REWORK_TEST_OUTPUT_CHARS = 32000
 
 
 def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:

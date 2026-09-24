@@ -109,8 +109,11 @@ def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
 
 
 # How much of the test step's output is kept. Big enough to carry the failures
-# themselves (diffs, assertion messages), not just the count at the end.
-_TEST_OUTPUT_CHARS = 12000
+# themselves (diffs, assertion messages), not just the count at the end -- and a
+# snapshot diff is not small: one 200x50 terminal grid, twice over, is most of ten
+# thousand characters, so a budget that holds a couple of assertion messages holds
+# none of these. The agent has no other sight of them.
+_TEST_OUTPUT_CHARS = 48000
 
 
 def _both_ends(text: str, budget: int) -> str:
