@@ -84,3 +84,44 @@ def test_a_short_or_two_part_identifier_is_not_a_filter() -> None:
     spend on a guess that loose."""
     got = _named_paths({"title": "adjust max_files and the hit_points field"}, "")
     assert got == []
+
+
+def test_the_payload_shape_the_delegation_actually_sends() -> None:
+    """Built from ``packages/worker/delegation.py``: {id, key, name, fields, states},
+    with the title and description *inside* ``fields``.
+
+    The first version of this extractor read a fixed list of top-level keys -- title,
+    description, notes -- none of which exist at that level. It found nothing, every
+    task got the alphabetical default, and the agent said so in prose: "the actual
+    contents ... were not available in the provided repository context (both shown empty
+    above)". The unit test beside it passed throughout, because it was fed the shape I
+    had assumed rather than the one the caller sends.
+    """
+    work_item = {
+        "id": "b4b1…",
+        "key": "wi-7",
+        "name": "Fix failing snapshot test render::tests::layout_snapshot_80x24",
+        "fields": {
+            "title": (
+                "Fix failing snapshot test render::tests::layout_snapshot_80x24 "
+                "(crates/loxia-tui/src/snapshots/"
+                "loxia_tui__render__tests__layout_snapshot_80x24.snap)"
+            ),
+            "description": "the code that renders it is crates/loxia-tui/src/render.rs",
+            "labels": [],
+            "story_points": 2,
+        },
+        "states": {"lifecycle": "ready"},
+    }
+    got = _named_paths(work_item, "")
+
+    assert (
+        "crates/loxia-tui/src/snapshots/loxia_tui__render__tests__layout_snapshot_80x24.snap" in got
+    )
+    assert "crates/loxia-tui/src/render.rs" in got
+    assert "layout_snapshot_80x24" in got
+
+
+def test_a_non_string_field_does_not_break_the_walk() -> None:
+    """``fields`` carries integers and lists beside its prose."""
+    assert _named_paths({"fields": {"points": 3, "labels": ["a"], "t": "x/y.rs"}}, "") == ["x/y.rs"]

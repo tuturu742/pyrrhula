@@ -128,11 +128,22 @@ def _named_paths(work_item: dict[str, Any], brief: str) -> list[str]:
     Longest first because a full path is a better filter than a bare basename, and the
     budget is spent in order.
     """
-    text = (
-        " ".join(str(work_item.get(key, "")) for key in ("title", "description", "notes"))
-        + " "
-        + (brief or "")
-    )
+
+    # Every string the item carries, at either level. The payload the delegation sends
+    # is {id, key, name, fields, states} with the title and description *inside*
+    # ``fields`` -- reading a fixed list of top-level keys found nothing at all, and the
+    # unit test that said otherwise was fed the shape I had assumed rather than the one
+    # the caller sends. Walk what is there instead of naming what should be.
+    def _strings(value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, dict):
+            return [s for v in value.values() for s in _strings(v)]
+        if isinstance(value, (list, tuple)):
+            return [s for v in value for s in _strings(v)]
+        return []
+
+    text = " ".join(_strings(work_item)) + " " + (brief or "")
     paths = {m.group(0).strip("./") for m in _PATH_TOKEN.finditer(text)}
     # A bare extension ("*.snap", ".rs") matches half the tree and spends the whole
     # budget on noise; a token needs a name in front of the dot to be a filter.
