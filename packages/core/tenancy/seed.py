@@ -31,14 +31,28 @@ async def seed_dev_tenant(
     owner_display_name: str = "Dev Owner",
     workspace_key: str = "default",
     workspace_name: str = "Default Workspace",
+    registration_policy: str = "open",
 ) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
-    """Idempotent: returns the existing tenant/owner/workspace ids if already seeded."""
+    """Idempotent: returns the existing tenant/owner/workspace ids if already seeded.
+
+    ``registration_policy`` is ``open`` here and ``closed`` everywhere else. This is the
+    DEV seeder -- the thing virtually every test calls to get a real Workspace, and most
+    of them then obtain a token by registering. A tenant made the production way
+    (``core.tenancy.provisioning.create_tenant``, which is what signup and the admin
+    console use) has no stored policy and therefore takes the deployment default, which
+    is closed. Stated as a parameter rather than left implicit so that a test which cares
+    about who may join says which it wants.
+    """
     async with unscoped_session() as session:
         existing = await session.scalar(select(Tenant).where(Tenant.slug == slug))
         if existing is not None:
             tenant_id = existing.id
         else:
-            tenant = Tenant(slug=slug, name=tenant_name)
+            tenant = Tenant(
+                slug=slug,
+                name=tenant_name,
+                settings={"registration_policy": registration_policy},
+            )
             session.add(tenant)
             await session.flush()
             tenant_id = tenant.id

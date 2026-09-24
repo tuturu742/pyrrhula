@@ -126,6 +126,13 @@ class Settings(BaseSettings):
     # Self-serve organization signup (POST /auth/signup). Disable on deployments where
     # only the platform admin creates tenants.
     allow_tenant_signup: bool = True
+    # What a tenant that has not chosen gets for `POST /auth/register` -- joining an
+    # EXISTING organization, which is a different question from creating a new one.
+    # `closed` (nobody self-registers), `request` (an admin approves each applicant) or
+    # `open`. Closed by default: the behaviour this replaced was ungated, so a
+    # deployment that upgraded into a permissive default would gain the setting and keep
+    # the hole. A tenant overrides it in `tenant.settings.registration_policy`.
+    default_registration_policy: str = "closed"
 
     # Per-principal budget must absorb a normal SPA session: the session view alone
     # polls ~5 queries every 10s, and a second tab doubles that. 60/min starved real

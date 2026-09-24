@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 
@@ -119,14 +120,34 @@ async def public_config() -> PublicConfigResponse:
     )
 
 
-@router.post("/register", dependencies=[Depends(rate_limit_by_ip)])
+# response_model=None: this returns a token OR a 202 "pending" body, and FastAPI
+# cannot build one response model from the union.
+@router.post("/register", dependencies=[Depends(rate_limit_by_ip)], response_model=None)
 async def register(
     body: RegisterRequest,
     response: Response,
     tenant: Tenant = Depends(resolve_tenant_for_auth),
-) -> TokenResponse:
+) -> TokenResponse | JSONResponse:
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="password must be at least 8 characters")
+
+    # Who may join THIS organization. `/auth/signup` next door has always checked
+    # `allow_tenant_signup`, and cannot reach an existing tenant anyway because a slug
+    # collision allocates a new suffix rather than joining one. This endpoint names its
+    # tenant in a header and checked nothing, so anyone who could reach the API could
+    # obtain a membership, and a token, inside any organization on the deployment.
+    from core.tenancy.registration import (
+        DuplicateRequestError,
+        get_policy,
+        submit_request,
+    )
+
+    policy = await get_policy(tenant.id)
+    if policy == "closed":
+        raise HTTPException(
+            status_code=403,
+            detail="this organization does not accept self-registration",
+        )
 
     # Best-effort pre-check for the common case (a clean 409 without creating anything).
     # register_local()'s unique constraint is still the source of truth for the race —
@@ -140,6 +161,31 @@ async def register(
         )
     if existing is not None:
         raise HTTPException(status_code=409, detail="email already registered")
+
+    if policy == "request":
+        # No principal, no membership, no token: an application, and an admin decides.
+        # 202 rather than 200 because nothing has been created that the caller can use.
+        try:
+            await submit_request(
+                tenant.id,
+                body.email,
+                body.display_name,
+                _identity_provider.hash_password(body.password),
+            )
+        except DuplicateRequestError:
+            raise HTTPException(
+                status_code=409, detail="a request from this address is already awaiting review"
+            ) from None
+        # 202, not an error: the request was accepted, it just does not yield a session.
+        # Raising an HTTPException here would hand every client library an exception for
+        # the successful path.
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "pending",
+                "detail": "registration requested; an administrator will review it",
+            },
+        )
 
     async with tenant_scope(tenant.id) as session:
         principal = Principal(tenant_id=tenant.id, kind="human", display_name=body.display_name)

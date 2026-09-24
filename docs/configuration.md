@@ -43,6 +43,7 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_SINGLE_TENANT_UI` | `false` (but **`true` in compose and k8s**) | Solo/self-host mode: a request with no tenant header resolves to this deployment's single organization. |
 | `PYRRHULA_DEFAULT_TENANT_SLUG` | — (inferred) | Pins single-tenant mode to one tenant slug. Leave unset: with exactly one organization, that one is used. Set it only where several exist and one should be the default. |
 | `PYRRHULA_ALLOW_TENANT_SIGNUP` | `true` | Whether strangers can create their own organisation. |
+| `PYRRHULA_DEFAULT_REGISTRATION_POLICY` | `closed` | What an organisation that has not chosen gets for **joining an existing** one (a different question from creating a new one). `closed` — nobody self-registers; `request` — anyone may apply and an admin approves; `open` — anyone who knows the organisation name gets a viewer account. Each organisation overrides it in the admin console under **Joining**. Anything unrecognised is read as `closed`. |
 | `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD` | generated | The platform admin created on first boot. Changing them afterwards does **not** rotate the account — change the password in the app. |
 | `PYRRHULA_ADMIN_TOKEN` | generated | Legacy admin console token (deprecated). |
 | `PYRRHULA_ADMIN_PORT` | `8100` | Port for that legacy console. |

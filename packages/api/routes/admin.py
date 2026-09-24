@@ -779,6 +779,101 @@ async def _create_user(
     return principal_id
 
 
+# ── who may join an organization ────────────────────────────────────────────────────
+class RegistrationPolicyRequest(BaseModel):
+    policy: str
+
+
+class RejectRequest(BaseModel):
+    note: str | None = None
+
+
+@router.get("/tenants/{tenant_id}/registration-policy")
+async def get_registration_policy_endpoint(tenant_id: uuid.UUID) -> dict[str, object]:
+    """This tenant's policy, the deployment default, and what the choices mean."""
+    from core.config import get_settings as _s
+    from core.tenancy.registration import POLICIES, get_policy, normalise_policy
+
+    return {
+        "policy": await get_policy(tenant_id),
+        "deployment_default": normalise_policy(_s().default_registration_policy),
+        "choices": sorted(POLICIES),
+    }
+
+
+@router.put("/tenants/{tenant_id}/registration-policy")
+async def set_registration_policy_endpoint(
+    tenant_id: uuid.UUID, body: RegistrationPolicyRequest
+) -> dict[str, str]:
+    from core.tenancy.registration import set_policy
+
+    try:
+        chosen = await set_policy(tenant_id, body.policy)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await _audit_admin(tenant_id, "tenant.registration_policy", "tenant", {"policy": chosen})
+    return {"policy": chosen}
+
+
+@router.get("/tenants/{tenant_id}/registration-requests")
+async def list_registration_requests_endpoint(tenant_id: uuid.UUID) -> list[dict[str, str]]:
+    from core.tenancy.registration import list_pending
+
+    return [
+        {
+            "id": str(r.id),
+            "email": r.email,
+            "display_name": r.display_name,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in await list_pending(tenant_id)
+    ]
+
+
+@router.post("/tenants/{tenant_id}/registration-requests/{request_id}/approve")
+async def approve_registration_endpoint(
+    tenant_id: uuid.UUID, request_id: uuid.UUID, role: str = "viewer"
+) -> dict[str, str]:
+    """Turn an application into an account, at the role the admin chooses."""
+    from core.tenancy.registration import take_pending
+
+    if role not in _ROLES:
+        raise HTTPException(status_code=400, detail=f"role must be one of {sorted(_ROLES)}")
+    # Claimed and marked decided in one statement, so two admins approving at once
+    # cannot both go on to mint an account.
+    claimed = await take_pending(tenant_id, request_id, None)
+    if claimed is None:
+        raise HTTPException(status_code=404, detail="no pending request with that id")
+
+    principal_id = await create_tenant_user(tenant_id, claimed.display_name, role)
+    try:
+        await _identity_provider.register_local_hashed(
+            tenant_id, principal_id, claimed.email, claimed.password_hash
+        )
+    except Exception as exc:  # noqa: BLE001 -- duplicate email -> clean up, report
+        await delete_principal(tenant_id, principal_id)
+        raise HTTPException(status_code=409, detail="email already registered") from exc
+    await _audit_admin(
+        tenant_id,
+        "tenant.registration_approved",
+        "principal",
+        {"email": claimed.email, "role": role},
+    )
+    return {"principal_id": str(principal_id), "email": claimed.email, "role": role}
+
+
+@router.post("/tenants/{tenant_id}/registration-requests/{request_id}/reject")
+async def reject_registration_endpoint(
+    tenant_id: uuid.UUID, request_id: uuid.UUID, body: RejectRequest | None = None
+) -> dict[str, bool]:
+    from core.tenancy.registration import reject
+
+    if not await reject(tenant_id, request_id, None, (body.note if body else None)):
+        raise HTTPException(status_code=404, detail="no pending request with that id")
+    await _audit_admin(tenant_id, "tenant.registration_rejected", "tenant", {})
+    return {"rejected": True}
+
+
 # ── audit chain verification (E2.10's verifier, as an operable endpoint) ─────────────
 @router.get("/tenants/{tenant_id}/audit/verify")
 async def verify_audit_chain_endpoint(tenant_id: uuid.UUID) -> dict[str, object]:

@@ -455,6 +455,15 @@ def test_workspace_mcp_put_requires_workflow_manage(
     ).json()
     wid = body["workspace_id"]
 
+    # An admin-created organization is closed to self-registration; this test needs a
+    # self-registered viewer, so it says so. What is under test is what that viewer may
+    # DO, not whether they are let in.
+    admin.put(
+        f"/admin/tenants/{body['tenant_id']}/registration-policy",
+        json={"policy": "open"},
+        headers=_auth(),
+    )
+
     viewer_email = f"{uuid.uuid4().hex}@example.com"
     viewer_token = api.post(
         "/auth/register",

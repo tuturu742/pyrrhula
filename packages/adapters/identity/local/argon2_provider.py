@@ -16,10 +16,37 @@ _hasher = PasswordHasher()
 
 
 class LocalArgon2IdentityProvider:
+    def hash_password(self, password: str) -> str:
+        """Hash without creating anything.
+
+        A registration held for an admin's decision has to keep the applicant's
+        credential somewhere, and it must be the same hash a real identity would carry --
+        approving is then binding an existing hash to a new principal, not asking the
+        person to choose a password twice.
+        """
+        return _hasher.hash(password)
+
+    async def register_local_hashed(
+        self, tenant_id: uuid.UUID, principal_id: uuid.UUID, email: str, password_hash: str
+    ) -> Identity:
+        """Create the identity from a hash produced earlier by ``hash_password``."""
+        async with tenant_scope(tenant_id) as session:
+            identity = Identity(
+                tenant_id=tenant_id,
+                principal_id=principal_id,
+                provider="local",
+                external_id=email,
+                email=email,
+                password_hash=password_hash,
+            )
+            session.add(identity)
+            await session.flush()
+            return identity
+
     async def register_local(
         self, tenant_id: uuid.UUID, principal_id: uuid.UUID, email: str, password: str
     ) -> Identity:
-        password_hash = _hasher.hash(password)
+        password_hash = self.hash_password(password)
         async with tenant_scope(tenant_id) as session:
             identity = Identity(
                 tenant_id=tenant_id,

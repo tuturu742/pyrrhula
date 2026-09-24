@@ -118,6 +118,52 @@ instead, which blocks login and every request for that tenant while leaving the 
 intact and the action audited — which is what "remove this customer" almost always
 actually means. Reach for the CLI only when the rows themselves must go.
 
+## Who may join an organization
+
+Two different questions, and they were not equally guarded:
+
+* **Creating a new organization** — `POST /auth/signup`, gated by
+  `PYRRHULA_ALLOW_TENANT_SIGNUP`. It cannot be used to reach an existing organization: a
+  slug collision allocates a new suffix rather than joining the one that is there.
+* **Joining an existing organization** — `POST /auth/register`, which names its
+  organization in the `X-Pyrrhula-Tenant` header. This one checked nothing but the per-IP
+  rate limiter, so anyone who could reach the API could obtain a membership, and a session
+  token, inside any organization on the deployment.
+
+Each organization now states a policy, in the admin console under **Joining** on its
+tenant card:
+
+| Policy | What happens to a stranger who tries |
+| --- | --- |
+| `closed` | 403. You create every account yourself. **The default.** |
+| `request` | Their application is queued for you to approve or reject. No account, no membership, no token exists in the meantime, and they cannot sign in. |
+| `open` | They get a `viewer` account immediately — the old behaviour, now chosen rather than assumed. |
+
+`closed` is the default because the behaviour it replaced was the vulnerability: a
+deployment that upgraded into a permissive default would have gained the setting and kept
+the hole. `PYRRHULA_DEFAULT_REGISTRATION_POLICY` changes what an organization that has
+not chosen gets. A stored value that is not one of the three — a typo, a hand-edited row
+— is read as `closed`, because failing the other way puts an organization on the internet
+over a misspelling.
+
+Under `request`, the application holds an argon2 hash of the password the applicant
+chose, so approving mints the account without asking them to choose again. Approving is
+where you pick their role. Rejecting discards the hash.
+
+```bash
+# from a script, with the ops token
+curl -X PUT "$API/admin/tenants/$TENANT/registration-policy" \
+  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN" \
+  -H 'content-type: application/json' -d '{"policy": "request"}'
+
+curl "$API/admin/tenants/$TENANT/registration-requests" \
+  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN"
+```
+
+Seeded sample tenants have no human accounts at all — seeding creates personas, which are
+principals, not people. Add one under **Users** on the tenant card, or with
+`POST /admin/tenants/{id}/users`.
+
 ## Resetting a password
 
 There is no email delivery, so a locked-out user is an operator task. Prints a freshly

@@ -46,22 +46,14 @@ pytestmark = pytest.mark.skipif(
 
 def _bundle_parts() -> tuple[dict, str]:
     with zipfile.ZipFile(_BUNDLE) as z:
-        rules_path = next(
-            n for n in z.namelist() if n.startswith("rules/") and "rule_system" in n
-        )
+        rules_path = next(n for n in z.namelist() if n.startswith("rules/") and "rule_system" in n)
         system = json.loads(z.read(rules_path))
-        rulebook = "\n".join(
-            z.read(n).decode() for n in z.namelist() if n.endswith(".md")
-        )
+        rulebook = "\n".join(z.read(n).decode() for n in z.namelist() if n.endswith(".md"))
     return system, rulebook
 
 
-@pytest.mark.parametrize(
-    ("phrase", "check_type"), sorted(_ROLLS_THE_RULEBOOK_ASKS_FOR.items())
-)
-def test_the_ruleset_can_resolve_a_roll_its_rulebook_names(
-    phrase: str, check_type: str
-) -> None:
+@pytest.mark.parametrize(("phrase", "check_type"), sorted(_ROLLS_THE_RULEBOOK_ASKS_FOR.items()))
+def test_the_ruleset_can_resolve_a_roll_its_rulebook_names(phrase: str, check_type: str) -> None:
     system, rulebook = _bundle_parts()
     assert phrase in rulebook, (
         f"the rulebook no longer says {phrase!r}; update this mapping rather than "

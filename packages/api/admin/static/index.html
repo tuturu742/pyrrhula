@@ -203,15 +203,18 @@ function renderTenant(t) {
           </select>
         </label>
         <button class="ghost" data-act="users">Users</button>
+        <button class="ghost" data-act="joining">Joining</button>
         ${t.deactivated
           ? `<button class="ghost" data-act="reactivate">Reactivate</button>`
           : `<button class="danger" data-act="deactivate">Deactivate</button>`}
       </div>
     </div>
-    <div class="users hidden"></div>`;
+    <div class="users hidden"></div>
+    <div class="joining hidden"></div>`;
   wireWorkflow(t, el.querySelector('[data-workflow]'));
   wireOverlay(t, el.querySelector('[data-overlay]'));
   el.querySelector('[data-act="users"]').onclick = () => toggleUsers(t, el);
+  el.querySelector('[data-act="joining"]').onclick = () => toggleJoining(t, el);
   const de = el.querySelector('[data-act="deactivate"]');
   if (de) de.onclick = async () => { if (confirm(`Deactivate tenant "${t.name}"? Its users can no longer log in.`)) { await guard(() => api("POST", `/admin/tenants/${t.id}/deactivate`)); loadTenants(); } };
   const re = el.querySelector('[data-act="reactivate"]');
@@ -264,6 +267,79 @@ async function toggleUsers(t, el) {
       loadTenants();
     };
   } catch (e) { box.innerHTML = `<p id="err2" class="muted">${esc(e.message)}</p>`; }
+}
+
+const POLICY_HELP = {
+  closed: "Nobody can sign themselves up. You create every account here.",
+  request: "Anyone may apply. Nothing exists until you approve it — no account, no sign-in.",
+  open: "Anyone who knows the organization name can create their own account, as a viewer.",
+};
+
+async function toggleJoining(t, el) {
+  const box = el.querySelector(".joining");
+  if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  box.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const [pol, reqs] = await Promise.all([
+      api("GET", `/admin/tenants/${t.id}/registration-policy`),
+      api("GET", `/admin/tenants/${t.id}/registration-requests`),
+    ]);
+    const opts = pol.choices.map((c) =>
+      `<option value="${esc(c)}"${c === pol.policy ? " selected" : ""}>${esc(c)}</option>`).join("");
+    box.innerHTML = `
+      <div class="row" style="margin-top:8px">
+        <label class="muted" style="font-size:12px">who may join
+          <select class="pol-sel" style="margin-left:4px">${opts}</select>
+        </label>
+        <span class="muted pol-help" style="font-size:12px"></span>
+      </div>
+      <p class="muted" style="font-size:12px">
+        Deployment default for an organization that has not chosen: ${esc(pol.deployment_default)}.
+      </p>
+      ${reqs.length === 0
+        ? '<p class="muted">No one is waiting.</p>'
+        : `<table><thead><tr><th>Name</th><th>Email</th><th>Asked</th><th></th></tr></thead>
+           <tbody>${reqs.map((r) => `
+             <tr>
+               <td>${esc(r.display_name)}</td>
+               <td class="muted">${esc(r.email)}</td>
+               <td class="muted">${esc((r.created_at || "").slice(0, 16).replace("T", " "))}</td>
+               <td>
+                 <select class="rq-role" data-rid="${r.id}">
+                   <option>viewer</option><option>participant</option><option>editor</option>
+                   <option>admin</option><option>owner</option>
+                 </select>
+                 <button class="ghost rq-ok" data-rid="${r.id}">Approve</button>
+                 <button class="danger rq-no" data-rid="${r.id}">Reject</button>
+               </td>
+             </tr>`).join("")}</tbody></table>`}`;
+    const sel = box.querySelector(".pol-sel");
+    const help = box.querySelector(".pol-help");
+    const showHelp = () => { help.textContent = POLICY_HELP[sel.value] || ""; };
+    showHelp();
+    sel.onchange = async () => {
+      await guard(() => api("PUT", `/admin/tenants/${t.id}/registration-policy`, { policy: sel.value }));
+      showHelp();
+      toggleJoining(t, el); toggleJoining(t, el);
+    };
+    box.querySelectorAll(".rq-ok").forEach((b) => {
+      b.onclick = async () => {
+        const role = box.querySelector(`.rq-role[data-rid="${b.dataset.rid}"]`).value;
+        await guard(() => api("POST",
+          `/admin/tenants/${t.id}/registration-requests/${b.dataset.rid}/approve?role=${role}`));
+        toggleJoining(t, el); toggleJoining(t, el);
+      };
+    });
+    box.querySelectorAll(".rq-no").forEach((b) => {
+      b.onclick = async () => {
+        if (!confirm("Reject this request? Their password is discarded and they are not told.")) return;
+        await guard(() => api("POST",
+          `/admin/tenants/${t.id}/registration-requests/${b.dataset.rid}/reject`, {}));
+        toggleJoining(t, el); toggleJoining(t, el);
+      };
+    });
+  } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 
 function wireWorkflow(t, sel) {

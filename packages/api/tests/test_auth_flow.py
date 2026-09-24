@@ -55,9 +55,18 @@ def _tenant_of(token: str) -> str:
     return str(json.loads(base64.urlsafe_b64decode(payload))["tenant_id"])
 
 
-async def _new_tenant_slug() -> str:
+async def _new_tenant_slug(policy: str = "open") -> str:
+    """A fresh tenant, open to self-registration unless the test says otherwise.
+
+    The deployment default is `closed`, so these tests -- which are about what
+    registration DOES, not about who is allowed to -- say so out loud rather than
+    relying on a default that must stay permissive for them to pass.
+    """
     slug = f"authflow-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _workspace_id, _owner = await seed_dev_tenant(slug=slug)
+    from core.tenancy.registration import set_policy
+
+    await set_policy(tenant_id, policy)
     return slug
 
 
@@ -457,6 +466,11 @@ async def test_a_viewer_who_joins_the_solo_org_is_not_an_admin(
         session.expunge(sole)
     monkeypatch.setattr(tenant_middleware, "_sole_tenant", lambda: _async(sole))
 
+    # A new organization starts closed to self-registration, so open it: this test is
+    # about what a self-registered viewer may DO, not about who is let in.
+    from core.tenancy.registration import set_policy
+
+    await set_policy(sole.id, "open")
     viewer_token = _register(client, slug, "the-viewer@example.com")
 
     me = client.get("/me", headers={"Authorization": f"Bearer {viewer_token}"})
