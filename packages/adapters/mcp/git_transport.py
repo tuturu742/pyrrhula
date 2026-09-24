@@ -116,6 +116,31 @@ def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
 _TEST_OUTPUT_CHARS = 48000
 
 
+# Progress chatter every build tool emits: one line per dependency, hundreds of them,
+# carrying nothing about the run's outcome. Dropped before the budget is applied, because
+# a budget spent on these is a budget not spent on the failure. Anchored at the start of
+# the (stripped) line so a test whose own output mentions one of these words is untouched.
+_NOISE_PREFIXES = (
+    "Downloaded ",
+    "Downloading ",
+    "Compiling ",
+    "Checking ",
+    "Updating ",
+    "Fresh ",
+    "Installing ",
+    "Adding ",
+    "Removing ",
+    "Blocking ",
+    "Downloading",
+)
+
+
+def _strip_build_noise(text: str) -> str:
+    """Drop per-dependency progress lines, keep everything else in order."""
+    kept = [ln for ln in text.splitlines() if not ln.strip().startswith(_NOISE_PREFIXES)]
+    return "\n".join(kept)
+
+
 def _both_ends(text: str, budget: int) -> str:
     """Keep the start and the end of a long run, not just the end.
 
@@ -126,7 +151,11 @@ def _both_ends(text: str, budget: int) -> str:
     """
     if len(text) <= budget:
         return text
-    head = budget * 2 // 3
+    # Biased to the end. A run prints its setup first, its failures next and its tally
+    # last, so the useful half is the back: an even split spent two thirds of the budget
+    # on crate downloads and cut off before a single test result -- the reviewer said so,
+    # "the build log is cut off during crate downloads, before any test output".
+    head = budget // 5
     tail = budget - head
     dropped = len(text) - head - tail
     return (
@@ -871,10 +900,8 @@ class GitMcpTransport:
                 # the bytes the renderer produces, and every attempt in the loxia sample
                 # duly guessed wrong. Failure detail prints before the summary, so a
                 # larger tail carries both.
-                test_tail = _both_ends(
-                    result.output[idx + len(marker) : end if end != -1 else None],
-                    _TEST_OUTPUT_CHARS,
-                )
+                raw = result.output[idx + len(marker) : end if end != -1 else None]
+                test_tail = _both_ends(_strip_build_noise(raw), _TEST_OUTPUT_CHARS)
         return ci_status, test_tail
 
     async def _get_branch(self, repo: str, branch: str) -> McpToolResult:
