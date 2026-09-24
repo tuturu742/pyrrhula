@@ -97,11 +97,11 @@ def _build_line(pr: dict[str, Any]) -> str:
     if status == "passed":
         return "Build: tests PASSED on this branch."
     if status in ("failed", "error"):
-        # The recorded summary already carries the failing-test tail; there is no
-        # separate ci_summary field, and inventing one is how a reader ends up with an
-        # empty string that looks like "no detail available".
-        summary = str(pr.get("summary") or "").strip()
-        tail = f"\n{summary[:1500]}" if summary else ""
+        # `test_output` is what the run printed, recorded whole; `summary` is the short
+        # label and is all that older records carry. Fall back to it rather than to an
+        # empty string that reads as "no detail available".
+        detail = str(pr.get("test_output") or pr.get("summary") or "").strip()
+        tail = f"\n{detail[:2500]}" if detail else ""
         return (
             "Build: tests FAILED on this branch. Check whether this work item's own "
             "target is among the failures before deciding." + tail

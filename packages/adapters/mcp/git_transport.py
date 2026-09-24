@@ -108,6 +108,10 @@ def _wanted_a_remote_pr(args: Mapping[str, Any]) -> bool:
     return bool(remote.get("url")) and bool(remote.get("credential_ref"))
 
 
+# How much of the test step's output is kept. Big enough to carry the failures
+# themselves (diffs, assertion messages), not just the count at the end.
+_TEST_OUTPUT_CHARS = 6000
+
 _PATH_TOKEN = re.compile(r"[\w./-]*[\w-]\.[A-Za-z][\w]{0,9}")
 # Generated files are routinely named after the thing they belong to rather than after
 # the source that produces them: a snapshot fixture for `render::tests::layout_snapshot_80x24`
@@ -503,7 +507,9 @@ class GitMcpTransport:
         if ci_status != "pending":
             summary += f"; tests {ci_status}"
             if test_tail:
-                summary += f"\n{test_tail}"
+                # The summary is a one-line-ish label that travels into transcript notes,
+                # so it keeps the short end; the full output is recorded beside it.
+                summary += f"\n{test_tail[-500:]}"
         await self._store.record_pr(
             repo,
             branch,
@@ -515,6 +521,10 @@ class GitMcpTransport:
                 "commits": commits,
                 "title": str(work_item.get("name") or branch),
                 "summary": summary,
+                # What the tests actually said, kept whole rather than trimmed to a
+                # label. The rework agent is handed this: it cannot run the suite
+                # itself, so this is its only sight of the failure it must fix.
+                "test_output": test_tail,
                 "html_url": remote_pr["html_url"] if remote_pr else None,
                 # Which work item this pull request IS. Without it the record is a
                 # dead end: anything later asking "the host closed this PR, whose
@@ -833,7 +843,15 @@ class GitMcpTransport:
             idx = result.output.find(marker)
             end = result.output.find("PYR_STEP=push")
             if idx != -1:
-                test_tail = result.output[idx + len(marker) : end if end != -1 else None][-500:]
+                # Was the last 500 characters, which for most runners is the summary
+                # line and nothing else -- "364 passed; 5 failed" and not one word about
+                # WHAT failed. An agent asked to fix a snapshot fixture then has to guess
+                # the bytes the renderer produces, and every attempt in the loxia sample
+                # duly guessed wrong. Failure detail prints before the summary, so a
+                # larger tail carries both.
+                test_tail = result.output[idx + len(marker) : end if end != -1 else None][
+                    -_TEST_OUTPUT_CHARS:
+                ]
         return ci_status, test_tail
 
     async def _get_branch(self, repo: str, branch: str) -> McpToolResult:

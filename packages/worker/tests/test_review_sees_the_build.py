@@ -59,3 +59,23 @@ def test_the_system_prompt_makes_a_red_build_decisive() -> None:
     can still land on approve."""
     assert "request_changes" in _REVIEW_SYSTEM
     assert "red" in _REVIEW_SYSTEM.lower()
+
+
+def test_the_reviewer_prefers_what_the_run_actually_printed() -> None:
+    """`summary` is a label; `test_output` is the run. A record carrying both should
+    show the reviewer the second one."""
+    line = _build_line(
+        {
+            "ci_status": "failed",
+            "summary": "Implement: x on pyr/a-1; #52 open; tests failed",
+            "test_output": "assertion failed: snapshot mismatch\n-[unbound]\n+[H]",
+        }
+    )
+    assert "snapshot mismatch" in line
+
+
+def test_an_older_record_without_test_output_still_shows_its_summary() -> None:
+    """Records written before `test_output` existed carry only `summary`, and a reviewer
+    shown an empty string would read it as "no detail available"."""
+    line = _build_line({"ci_status": "failed", "summary": "364 passed; 5 failed"})
+    assert "364 passed; 5 failed" in line

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 import structlog
@@ -526,6 +527,33 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_REWORK_TEST_OUTPUT_CHARS = 4000
+
+
+def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:
+    """Append what the tests actually printed to the rework brief.
+
+    Older pull-request records predate ``test_output`` and carry only ``summary``; fall
+    back to that rather than to nothing, and say plainly when there is no recorded run at
+    all -- an agent that believes the suite was green when nobody ran it will "fix"
+    whatever it feels like.
+    """
+    status = str(pr.get("ci_status") or "").strip().lower()
+    if status == "passed":
+        return f"{comment}\n\nBuild: the tests PASSED on this branch."
+    if status not in ("failed", "error"):
+        return f"{comment}\n\nBuild: no test result was recorded for this branch."
+    detail = str(pr.get("test_output") or pr.get("summary") or "").strip()
+    if not detail:
+        return f"{comment}\n\nBuild: the tests FAILED on this branch; no output was captured."
+    return (
+        f"{comment}\n\nBuild: the tests FAILED on this branch. This is what they printed "
+        f"-- fix what it shows rather than guessing at it. You cannot run the suite "
+        f"yourself, so this output is the only record of what the code actually "
+        f"produced:\n\n{detail[-_REWORK_TEST_OUTPUT_CHARS:]}"
+    )
+
+
 async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     """Review->fix: append a commit to the existing branch/PR and drive ``rework``."""
     tenant_id = uuid.UUID(payload["tenant_id"])
@@ -550,8 +578,14 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     environment = await _environment_config(
         tenant_id, payload.get("repo_id"), payload.get("base_branch")
     )
-    arguments: dict[str, Any] = {"branch": branch, "brief": comment, "work_item": work_item_arg}
     record_for_codegen = await GitStore(default_git_root()).get_pr(repo, branch) or {}
+    # The agent cannot run the suite -- it emits file contents and the environment runs
+    # the tests -- so unless the failure is put in front of it, it is being asked to fix
+    # something it has never seen. That is not a subtle handicap: every attempt at
+    # loxia's snapshot fixtures hand-wrote a guess, because a guess was the only thing
+    # available. The reviewer's prose says a test is red; this says how.
+    comment = _with_test_output(comment, record_for_codegen)
+    arguments: dict[str, Any] = {"branch": branch, "brief": comment, "work_item": work_item_arg}
     rework_assignee = await _load_assignee(tenant_id, record_for_codegen.get("assignee_persona_id"))
     if environment:
         environment.update(
