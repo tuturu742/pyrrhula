@@ -169,6 +169,36 @@ more than one safe — a second worker that finds a session claimed declines and
 kubectl -n pyrrhula scale deploy/pyrrhula-worker --replicas=3
 ```
 
+### A long job is not a dead one
+
+The job queue has its own claim, separate from the session claim above, and it works the
+same way. A worker that dies mid-job leaves its row in `claimed` with nobody running it,
+so the row carries a lease: once it has been quiet for `lease_seconds` (900 by default)
+another worker may take it, and after three attempts it is failed and left alone rather
+than crash-looping.
+
+The worker calls `heartbeat` every 30 seconds while its handler runs, so the lease
+measures **silence, not duration**. This matters for the delegation handlers in
+particular: a codegen rework that builds a container, runs a suite and repairs its output
+regularly runs past fifteen minutes. Before the heartbeat existed, the queue read that as
+a dead worker and handed the job to a second one — the tenant paid for the same generation
+twice and two workers pushed to the same place, while the job's own log looked normal.
+
+Each beat carries the attempt number the worker claimed at. A worker that really did go
+quiet long enough to be reclaimed therefore cannot come back and hold the new holder's
+lease open: its beat returns false, it logs `worker.claim_lost`, and it stops.
+
+If you see one job id claimed twice in the worker logs, check that the workers are on an
+image that has the heartbeat before looking for anything subtler:
+
+```bash
+kubectl -n pyrrhula logs -l app=worker --tail=200 | grep -E "job_claimed|claim_lost" | sort
+```
+
+Restarting workers during long jobs is safe but not free: the killed worker stops beating,
+and its job is only picked back up once the lease elapses, so expect up to
+`lease_seconds` of apparent idleness after a rollout.
+
 Compose fixes `container_name` on the worker, so `podman compose` cannot scale it. Running
 extra workers by hand works, and **two details bite**:
 
@@ -330,3 +360,4 @@ select split_part(slug,'-',1) as prefix, count(*) from tenant group by 1 order b
 - [`docs/packs-and-samples.md`](packs-and-samples.md) — where a deployment's content comes from
 - [`docs/configuration.md`](configuration.md) — every environment variable
 - [`docs/install.md`](install.md) — standing a deployment up in the first place
+- [`docs/delegation.md`](delegation.md) — the delegate / review / rework loop these workers run

@@ -138,3 +138,7 @@ the task definition; Cloud Run/ACI: registry credentials on the job/group spec) 
 adapter translates the repo's sealed credentials where the API allows, else documents a
 pre-provisioned secret like k8s. Explicit v1 non-goals: autoscaling pools, per-tenant
 cloud accounts, spot handling, cost attribution beyond the existing usage records.
+
+## See also
+
+* [`docs/delegation.md`](delegation.md) — the delegate / review / rework loop these engines run work for

@@ -170,3 +170,7 @@ are waiting for a human, which is the intended behaviour.
 **The admin console shows servers you did not add.** Look at which block they are in.
 *Built-in tools* is the bundled pack's own `pyrrhula://` tooling. Only *External MCP
 servers* is an approval decision.
+
+## See also
+
+* [`docs/delegation.md`](delegation.md) — the coding-agent loop that reaches a repository through the git transport
