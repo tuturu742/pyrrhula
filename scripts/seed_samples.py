@@ -41,6 +41,7 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "coffee-campaign": ("coffee-campaign/coffee-campaign.pyr", "enterprise"),
     "mice-invaders": ("mice-invaders/mice-invaders.pyr", "swdev"),
     "pyrrhula": ("pyrrhula/pyrrhula.pyr", "swdev"),
+    "newsroom": ("newsroom/newsroom.pyr", "enterprise"),
 }
 
 
@@ -83,6 +84,17 @@ CONNECTIONS: tuple[Connection, ...] = (
     Connection("DeepSeek V4 Pro", "deepseek", "deepseek-v4-pro", "deepseek"),
     # api_base is resolved at run time -- see ollama_base_url.
     Connection("Ollama Qwen", "ollama_chat", "qwen3.8:27b", None),
+    # The local model the newsroom runs on, and the reason that sample can claim to
+    # prove internet access at all: a hosted model could be answering from training
+    # data, and nothing in the transcript would tell you apart. This one cannot know
+    # what happened this week unless it looked.
+    #
+    # A sparse MoE rather than a dense model of the same footprint, which is what makes
+    # it usable here. On this class of machine memory capacity is abundant and bandwidth
+    # is the constraint, so 30B total with 3B active runs at ~46 tok/s where the dense
+    # 27B managed turns past ten minutes -- the measurement that got Ollama dropped from
+    # every other sample.
+    Connection("Ollama Qwen3 MoE", "ollama_chat", "qwen3:30b-a3b", None),
 )
 
 # Where a container reaches a model server running on the host. There is no single right
@@ -167,6 +179,15 @@ SAMPLE_CONNECTIONS: dict[str, dict[str, str]] = {
     # with one action per player is not a fight on any model. The flow writes its rounds
     # out now; the seating below is the other half.
     "karsh-vale": {"participant": "DeepSeek V4 Pro", "supervisor": "DeepSeek V4 Pro"},
+    # Every seat local, on purpose. The point of this sample is that the paper could not
+    # have been written without reaching the internet, and that claim only means
+    # something if the model has no other way to know: a hosted model asked about this
+    # week may simply answer, and the transcript looks identical either way.
+    "newsroom": {
+        "supervisor": "Ollama Qwen3 MoE",
+        "participant": "Ollama Qwen3 MoE",
+        "informational": "Ollama Qwen3 MoE",
+    },
 }
 
 

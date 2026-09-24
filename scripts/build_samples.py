@@ -306,6 +306,166 @@ _DELIVERY_FLOW = {
     },
 }
 
+_NEWSROOM_FLOW = {
+    "name": "Daily edition",
+    "vocabulary_overlay": "default_v1",
+    "initial_phase": "assignment",
+    "phases": {
+        "assignment": {
+            "label_key": "phase.assignment",
+            "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
+            "visibility": {
+                "knowledge_classes": ["rules", "lore"],
+                "scopes": ["workspace_public"],
+                "entity_fields": "all",
+                "secrets": "none",
+            },
+            "budget": {
+                "ratio": {"rules": 0.6, "lore": 0.4},
+                "max_tokens": 1800,
+                "history_ratio": 0.2,
+            },
+            "prompt": (
+                "Open the news meeting. Address each of your two reporters BY NAME and "
+                "give each ONE beat, stated as a question a reader would ask.\n\n"
+                "You have not read today's news and must not pretend you have. Do NOT "
+                "suggest a headline, name an event, quote a number, or describe what the "
+                "story will say -- you do not know yet, and a desk handed an invented "
+                "headline goes looking for a story that does not exist. A beat is a "
+                "question, not an answer.\n\n"
+                "Say what makes a story worth the front page in general terms -- "
+                "recency, consequence, whether it can be sourced -- and nothing about "
+                "what today's stories are. If the brief states today's date, repeat it "
+                "for the desks; otherwise tell them to judge recency from the dates on "
+                "what they find. Do not write any stories yourself."
+            ),
+            "on_complete": "reporting",
+        },
+        "reporting": {
+            "label_key": "phase.reporting",
+            "actors": [
+                {
+                    "mode": "generate",
+                    "order": "declared",
+                    "any_of": ["participant_agent"],
+                    "max_turns": 4,
+                }
+            ],
+            "visibility": {
+                "knowledge_classes": ["rules", "lore", "misc"],
+                "scopes": ["workspace_public"],
+                "entity_fields": "all",
+                "secrets": "none",
+            },
+            "budget": {
+                "ratio": {"rules": 0.5, "lore": 0.3, "misc": 0.2},
+                "max_tokens": 3000,
+                "history_ratio": 0.4,
+            },
+            "prompt": (
+                "SEARCH BEFORE YOU WRITE, and search as often as you need -- there is no "
+                'ration. Pass `recency: "week"` for news; without it the top results are '
+                "whatever ranks best, which is usually years old. Read what comes back, "
+                "then file ONE story of 120-180 words from what you actually found, "
+                "ending with Source: <url> (<date>). If nothing usable comes back, file "
+                "nothing and say so -- a story written from memory is the one thing this "
+                "desk cannot print."
+            ),
+            # A floor, not a quota: the beat cannot CLOSE until the desks have actually
+            # looked something up. Two desks, one search each, is the minimum that
+            # distinguishes a newsroom from two models writing from memory -- and it is
+            # enforced by the flow because a prompt asking for it is a prompt a model may
+            # decline. `repeat` nudges once; nothing traps the session.
+            "requires": {"tool_calls": 2, "on_unmet": "repeat", "max_repeats": 1},
+            "on_complete": "desk_review",
+        },
+        "desk_review": {
+            "label_key": "phase.desk_review",
+            "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
+            "visibility": {
+                "knowledge_classes": ["rules", "lore", "misc"],
+                "scopes": ["workspace_public"],
+                "entity_fields": "all",
+                "secrets": "none",
+            },
+            "budget": {
+                "ratio": {"rules": 0.6, "lore": 0.2, "misc": 0.2},
+                "max_tokens": 2200,
+                "history_ratio": 0.6,
+            },
+            "prompt": (
+                "Take each filed story in turn and rule on it: RUN, REWRITE or SPIKE, with "
+                "one sentence of reason. Spike anything unsourced, anything you cannot "
+                "tell apart from a press release, anything off its beat, and anything that "
+                "is not worth the page today -- that judgement is your job and a thin "
+                "edition is not a failure. Ask for a REWRITE when the story is real but "
+                "the copy is not: say exactly what to fix. Do not rewrite anything "
+                "yourself."
+            ),
+            "on_complete": "rewrite",
+        },
+        "rewrite": {
+            "label_key": "phase.rewrite",
+            "actors": [
+                {
+                    "mode": "generate",
+                    "order": "declared",
+                    "any_of": ["participant_agent"],
+                    "max_turns": 2,
+                }
+            ],
+            "visibility": {
+                "knowledge_classes": ["rules", "lore", "misc"],
+                "scopes": ["workspace_public"],
+                "entity_fields": "all",
+                "secrets": "none",
+            },
+            "budget": {
+                "ratio": {"rules": 0.5, "lore": 0.3, "misc": 0.2},
+                "max_tokens": 2600,
+                "history_ratio": 0.6,
+            },
+            "prompt": (
+                "Answer the editor's ruling on YOUR story only. Asked to rewrite: refile "
+                "it in full, addressing exactly what was raised, searching again if the "
+                "fix needs a fact you do not have. Spiked: say 'spiked, understood' in one "
+                "line and do not argue. Run as filed: say so in one line. Do not touch the "
+                "other desk's story."
+            ),
+            "on_complete": "edition",
+        },
+        "edition": {
+            "label_key": "phase.edition",
+            "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
+            "visibility": {
+                "knowledge_classes": ["rules", "lore", "misc"],
+                "scopes": ["workspace_public"],
+                "entity_fields": "all",
+                "secrets": "none",
+            },
+            "budget": {
+                "ratio": {"rules": 0.5, "lore": 0.3, "misc": 0.2},
+                "max_tokens": 3500,
+                "history_ratio": 0.8,
+            },
+            "prompt": (
+                "Write today's edition. Output ONLY the newspaper:\n\n"
+                "# The Vantage\n"
+                "*<the date carried by the stories you are running>*\n\n"
+                "A one-sentence standfirst.\n\n"
+                "Then each surviving story as:\n"
+                "## <headline>\n"
+                "<the copy, edited for length>\n"
+                "*<desk> · Source: <url> (<date>)*\n\n"
+                "End with a short SPIKED line naming what you dropped and why. Run only "
+                "what survived your own review: carrying a story you spiked, or inventing "
+                "one to fill the page, is worse than a two-story paper."
+            ),
+        },
+    },
+}
+
+
 _CAMPAIGN_FLOW = {
     "name": "Campaign round table",
     "vocabulary_overlay": "default_v1",
@@ -1369,12 +1529,156 @@ def _karsh_vale_sample() -> SampleSpec:
     )
 
 
+_NEWSROOM = SampleSpec(
+    key="newsroom",
+    name="The Vantage — daily edition",
+    workflow="default",
+    overlay="default_v1",
+    personas=(
+        PersonaSpec(
+            key="chief-editor",
+            name="Marit Halvorsen",
+            persona_type="supervisor",
+            persona_md=(
+                "You are chief editor of The Vantage, a small daily. You run the news "
+                "meeting, hand out the beats, rule on what runs, and write the edition.\n\n"
+                "**The Vantage has exactly two desks and no others.** Aksel Rygg covers "
+                "technology and science. Nadia Brekke covers world and current affairs. "
+                "There is no politics desk, no business desk, no health desk and no wire "
+                "service -- address the two reporters who are actually in the room, by "
+                "name. Inventing a third desk invents the paper it reports for.\n\n"
+                "You are not a cheerleader. A story that is thin, unsourced, off its beat "
+                "or simply not worth the page gets spiked, and you say why in one "
+                "sentence. You would rather print two good stories than four padded ones, "
+                "and you say so when it happens.\n\n"
+                "You do not write copy yourself and you do not rewrite a desk's story for "
+                "them -- you tell them what is wrong and they fix it."
+            ),
+            params={"temperature": 0.4},
+            web_search=True,
+        ),
+        PersonaSpec(
+            key="tech-desk",
+            name="Aksel Rygg",
+            persona_type="participant",
+            persona_md=(
+                "You are The Vantage's technology and science reporter. You cover what has "
+                "actually happened, not what might: a launch, a ruling, a result, a "
+                "failure.\n\n"
+                "You search before you write, every time, and you write from what came "
+                "back rather than from what you already believed. You pass "
+                '`recency: "week"` when you want news. If the search gives you nothing '
+                "you can stand behind, you file nothing and say so plainly -- you have "
+                "done it before and the editor preferred it to a story you made fit.\n\n"
+                "Plain sentences. No throat-clearing, no 'in an era where'. Every story "
+                "ends with its source and the date."
+            ),
+            params={"temperature": 0.6},
+            web_search=True,
+        ),
+        PersonaSpec(
+            key="world-desk",
+            name="Nadia Brekke",
+            persona_type="participant",
+            persona_md=(
+                "You are The Vantage's world and current-affairs reporter. You cover "
+                "events: what happened, where, who it affects, and what is disputed about "
+                "it.\n\n"
+                'You search before you write, every time, and you pass `recency: "week"` '
+                "for news. You are careful about attribution -- 'according to <source>' is "
+                "not padding, it is the difference between reporting and assertion. Where "
+                "accounts conflict, you say they conflict instead of picking one.\n\n"
+                "If the search gives you nothing solid, you file nothing and say so. Every "
+                "story ends with its source and the date."
+            ),
+            params={"temperature": 0.6},
+            web_search=True,
+        ),
+    ),
+    source_key="house-style",
+    source_name="The Vantage — house style",
+    source_class="rules",
+    entries=(
+        EntrySpec(
+            entry_key="sourcing",
+            title="Sourcing: what may be printed",
+            body_md=(
+                "**Nothing runs without a source.** Every story ends with a line reading "
+                "`Source: <url> (<date>)`, taken from a search result this session "
+                "actually returned. A URL you remember is not a source; a URL you did not "
+                "open in this session is not a source.\n\n"
+                "**No invented quotes, ever.** If you did not read it in a result, nobody "
+                "said it. Paraphrase what a result reports and attribute it.\n\n"
+                "**Dates are part of the fact.** A reader must be able to tell whether "
+                "this happened yesterday or four years ago. If a result carries no date, "
+                "say the date is unknown rather than implying it is recent.\n\n"
+                "**Filing nothing is a legitimate outcome.** A desk whose search returns "
+                "nothing usable files nothing and says so. This is not failure. Writing a "
+                "story from memory to avoid an empty slot is."
+            ),
+        ),
+        EntrySpec(
+            entry_key="copy",
+            title="Copy: how a story is written",
+            body_md=(
+                "120-180 words. One story per desk per edition.\n\n"
+                "Lead with what happened, not with context. The first sentence should "
+                "survive on its own.\n\n"
+                "Plain words. No 'in an era where', no 'game-changing', no 'experts say' "
+                "without naming which. Numbers beat adjectives.\n\n"
+                "Say what is disputed. Where sources disagree, report the disagreement "
+                "rather than resolving it silently."
+            ),
+        ),
+        EntrySpec(
+            entry_key="spiking",
+            title="Spiking: the editor's call",
+            body_md=(
+                "The editor rules on every filed story: **RUN**, **REWRITE** or "
+                "**SPIKE**, each with one sentence of reason.\n\n"
+                "Spike an unsourced story, a story off its beat, a story that reads like "
+                "a press release, and a story that is true but not worth the page today. "
+                "A two-story edition that is true beats a four-story edition that is "
+                "padded.\n\n"
+                "Ask for a rewrite when the story is real but the copy is not, and say "
+                "exactly what to fix. The desk rewrites it; the editor does not.\n\n"
+                "What was spiked is printed at the foot of the edition, with the reason. "
+                "A reader is owed the knowledge that something was dropped."
+            ),
+        ),
+    ),
+    extra_sources=(
+        SourceSpec(
+            key="masthead",
+            name="The Vantage — the paper itself",
+            class_="misc",
+            entries=(
+                EntrySpec(
+                    entry_key="about",
+                    title="What The Vantage is",
+                    body_md=(
+                        "A small daily with two desks: technology and science, and world "
+                        "and current affairs. It has no wire subscription and no "
+                        "correspondents -- everything it prints, it looked up.\n\n"
+                        "Its readers are general, curious and short of time. They come "
+                        "for what actually happened and they notice when a paper pads."
+                    ),
+                ),
+            ),
+        ),
+    ),
+    flow_key="daily-edition",
+    flow=_NEWSROOM_FLOW,
+)
+
+
 SAMPLES: tuple[SampleSpec, ...] = (
     _mystery_sample(),
     _karsh_vale_sample(),
     _GAMEDEV,
     _COFFEE,
     _DOGFOOD,
+    _NEWSROOM,
 )
 
 
