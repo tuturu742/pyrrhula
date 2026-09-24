@@ -25,6 +25,8 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_APP_DB_PASSWORD` | — | Password the migration path grants the app role. Read by the deployment (compose, CI), not by `Settings`. |
 | `PYRRHULA_POSTGRES_PASSWORD` | generated | Compose/k8s only: seeds the database's own password on first boot. |
 | `PYRRHULA_REDIS_URL` | `redis://localhost:6379/0` | Cache, rate-limit counters, and the live event bus. |
+| `PYRRHULA_DB_POOL_SIZE` | `5` | Pooled connections per engine. **`0` selects `NullPool`** — nothing is pooled and every session opens and closes its own connection. Worth it only where engines are short-lived: the test run sets it, because an engine rebinds per event loop and a pooled connection belonging to an abandoned engine cannot be closed from the loop that notices, so a long run exhausts Postgres. |
+| `PYRRHULA_DB_MAX_OVERFLOW` | `10` | Connections an engine may open beyond the pool under load. Ignored when `PYRRHULA_DB_POOL_SIZE` is `0`. Setting it to `0` alongside a pool of 1 deadlocks anything needing two sessions at once — don't. |
 | `PYRRHULA_JWT_SECRET` | — (**required**) | Signs session tokens. Rotating it logs everyone out. |
 | `PYRRHULA_JWT_ALGORITHM` | `HS256` | Token signing algorithm. |
 | `PYRRHULA_JWT_EXPIRY_SECONDS` | `86400` | How long a login lasts. |
