@@ -527,6 +527,10 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# The recorded output is already noise-stripped and trimmed at the source, so this is
+# a second trim of a curated record -- and it must take the SAME end the first one
+# favoured. Taking the head here handed the agent 32,000 characters that named not one
+# failing test, because a run prints its failures and its tally last.
 _REWORK_TEST_OUTPUT_CHARS = 32000
 
 
@@ -550,7 +554,7 @@ def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:
         f"{comment}\n\nBuild: the tests FAILED on this branch. This is what they printed "
         f"-- fix what it shows rather than guessing at it. You cannot run the suite "
         f"yourself, so this output is the only record of what the code actually "
-        f"produced:\n\n{detail[:_REWORK_TEST_OUTPUT_CHARS]}"
+        f"produced:\n\n{detail[-_REWORK_TEST_OUTPUT_CHARS:]}"
     )
 
 

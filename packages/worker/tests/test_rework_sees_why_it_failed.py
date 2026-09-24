@@ -45,3 +45,21 @@ def test_a_green_branch_says_so() -> None:
 def test_a_failed_run_with_no_captured_output_says_that_rather_than_nothing() -> None:
     brief = _with_test_output("fix it", {"ci_status": "failed"})
     assert "no output was captured" in brief
+
+
+def test_a_long_record_is_trimmed_from_the_front_not_the_back() -> None:
+    """The recorded output is already curated at the source; this is a second trim of it,
+    and it must favour the same end. Trimming from the back handed the agent 32,000
+    characters naming not one failing test -- a run prints setup first and its failures
+    and tally last, so the front is the part that says least.
+
+    Asserts on content rather than length, which is what the earlier tests missed: a
+    brief of the right size that names nothing is the exact failure this had.
+    """
+    detail = ("setup chatter line\n" * 4000) + (
+        "snapshot assertion for 'layout_snapshot_200x50' failed\n"
+        "test result: FAILED. 365 passed; 4 failed"
+    )
+    brief = _with_test_output("fix it", {"ci_status": "failed", "test_output": detail})
+    assert "layout_snapshot_200x50" in brief, "the failing test was trimmed away"
+    assert "365 passed; 4 failed" in brief

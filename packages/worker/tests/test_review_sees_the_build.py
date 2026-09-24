@@ -79,3 +79,10 @@ def test_an_older_record_without_test_output_still_shows_its_summary() -> None:
     shown an empty string would read it as "no detail available"."""
     line = _build_line({"ci_status": "failed", "summary": "364 passed; 5 failed"})
     assert "364 passed; 5 failed" in line
+
+
+def test_the_reviewer_is_shown_the_end_of_a_long_record() -> None:
+    """Same rule as the rework brief: failures and the tally are at the end."""
+    detail = ("compile chatter\n" * 4000) + "snapshot assertion for 'layout_snapshot_80x24' failed"
+    line = _build_line({"ci_status": "failed", "test_output": detail})
+    assert "layout_snapshot_80x24" in line
