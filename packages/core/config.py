@@ -23,6 +23,19 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://pyrrhula_app:pyrrhula_app_dev@localhost:5432/pyrrhula"
     )
     redis_url: str = "redis://localhost:6379/0"
+    # SQLAlchemy's own defaults, stated rather than inherited, because one process can
+    # hold several engines and the ceiling that matters is Postgres's `max_connections`
+    # shared across every process pointing at it. Worth turning down where many short
+    # lived engines exist -- a test run rebinds the engine per event loop, and fifteen
+    # sockets per abandoned pool is what took a full suite to 98 of 100 slots and made
+    # whichever test came next fail as if it were flaky.
+    # 0 means "pool nothing": every session opens its own connection and closes it on
+    # release. That is the only setting that survives an engine being abandoned, which
+    # is why the test run uses it -- a pooled connection belonging to an engine whose
+    # event loop has gone cannot be closed from the loop that notices, so it sits open
+    # until garbage collection, and a long run accumulates them until Postgres refuses.
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
 
     auth_provider: str = "local"
     isolation_mode: str = "shared"

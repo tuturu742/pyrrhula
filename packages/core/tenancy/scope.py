@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from core.config import get_settings
 
@@ -58,6 +59,15 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 _admin_engine: AsyncEngine | None = None
 _admin_engine_loop: asyncio.AbstractEventLoop | None = None
 _admin_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
+
+def _pool_options(settings: object) -> dict[str, object]:
+    """Pooling for a new engine. ``db_pool_size = 0`` selects ``NullPool``, where there
+    is nothing to leak when an engine is abandoned."""
+    size = int(getattr(settings, "db_pool_size", 5))
+    if size <= 0:
+        return {"poolclass": NullPool}
+    return {"pool_size": size, "max_overflow": int(getattr(settings, "db_max_overflow", 10))}
 
 
 def _release_abandoned(engine: AsyncEngine | None, loop: asyncio.AbstractEventLoop | None) -> None:
@@ -96,7 +106,9 @@ def _get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     if _sessionmaker is None or _engine_loop is not current_loop:
         _release_abandoned(_engine, _engine_loop)
         settings = get_settings()
-        _engine = create_async_engine(settings.app_database_url, pool_pre_ping=True)
+        _engine = create_async_engine(
+            settings.app_database_url, pool_pre_ping=True, **_pool_options(settings)
+        )
         _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
         _engine_loop = current_loop
     return _sessionmaker
@@ -142,7 +154,9 @@ def _get_admin_sessionmaker() -> async_sessionmaker[AsyncSession]:
     if _admin_sessionmaker is None or _admin_engine_loop is not current_loop:
         _release_abandoned(_admin_engine, _admin_engine_loop)
         settings = get_settings()
-        _admin_engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        _admin_engine = create_async_engine(
+            settings.database_url, pool_pre_ping=True, **_pool_options(settings)
+        )
         _admin_sessionmaker = async_sessionmaker(_admin_engine, expire_on_commit=False)
         _admin_engine_loop = current_loop
     return _admin_sessionmaker
