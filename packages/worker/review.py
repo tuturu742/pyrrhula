@@ -61,8 +61,35 @@ _REVIEW_SYSTEM = (
     "whole; judge correctness from the contents you can see. Never treat a truncated "
     "body as evidence that nothing else changed, and do not withhold a verdict merely "
     "because the contents are cut: say which part of your judgement the truncation "
-    "limits."
+    "limits.\n\n"
+    "The build result for this branch is stated above the diff. A branch whose tests "
+    "failed is 'request_changes', whatever the diff looks like -- name the failing "
+    "tests and stop there. A scope-correct one-file change that leaves the suite red is "
+    "still red, and approving it is the one review error that cannot be caught "
+    "downstream: the merge order is planned from approvals."
 )
+
+
+def _build_line(pr: dict[str, Any]) -> str:
+    """What the branch's tests did, stated where the reviewer cannot miss it.
+
+    The reviewer was given the work item and the diff and nothing else, so every verdict
+    it ever reached was a reading of the diff. That is fine for finding defects and
+    useless for the one rule the sample exists to demonstrate: it approved a
+    scope-correct one-file change on a branch whose suite was red, because nothing in
+    front of it said the suite was red.
+    """
+    status = str(pr.get("ci_status") or "").strip().lower()
+    if status == "passed":
+        return "Build: tests PASSED on this branch."
+    if status in ("failed", "error"):
+        # The recorded summary already carries the failing-test tail; there is no
+        # separate ci_summary field, and inventing one is how a reader ends up with an
+        # empty string that looks like "no detail available".
+        summary = str(pr.get("summary") or "").strip()
+        tail = f"\n{summary[:1500]}" if summary else ""
+        return f"Build: tests FAILED on this branch. This is request_changes.{tail}"
+    return "Build: no test result recorded for this branch — say so in your verdict."
 
 
 _MERGE_ORDER_SYSTEM = (
@@ -292,6 +319,7 @@ async def handle_facilitator_review(payload: dict[str, Any]) -> dict[str, Any]:
                     f"Work item: {title}\n{description}\n\n"
                     f"Review round {review_round} of "
                     f"{await max_review_rounds(tenant_id, workspace_id)}.\n\n"
+                    f"{_build_line(pr)}\n\n"
                     f"Diff of branch {branch}:\n```diff\n{diff or '(empty diff)'}\n```"
                 ),
             },
