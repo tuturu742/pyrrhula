@@ -101,13 +101,19 @@ SELECT created_at, left(content_md, 120) FROM message
 WHERE content_md LIKE '%Review (round%' ORDER BY created_at DESC LIMIT 20;
 ```
 
-Remember that `message` is tenant-scoped with RLS `FORCE`, so a `psql` session sees
-nothing until it sets the GUC — an empty result is the most common way to misread this
-as "no reviews happened":
+`message` is tenant-scoped, so which role you connect as decides what you see. The
+application's role (`pyrrhula_app`) is subject to RLS and returns nothing until the GUC
+is set:
 
 ```sql
 SET app.tenant_id = '<tenant uuid>';
 ```
+
+The admin role the installers create is a superuser, and a superuser bypasses RLS
+entirely — setting the GUC there changes nothing, and the query returns every tenant's
+rows. That is worth knowing in both directions: a result that looks cross-tenant from
+`psql` is not evidence of a leak, and a result that looks correctly scoped is not
+evidence that isolation works. `tests/isolation/` is what answers that question.
 
 ## See also
 
