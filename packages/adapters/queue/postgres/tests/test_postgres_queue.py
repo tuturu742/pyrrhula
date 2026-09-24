@@ -1,7 +1,22 @@
 import uuid
 
+from sqlalchemy import text, update
+
+from adapters.queue.postgres.models import JobRow
 from adapters.queue.postgres.queue import PostgresJobQueue
 from core.ports.job_queue import JobQueue
+from core.tenancy.scope import unscoped_session
+
+
+async def _age_claim(job_id: uuid.UUID, seconds: int) -> None:
+    """Pretend the claim was taken `seconds` ago, so a lease can elapse without the test
+    sleeping through it."""
+    async with unscoped_session() as session:
+        await session.execute(
+            update(JobRow)
+            .where(JobRow.id == job_id)
+            .values(claimed_at=text(f"now() - make_interval(secs => {seconds})"))
+        )
 
 
 async def test_enqueue_claim_complete(db_available: None) -> None:
@@ -110,3 +125,53 @@ async def test_a_job_that_keeps_killing_its_worker_is_retired(db_available: None
     assert retired is not None
     assert retired.status == "failed"
     assert "abandoned" in (retired.error or "")
+
+
+async def test_a_slow_worker_that_is_still_working_keeps_its_job(db_available: None) -> None:
+    """The lease is meant to recover jobs whose worker died, but it could not tell a dead
+    worker from a slow one: it measured how long the job had been claimed, and nothing
+    else. A codegen rework routinely runs past 900s, so a second worker picked up a job the
+    first was still running -- the tenant paid for the same generation twice and both
+    workers pushed to the same branch. Observed live, 2026-09-24: job e679840b claimed at
+    05:55:25 and again at 06:11:22.
+
+    `lease_seconds=0` stands in for "the lease has elapsed" without sleeping, so a
+    heartbeat is the only thing that can save the claim here."""
+    kind = f"rework_work_item_{uuid.uuid4().hex[:8]}"
+    tenant_id = uuid.uuid4()
+
+    queue: JobQueue = PostgresJobQueue()
+    await queue.enqueue(tenant_id, kind, {"branch": "pyr/slow"})
+    mine = await queue.claim_one(kinds=[kind])
+    assert mine is not None
+
+    # Ten minutes of honest work under a five-minute lease: stale by duration alone.
+    await _age_claim(mine.id, seconds=600)
+    assert await queue.heartbeat(mine.id, attempts=mine.attempts) is True
+
+    stealer = await PostgresJobQueue(lease_seconds=300).claim_one(kinds=[kind])
+    assert stealer is None, "a job whose worker said it was still working was taken away"
+
+
+async def test_a_worker_that_lost_its_job_stops_holding_the_lease_open(
+    db_available: None,
+) -> None:
+    """The generation guard. If a heartbeat matched on job id alone, a worker that had
+    genuinely gone silent long enough to be reclaimed would come back and keep extending
+    the *new* holder's lease -- and would never find out it had lost the job."""
+    kind = f"rework_work_item_{uuid.uuid4().hex[:8]}"
+    tenant_id = uuid.uuid4()
+
+    queue: JobQueue = PostgresJobQueue()
+    await queue.enqueue(tenant_id, kind, {"branch": "pyr/silent"})
+    first = await queue.claim_one(kinds=[kind])
+    assert first is not None
+
+    # This worker really did go silent -- no heartbeat -- so the reclaim is correct.
+    await _age_claim(first.id, seconds=600)
+    second = await PostgresJobQueue(lease_seconds=300).claim_one(kinds=[kind])
+    assert second is not None and second.id == first.id
+    assert second.attempts > first.attempts
+
+    assert await queue.heartbeat(first.id, attempts=first.attempts) is False
+    assert await queue.heartbeat(second.id, attempts=second.attempts) is True

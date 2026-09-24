@@ -78,17 +78,37 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
 # idle branch doubles as the tick. Kubernetes also enforces its own deadline
 # (activeDeadlineSeconds), which covers the case where the worker itself is down.
 _REAP_INTERVAL = 60.0
+# Far below the queue's claim lease, so a working worker never looks silent.
+_HEARTBEAT_SECONDS = 30.0
+
+
+async def _beat(queue: JobQueue, job: Job) -> None:
+    """Say "still here" until cancelled, so the claim lease measures silence rather than
+    duration. A codegen rework routinely runs past the lease; without this the queue read
+    a working worker as a dead one and handed the job to a second worker, which spent the
+    tenant's budget again and pushed to the same branch. A lost claim ends the loop rather
+    than fighting for it back -- same rule the session claim follows."""
+    while True:
+        await asyncio.sleep(_HEARTBEAT_SECONDS)
+        if not await queue.heartbeat(job.id, attempts=job.attempts):
+            log.warning("worker.claim_lost", job_id=str(job.id), kind=job.kind)
+            return
 
 
 async def _run_one(queue: JobQueue, job: Job) -> None:
     handler = _HANDLERS[job.kind]
     log.info("worker.job_claimed", job_id=str(job.id), kind=job.kind, tenant_id=str(job.tenant_id))
+    beat = asyncio.create_task(_beat(queue, job))
     try:
         result = await handler(job.payload)
     except Exception as exc:
         log.warning("worker.job_failed", job_id=str(job.id), kind=job.kind, error=str(exc))
         await queue.fail(job.id, str(exc))
         return
+    finally:
+        beat.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await beat
     log.info("worker.job_completed", job_id=str(job.id), kind=job.kind)
     await queue.complete(job.id, result)
 

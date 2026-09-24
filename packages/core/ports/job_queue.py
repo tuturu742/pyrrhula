@@ -35,6 +35,20 @@ class JobQueue(Protocol):
 
     async def claim_one(self, kinds: list[str] | None = None) -> Job | None: ...
 
+    async def heartbeat(self, job_id: uuid.UUID, *, attempts: int) -> bool:
+        """Say "still working" so the claim lease measures silence, not duration.
+
+        The lease exists to recover jobs whose worker died (see the adapter). Without a
+        heartbeat it cannot tell a dead worker from a slow one, so any handler that runs
+        longer than the lease is handed to a *second* worker while the first is still
+        going: duplicate model spend, and two workers pushing the same branch.
+
+        ``attempts`` is the generation the caller claimed at. A reclaim bumps it, so a
+        heartbeat from a worker that has already lost the job returns ``False`` instead of
+        extending the new holder's lease.
+        """
+        ...
+
     async def complete(self, job_id: uuid.UUID, result: dict[str, Any] | None = None) -> None: ...
 
     async def fail(self, job_id: uuid.UUID, error: str) -> None: ...

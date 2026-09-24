@@ -259,8 +259,8 @@ def make_randomizer_handler(
         # get wrong, and getting it wrong must cost the call rather than the session.
         # Unguarded, a mistyped entity id raised out of the handler, failed the advance,
         # and recorded the turn as failed -- after which the idempotency guard correctly
-        # refused to retry it. A campaign died at its boss fight that way, ninety minutes
-        # in, on one malformed uuid.
+        # refused to retry it. A ninety-minute session died at its climax that way,
+        # on one malformed uuid.
         missing = [k for k in ("expression", "check_type") if not str(args.get(k) or "").strip()]
         if missing:
             return ToolResult(

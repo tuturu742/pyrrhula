@@ -17,6 +17,11 @@ from core.tenancy.scope import unscoped_session
 # filter means that row is never looked at again: the work is not retried, not failed, and
 # not reported -- it is silently lost. That is how a container OOM turned into "embeddings
 # just never happened" with a green-looking queue.
+#
+# The lease answers "has this job gone silent", not "has it taken a long time" -- the
+# worker calls `heartbeat` while its handler runs (see packages/worker/main.py). Before
+# that existed the two questions were the same one, and a codegen rework that legitimately
+# ran past the lease was handed to a second worker while the first was still going.
 _DEFAULT_LEASE_SECONDS = 900
 # The other half: a job that reliably kills its worker would otherwise be reclaimed
 # forever, taking the worker (and every other tenant's queued work, since the worker claims
@@ -103,6 +108,23 @@ class PostgresJobQueue:
                 result=row.result,
                 error=row.error,
             )
+
+    async def heartbeat(self, job_id: uuid.UUID, *, attempts: int) -> bool:
+        """Push this job's lease forward. False once someone else holds it."""
+        async with unscoped_session() as session:
+            result = await session.execute(
+                update(JobRow)
+                .where(
+                    JobRow.id == job_id,
+                    JobRow.status == "claimed",
+                    # The generation guard. Reclaiming bumps `attempts`, so a worker whose
+                    # job was taken while it was quiet cannot keep the new holder's lease
+                    # alive -- it learns it lost instead.
+                    JobRow.attempts == attempts,
+                )
+                .values(claimed_at=text("now()"))
+            )
+            return bool(result.rowcount)
 
     async def complete(self, job_id: uuid.UUID, result: dict[str, Any] | None = None) -> None:
         async with unscoped_session() as session:

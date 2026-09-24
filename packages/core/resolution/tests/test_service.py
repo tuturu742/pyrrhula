@@ -423,7 +423,7 @@ async def test_a_malformed_actor_id_costs_the_call_and_not_the_session(
     """Every argument here is model output, so every one is a thing a model can get
     wrong. Unguarded, a mistyped id raised out of the handler, failed the advance job,
     and recorded the turn as failed -- after which the idempotency guard correctly
-    refused to retry it. A campaign died at its boss fight that way, ninety minutes in,
+    refused to retry it. A ninety-minute session died at its climax that way,
     on one malformed uuid.
     """
     tenant_id, session_id, rule_system, rule_system_id = await _setup("resolve-bad-actor")
