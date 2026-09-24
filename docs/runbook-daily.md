@@ -93,6 +93,21 @@ kubectl -n pyrrhula exec "$POD" -- python /tmp/seed_samples.py \
   --samples hagnaryd-mystery,mice-invaders
 ```
 
+**Remove the directory before copying it again.** `podman cp` and `kubectl cp` of a
+directory *into a directory that already exists* put it **inside**, they do not replace
+it: a second copy leaves the first one's files in place and adds
+`/tmp/samples/pyrrhula-samples/` beside them. Re-seeding then reads the stale bundle and
+reports a clean import of content you fixed twenty minutes ago. Observed: two rebuild-and-
+reseed rounds in a row imported the same superseded `.pyr`, and the symptom was a persona
+ignoring a brief it had never been given. `rm -rf` the target first, and check the byte
+count of the file you meant to update:
+
+```bash
+podman exec pyrrhula_api_1 rm -rf /tmp/samples
+podman cp ~/code/pyrrhula-samples pyrrhula_api_1:/tmp/samples
+podman exec pyrrhula_api_1 ls -l /tmp/samples/<sample>/<sample>.pyr
+```
+
 ```bash
 # Compose (run inside the api container, for the same reason):
 podman cp scripts/seed_samples.py pyrrhula_api_1:/tmp/seed_samples.py
