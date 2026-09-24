@@ -1,8 +1,43 @@
 # Minimal SearXNG settings for the bundled agent-web-search service.
-# The one deviation from defaults that matters: the JSON output format -- the
-# platform's search transport queries /search?format=json, which stock SearXNG
-# refuses (403) unless enabled here. secret_key comes from SEARXNG_SECRET (compose).
+#
+# Three deviations from stock, all load-bearing:
+#
+# 1. The JSON output format -- the platform's search transport queries
+#    /search?format=json, which stock SearXNG refuses (403) unless enabled here.
+#
+# 2. The big engines are turned OFF. From an ordinary self-hosted address without API
+#    keys they refuse: duckduckgo answers with a CAPTCHA, brave, startpage, qwant and
+#    yahoo block outright. Left on, a search returns HTTP 200 with zero results -- a
+#    silent nothing indistinguishable from a model that chose not to search.
+#
+# 3. Engines that DO answer are enabled and pulled into the `general` category. They
+#    ship disabled, and several sit only in `news` or `it`, while a query with no
+#    category searches `general` alone -- so without both halves of this they are
+#    enabled and still never asked. Measured from this host; re-measure before editing.
 use_default_settings: true
+engines:
+  - name: hackernews
+    disabled: false
+    categories: [general, news, it]
+  - name: wikinews
+    disabled: false
+    categories: [general, news]
+  - name: mwmbl
+    disabled: false
+    categories: [general]
+  - name: crowdview
+    disabled: false
+    categories: [general]
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: startpage
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: yahoo
+    disabled: true
 search:
   formats:
     - html

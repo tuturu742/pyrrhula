@@ -51,6 +51,10 @@ class PersonaSpec:
     # Generation overrides merged over the connection's params at turn time -- a shared
     # connection with per-persona sampling, so a cast does not converge into one voice.
     params: dict[str, object] = field(default_factory=dict)
+    # May this persona reach the internet? Off unless a sample says otherwise: a desk
+    # that has to check what happened today needs it, and an interrogation room in a
+    # closed house must not have it.
+    web_search: bool = False
 
 
 @dataclass(frozen=True)
@@ -1612,6 +1616,7 @@ def _write_evidence_server(out_dir: pathlib.Path) -> None:
 async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
 
     from core.agents.authoring import create_agent, create_persona
+    from core.agents.models import Persona
     from core.assembler.visibility import seed_default_scopes
     from core.behavior.repo import create_behavior_profile
     from core.portability.export import ExportOptions, export_workspace
@@ -1689,6 +1694,11 @@ async def build_sample(spec: SampleSpec, out_dir: pathlib.Path) -> pathlib.Path:
             persona_md=persona_spec.persona_md,
             params=dict(persona_spec.params),
         )
+        if persona_spec.web_search:
+            async with tenant_scope(tenant_id) as session:
+                row = await session.get(Persona, persona.id)
+                if row is not None:
+                    row.web_search = True
         persona_ids[persona_spec.key] = persona.id
         persona_principals[persona_spec.key] = persona.principal_id
         async with tenant_scope(tenant_id) as session:

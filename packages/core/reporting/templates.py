@@ -133,8 +133,20 @@ DECISION_SUMMARY = ReportTemplate(
     requires_review=True,
 )
 
+COMPOSED_DOCUMENT = ReportTemplate(
+    key="composed_document",
+    label_key="report.composed_document",
+    audience_mode="participant",
+    # No chunk_summarise, no reduce: the point is the text the session composed, rendered
+    # as written. Every other template here answers "what happened", which is a summary
+    # of prose. This one is for a flow whose OUTPUT is the prose -- a drafted document, a
+    # written deliverable -- where summarising it destroys the thing being asked for.
+    pipeline=[Step(kind="fact_frame"), Step(kind="render")],
+    output_formats=["markdown", "pdf"],
+)
+
 BUILT_IN_TEMPLATES: dict[str, ReportTemplate] = {
-    t.key: t for t in (NARRATIVE_RECAP, SESSION_LOG, DECISION_SUMMARY)
+    t.key: t for t in (NARRATIVE_RECAP, SESSION_LOG, DECISION_SUMMARY, COMPOSED_DOCUMENT)
 }
 
 
