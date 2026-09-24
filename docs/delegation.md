@@ -82,6 +82,31 @@ one that does fix its own test.
 The reviewer is required to list the failing tests it was given and say which of the two
 kinds each one is, so the attribution is on the record rather than implied.
 
+## What a delegation cannot do
+
+The agent does not have a shell. It receives the repository's files and the work item,
+and it answers with **whole file contents**; the environment then commits them, runs the
+test command, and runs the build command if the tests passed. Nothing it writes is
+executed on its behalf before the commit.
+
+That shapes what it is good at. Writing and changing source is squarely inside it.
+Producing a file that a *tool* would normally generate is not:
+
+* Regenerating snapshot fixtures, golden files, lockfiles or formatter output means
+  reproducing the tool's exact bytes by hand. On a real attempt, asked for four snapshot
+  fixtures of up to 38 KB of box-drawing characters in one answer, the model returned all
+  four short — between 244 and 3,943 bytes missing from each. A fixture short by one line
+  fails exactly like a fixture that is wrong.
+* The failing run's output is fed back (see above), so the agent can see what differs and
+  edit a *small* number of lines in a file it already has. That works: the same run fixed
+  the one small fixture byte-perfectly while losing lines from the large ones.
+
+So scope these tasks to one generated file per round and say explicitly that nothing else
+may be re-emitted — a fixture that already passes going red again is otherwise the normal
+outcome. Where the generated output is large and there are many of them, the honest answer
+today is that a person runs the generator; the loop is for the change that makes the
+generator's output correct, not for impersonating the generator.
+
 ## Where the verdicts go
 
 Every verdict is posted into the session transcript, so the loop is visible where people
