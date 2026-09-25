@@ -95,7 +95,10 @@ CONNECTIONS: tuple[Connection, ...] = (
     # 27B managed turns past ten minutes -- the measurement that got Ollama dropped from
     # every other sample.
     Connection(
-        "Ollama Qwen3 MoE", "ollama_chat", "qwen3:30b-a3b", None,
+        "Ollama Qwen3 MoE",
+        "ollama_chat",
+        "qwen3:30b-a3b",
+        None,
         # An output cap, because a local reasoning model without one can run away. This
         # model thinks before it answers, and the thinking is not bounded by anything in
         # the request: a turn was observed generating for ten minutes and never
