@@ -14,7 +14,7 @@ instead of rediscovering it.
 
 ## 1. One branch, named for the track
 
-Branch once, off `master`, named for the phase/track (e.g.
+Branch once, off `main`, named for the phase/track (e.g.
 `feat/phase-2-secrets-behaviour-gate`). Every task in the track lands on this branch as its
 own commit. No per-task branches, no per-task PRs — the PR happens once, at the end,
 covering the whole track.
@@ -130,7 +130,7 @@ Run every one of these across the *whole* branch, not just the last task's own d
   call graph together. Track E's own PR caught exactly this class of bug this way, in files
   from two tasks earlier, after each had already passed its own per-file `--strict` check.
 - If that whole-tree mypy run surfaces errors in files your track's commits never
-  touched, check via `git log --oneline master..HEAD -- <file>` (or diff against `master`)
+  touched, check via `git log --oneline main..HEAD -- <file>` (or diff against `main`)
   whether the error pre-dates the branch. If it does, it is not yours to fix — leave it and
   say so in the PR body. If your track's own commits introduced or modified the file, fix
   it before opening the PR.

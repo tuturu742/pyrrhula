@@ -29,7 +29,7 @@ managed by Pyrrhula. One product, one codebase.
 > bundles, and three verified install paths (compose, k8s, AWS ECS). Four runnable
 > sample workspaces live in
 > [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples) — start with the
-> murder mystery, or [read a finished session first](https://github.com/tuturu742/pyrrhula-samples/blob/master/hagnaryd-mystery/TRANSCRIPT.md)
+> murder mystery, or [read a finished session first](https://github.com/tuturu742/pyrrhula-samples/blob/main/hagnaryd-mystery/TRANSCRIPT.md)
 > to see the disclosure gate working before you install anything.
 
 ## Install

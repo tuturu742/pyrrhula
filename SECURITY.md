@@ -48,4 +48,4 @@ crashes:
 
 ## Supported versions
 
-Pre-1.0: only the latest `master`. There are no maintained release branches yet.
+Pre-1.0: only the latest `main`. There are no maintained release branches yet.

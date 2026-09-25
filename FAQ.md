@@ -9,7 +9,7 @@ Pyrrhula *removes the secret from the model's context*. A concealed fact cannot 
 because the model generating the turn does not have it — the agent acts on an
 author-written directive instead ("deflect questions about the evening"), never on the
 fact. The claim is testable and we published a test:
-[an unedited transcript](https://github.com/tuturu742/pyrrhula-samples/blob/master/hagnaryd-mystery/TRANSCRIPT.md)
+[an unedited transcript](https://github.com/tuturu742/pyrrhula-samples/blob/main/hagnaryd-mystery/TRANSCRIPT.md)
 where the murderer survives a police interview because the model playing her was never
 told she did it. The per-turn conceal/hint/reveal decisions are database records you can
 read back, not vibes.

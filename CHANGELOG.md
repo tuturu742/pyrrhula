@@ -223,7 +223,7 @@ First public release candidate. Everything below is new, because everything is.
 Multi-agent conversations where **who-knows-what is enforced by the system, not requested
 of the model**. A concealed secret's text is excluded from the model's context — a leak is
 impossible by construction, not unlikely by prompting. See
-[an annotated transcript](https://github.com/tuturu742/pyrrhula-samples/blob/master/hagnaryd-mystery/TRANSCRIPT.md)
+[an annotated transcript](https://github.com/tuturu742/pyrrhula-samples/blob/main/hagnaryd-mystery/TRANSCRIPT.md)
 of the engine holding a murderer's secret through a police interview.
 
 ### Engine
