@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -190,6 +191,19 @@ async def _call_provider_with_retry(
                         cached_tokens = chunk.cached_tokens
                 latency_ms = int((time.monotonic() - start) * 1000)
                 content = "".join(full_text)
+                structlog.get_logger().info(
+                    "runtime.generate_attempt",
+                    model=model_string,
+                    purpose=purpose,
+                    attempt=attempt_index + 1,
+                    latency_ms=latency_ms,
+                    messages=len(messages),
+                    prompt_chars=sum(len(str(m.get("content") or "")) for m in messages),
+                    tools=len(tools or ()),
+                    content_chars=len(content),
+                    tool_calls=len(tool_calls),
+                    max_tokens=req.params.get("max_tokens"),
+                )
                 if not content.strip() and not tool_calls:
                     raise EmptyGenerationError(f"{model_string} returned an empty generation")
                 prompt_tokens = sum(
@@ -211,6 +225,13 @@ async def _call_provider_with_retry(
                 return content, list(tool_calls), usage
             except Exception as exc:  # noqa: BLE001 -- any provider failure triggers retry/fallback
                 last_exc = exc
+                structlog.get_logger().info(
+                    "runtime.generate_failed",
+                    purpose=purpose,
+                    attempt=attempt_index + 1,
+                    error=type(exc).__name__,
+                    detail=str(exc)[:200],
+                )
                 if attempt_index < len(candidates) - 1:
                     await asyncio.sleep(_BACKOFF_BASE_SECONDS * (2**attempt_index))
                 continue
