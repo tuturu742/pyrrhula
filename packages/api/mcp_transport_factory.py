@@ -9,6 +9,7 @@ delegate endpoints enqueue worker jobs rather than dispatching in-process).
 from __future__ import annotations
 
 from adapters.mcp.composite_transport import KeyRoutingMcpTransport
+from adapters.mcp.fetch_transport import WebFetchTransport
 from adapters.mcp.git_store import GitStore, default_git_root
 from adapters.mcp.git_transport import GitMcpTransport
 from adapters.mcp.remote_transport import RemoteMcpTransport
@@ -24,6 +25,7 @@ def get_mcp_transport() -> McpTransport:
     return KeyRoutingMcpTransport(
         git=git,
         web_search=SearxngSearchTransport(),
+        web_fetch=WebFetchTransport(),
         resolution=ResolutionMcpTransport(permission_service=RolePermissionService()),
         remote=RemoteMcpTransport(),
     )

@@ -409,6 +409,15 @@ WEB_SEARCH_PRESET = {
 }
 
 
+WEB_FETCH_PRESET = {
+    "key": "web_fetch",
+    "url": "https://mcp.example.invalid/web-fetch",
+    "enabled_tools": ["fetch"],
+    "effectful_tools": [],
+    "require_confirmation": False,
+}
+
+
 class McpCallRecord(Base):
     """Append-only ledger of external MCP calls, one row per call.
 

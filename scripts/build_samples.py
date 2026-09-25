@@ -307,6 +307,16 @@ _DELIVERY_FLOW = {
 }
 
 _NEWSROOM_FLOW = {
+    # No history summarisation anywhere in this flow (`history_ratio: 0.0`).
+    #
+    # Summarising is for a session long enough that its transcript will not fit. This one
+    # is eight turns, and the raw turns are passed to every actor anyway -- so the summary
+    # added nothing and cost the sample its point. Asked to reduce phase summaries that do
+    # not exist yet, the summariser answers "No per-phase summaries were provided in the
+    # input text for consolidation", and that sentence goes into the context as history.
+    # A small local model then echoes it: both desks filed that line as their story,
+    # having searched nothing, because it was the most instruction-shaped text they could
+    # see.
     "name": "Daily edition",
     "vocabulary_overlay": "default_v1",
     "initial_phase": "assignment",
@@ -315,15 +325,15 @@ _NEWSROOM_FLOW = {
             "label_key": "phase.assignment",
             "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
             "visibility": {
-                "knowledge_classes": ["rules", "lore"],
+                "knowledge_classes": ["rules", "misc"],
                 "scopes": ["workspace_public"],
                 "entity_fields": "all",
                 "secrets": "none",
             },
             "budget": {
-                "ratio": {"rules": 0.6, "lore": 0.4},
+                "ratio": {"rules": 0.7, "misc": 0.3},
                 "max_tokens": 1800,
-                "history_ratio": 0.2,
+                "history_ratio": 0.0,
             },
             "prompt": (
                 "Open the news meeting. Address each of your two reporters BY NAME and "
@@ -335,9 +345,12 @@ _NEWSROOM_FLOW = {
                 "question, not an answer.\n\n"
                 "Say what makes a story worth the front page in general terms -- "
                 "recency, consequence, whether it can be sourced -- and nothing about "
-                "what today's stories are. If the brief states today's date, repeat it "
-                "for the desks; otherwise tell them to judge recency from the dates on "
-                "what they find. Do not write any stories yourself."
+                "what today's stories are. Do NOT set an hour window: '48 hours' or "
+                "'72 hours' reads to a desk as a search filter, and the narrowest "
+                "filters come back empty on a small index. Say 'this week'. If the brief "
+                "states today's date, repeat it for the desks; otherwise tell them to "
+                "judge recency from the dates on what they find. Do not write any "
+                "stories yourself."
             ),
             "on_complete": "reporting",
         },
@@ -352,24 +365,40 @@ _NEWSROOM_FLOW = {
                 }
             ],
             "visibility": {
-                "knowledge_classes": ["rules", "lore", "misc"],
+                "knowledge_classes": ["rules", "misc"],
                 "scopes": ["workspace_public"],
                 "entity_fields": "all",
                 "secrets": "none",
             },
             "budget": {
-                "ratio": {"rules": 0.5, "lore": 0.3, "misc": 0.2},
+                "ratio": {"rules": 0.7, "misc": 0.3},
                 "max_tokens": 3000,
-                "history_ratio": 0.4,
+                "history_ratio": 0.0,
             },
             "prompt": (
-                "SEARCH BEFORE YOU WRITE, and search as often as you need -- there is no "
-                'ration. Pass `recency: "week"` for news; without it the top results are '
-                "whatever ranks best, which is usually years old. Read what comes back, "
-                "then file ONE story of 120-180 words from what you actually found, "
-                "ending with Source: <url> (<date>). If nothing usable comes back, file "
-                "nothing and say so -- a story written from memory is the one thing this "
-                "desk cannot print."
+                "SEARCH BEFORE YOU WRITE, and search as often as you need -- there is "
+                "no ration.\n\n"
+                "A QUERY IS KEYWORDS, NOT A SENTENCE. Two to four words naming the "
+                "subject: `artificial intelligence`, `space telescope`, `energy prices`. "
+                "Describing what you want -- 'significant technology development "
+                "affecting daily life' -- returns nothing at all, which is not the same "
+                "as there being no news: measured, that phrasing returns 0 results where "
+                "`artificial intelligence` returns 30. An empty result means try a "
+                "shorter query, not that the week was quiet.\n\n"
+                'Pass `recency: "week"`. Not "day" -- it is usually empty on a small '
+                "index, and a story from four days ago is still news.\n\n"
+                "THEN OPEN THE PAGE. A search result is a headline and a few lines; "
+                "`fetch_page` on its URL gives you the article. Report from the article, "
+                "not from the snippet, and quote only what you read there.\n\n"
+                "FILE THE STORY, DO NOT DESCRIBE FILING IT. Your message is the copy a "
+                "reader sees -- a headline and 120-180 words, ending with "
+                "Source: <url> (<date>). Not an account of what you searched, not "
+                "'I then refined my query', and never about yourself in the third "
+                "person. The editor can see your searches; what the editor cannot see is "
+                "the story.\n\n"
+                "If nothing usable comes back after trying a shorter query, say that in "
+                "one line and file nothing -- a story written from memory is the one "
+                "thing this desk cannot print."
             ),
             # A floor, not a quota: the beat cannot CLOSE until the desks have actually
             # looked something up. Two desks, one search each, is the minimum that
@@ -383,15 +412,15 @@ _NEWSROOM_FLOW = {
             "label_key": "phase.desk_review",
             "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
             "visibility": {
-                "knowledge_classes": ["rules", "lore", "misc"],
+                "knowledge_classes": ["rules", "misc"],
                 "scopes": ["workspace_public"],
                 "entity_fields": "all",
                 "secrets": "none",
             },
             "budget": {
-                "ratio": {"rules": 0.6, "lore": 0.2, "misc": 0.2},
+                "ratio": {"rules": 0.7, "misc": 0.3},
                 "max_tokens": 2200,
-                "history_ratio": 0.6,
+                "history_ratio": 0.0,
             },
             "prompt": (
                 "Take each filed story in turn and rule on it: RUN, REWRITE or SPIKE, with "
@@ -415,15 +444,15 @@ _NEWSROOM_FLOW = {
                 }
             ],
             "visibility": {
-                "knowledge_classes": ["rules", "lore", "misc"],
+                "knowledge_classes": ["rules", "misc"],
                 "scopes": ["workspace_public"],
                 "entity_fields": "all",
                 "secrets": "none",
             },
             "budget": {
-                "ratio": {"rules": 0.5, "lore": 0.3, "misc": 0.2},
+                "ratio": {"rules": 0.7, "misc": 0.3},
                 "max_tokens": 2600,
-                "history_ratio": 0.6,
+                "history_ratio": 0.0,
             },
             "prompt": (
                 "Answer the editor's ruling on YOUR story only. Asked to rewrite: refile "
@@ -438,15 +467,15 @@ _NEWSROOM_FLOW = {
             "label_key": "phase.edition",
             "actors": [{"persona_type": "supervisor", "mode": "generate", "max_turns": 1}],
             "visibility": {
-                "knowledge_classes": ["rules", "lore", "misc"],
+                "knowledge_classes": ["rules", "misc"],
                 "scopes": ["workspace_public"],
                 "entity_fields": "all",
                 "secrets": "none",
             },
             "budget": {
-                "ratio": {"rules": 0.5, "lore": 0.3, "misc": 0.2},
+                "ratio": {"rules": 0.7, "misc": 0.3},
                 "max_tokens": 3500,
-                "history_ratio": 0.8,
+                "history_ratio": 0.0,
             },
             "prompt": (
                 "Write today's edition. Output ONLY the newspaper:\n\n"
@@ -1555,7 +1584,15 @@ _NEWSROOM = SampleSpec(
                 "them -- you tell them what is wrong and they fix it."
             ),
             params={"temperature": 0.4},
-            web_search=True,
+            # The editor does NOT search. Reporters research; an editor edits.
+            #
+            # It had the tool and the same prompt telling it that it has not read today's
+            # news -- so it searched, found it still could not name a story, searched
+            # again, and spent the whole turn in that loop: `llama-server` at full tilt
+            # for eight minutes across roughly five capped generations, with no message
+            # and no usage row to show for it. Giving a persona a tool it has no job for
+            # is not a neutral act.
+            web_search=False,
         ),
         PersonaSpec(
             key="tech-desk",
@@ -1607,8 +1644,16 @@ _NEWSROOM = SampleSpec(
                 "`Source: <url> (<date>)`, taken from a search result this session "
                 "actually returned. A URL you remember is not a source; a URL you did not "
                 "open in this session is not a source.\n\n"
-                "**No invented quotes, ever.** If you did not read it in a result, nobody "
-                "said it. Paraphrase what a result reports and attribute it.\n\n"
+                "**A snippet is not an article. Open the page.** The search returns a "
+                "title, a URL and a few lines. That is enough to know a story exists and "
+                "not enough to report it, so call `fetch_page` on the URL and read what "
+                "it actually says before you write.\n\n"
+                "**Quote only what you have read.** Having fetched the page you may quote "
+                "from it, and you must quote it exactly. A sentence in quotation marks "
+                "that you did not read is invented however plausible it sounds -- and "
+                "plausible is exactly how it will sound. If you could not fetch the page, "
+                "report what the snippet states and attribute it to the publication: "
+                "'the BBC reports that...' is honest where a quotation is not.\n\n"
                 "**Dates are part of the fact.** A reader must be able to tell whether "
                 "this happened yesterday or four years ago. If a result carries no date, "
                 "say the date is unknown rather than implying it is recent.\n\n"

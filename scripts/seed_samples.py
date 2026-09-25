@@ -94,7 +94,28 @@ CONNECTIONS: tuple[Connection, ...] = (
     # is the constraint, so 30B total with 3B active runs at ~46 tok/s where the dense
     # 27B managed turns past ten minutes -- the measurement that got Ollama dropped from
     # every other sample.
-    Connection("Ollama Qwen3 MoE", "ollama_chat", "qwen3:30b-a3b", None),
+    Connection(
+        "Ollama Qwen3 MoE", "ollama_chat", "qwen3:30b-a3b", None,
+        # An output cap, because a local reasoning model without one can run away. This
+        # model thinks before it answers, and the thinking is not bounded by anything in
+        # the request: a turn was observed generating for ten minutes and never
+        # returning, with `llama-server` at full tilt and zero usage rows written --
+        # usage is metered in the same transaction as the message, so a turn that never
+        # produces one leaves no trace of having run at all.
+        #
+        # Sized against the PLATFORM's prompt, not a bare one. This model thinks before
+        # it answers and the thinking is counted against the same budget, so a cap has to
+        # cover both -- and the thinking grows with the prompt. 1200 was measured against
+        # a bare prompt, where it leaves room; against a real turn (brief + house style +
+        # phase instructions + agenda) it was spent before the answer began and the
+        # adapter reported "returned an empty generation". Not a hang and not a refusal:
+        # a budget consumed by reasoning nobody sees.
+        #
+        # 4000 measured: ~2,400 characters of thinking, ~1,200 of answer, 19 seconds. It
+        # still bounds the runaway it was added for -- an uncapped turn generated until
+        # the 16k context filled and returned nothing after ten minutes.
+        params={"max_tokens": 4000},
+    ),
 )
 
 # Where a container reaches a model server running on the host. There is no single right

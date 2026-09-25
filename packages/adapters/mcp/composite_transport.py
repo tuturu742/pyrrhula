@@ -18,7 +18,7 @@ from typing import Any
 from adapters.mcp.http_transport import UnreachableMcpTransport
 from core.ports.mcp import McpServerRef, McpToolResult, McpToolSpec, McpTransport
 
-_PRESET_KEYS = ("web_search", "resolution", "git")
+_PRESET_KEYS = ("web_search", "web_fetch", "resolution", "git")
 
 
 class KeyRoutingMcpTransport:
@@ -27,11 +27,13 @@ class KeyRoutingMcpTransport:
         *,
         git: McpTransport | None = None,
         web_search: McpTransport | None = None,
+        web_fetch: McpTransport | None = None,
         resolution: McpTransport | None = None,
         remote: McpTransport | None = None,
     ) -> None:
         self._git = git
         self._web_search = web_search
+        self._web_fetch = web_fetch
         self._resolution = resolution
         self._remote = remote
         self._fallback = UnreachableMcpTransport()
@@ -39,6 +41,8 @@ class KeyRoutingMcpTransport:
     def _route(self, server: McpServerRef) -> McpTransport:
         if server.key == "web_search" and self._web_search is not None:
             return self._web_search
+        if server.key == "web_fetch" and self._web_fetch is not None:
+            return self._web_fetch
         if server.key == "resolution" and self._resolution is not None:
             return self._resolution
         if (server.key == "git" or server.key.startswith("git-")) and self._git is not None:

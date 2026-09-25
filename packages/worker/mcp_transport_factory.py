@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 from adapters.mcp.composite_transport import KeyRoutingMcpTransport
+from adapters.mcp.fetch_transport import WebFetchTransport
 from adapters.mcp.git_store import GitStore, default_git_root
 from adapters.mcp.git_transport import GitMcpTransport
 from adapters.mcp.search_transport import SearxngSearchTransport
@@ -141,6 +142,7 @@ def get_mcp_transport() -> McpTransport:
     return KeyRoutingMcpTransport(
         git=git,
         web_search=SearxngSearchTransport(),
+        web_fetch=WebFetchTransport(),
         resolution=ResolutionMcpTransport(permission_service=get_permission_service()),
         remote=RemoteMcpTransport(),
     )

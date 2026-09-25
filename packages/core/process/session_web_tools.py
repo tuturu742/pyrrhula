@@ -27,6 +27,7 @@ from core.sessions.models import SessionRow
 from core.tenancy.scope import tenant_scope
 
 WEB_SEARCH_SERVER_KEY = "web_search"
+WEB_FETCH_SERVER_KEY = "web_fetch"
 
 
 def _search_phase() -> PhaseSpec:
@@ -48,6 +49,55 @@ async def workspace_has_web_search(tenant_id: uuid.UUID, workspace_id: uuid.UUID
         row.key == WEB_SEARCH_SERVER_KEY and "search" in row.enabled_tools
         for row in await list_servers(tenant_id, workspace_id)
     )
+
+
+async def workspace_has_web_fetch(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> bool:
+    return any(
+        row.key == WEB_FETCH_SERVER_KEY and "fetch" in row.enabled_tools
+        for row in await list_servers(tenant_id, workspace_id)
+    )
+
+
+def make_web_fetch_handler(*, workspace_id: uuid.UUID, transport: McpTransport) -> ToolHandler:
+    """Read one page. Same shape as search: a reserved event_seq, the call recorded in
+    `mcp_call_record`, and the page returned inside the untrusted-output envelope -- a
+    fetched page is the least trustworthy text in a session, being chosen by the model
+    and written by a stranger."""
+
+    async def handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
+        url = str(args.get("url") or "").strip()
+        if not url:
+            return ToolResult(content=json.dumps({"error": "no_url"}))
+        if ctx.session_id is None:
+            return ToolResult(content=json.dumps({"error": "no_session"}))
+
+        async with tenant_scope(ctx.tenant_id) as session:
+            row = await session.get(SessionRow, ctx.session_id)
+            assert row is not None
+            event_seq = row.next_event_seq
+            if ctx.turn_event_seq is not None and event_seq <= ctx.turn_event_seq:
+                event_seq = ctx.turn_event_seq + 1
+            row.next_event_seq = event_seq + 1
+
+        try:
+            invocation = await mcp_call_tool(
+                ctx.tenant_id,
+                workspace_id,
+                ctx.session_id,
+                event_seq,
+                _search_phase(),
+                WEB_FETCH_SERVER_KEY,
+                "fetch",
+                {"url": url},
+                transport=transport,
+            )
+        except (McpTransportError, ToolNotAvailableError) as exc:
+            return ToolResult(
+                content=json.dumps({"error": "fetch_failed", "message": str(exc)[:200]})
+            )
+        return ToolResult(content=invocation.envelope)
+
+    return handler
 
 
 def make_web_search_handler(*, workspace_id: uuid.UUID, transport: McpTransport) -> ToolHandler:

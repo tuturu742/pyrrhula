@@ -70,7 +70,9 @@ from core.process.session_entity_tools import (
     make_resolve_apply_handler,
 )
 from core.process.session_web_tools import (
+    make_web_fetch_handler,
     make_web_search_handler,
+    workspace_has_web_fetch,
     workspace_has_web_search,
 )
 from core.resolution.registry import RANDOMIZER_DEFINITION, ensure_tool_definition
@@ -596,6 +598,31 @@ async def run_one_persona_turn(
                 },
             ),
             make_web_search_handler(workspace_id=workspace_id, transport=mcp_transport),
+        )
+
+    # Reading a page, as distinct from finding one. Same actor switch -- "may reach the
+    # internet" is one permission, not two -- and its own workspace registration, because
+    # fetching an arbitrary URL a model chose is a wider door than querying one search
+    # host, and an operator should be able to open the narrow one alone.
+    if (
+        mcp_transport is not None
+        and persona_web_search
+        and await workspace_has_web_fetch(tenant_id, workspace_id)
+    ):
+        tool_registry.register(
+            ToolSpec(
+                name="fetch_page",
+                description=(
+                    "Fetch a web page and return its readable text. Use it on a URL a "
+                    "search returned when the snippet is not enough to report from."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {"url": {"type": "string", "description": "the page to read"}},
+                    "required": ["url"],
+                },
+            ),
+            make_web_fetch_handler(workspace_id=workspace_id, transport=mcp_transport),
         )
 
     # The workspace's registered deterministic resolution tools (the `resolution`
