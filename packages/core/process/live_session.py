@@ -8,6 +8,7 @@ established "build the seam, wire it in once the real pieces exist" discipline.
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
@@ -425,6 +426,7 @@ async def run_one_persona_turn(
             except Exception as exc:  # noqa: BLE001 -- a summary is an enrichment
                 structlog.get_logger().warning("history.summarise_failed", error=str(exc)[:200])
 
+    _t_assemble = time.monotonic()
     manifest = await assemble(
         viewer_principal,
         phase,
@@ -451,6 +453,10 @@ async def run_one_persona_turn(
         # agents, had no ids to name, and correctly refused to guess.
         entity_state_renderer=render_entity_state,
     )
+    structlog.get_logger().info(
+        "turn.stage", stage="assemble", seconds=round(time.monotonic() - _t_assemble, 1)
+    )
+    _t_stage = time.monotonic()
     manifest_row = await write_context_manifest(
         tenant_id,
         session_id,
@@ -461,6 +467,10 @@ async def run_one_persona_turn(
         behavior_profile_version=current_profile.version if current_profile else None,
     )
 
+    structlog.get_logger().info(
+        "turn.stage", stage="manifest", seconds=round(time.monotonic() - _t_stage, 1)
+    )
+    _t_stage = time.monotonic()
     tool_registry = ToolRegistry()
     # Caller-supplied tools (in-process drivers only -- e.g. the eval runner's lab
     # oracle). HTTP paths never populate this; phase.tools remains the workflow's gate
@@ -729,7 +739,16 @@ async def run_one_persona_turn(
     # shape its output should take -- without it the model only knows who it is, not
     # what the flow wants from it here.
     phase_prompt = getattr(phase, "prompt", "") or ""
-    if phase_prompt.strip():
+    # Where the instruction goes depends on whether anyone has spoken. With a transcript
+    # to answer, it is standing context and belongs in the system blocks. With none, it
+    # is the only thing being ASKED, and burying it in system while the user turn says
+    # "(You have the floor.)" is what several local models actually answer: measured on
+    # the newsroom's opening turn, devstral replied with the literal string "You have the
+    # floor." in three attempts out of four, and produced a proper editor's brief in
+    # three out of four once the same text arrived as the user turn instead.
+    speak_to_the_floor = not any(turn.get("role") == "user" for turn in conversation)
+    instruction_as_user = phase_prompt.strip() if speak_to_the_floor else ""
+    if phase_prompt.strip() and not instruction_as_user:
         system_blocks.append(f"Instructions for this phase:\n\n{phase_prompt.strip()}")
     # #5: the supervisor is the one who moves the discussion/flow along the agenda.
     if persona_type == "supervisor" and agenda_md and agenda_md.strip():
@@ -760,7 +779,10 @@ async def run_one_persona_turn(
         # Two ways to get there: the session's first turn (empty transcript), and a
         # persona whose history so far is only its OWN past turns (perspective mapping
         # keeps those 'assistant'). A neutral floor-holding line covers both.
-        messages.append({"role": "user", "content": "(You have the floor.)"})
+        # The phase's own instruction when there is one, because a model with nothing to
+        # answer answers the placeholder. The neutral line remains for a phase that
+        # declares no prompt.
+        messages.append({"role": "user", "content": instruction_as_user or "(You have the floor.)"})
 
     # S2 (E2.7): the reply is checked against this turn's CONCEALED secrets before it
     # is ever persisted -- regenerate once with a nudge, then fall back to an in-voice
@@ -835,6 +857,9 @@ async def run_one_persona_turn(
 
     finalize_reply = _base_finalize
 
+    structlog.get_logger().info(
+        "turn.stage", stage="tools", seconds=round(time.monotonic() - _t_stage, 1)
+    )
     try:
         result = await run_agent_turn(
             tenant_id,
