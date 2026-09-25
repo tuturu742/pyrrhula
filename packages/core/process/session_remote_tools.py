@@ -34,7 +34,14 @@ from core.sessions.models import SessionRow
 from core.tenancy.scope import tenant_scope
 
 # Keys served by dedicated transports/handlers -- never surfaced through this module.
-_RESERVED_KEYS = {"web_search", "resolution", "git"}
+# `web_fetch` belongs here for the same reason `web_search` does, and leaving it out was a
+# hole in the two-switch egress design rather than a cosmetic omission: this path gates on
+# workspace registration ALONE, so a registered web_fetch server handed a `fetch` tool to
+# every persona in the workspace -- including the ones whose own `web_search` flag is off,
+# which is the switch that is supposed to say "this seat does not call out". Observed in
+# the newsroom sample, where the chief editor is deliberately offline and was offered a
+# fetch tool anyway, while the desks were offered two tools that do the same thing.
+_RESERVED_KEYS = {"web_search", "web_fetch", "resolution", "git"}
 
 
 def _is_remote(key: str, url: str) -> bool:

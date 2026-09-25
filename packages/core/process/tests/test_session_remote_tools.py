@@ -16,6 +16,9 @@ def test_is_remote_excludes_presets_and_non_http() -> None:
     assert _is_remote("engine", "http://godot-mcp:8090/mcp")
     assert _is_remote("assets", "https://comfy.internal/mcp")
     assert not _is_remote("web_search", "https://searx.internal")
+    # Not cosmetic: this path gates on workspace registration alone, so anything it
+    # surfaces reaches personas whose own web_search flag is off.
+    assert not _is_remote("web_fetch", "https://fetch.local/")
     assert not _is_remote("resolution", "pyrrhula://resolution/x")
     assert not _is_remote("git", "http://mcp-git:8080")
     assert not _is_remote("git-myrepo", "http://mcp-git:8080")
