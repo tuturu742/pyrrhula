@@ -22,10 +22,24 @@ data:
     # 1. The JSON output format -- the platform's search transport queries
     #    /search?format=json, which stock SearXNG refuses (403) unless enabled here.
     #
-    # 2. The big engines are turned OFF. From an ordinary self-hosted address without API
-    #    keys they refuse: duckduckgo answers with a CAPTCHA, brave, startpage, qwant and
-    #    yahoo block outright. Left on, a search returns HTTP 200 with zero results -- a
-    #    silent nothing indistinguishable from a model that chose not to search.
+    # 2. The big WEB engines are turned OFF. From an ordinary self-hosted address without
+    #    API keys they refuse: duckduckgo answers with a CAPTCHA, brave, startpage, qwant
+    #    and yahoo block outright. Left on, a search returns HTTP 200 with zero results --
+    #    a silent nothing indistinguishable from a model that chose not to search.
+    #
+    #    Their NEWS siblings are separate engines and are not blocked: `bing news`,
+    #    `duckduckgo news` and `yahoo news` all answer. Measured, one query each: bing
+    #    news 10 results and the only one honouring a time filter; duckduckgo news 25 but
+    #    ZERO filtered; yahoo news 69, likewise zero filtered; google news dead. Without a
+    #    time filter the general set ranks by relevance and its freshest result is six
+    #    weeks old, so a daily paper needs the news engines, not the filter.
+    #
+    #    `qwant news` is the only engine that dates every result, which is what a story
+    #    needs to carry. Tested and rejected: `ecosia`, `baidu news`, `brave news`,
+    #    `yandex news`, `marginalia` are not names this build knows, and an unrecognised
+    #    name does not error -- it silently searches the DEFAULT set, which is why each
+    #    looked like it returned 84 good results until the per-result `engine` field was
+    #    checked. `baidu` and `startpage news` CAPTCHA, `presearch`/`seznam` fail.
     #
     # 3. Engines that DO answer are enabled and pulled into the `general` category. They
     #    ship disabled, and several sit only in `news` or `it`, while a query with no
@@ -33,6 +47,18 @@ data:
     #    enabled and still never asked. Measured from this host; re-measure before editing.
     use_default_settings: true
     engines:
+      - name: bing news
+        disabled: false
+        categories: [general, news]
+      - name: duckduckgo news
+        disabled: false
+        categories: [general, news]
+      - name: yahoo news
+        disabled: false
+        categories: [general, news]
+      - name: qwant news
+        disabled: false
+        categories: [general, news]
       - name: hackernews
         disabled: false
         categories: [general, news, it]

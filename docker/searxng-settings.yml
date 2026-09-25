@@ -5,17 +5,55 @@
 # 1. The JSON output format -- the platform's search transport queries
 #    /search?format=json, which stock SearXNG refuses (403) unless enabled here.
 #
-# 2. The big engines are turned OFF. From an ordinary self-hosted address without API
-#    keys they refuse: duckduckgo answers with a CAPTCHA, brave, startpage, qwant and
-#    yahoo block outright. Left on, a search returns HTTP 200 with zero results -- a
+# 2. The big WEB engines are turned OFF. From an ordinary self-hosted address without
+#    API keys they refuse: duckduckgo answers with a CAPTCHA, brave, startpage, qwant
+#    and yahoo block outright. Left on, a search returns HTTP 200 with zero results -- a
 #    silent nothing indistinguishable from a model that chose not to search.
+#
+#    Their NEWS siblings are separate engines and are not blocked: `bing news`,
+#    `duckduckgo news` and `yahoo news` all answer from this host, which matters
+#    enormously for anything reporting on this week. Measured here, one query each:
+#
+#        bing news        10 results, and the only one that honours a time filter (7)
+#        duckduckgo news  25 results, but ZERO once a time filter is applied
+#        yahoo news       69 results, likewise zero filtered
+#        qwant news        7 results, and the ONLY engine that dates every one
+#        google news      dead, filtered or not
+#
+#    So the set leans on news engines, which are fresh by construction, rather than on
+#    a time filter that two of the three silently answer with nothing.
+#
+#    Tested and rejected, so nobody re-tests them: `ecosia`, `baidu news`, `brave news`,
+#    `yandex news` and `marginalia` are not engine names this build knows -- and pinning
+#    a name SearXNG does not recognise does not error, it silently searches the default
+#    set instead. Each appeared to return 84 excellent results until the `engine` field
+#    on each result was checked and none of them came from the engine asked for. `baidu`
+#    and `startpage news` answer with a CAPTCHA, `presearch` and `seznam` fail outright,
+#    `mojeek` returns nothing. `yandex` and `naver` do answer but carry no dates and skew
+#    to reference pages and Korean-language results respectively.
 #
 # 3. Engines that DO answer are enabled and pulled into the `general` category. They
 #    ship disabled, and several sit only in `news` or `it`, while a query with no
 #    category searches `general` alone -- so without both halves of this they are
 #    enabled and still never asked. Measured from this host; re-measure before editing.
+#
+#    Why this matters, measured: without a time filter the general set ranks by
+#    relevance and the freshest thing it returns is six weeks old; the news engines
+#    return today. A daily paper cannot be written from the first set.
 use_default_settings: true
 engines:
+  - name: bing news
+    disabled: false
+    categories: [general, news]
+  - name: duckduckgo news
+    disabled: false
+    categories: [general, news]
+  - name: yahoo news
+    disabled: false
+    categories: [general, news]
+  - name: qwant news
+    disabled: false
+    categories: [general, news]
   - name: hackernews
     disabled: false
     categories: [general, news, it]

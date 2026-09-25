@@ -89,36 +89,43 @@ CONNECTIONS: tuple[Connection, ...] = (
     # data, and nothing in the transcript would tell you apart. This one cannot know
     # what happened this week unless it looked.
     #
-    # A sparse MoE rather than a dense model of the same footprint, which is what makes
-    # it usable here. On this class of machine memory capacity is abundant and bandwidth
-    # is the constraint, so 30B total with 3B active runs at ~46 tok/s where the dense
-    # 27B managed turns past ten minutes -- the measurement that got Ollama dropped from
-    # every other sample.
-    Connection(
-        "Ollama Qwen3 MoE",
-        "ollama_chat",
-        "qwen3:30b-a3b",
-        None,
-        # An output cap, because a local reasoning model without one can run away. This
-        # model thinks before it answers, and the thinking is not bounded by anything in
-        # the request: a turn was observed generating for ten minutes and never
-        # returning, with `llama-server` at full tilt and zero usage rows written --
-        # usage is metered in the same transaction as the message, so a turn that never
-        # produces one leaves no trace of having run at all.
-        #
-        # Sized against the PLATFORM's prompt, not a bare one. This model thinks before
-        # it answers and the thinking is counted against the same budget, so a cap has to
-        # cover both -- and the thinking grows with the prompt. 1200 was measured against
-        # a bare prompt, where it leaves room; against a real turn (brief + house style +
-        # phase instructions + agenda) it was spent before the answer began and the
-        # adapter reported "returned an empty generation". Not a hang and not a refusal:
-        # a budget consumed by reasoning nobody sees.
-        #
-        # 4000 measured: ~2,400 characters of thinking, ~1,200 of answer, 19 seconds. It
-        # still bounds the runaway it was added for -- an uncapped turn generated until
-        # the 16k context filled and returned nothing after ten minutes.
-        params={"max_tokens": 4000},
-    ),
+    # Chosen for one property above all: it does not think. `qwen3:30b-a3b` sat here
+    # first and is the better writer, but it is a reasoning model, and on this task its
+    # reasoning did not terminate -- turns of 22, 58 and 79 minutes that emitted no copy
+    # at all, because hidden reasoning streams as `reasoning_content` and so trips
+    # neither an output cap nor a job lease. Every lever was tried: a budget (the
+    # thinking eats it, then the provider retries at four times the budget), no budget
+    # (it runs until the context slides), `think: false` (the deliberation simply moves
+    # into `content` and the paper fills with "Okay, let us break this down").
+    #
+    # Measured on the real task -- search, open the page, file the story -- against live
+    # SearXNG: devstral 25 seconds, both tools, 786 characters of sourced copy on the
+    # first attempt. hermes3:8b managed 8 seconds but would not open the page it found.
+    # qwen3 does not finish. A desk that has to call a tool and write 150 words wants an
+    # agentic instruct model, not a reasoner.
+    Connection("Ollama Devstral", "ollama_chat", "devstral:24b", None),
+    # NOT cast in the newsroom, and the reason is the hardware. Two models resident on
+    # one iGPU garble each other: measured on the same prompt, qwen3 alone answered 3
+    # times out of 4 in 7-45s, and with devstral also loaded returned EMPTY 3 times out
+    # of 3, or took 79-220 seconds. A two-model cast FORCES that co-residency, so the
+    # whole roster shares one connection here and the box only ever holds one model.
+    #
+    # That also retires a verdict reached under exactly those conditions: devstral's
+    # "repetition loop" on the editor's turn was measured while qwen3 was resident.
+    # Alone, and given the phase instruction as the user turn rather than buried in a
+    # system block behind "(You have the floor.)", it opens the meeting properly.
+    #
+    # Devstral cannot hold the chair. Handed the editor's turn, which is pure prose and
+    # has no tools to reach for, it falls into a repetition loop: "We have **Nina** and
+    # **Nina**. They are the same person." for 25,713 characters until the clock guard
+    # cut it off. qwen3 opens the same meeting in 16-35 seconds and writes like an
+    # editor. Put tools in front of qwen3 and it reasons without terminating; take the
+    # tools away and it is the better writer by a distance.
+    #
+    # So the seats are cast to what each model demonstrably does: the reasoner presides,
+    # the agentic model reports. Which is the per-persona connection binding doing the
+    # job it exists for -- a roster is not required to share one model.
+    Connection("Ollama Qwen3 MoE", "ollama_chat", "qwen3:30b-a3b", None),
 )
 
 # Where a container reaches a model server running on the host. There is no single right
@@ -208,9 +215,9 @@ SAMPLE_CONNECTIONS: dict[str, dict[str, str]] = {
     # something if the model has no other way to know: a hosted model asked about this
     # week may simply answer, and the transcript looks identical either way.
     "newsroom": {
-        "supervisor": "Ollama Qwen3 MoE",
-        "participant": "Ollama Qwen3 MoE",
-        "informational": "Ollama Qwen3 MoE",
+        "supervisor": "Ollama Devstral",
+        "participant": "Ollama Devstral",
+        "informational": "Ollama Devstral",
     },
 }
 

@@ -376,29 +376,14 @@ _NEWSROOM_FLOW = {
                 "history_ratio": 0.0,
             },
             "prompt": (
-                "SEARCH BEFORE YOU WRITE, and search as often as you need -- there is "
-                "no ration.\n\n"
-                "A QUERY IS KEYWORDS, NOT A SENTENCE. Two to four words naming the "
-                "subject: `artificial intelligence`, `space telescope`, `energy prices`. "
-                "Describing what you want -- 'significant technology development "
-                "affecting daily life' -- returns nothing at all, which is not the same "
-                "as there being no news: measured, that phrasing returns 0 results where "
-                "`artificial intelligence` returns 30. An empty result means try a "
-                "shorter query, not that the week was quiet.\n\n"
-                'Pass `recency: "week"`. Not "day" -- it is usually empty on a small '
-                "index, and a story from four days ago is still news.\n\n"
-                "THEN OPEN THE PAGE. A search result is a headline and a few lines; "
-                "`fetch_page` on its URL gives you the article. Report from the article, "
-                "not from the snippet, and quote only what you read there.\n\n"
-                "FILE THE STORY, DO NOT DESCRIBE FILING IT. Your message is the copy a "
-                "reader sees -- a headline and 120-180 words, ending with "
-                "Source: <url> (<date>). Not an account of what you searched, not "
-                "'I then refined my query', and never about yourself in the third "
-                "person. The editor can see your searches; what the editor cannot see is "
-                "the story.\n\n"
-                "If nothing usable comes back after trying a shorter query, say that in "
-                "one line and file nothing -- a story written from memory is the one "
-                "thing this desk cannot print."
+                'Call web_search with 2-4 keywords -- "UN General Assembly", not a '
+                "sentence. Leave `recency` out: these are news engines and already "
+                "return this week, while the filter empties two of them.\n\n"
+                "Then fetch_page the best result and write 120-180 words from what you "
+                "read, ending with Source: <url> (<date>) -- take the date off the page, "
+                "the search result rarely carries one.\n\n"
+                "Saying you searched without calling the tool is a fabrication. Two "
+                "searches, different keywords, before you may report nothing."
             ),
             # A floor, not a quota: the beat cannot CLOSE until the desks have actually
             # looked something up. Two desks, one search each, is the minimum that
@@ -1660,6 +1645,25 @@ _NEWSROOM = SampleSpec(
                 "**Filing nothing is a legitimate outcome.** A desk whose search returns "
                 "nothing usable files nothing and says so. This is not failure. Writing a "
                 "story from memory to avoid an empty slot is."
+            ),
+        ),
+        EntrySpec(
+            entry_key="searching",
+            title="Searching: how to find a story",
+            body_md=(
+                "**A query is keywords, not a sentence.** Two to four words naming the "
+                "subject: `artificial intelligence`, `space telescope`, `energy prices`. "
+                "Describing what you want -- 'significant technology development "
+                "affecting daily life' -- returns nothing, which is not the same as "
+                "there being no news. Measured: that phrasing returns 0 results where "
+                "`artificial intelligence` returns 30.\n\n"
+                "**An empty result means search again, shorter.** It does not mean the "
+                "week was quiet.\n\n"
+                '**Ask for `recency: "week"`.** Not `day`, which is usually empty on a '
+                "small index; a story from four days ago is still news.\n\n"
+                "**Then open the page.** A search result is a headline and a few lines. "
+                "`fetch_page` on its URL gives you the article, and the article is what "
+                "you report from."
             ),
         ),
         EntrySpec(
