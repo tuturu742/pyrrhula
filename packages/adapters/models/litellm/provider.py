@@ -55,25 +55,6 @@ from core.ports.model_provider import (
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
-# Upper bound on ONE generation, in characters. Not a budget -- a circuit breaker. The
-# longest legitimate turn measured in this project is a few thousand characters, so this
-# sits roughly an order of magnitude above it: high enough never to shape normal output,
-# low enough that a model which has stopped stopping is cut off in minutes rather than
-# the seventy-nine it took unguarded. Deployment-tunable.
-_MAX_GENERATION_CHARS = int(os.environ.get("PYRRHULA_MAX_GENERATION_CHARS", "100000"))
-
-# Wall-clock bound on ONE generation. The character ceiling above cannot catch the worst
-# case, and that took a while to see: a reasoning model's thinking arrives as
-# `reasoning_content`, never as content, so a turn that thinks forever emits nothing to
-# count. Measured here, all with the character guard in place and useless: 22 minutes, 58
-# minutes, 79 minutes. A lease measures silence and a character cap measures output; only
-# a clock measures a turn that is doing neither.
-#
-# 300s, against a longest legitimate turn of 65s measured across every sample here,
-# so five times the worst honest case. It was 600 first, which works and costs ten
-# minutes each time a model wanders off -- too much patience for something that has
-# already failed.
-_MAX_GENERATION_SECONDS = float(os.environ.get("PYRRHULA_MAX_GENERATION_SECONDS", "300"))
 
 _PROMPT_CACHING_MARKERS = ("claude", "gpt-4", "gpt-5", "gemini-1.5", "gemini-2")
 
@@ -424,13 +405,13 @@ class LiteLLMModelProvider:
 
             pending_calls: dict[int, dict[str, Any]] = {}
             streamed_chars = 0
-            deadline = time.monotonic() + _MAX_GENERATION_SECONDS
+            deadline = time.monotonic() + req.max_generation_seconds
             async for part in response:
                 if time.monotonic() > deadline:
                     structlog.get_logger().warning(
                         "provider.generation_timed_out",
                         model=this_call.get("model"),
-                        seconds=_MAX_GENERATION_SECONDS,
+                        seconds=req.max_generation_seconds,
                         chars=streamed_chars,
                     )
                     # Whatever it has said so far, which may be nothing -- an empty
@@ -475,7 +456,7 @@ class LiteLLMModelProvider:
                     )
                 elif text or finish_reason:
                     streamed_chars += len(text)
-                    if streamed_chars > _MAX_GENERATION_CHARS:
+                    if streamed_chars > req.max_generation_chars:
                         # A generation that will not stop. Ollama slides its context
                         # window rather than ending the turn, so `num_ctx` bounds what
                         # the model can SEE, not what it may emit: one desk turn ran 79
@@ -487,7 +468,7 @@ class LiteLLMModelProvider:
                             "provider.generation_truncated",
                             model=this_call.get("model"),
                             chars=streamed_chars,
-                            limit=_MAX_GENERATION_CHARS,
+                            limit=req.max_generation_chars,
                         )
                         yield (
                             Chunk(

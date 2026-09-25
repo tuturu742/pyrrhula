@@ -81,6 +81,12 @@ class GenerationRequest:
     purpose: str
     # Missing purpose key => permissive default ("all purposes allowed", per plan §13.9).
     egress_policy: Mapping[str, Sequence[str]] = field(default_factory=dict)
+    # Tenant ceilings on ONE generation (core.tenancy.generation_limits), carried the same
+    # way egress policy is: loaded at construction, enforced inside the port. Unlike
+    # egress, an absent value is NOT permissive -- these default CLOSED to the module's
+    # ceilings, because the failure they guard is a model that never returns.
+    max_generation_seconds: float = 300.0
+    max_generation_chars: int = 100_000
     temperature: float | None = None
     max_tokens: int | None = None
     tools: tuple[ToolSpec, ...] = ()

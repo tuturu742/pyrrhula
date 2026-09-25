@@ -43,6 +43,7 @@ from core.resolution.contradiction import scan_for_contradictions
 from core.resolution.records import ResolutionRecordRow
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionEventRow, SessionRow
+from core.tenancy.generation_limits import DEFAULT_LIMITS, GenerationLimits
 from core.tenancy.scope import tenant_scope, unscoped_session
 
 _tracer = get_tracer(__name__)
@@ -153,6 +154,7 @@ async def _call_provider_with_retry(
     api_keys: dict[uuid.UUID, str | None] | None = None,
     egress_policy: dict[str, list[str]] | None = None,
     persona_params: dict[str, object] | None = None,
+    limits: GenerationLimits = DEFAULT_LIMITS,
 ) -> tuple[str, list[ToolCall], _UsagePoint]:
     """Tries ``profile`` up to ``max_retries`` times with exponential backoff; on total
     failure, tries ``fallback_profile`` once (if set). Raises
@@ -178,6 +180,8 @@ async def _call_provider_with_retry(
                     params={**dict(candidate.params or {}), **(persona_params or {})},
                     api_key=(api_keys or {}).get(candidate.id),
                     egress_policy=egress_policy or {},
+                    max_generation_seconds=limits.max_seconds,
+                    max_generation_chars=limits.max_chars,
                 )
                 start = time.monotonic()
                 full_text: list[str] = []
@@ -335,8 +339,10 @@ async def run_agent_turn(
                 )
 
         from core.tenancy.egress import load_egress_policy
+        from core.tenancy.generation_limits import load_generation_limits
 
         egress_policy = await load_egress_policy(tenant_id)
+        generation_limits = await load_generation_limits(tenant_id)
         conversation = list(messages)
         usage_points: list[_UsagePoint] = []
         tool_calls_made = 0
@@ -357,6 +363,7 @@ async def run_agent_turn(
                 api_keys,
                 egress_policy,
                 persona_params=persona_params,
+                limits=generation_limits,
             )
             usage_points.append(usage)
 
@@ -458,6 +465,7 @@ async def run_agent_turn(
             api_keys,
             egress_policy,
             persona_params=persona_params,
+            limits=generation_limits,
         )
         usage_points.append(usage)
         if finalize_reply is not None:

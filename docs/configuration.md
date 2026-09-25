@@ -239,6 +239,17 @@ no change at all. Use `priority_weight` to rank sources against each other, and
 
 These were considered and put somewhere a user will actually find them:
 
+- **How long one generation may run, and how much it may emit** — `generation_limits`
+  on the tenant (`{"max_seconds": 300, "max_chars": 100000}`), loaded per request and
+  enforced inside the `ModelProvider` port, exactly like the egress policy beside it.
+  Circuit breakers, not budgets: nothing else in the stack catches a model that stops
+  stopping. The job lease measures *silence*, and a runaway is not silent — one kept a
+  heartbeat alive for 79 minutes while emitting 470,244 characters that then became the
+  next turn's prompt. A character ceiling measures *output*, and the worst case emits
+  none, because a reasoning model's thinking never reaches content — turns of 22 and 58
+  minutes produced nothing at all. So one of each, and both **fail closed**: 0, a
+  negative, or anything unparseable reads as the default, never as "no limit", because
+  no limit is the state they exist to end.
 - **How long to wait on an external MCP server, how much of its answer to accept, and how
   many times a session may call it** — `timeout_seconds`, `max_result_chars` and
   `max_calls_per_session`, all fields on the server's registration. An env var would be global, and the external

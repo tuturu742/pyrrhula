@@ -451,10 +451,6 @@ async def test_a_generation_that_only_ever_thinks_is_cut_off_on_the_clock(
     minutes with the character guard in place and unable to help."""
     import litellm
 
-    from adapters.models.litellm import provider as provider_module
-
-    monkeypatch.setattr(provider_module, "_MAX_GENERATION_SECONDS", 0.05)
-
     def _thinking_delta():  # noqa: ANN202
         part = MagicMock()
         choice = MagicMock()
@@ -479,6 +475,7 @@ async def test_a_generation_that_only_ever_thinks_is_cut_off_on_the_clock(
         model="ollama_chat/qwen3:30b-a3b",
         messages=[{"role": "user", "content": "file your story"}],
         purpose="generation",
+        max_generation_seconds=0.05,
     )
 
     chunks = [c async for c in provider.generate(req)]
@@ -494,10 +491,6 @@ async def test_a_generation_that_will_not_stop_is_cut_off(
     turn's prompt and ran away again. num_ctx bounds what a model SEES, not what it may
     emit, and the job heartbeat keeps a runaway alive because a lease measures silence."""
     import litellm
-
-    from adapters.models.litellm import provider as provider_module
-
-    monkeypatch.setattr(provider_module, "_MAX_GENERATION_CHARS", 500)
 
     def _delta(content, finish=None):  # noqa: ANN001, ANN202
         part = MagicMock()
@@ -522,6 +515,7 @@ async def test_a_generation_that_will_not_stop_is_cut_off(
         model="ollama_chat/qwen3:30b-a3b",
         messages=[{"role": "user", "content": "file your story"}],
         purpose="generation",
+        max_generation_chars=500,
     )
     chunks = [c async for c in provider.generate(req)]
     text = "".join(c.text for c in chunks)
