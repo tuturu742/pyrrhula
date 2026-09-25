@@ -41,6 +41,7 @@ import re
 from collections.abc import AsyncIterator
 from typing import Any, TypeVar
 
+import structlog
 from pydantic import BaseModel
 
 from core.ports.model_provider import (
@@ -441,13 +442,40 @@ class LiteLLMModelProvider:
                 elif text or finish_reason:
                     yield (
                         Chunk(text=text, finish_reason=finish_reason, cached_tokens=cached_tokens),
-                        bool(text),
+                        # `.strip()`, to agree with the runtime's own emptiness test.
+                        # Observed live: qwen3 returned thirty newlines and nothing else.
+                        # Counted as output here, the escalating retry below was skipped;
+                        # the runtime then rejected the same text as empty and retried the
+                        # IDENTICAL request -- which, as the comment below says, simply
+                        # reproduces it. Whitespace is not an answer, so say so here and
+                        # let the retry that actually changes something run.
+                        bool(text.strip()),
                     )
 
+        import time as _time
+
+        _log = structlog.get_logger()
+        _log.info(
+            "provider.call",
+            model=call.get("model"),
+            messages=len(call.get("messages") or ()),
+            prompt_chars=sum(len(str(m.get("content") or "")) for m in call.get("messages") or ()),
+            tools=len(call.get("tools") or ()),
+            max_tokens=call.get("max_tokens"),
+            num_ctx=call.get("num_ctx"),
+            reasoning_effort=call.get("reasoning_effort"),
+        )
+        _t0 = _time.monotonic()
         produced = False
         async for chunk, had_output in _attempt(call):
             produced = produced or had_output
             yield chunk
+        _log.info(
+            "provider.attempt_done",
+            which="first",
+            seconds=round(_time.monotonic() - _t0, 1),
+            produced=produced,
+        )
         if not produced:
             # A reasoning model can spend its whole completion budget on hidden reasoning
             # and return nothing (seen live: gpt-5.6-terra mid-interrogation). Retrying
@@ -467,15 +495,28 @@ class LiteLLMModelProvider:
                 retry["max_tokens"] = max(
                     budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
                 )
+                _t1 = _time.monotonic()
                 async for chunk, _had in _attempt(retry):
                     yield chunk
+                _log.info(
+                    "provider.attempt_done",
+                    which="retry_raised_budget",
+                    seconds=round(_time.monotonic() - _t1, 1),
+                    max_tokens=retry.get("max_tokens"),
+                )
             elif not requested_effort:
                 # No budget to raise and no effort chosen: forcing reasoning off is the
                 # only lever left. A caller who *chose* an effort keeps it -- and keeps
                 # the empty generation, which the runtime reports rather than papering
                 # over a deliberate configuration.
+                _t1 = _time.monotonic()
                 async for chunk, _had in _attempt({**retry, "reasoning_effort": "none"}):
                     yield chunk
+                _log.info(
+                    "provider.attempt_done",
+                    which="retry_reasoning_off",
+                    seconds=round(_time.monotonic() - _t1, 1),
+                )
 
     async def generate_structured(self, req: GenerationRequest, schema: type[ModelT]) -> ModelT:
         check_egress(req.purpose, req.model, req.egress_policy)

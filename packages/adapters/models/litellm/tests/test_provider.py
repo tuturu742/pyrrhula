@@ -442,6 +442,54 @@ async def test_empty_generation_retries_once_with_reasoning_off(
     assert calls[1]["reasoning_effort"] == "none"
 
 
+async def test_whitespace_only_generation_counts_as_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observed live: qwen3:30b-a3b streamed thirty newlines and nothing else. Treated as
+    output, the retry below is skipped and the runtime rejects the same text as empty --
+    then retries the IDENTICAL request, which only reproduces it. Whitespace is not an
+    answer."""
+    import litellm
+
+    calls: list[dict] = []
+
+    def _stream(chunks):  # noqa: ANN001, ANN202
+        async def gen():
+            for c in chunks:
+                yield c
+
+        return gen()
+
+    def _delta(content, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        choice.delta = MagicMock(content=content, tool_calls=None)
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return _stream([_delta("\n" * 30), _delta("", "stop")])
+        return _stream([_delta("The meeting is open."), _delta("", "stop")])
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="ollama_chat/qwen3:30b-a3b",
+        messages=[{"role": "user", "content": "open the news meeting"}],
+        purpose="generation",
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert "The meeting is open." in text
+    assert len(calls) == 2
+    assert calls[1]["reasoning_effort"] == "none"
+
+
 async def test_a_nonempty_generation_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     import litellm
 
