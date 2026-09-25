@@ -61,8 +61,11 @@ class AllRetriesExhaustedError(Exception):
 
 
 class ToolLoopExceededError(Exception):
-    """The model kept calling tools past ``max_tool_loop`` iterations without producing
-    a final answer -- a runaway-loop guard, matching B1.2's own ``max_steps``."""
+    """No longer raised by ``run_agent_turn``: exhausting ``max_tool_loop`` now strips the
+    tools and asks once more, because a model that keeps reaching for tools has failed to
+    stop rather than failed outright, and faulting discarded the work it had already done.
+    Kept as a type so the interpreter's defensive except clause still names something real,
+    and for callers that run their own tool loops."""
 
 
 class EmptyGenerationError(Exception):
@@ -200,11 +203,16 @@ async def _call_provider_with_retry(
                     messages=len(messages),
                     prompt_chars=sum(len(str(m.get("content") or "")) for m in messages),
                     tools=len(tools or ()),
+                    tool_schema_chars=sum(
+                        len(t.name) + len(t.description) + len(json.dumps(t.parameters))
+                        for t in (tools or ())
+                    ),
                     content_chars=len(content),
                     tool_calls=len(tool_calls),
                     max_tokens=req.params.get("max_tokens"),
                 )
                 if not content.strip() and not tool_calls:
+                    structlog.get_logger().info("runtime.empty_content", raw=repr(content[:200]))
                     raise EmptyGenerationError(f"{model_string} returned an empty generation")
                 prompt_tokens = sum(
                     provider.count_tokens(str(m.get("content") or ""), model_string)
@@ -416,7 +424,58 @@ async def run_agent_turn(
                     }
                 )
 
-        raise ToolLoopExceededError(f"tool loop exceeded {max_tool_loop} iterations")
+        # Out of tool iterations. Faulting here threw away a turn's real work and paused
+        # the whole session: a newsroom desk that searched six times and had not yet
+        # started writing took the session down with it, losing six completed searches.
+        # A model that keeps reaching for tools has not failed -- it has failed to STOP.
+        # So take the tools away and ask once more, which leaves it nothing to do but
+        # answer from what it already gathered.
+        structlog.get_logger().info(
+            "runtime.tool_loop_exhausted",
+            persona_id=str(persona_id),
+            iterations=max_tool_loop,
+            tool_calls_made=tool_calls_made,
+        )
+        conversation.append(
+            {
+                "role": "user",
+                "content": (
+                    "You are out of tool calls for this turn. Answer now, using only what "
+                    "you have already gathered. Do not ask for another tool."
+                ),
+            }
+        )
+        content, _unused_calls, usage = await _call_provider_with_retry(
+            profile,
+            fallback_profile,
+            conversation,
+            None,
+            "generation",
+            model_provider_factory,
+            on_chunk,
+            max_retries,
+            cache_boundary_index,
+            api_keys,
+            egress_policy,
+            persona_params=persona_params,
+        )
+        usage_points.append(usage)
+        if finalize_reply is not None:
+            content = await finalize_reply(content)
+        return await _commit_turn(
+            triggered_by=triggered_by,
+            tenant_id=tenant_id,
+            session_id=session_id,
+            author_principal_id=agent_principal_id,
+            workspace_id=workspace_id,
+            persona_id=persona_id,
+            content=content,
+            usage_points=usage_points,
+            tool_calls_made=tool_calls_made,
+            resolution_record_ids=resolution_record_ids,
+            context_manifest_id=context_manifest_id,
+            event_seq=event_seq,
+        )
 
 
 _SELF_ATTRIBUTION_LIMIT = 120

@@ -418,3 +418,42 @@ async def test_persona_params_ride_over_the_connections(db_available: None) -> N
     assert merged["temperature"] == 0.9, "persona wins over connection"
     assert merged["top_p"] == 0.9, "connection fills what the persona left alone"
     assert merged["presence_penalty"] == 0.4
+
+
+async def test_a_model_that_never_stops_calling_tools_is_made_to_answer(
+    db_available: None,
+) -> None:
+    """Exhausting the tool loop used to raise, which paused the whole session and threw
+    away the turn's real work -- a newsroom desk that had searched six times took the
+    session down with it. A model still reaching for tools has failed to STOP, not
+    failed, so the tools are taken away and it is asked once more."""
+    tenant_id, session_id, persona_id = await _setup("runtime-toolloop")
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="", tool_calls=(ToolCall(id=f"c{i}", name="search", arguments={"q": "x"}),)
+            )
+            for i in range(3)
+        ]
+        + [_ScriptedTurn(text="Filed from what I already have.")]
+    )
+
+    async def search_handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
+        return ToolResult(content="a result")
+
+    registry = ToolRegistry()
+    registry.register(ToolSpec(name="search", description="Search", parameters={}), search_handler)
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "file a story"}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=registry,
+        idempotency_key=f"turn:{uuid.uuid4()}",
+        max_tool_loop=3,
+    )
+
+    assert result.content_md == "Filed from what I already have."
+    assert result.tool_calls_made == 3
