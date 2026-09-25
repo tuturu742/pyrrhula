@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from collections.abc import AsyncIterator
 from typing import Any, TypeVar
 
@@ -53,6 +54,26 @@ from core.ports.model_provider import (
 )
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+
+# Upper bound on ONE generation, in characters. Not a budget -- a circuit breaker. The
+# longest legitimate turn measured in this project is a few thousand characters, so this
+# sits roughly an order of magnitude above it: high enough never to shape normal output,
+# low enough that a model which has stopped stopping is cut off in minutes rather than
+# the seventy-nine it took unguarded. Deployment-tunable.
+_MAX_GENERATION_CHARS = int(os.environ.get("PYRRHULA_MAX_GENERATION_CHARS", "100000"))
+
+# Wall-clock bound on ONE generation. The character ceiling above cannot catch the worst
+# case, and that took a while to see: a reasoning model's thinking arrives as
+# `reasoning_content`, never as content, so a turn that thinks forever emits nothing to
+# count. Measured here, all with the character guard in place and useless: 22 minutes, 58
+# minutes, 79 minutes. A lease measures silence and a character cap measures output; only
+# a clock measures a turn that is doing neither.
+#
+# 300s, against a longest legitimate turn of 65s measured across every sample here,
+# so five times the worst honest case. It was 600 first, which works and costs ten
+# minutes each time a model wanders off -- too much patience for something that has
+# already failed.
+_MAX_GENERATION_SECONDS = float(os.environ.get("PYRRHULA_MAX_GENERATION_SECONDS", "300"))
 
 _PROMPT_CACHING_MARKERS = ("claude", "gpt-4", "gpt-5", "gemini-1.5", "gemini-2")
 
@@ -402,7 +423,20 @@ class LiteLLMModelProvider:
                     this_call = repaired
 
             pending_calls: dict[int, dict[str, Any]] = {}
+            streamed_chars = 0
+            deadline = time.monotonic() + _MAX_GENERATION_SECONDS
             async for part in response:
+                if time.monotonic() > deadline:
+                    structlog.get_logger().warning(
+                        "provider.generation_timed_out",
+                        model=this_call.get("model"),
+                        seconds=_MAX_GENERATION_SECONDS,
+                        chars=streamed_chars,
+                    )
+                    # Whatever it has said so far, which may be nothing -- an empty
+                    # return is handled below, and handled better than a turn that never
+                    # comes back at all.
+                    return
                 cached_tokens = _extract_cached_tokens(getattr(part, "usage", None))
                 if not part.choices:
                     continue
@@ -440,6 +474,30 @@ class LiteLLMModelProvider:
                         True,
                     )
                 elif text or finish_reason:
+                    streamed_chars += len(text)
+                    if streamed_chars > _MAX_GENERATION_CHARS:
+                        # A generation that will not stop. Ollama slides its context
+                        # window rather than ending the turn, so `num_ctx` bounds what
+                        # the model can SEE, not what it may emit: one desk turn ran 79
+                        # minutes and produced 470,244 characters, which then became the
+                        # next turn's prompt and did it again. Nothing else in the stack
+                        # bounds this -- the job heartbeat faithfully keeps a runaway
+                        # alive, because a lease measures silence, not sanity.
+                        structlog.get_logger().warning(
+                            "provider.generation_truncated",
+                            model=this_call.get("model"),
+                            chars=streamed_chars,
+                            limit=_MAX_GENERATION_CHARS,
+                        )
+                        yield (
+                            Chunk(
+                                text=text,
+                                finish_reason="length",
+                                cached_tokens=cached_tokens,
+                            ),
+                            True,
+                        )
+                        return
                     yield (
                         Chunk(text=text, finish_reason=finish_reason, cached_tokens=cached_tokens),
                         # `.strip()`, to agree with the runtime's own emptiness test.
@@ -452,8 +510,6 @@ class LiteLLMModelProvider:
                         bool(text.strip()),
                     )
 
-        import time as _time
-
         _log = structlog.get_logger()
         _log.info(
             "provider.call",
@@ -465,7 +521,7 @@ class LiteLLMModelProvider:
             num_ctx=call.get("num_ctx"),
             reasoning_effort=call.get("reasoning_effort"),
         )
-        _t0 = _time.monotonic()
+        _t0 = time.monotonic()
         produced = False
         async for chunk, had_output in _attempt(call):
             produced = produced or had_output
@@ -473,7 +529,7 @@ class LiteLLMModelProvider:
         _log.info(
             "provider.attempt_done",
             which="first",
-            seconds=round(_time.monotonic() - _t0, 1),
+            seconds=round(time.monotonic() - _t0, 1),
             produced=produced,
         )
         if not produced:
@@ -495,13 +551,13 @@ class LiteLLMModelProvider:
                 retry["max_tokens"] = max(
                     budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
                 )
-                _t1 = _time.monotonic()
+                _t1 = time.monotonic()
                 async for chunk, _had in _attempt(retry):
                     yield chunk
                 _log.info(
                     "provider.attempt_done",
                     which="retry_raised_budget",
-                    seconds=round(_time.monotonic() - _t1, 1),
+                    seconds=round(time.monotonic() - _t1, 1),
                     max_tokens=retry.get("max_tokens"),
                 )
             elif not requested_effort:
@@ -509,13 +565,13 @@ class LiteLLMModelProvider:
                 # only lever left. A caller who *chose* an effort keeps it -- and keeps
                 # the empty generation, which the runtime reports rather than papering
                 # over a deliberate configuration.
-                _t1 = _time.monotonic()
+                _t1 = time.monotonic()
                 async for chunk, _had in _attempt({**retry, "reasoning_effort": "none"}):
                     yield chunk
                 _log.info(
                     "provider.attempt_done",
                     which="retry_reasoning_off",
-                    seconds=round(_time.monotonic() - _t1, 1),
+                    seconds=round(time.monotonic() - _t1, 1),
                 )
 
     async def generate_structured(self, req: GenerationRequest, schema: type[ModelT]) -> ModelT:

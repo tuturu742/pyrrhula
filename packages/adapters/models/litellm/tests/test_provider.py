@@ -442,6 +442,94 @@ async def test_empty_generation_retries_once_with_reasoning_off(
     assert calls[1]["reasoning_effort"] == "none"
 
 
+async def test_a_generation_that_only_ever_thinks_is_cut_off_on_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The character ceiling cannot catch this one. A reasoning model's thinking arrives
+    as `reasoning_content`, never as content, so a turn that thinks forever streams
+    chunks endlessly while emitting nothing to count. Observed live at 22, 58 and 79
+    minutes with the character guard in place and unable to help."""
+    import litellm
+
+    from adapters.models.litellm import provider as provider_module
+
+    monkeypatch.setattr(provider_module, "_MAX_GENERATION_SECONDS", 0.05)
+
+    def _thinking_delta():  # noqa: ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        # content is empty forever; only the hidden reasoning field advances
+        choice.delta = MagicMock(content="", tool_calls=None)
+        choice.finish_reason = None
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        async def gen():
+            for _ in range(1_000_000):
+                yield _thinking_delta()
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="ollama_chat/qwen3:30b-a3b",
+        messages=[{"role": "user", "content": "file your story"}],
+        purpose="generation",
+    )
+
+    chunks = [c async for c in provider.generate(req)]
+
+    # It returns at all, which is the whole point -- unguarded this never came back.
+    assert "".join(c.text for c in chunks).strip() == ""
+
+
+async def test_a_generation_that_will_not_stop_is_cut_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observed live: 470,244 characters over 79 minutes, which then became the next
+    turn's prompt and ran away again. num_ctx bounds what a model SEES, not what it may
+    emit, and the job heartbeat keeps a runaway alive because a lease measures silence."""
+    import litellm
+
+    from adapters.models.litellm import provider as provider_module
+
+    monkeypatch.setattr(provider_module, "_MAX_GENERATION_CHARS", 500)
+
+    def _delta(content, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        choice.delta = MagicMock(content=content, tool_calls=None)
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        async def gen():
+            for _ in range(1000):  # a model that never emits a finish_reason
+                yield _delta("x" * 100)
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="ollama_chat/qwen3:30b-a3b",
+        messages=[{"role": "user", "content": "file your story"}],
+        purpose="generation",
+    )
+    chunks = [c async for c in provider.generate(req)]
+    text = "".join(c.text for c in chunks)
+
+    assert len(text) <= 700, f"runaway not cut off: {len(text)} chars"
+    assert chunks[-1].finish_reason == "length"
+
+
 async def test_whitespace_only_generation_counts_as_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
