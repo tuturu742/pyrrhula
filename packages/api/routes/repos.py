@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse, Response
@@ -245,7 +245,7 @@ async def list_runtimes_endpoint(
         RuntimeResponse(
             key=k,
             image=str(v["image"]),
-            setup=[str(c) for c in (v.get("setup") or [])],
+            setup=[str(c) for c in cast("list[object]", v.get("setup") or [])],
             tenant_owned=BUILTIN_RUNTIMES.get(k) != v,
         )
         for k, v in sorted(effective.items())
@@ -275,7 +275,7 @@ async def register_runtime_endpoint(
     return RuntimeResponse(
         key=key,
         image=str(entry["image"]),
-        setup=[str(c) for c in (entry.get("setup") or [])],
+        setup=[str(c) for c in cast("list[object]", entry.get("setup") or [])],
         tenant_owned=True,
     )
 

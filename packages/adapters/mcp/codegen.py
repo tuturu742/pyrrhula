@@ -164,10 +164,10 @@ def _prompt(
 _DEFAULT_CODEGEN_MAX_TOKENS = 12000
 
 
-def _budget_from(params: dict | None, fallback: int) -> int:
+def _budget_from(params: dict[str, object] | None, fallback: int) -> int:
     raw = dict(params or {}).get("max_tokens")
     try:
-        return int(raw) if raw else fallback
+        return int(str(raw)) if raw else fallback
     except (TypeError, ValueError):
         return fallback
 
@@ -197,7 +197,7 @@ def make_model_codegen(
         brief: str,
         repo_files: dict[str, str],
         rework_comment: str | None,
-    ) -> dict[str, str]:
+    ) -> CodegenOutput:
         req = GenerationRequest(
             model=model,
             messages=[

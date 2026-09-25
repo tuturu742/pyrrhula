@@ -246,7 +246,6 @@ async def test_a_slow_turn_on_one_session_does_not_block_advancing_another(
     )
     await asyncio.sleep(0.05)
 
-    fast_start = time.monotonic()
     fast_result = await advance_session_locked(
         tenant_id_b,
         session_id_b,
@@ -256,10 +255,12 @@ async def test_a_slow_turn_on_one_session_does_not_block_advancing_another(
         execute_turn=_instant_execute_turn,
         max_steps=1,
     )
-    fast_elapsed = time.monotonic() - fast_start
 
     assert fast_result.status == "active"
-    assert fast_elapsed < 0.2  # session B advanced without waiting on session A's stall
+    # The property is that B did not wait on A's stall. Asserting it as "B took under
+    # 0.2s" made this fail three times in one day on a box that was merely busy; the
+    # load-independent form is that A was still stalled when B came back.
+    assert not slow_task.done(), "session B waited for session A's turn to finish"
 
     await slow_task
 

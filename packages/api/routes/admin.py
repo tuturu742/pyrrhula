@@ -391,7 +391,7 @@ async def admin_assistant_chat_endpoint(body: AdminAssistantChatRequest) -> Stre
 
 
 @router.get("/retrieval-models/cache")
-async def retrieval_cache_status_endpoint() -> dict:
+async def retrieval_cache_status_endpoint() -> dict[str, object]:
     """Whether the models are actually on this box, and how big they are.
 
     The installers used to block on the download, so "did it work" was answered by the
@@ -402,7 +402,7 @@ async def retrieval_cache_status_endpoint() -> dict:
 
 
 @router.post("/retrieval-models/download", status_code=202)
-async def download_retrieval_models_endpoint() -> dict:
+async def download_retrieval_models_endpoint() -> dict[str, object]:
     """Fetch the configured models from Hugging Face, in the background.
 
     202 and a job rather than a long request: this is gigabytes, and an operator who
@@ -416,7 +416,7 @@ async def download_retrieval_models_endpoint() -> dict:
 
 
 @router.post("/retrieval-models/upload", status_code=201)
-async def upload_retrieval_cache_endpoint(file: UploadFile = File(...)) -> dict:
+async def upload_retrieval_cache_endpoint(file: UploadFile = File(...)) -> dict[str, object]:
     """Install an operator-supplied Hugging Face cache tarball.
 
     The air-gapped path: a box with no route to huggingface.co cannot download, and

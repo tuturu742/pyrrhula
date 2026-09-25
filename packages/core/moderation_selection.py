@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import uuid
 
+from core.ports.moderation import ModerationProvider
+
 MODERATION_MODEL_KEY = "moderation_model"
 MODERATION_API_BASE_KEY = "moderation_api_base"
 
@@ -48,7 +50,7 @@ async def moderation_choice(
     return model, (api_base or None)
 
 
-def build_provider(model: str, api_base: str | None):  # noqa: ANN201 -- ModerationProvider
+def build_provider(model: str, api_base: str | None) -> ModerationProvider:
     """The adapter for a resolved choice. Empty model means allow-all, which is the
     honest default: a deployment that configured no classifier must not silently get one."""
     from adapters.moderation.allow_all import AllowAllModerationProvider

@@ -278,7 +278,7 @@ async def run_one_persona_turn(
     turn_params = await merged_persona_params(tenant_id, persona_id)
     raw_budget = turn_params.get(HISTORY_CHAR_BUDGET_KEY)
     try:
-        history_budget_chars = int(raw_budget) if raw_budget is not None else None
+        history_budget_chars = int(str(raw_budget)) if raw_budget is not None else None
     except (TypeError, ValueError):
         history_budget_chars = None
     conversation = await _load_conversation(
@@ -675,7 +675,9 @@ async def run_one_persona_turn(
     # the only function available to me is delegate_work_item", which is both true and
     # exactly backwards from what that phase needed.
     allowed_remote_tools = _phase_remote_allowlist(phase)
-    wants_delegation = bool(allowed_remote_tools) and DELEGATE_TOOL_NAME in allowed_remote_tools
+    wants_delegation = (
+        allowed_remote_tools is not None and DELEGATE_TOOL_NAME in allowed_remote_tools
+    )
     if job_queue is not None and wants_delegation:
         tool_registry.register(
             ToolSpec(

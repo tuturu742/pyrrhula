@@ -29,7 +29,7 @@ DELEGATE_TOOL_DESCRIPTION = (
     "Pass every item you want built in one call."
 )
 
-DELEGATE_TOOL_PARAMETERS = {
+DELEGATE_TOOL_PARAMETERS: dict[str, object] = {
     "type": "object",
     "properties": {
         "work_item_ids": {

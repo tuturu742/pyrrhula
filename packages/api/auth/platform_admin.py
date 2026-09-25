@@ -42,12 +42,13 @@ _ADMIN_ROLES = frozenset({"owner", "admin"})
 
 async def _role_in(tenant_id: uuid.UUID, principal_id: uuid.UUID) -> str | None:
     async with tenant_scope(tenant_id) as session:
-        return await session.scalar(
+        found: str | None = await session.scalar(
             select(Membership.role).where(
                 Membership.tenant_id == tenant_id,
                 Membership.principal_id == principal_id,
             )
         )
+        return found
 
 
 async def is_platform_admin(tenant_id: uuid.UUID, principal_id: uuid.UUID) -> bool:

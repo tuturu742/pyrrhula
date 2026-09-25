@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from sqlalchemy import func, select
 from sqlalchemy import text as sa_text
@@ -561,7 +561,7 @@ async def _add_scopes(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: 
         # whoever performs the import, so an imported band is never orphaned.
         persona_keys = [
             key_by_principal[pid]
-            for pid in band["principal_ids"]  # type: ignore[union-attr]
+            for pid in cast("list[Any]", band["principal_ids"])
             if pid in key_by_principal
         ]
         writer.add_json(
@@ -663,7 +663,10 @@ async def _add_rules(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: u
 
     wanted: set[str] = set()
     for definition in await list_definitions(tenant_id, workspace_id=workspace_id):
-        for phase in (definition.definition.get("phases") or {}).values():
+        phases = definition.definition.get("phases")
+        if not isinstance(phases, dict):
+            continue
+        for phase in phases.values():
             if not isinstance(phase, dict):
                 continue
             for key in phase.get("tools") or []:

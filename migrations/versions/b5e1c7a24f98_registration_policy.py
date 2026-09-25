@@ -85,8 +85,7 @@ def upgrade() -> None:
     # Not append-only: a decision amends the row it rules on, and a rejected application
     # is removed rather than kept forever.
     op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.registration_request "
-        "TO pyrrhula_app"
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.registration_request TO pyrrhula_app"
     )
 
 

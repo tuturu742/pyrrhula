@@ -511,10 +511,10 @@ async def preview_socket(websocket: WebSocket, token: str, path: str) -> None:
         for task in pending:
             task.cancel()
         for task in done:
-            if (exc := task.exception()) is not None and not isinstance(
-                exc, websockets.exceptions.ConnectionClosed
+            if (error := task.exception()) is not None and not isinstance(
+                error, websockets.exceptions.ConnectionClosed
             ):
-                log.info("preview.ws_closed", name=row.name, error=str(exc)[:200])
+                log.info("preview.ws_closed", name=row.name, error=str(error)[:200])
     finally:
         await upstream.close()
         with suppress(RuntimeError):

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import select
 
@@ -68,10 +69,10 @@ class BundleInspection:
         return sum(1 for items in self.sections.values() for i in items if i.collides)
 
 
-def _json(raw: bytes) -> dict:
+def _json(raw: bytes) -> dict[str, Any]:
     import json
 
-    loaded: dict = json.loads(raw)
+    loaded: dict[str, Any] = json.loads(raw)
     return loaded
 
 

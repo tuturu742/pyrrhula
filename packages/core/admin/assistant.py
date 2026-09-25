@@ -29,7 +29,7 @@ from typing import Any
 
 import structlog
 
-from core.agents.tools import ToolContext, ToolRegistry, ToolResult
+from core.agents.tools import ToolContext, ToolHandler, ToolRegistry, ToolResult
 from core.ports.model_provider import GenerationRequest, ToolSpec
 
 log = structlog.get_logger()
@@ -87,7 +87,7 @@ async def _deployment_state() -> dict[str, Any]:
     return {
         "retrieval_models": models,
         "model_cache": cache,
-        "plugin_repositories": [{"url": r.url, "ref": r.ref, "enabled": r.enabled} for r in repos],
+        "plugin_repositories": [{"url": r.url, "ref": r.ref, "status": r.status} for r in repos],
         "tenants": [{"slug": t.slug, "name": t.name} for t in tenants][:50],
         "tenant_count": len(tenants),
     }
@@ -110,7 +110,7 @@ def _register_tools(registry: ToolRegistry, state: _State) -> list[ToolSpec]:
     registry.register(spec, _read)
     specs.append(spec)
 
-    def _proposer(action: str):  # noqa: ANN202
+    def _proposer(action: str) -> ToolHandler:
         async def handler(args: dict[str, Any], _ctx: ToolContext) -> ToolResult:
             supplied = {k: v for k, v in args.items() if v not in (None, "")}
             bits = ", ".join(f"{k}={str(v)[:60]}" for k, v in supplied.items())

@@ -99,7 +99,7 @@ async def _workspace_supervisor_principal(
     invent an authority to act under.
     """
     async with tenant_scope(tenant_id) as session:
-        return await session.scalar(
+        found: uuid.UUID | None = await session.scalar(
             select(Persona.principal_id)
             .where(
                 Persona.tenant_id == tenant_id,
@@ -109,6 +109,7 @@ async def _workspace_supervisor_principal(
             .order_by(Persona.created_at)
             .limit(1)
         )
+        return found
 
 
 async def sync_pull_requests_for_tenant(tenant_id: uuid.UUID) -> int:
@@ -131,6 +132,12 @@ async def sync_pull_requests_for_tenant(tenant_id: uuid.UUID) -> int:
             )
         except Exception as exc:  # noqa: BLE001 -- one unreadable credential, not a sweep
             log.warning("pr_sync.credential_failed", repo=repo.key, error=str(exc)[:200])
+            continue
+        if token is None:
+            # No credential resolves for this repository, so there is nothing to ask the
+            # host with. Skipping is the honest outcome; passing None was a type error
+            # waiting to be a runtime one.
+            log.warning("pr_sync.no_credential", repo=repo.key)
             continue
 
         try:

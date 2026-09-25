@@ -30,7 +30,7 @@ implementation) both correct and easy for the future ExportService/ReportService
 from __future__ import annotations
 
 import uuid
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,6 +176,12 @@ def _grants(row: ScopeRow, role: str, principal_id: uuid.UUID) -> bool:
     return False
 
 
+def _members_of(row: ScopeRow) -> dict[str, Any]:
+    """The JSON members column, typed: a band's members are a dict or absent."""
+    members = row.members
+    return dict(members) if isinstance(members, dict) else {}
+
+
 async def portable_scope_bands(
     tenant_id: uuid.UUID, workspace_id: uuid.UUID
 ) -> list[dict[str, object]]:
@@ -201,8 +207,8 @@ async def portable_scope_bands(
             {
                 "key": row.key,
                 "kind": row.kind,
-                "principal_ids": [str(pid) for pid in (row.members or {}).get("principal_ids", [])],
-                "roles": list((row.members or {}).get("roles", [])),
+                "principal_ids": [str(pid) for pid in _members_of(row).get("principal_ids", [])],
+                "roles": list(_members_of(row).get("roles", [])),
             }
             for row in rows
             if row.key not in default_keys and row.kind != "private"

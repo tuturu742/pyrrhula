@@ -456,7 +456,7 @@ async def run_agent_turn(
             profile,
             fallback_profile,
             conversation,
-            None,
+            (),
             "generation",
             model_provider_factory,
             on_chunk,

@@ -14,6 +14,7 @@ model said about it.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from api.mcp_server.server import McpArgumentError, McpTool, require_str, require_uuid
@@ -23,7 +24,9 @@ from core.resolution.rule_system import RuleSystemDefinition, get_or_create_defa
 from core.resolution.service import UnknownRuleSystemError, effective_rule_system, resolve
 
 
-def _make_handler(tool_key: str):
+def _make_handler(
+    tool_key: str,
+) -> Callable[[McpTokenClaims, dict[str, Any]], Awaitable[dict[str, Any]]]:
     async def handler(claims: McpTokenClaims, arguments: dict[str, Any]) -> dict[str, Any]:
         return await _resolve_tool(tool_key, claims, arguments)
 

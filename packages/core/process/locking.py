@@ -120,7 +120,12 @@ async def claim_session(
         yield observed_version
 
 
-_KEEP = object()
+class _Keep:
+    """Sentinel for 'leave `awaiting` as it is': a typed class rather than a bare
+    ``object()`` so an ``isinstance`` check narrows the parameter for the type checker."""
+
+
+_KEEP = _Keep()
 
 
 async def commit_advance(
@@ -128,7 +133,7 @@ async def commit_advance(
     session_id: uuid.UUID,
     expected_version: int,
     *,
-    awaiting: str | None | object = _KEEP,
+    awaiting: str | None | _Keep = _KEEP,
 ) -> None:
     """Re-acquires a fresh, brief lock; raises ``SessionConflictError`` if ``version``
     moved since the claim (someone else committed in between -- shouldn't happen given
@@ -148,7 +153,7 @@ async def commit_advance(
         row.version = expected_version + 1
         row.claimed_at = None
         row.claimed_by = None
-        if awaiting is not _KEEP:
+        if not isinstance(awaiting, _Keep):
             row.awaiting = awaiting
 
 

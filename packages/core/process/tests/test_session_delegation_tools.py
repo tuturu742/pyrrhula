@@ -92,10 +92,12 @@ def test_the_tool_is_registered_when_a_queue_and_the_phase_allow_it() -> None:
     exercise, and what regresses here is the condition, not the wiring."""
     from core.process import live_session
 
-    src = inspect.getsource(live_session)
-    assert "wants_delegation = bool(allowed_remote_tools) and DELEGATE_TOOL_NAME" in src, (
-        "a phase must ask for delegation by name, not get it by declaring nothing"
-    )
+    # Whitespace-normalised, so the assertion is on the condition and not on how a
+    # formatter happened to wrap it.
+    src = " ".join(inspect.getsource(live_session).split())
+    assert (
+        "allowed_remote_tools is not None and DELEGATE_TOOL_NAME in allowed_remote_tools"
+    ) in src, "a phase must ask for delegation by name, not get it by declaring nothing"
     assert "if job_queue is not None and wants_delegation:" in src
 
 

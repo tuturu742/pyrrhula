@@ -48,7 +48,7 @@ from core.agents.override import (
     post_override,
 )
 from core.entities.mutation import transition as entity_transition
-from core.mcp.registry import list_servers, register_server
+from core.mcp.registry import register_server
 from core.process.authoring import get_definition
 from core.process.awaits import satisfy_await
 from core.process.checkpoints import fork_session, list_checkpoints
@@ -710,26 +710,6 @@ class DelegateRequest(BaseModel):
     # When true (default), the session's facilitator persona reviews each landed PR and
     # drives the review->fix loop itself (bounded); false = a human reviews via /review.
     auto_review: bool = True
-
-
-async def _git_server(tenant_id: uuid.UUID, workspace_id: uuid.UUID, server_key: str) -> Any:
-    for row in await list_servers(tenant_id, workspace_id):
-        if row.key == server_key and "delegate_work_item" in row.enabled_tools:
-            return row
-    return None
-
-
-async def _session_supervisor_principal(
-    tenant_id: uuid.UUID, session_id: uuid.UUID
-) -> uuid.UUID | None:
-    """The dispatching engineer for delegation: the session's supervisor persona (it holds the
-    facilitator workspace role, hence entity:mutate for driving the work-item FSM)."""
-    for entry in await list_session_roster(tenant_id, session_id):
-        if entry.is_supervisor:
-            async with tenant_scope(tenant_id) as session:
-                persona = await session.get(Persona, entry.persona_id)
-                return persona.principal_id if persona is not None else None
-    return None
 
 
 @router.post("/{session_id}/delegate", status_code=202)

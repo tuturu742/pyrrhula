@@ -4,9 +4,10 @@ packages/core/ports/job_queue.py for why this table has no RLS."""
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import and_, or_, select, text, update
+from sqlalchemy.engine import CursorResult
 
 from adapters.queue.postgres.models import JobRow
 from core.ports.job_queue import Job
@@ -124,7 +125,7 @@ class PostgresJobQueue:
                 )
                 .values(claimed_at=text("now()"))
             )
-            return bool(result.rowcount)
+            return bool(cast("CursorResult[Any]", result).rowcount)
 
     async def complete(self, job_id: uuid.UUID, result: dict[str, Any] | None = None) -> None:
         async with unscoped_session() as session:

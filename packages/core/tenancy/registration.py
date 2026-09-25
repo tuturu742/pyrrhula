@@ -25,10 +25,11 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal, cast
 
 from sqlalchemy import String, Text, select, update
 from sqlalchemy import text as sql_text
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.tenancy.models import Base, Tenant, _uuid_pk
@@ -68,7 +69,9 @@ class PendingRegistration:
     created_at: datetime
 
 
-def normalise_policy(value: object, *, fallback: RegistrationPolicy = DEFAULT_POLICY) -> str:
+def normalise_policy(
+    value: object, *, fallback: RegistrationPolicy = DEFAULT_POLICY
+) -> RegistrationPolicy:
     """A stored value that is not a policy is treated as the fallback, never as "open".
 
     Anything unrecognised -- a typo, a value from a newer version, a hand-edited row --
@@ -76,7 +79,7 @@ def normalise_policy(value: object, *, fallback: RegistrationPolicy = DEFAULT_PO
     an organization to the internet.
     """
     text = str(value or "").strip().lower()
-    return text if text in POLICIES else fallback
+    return cast(RegistrationPolicy, text) if text in POLICIES else fallback
 
 
 async def get_policy(tenant_id: uuid.UUID) -> str:
@@ -213,4 +216,4 @@ async def reject(
                 decided_by_principal_id=decided_by,
             )
         )
-        return bool(result.rowcount)
+        return bool(cast("CursorResult[Any]", result).rowcount)

@@ -150,7 +150,11 @@ _KEY_PREFIXES = ("sk-", "sk_live", "ghp_", "github_pat_", "xoxb-", "AKIA", "AIza
 # Sentinel distinguishing "caller didn't say" from an explicit None/False: a workflow
 # re-apply that never mentions credential_ref must not wipe a credential an operator
 # attached to the row, nor flip require_confirmation back to its default.
-_UNSET: object = object()
+class _Unset:
+    """A class, not ``object()``, so ``isinstance`` narrows each parameter for mypy."""
+
+
+_UNSET = _Unset()
 
 
 async def register_server(
@@ -161,19 +165,19 @@ async def register_server(
     *,
     enabled_tools: list[str],
     effectful_tools: list[str] | None = None,
-    credential_ref: str | None | object = _UNSET,
-    require_confirmation: bool | object = _UNSET,
-    max_calls_per_session: int | None | object = _UNSET,
-    timeout_seconds: int | None | object = _UNSET,
-    max_result_chars: int | None | object = _UNSET,
-    options: dict[str, object] | None | object = _UNSET,
+    credential_ref: str | None | _Unset = _UNSET,
+    require_confirmation: bool | _Unset = _UNSET,
+    max_calls_per_session: int | None | _Unset = _UNSET,
+    timeout_seconds: int | None | _Unset = _UNSET,
+    max_result_chars: int | None | _Unset = _UNSET,
+    options: dict[str, object] | None | _Unset = _UNSET,
 ) -> McpServerRow:
     """Upsert by `(workspace, key)`, so re-running a deployment's registry setup is
     idempotent rather than a source of duplicates. Omitted ``credential_ref`` /
     ``require_confirmation`` preserve an existing row's values (defaults apply only on
     first creation)."""
     if (
-        credential_ref is not _UNSET
+        not isinstance(credential_ref, _Unset)
         and isinstance(credential_ref, str)
         and credential_ref.startswith(_KEY_PREFIXES)
     ):
@@ -197,24 +201,22 @@ async def register_server(
             require_confirmation=True,
         )
         row.url = url
-        if credential_ref is not _UNSET:
-            row.credential_ref = credential_ref  # type: ignore[assignment]
+        if not isinstance(credential_ref, _Unset):
+            row.credential_ref = credential_ref
         row.enabled_tools = list(enabled_tools)
         row.effectful_tools = list(effectful_tools or [])
-        if require_confirmation is not _UNSET:
+        if not isinstance(require_confirmation, _Unset):
             row.require_confirmation = bool(require_confirmation)
-        if max_calls_per_session is not _UNSET:
+        if not isinstance(max_calls_per_session, _Unset):
             row.max_calls_per_session = (
-                None if max_calls_per_session is None else int(max_calls_per_session)  # type: ignore[arg-type]
+                None if max_calls_per_session is None else int(max_calls_per_session)
             )
-        if timeout_seconds is not _UNSET:
-            row.timeout_seconds = None if timeout_seconds is None else int(timeout_seconds)  # type: ignore[arg-type]
-        if max_result_chars is not _UNSET:
-            row.max_result_chars = (
-                None if max_result_chars is None else int(max_result_chars)  # type: ignore[arg-type]
-            )
-        if options is not _UNSET:
-            row.options = dict(options or {})  # type: ignore[arg-type]
+        if not isinstance(timeout_seconds, _Unset):
+            row.timeout_seconds = None if timeout_seconds is None else int(timeout_seconds)
+        if not isinstance(max_result_chars, _Unset):
+            row.max_result_chars = None if max_result_chars is None else int(max_result_chars)
+        if not isinstance(options, _Unset):
+            row.options = dict(options or {})
         if existing is None:
             session.add(row)
         await session.flush()

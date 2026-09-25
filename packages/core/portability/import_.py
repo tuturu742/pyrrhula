@@ -513,9 +513,9 @@ async def _import_personas(
         # decision made by a file rather than by the importing operator.
         if record.get("web_search"):
             async with tenant_scope(tenant_id) as session:
-                row = await session.get(Persona, persona.id)
-                if row is not None:
-                    row.web_search = True
+                persona_row = await session.get(Persona, persona.id)
+                if persona_row is not None:
+                    persona_row.web_search = True
         report.id_map[str(record["id"])] = str(persona.id)
         report.persona_principals[str(record["id"])] = persona.principal_id
         report.imported.append(f"persona:{record['key']}")
@@ -539,7 +539,7 @@ async def _import_personas(
                 break
 
 
-def _json(line: str) -> dict[str, Any]:
+def _json(line: str | bytes) -> dict[str, Any]:
     parsed: dict[str, Any] = json.loads(line)
     return parsed
 
@@ -848,9 +848,9 @@ async def _import_schemas_and_entities(
         }
         if imported_states:
             async with tenant_scope(tenant_id) as session:
-                row = await session.get(EntityRow, entity.id)
-                assert row is not None
-                row.fsm_states = {**row.fsm_states, **imported_states}
+                entity_row = await session.get(EntityRow, entity.id)
+                assert entity_row is not None
+                entity_row.fsm_states = {**entity_row.fsm_states, **imported_states}
         async with tenant_scope(tenant_id) as session:
             for machine_key, state in imported_states.items():
                 session.add(
@@ -1285,6 +1285,11 @@ async def _import_secrets(
             f"secrets:{len(paths)} (this import path supplies no {', no '.join(missing)})"
         )
         return
+    # The check above guarantees these; restated so the type checker can see it too.
+    assert encryptor is not None
+    assert importing_principal_id is not None
+    assert permission_service is not None
+    assert moderation_provider is not None
 
     from core.secrets.authoring import (
         SecretAccessDeniedError,
