@@ -141,7 +141,14 @@ def test_a_template_without_a_fact_frame_step_is_rejected() -> None:
             audience_mode="participant",
             pipeline=[Step(kind="reduce"), Step(kind="fact_frame")],
         )
-    assert set(BUILT_IN_TEMPLATES) == {"narrative_recap", "session_log", "decision_summary"}
+    # The rule is structural, so assert it of every built-in rather than pinning the set:
+    # a hardcoded roster only records which templates existed the day it was written, and
+    # this one went red when `composed_document` was added rather than catching anything.
+    assert {"narrative_recap", "session_log", "decision_summary"} <= set(BUILT_IN_TEMPLATES)
+    for key, template in BUILT_IN_TEMPLATES.items():
+        assert template.pipeline[0].kind == "fact_frame", (
+            f"{key} must derive from the record before it renders anything"
+        )
 
 
 # ── acceptance criteria ─────────────────────────────────────────────────────────────
