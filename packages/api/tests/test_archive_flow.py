@@ -43,7 +43,8 @@ def _register_viewer(client: TestClient, slug: str) -> str:
 async def _owner_setup(client: TestClient, slug: str) -> tuple[dict[str, str], uuid.UUID, str]:
     """Seed a tenant, return (owner auth headers, workspace_id, a model-profile id)."""
     tenant_id, owner_id, workspace_id = await seed_dev_tenant(slug=slug)
-    headers = {"Authorization": f"Bearer {issue_token(principal_id=owner_id, tenant_id=tenant_id)}"}
+    token = issue_token(principal_id=owner_id, tenant_id=tenant_id, expires_in_seconds=3600)
+    headers = {"Authorization": f"Bearer {token}"}
     resp = client.post(
         "/model-profiles",
         json={"name": f"echo-{uuid.uuid4().hex[:6]}", "provider": "echo", "model": "echo"},

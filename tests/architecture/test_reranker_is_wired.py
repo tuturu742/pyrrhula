@@ -29,16 +29,17 @@ def test_the_api_composition_root_supplies_a_real_reranker() -> None:
     from api.routes import sessions
 
     source = inspect.getsource(sessions)
-    assert "reranker=get_reranker()" in source, (
+    assert "reranker=await get_reranker_for(tenant_id)" in source, (
         "the session routes stopped supplying a reranker; assemble() would fall back to "
         "None and rank on WRRF order alone"
     )
 
 
-def test_disabling_it_in_config_still_yields_none() -> None:
+def test_disabling_it_in_the_admin_console_still_yields_none() -> None:
     """The documented degraded mode has to keep working: the switch is the one knob a
     tiny deployment has, and it must reach the assembler as an absent reranker rather
-    than as an error."""
+    than as an error. (An organization's own switch sits above this one, in
+    ``get_reranker_for``, and is covered by the tenant-settings API tests.)"""
     from api.reranker_factory import get_reranker
     from core.deployment_settings import current_retrieval_models
 

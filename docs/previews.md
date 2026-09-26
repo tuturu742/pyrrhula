@@ -172,8 +172,8 @@ before this existed.
 
 ## Lifetime
 
-Previews expire (`PYRRHULA_PREVIEW_TTL_SECONDS`, capped by
-`PYRRHULA_PREVIEW_MAX_TTL_SECONDS`) and are reaped. Starting a preview twice for one repo
+Previews expire (the organization's preview lifetime, set on the Organization page and
+capped by the operator's `PYRRHULA_PREVIEW_MAX_TTL_SECONDS`) and are reaped. Starting a preview twice for one repo
 converges on a single container rather than leaking a second.
 
 ## See also

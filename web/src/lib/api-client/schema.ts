@@ -209,6 +209,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenant/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tenant Settings
+         * @description The organization's preferences with defaults filled in. Readable by any member:
+         *     the values are not secrets, and the session view needs to know its own lifetime.
+         */
+        get: operations["get_tenant_settings_tenant_settings_get"];
+        /** Put Tenant Settings */
+        put: operations["put_tenant_settings_tenant_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sessions": {
         parameters: {
             query?: never;
@@ -3867,7 +3889,7 @@ export interface paths {
         };
         /**
          * Get Registration Policy Endpoint
-         * @description This tenant's policy, the deployment default, and what the choices mean.
+         * @description This tenant's policy, the default for one that has not chosen, and the choices.
          */
         get: operations["get_registration_policy_endpoint_admin_tenants__tenant_id__registration_policy_get"];
         /** Set Registration Policy Endpoint */
@@ -6726,6 +6748,60 @@ export interface components {
             /** Workflow Key */
             workflow_key: string | null;
         };
+        /**
+         * TenantSettingsBody
+         * @description Only the fields sent are changed; an omitted field keeps its value.
+         */
+        TenantSettingsBody: {
+            /** Session Lifetime Seconds */
+            session_lifetime_seconds?: number | null;
+            /** Preview Ttl Seconds */
+            preview_ttl_seconds?: number | null;
+            /** Reranker Enabled */
+            reranker_enabled?: boolean | null;
+        };
+        /** TenantSettingsBounds */
+        TenantSettingsBounds: {
+            /**
+             * Session Lifetime Min
+             * @default 300
+             */
+            session_lifetime_min: number;
+            /**
+             * Session Lifetime Max
+             * @default 2592000
+             */
+            session_lifetime_max: number;
+            /**
+             * Session Lifetime Default
+             * @default 86400
+             */
+            session_lifetime_default: number;
+            /**
+             * Preview Ttl Min
+             * @default 60
+             */
+            preview_ttl_min: number;
+            /** Preview Ttl Max */
+            preview_ttl_max: number;
+            /**
+             * Preview Ttl Default
+             * @default 14400
+             */
+            preview_ttl_default: number;
+            /** Reranker Available */
+            reranker_available: boolean;
+        };
+        /** TenantSettingsResponse */
+        TenantSettingsResponse: {
+            /** Session Lifetime Seconds */
+            session_lifetime_seconds: number;
+            /** Preview Ttl Seconds */
+            preview_ttl_seconds: number;
+            /** Reranker Enabled */
+            reranker_enabled: boolean;
+            bounds: components["schemas"]["TenantSettingsBounds"];
+        };
         /** TenantUserOut */
         TenantUserOut: {
             /**
@@ -7759,6 +7835,78 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_settings_tenant_settings_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_tenant_settings_tenant_settings_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantSettingsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantSettingsResponse"];
                 };
             };
             /** @description Validation Error */

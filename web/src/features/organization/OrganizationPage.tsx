@@ -4,13 +4,14 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client/client";
 import { useMe } from "@/features/admin/useMe";
 import { UsageLimitsCard } from "@/features/workspaces/UsageLimitsCard";
+import { OrganizationSettingsCard } from "./OrganizationSettingsCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const ROLES = ["participant", "editor", "admin", "owner", "viewer"] as const;
 
 /** Owner-facing organization management: the people in your org (create, deactivate),
- * plus org-wide settings (daily usage caps). Until this page existed, creating a user
+ * plus org-wide settings (preferences, daily usage caps). Until this page existed, creating a user
  * required the PLATFORM admin console — an org owner could not add their own teammate. */
 export function OrganizationPage() {
   const queryClient = useQueryClient();
@@ -174,6 +175,7 @@ export function OrganizationPage() {
         </form>
       </div>
 
+      <OrganizationSettingsCard />
       <UsageLimitsCard />
     </div>
   );

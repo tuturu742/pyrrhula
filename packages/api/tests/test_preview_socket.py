@@ -177,7 +177,7 @@ async def test_creating_a_preview_over_http_reaches_the_queue() -> None:
         artifact_name="web.tgz",
     )
 
-    token = issue_token(principal_id=owner_id, tenant_id=tenant_id)
+    token = issue_token(principal_id=owner_id, tenant_id=tenant_id, expires_in_seconds=3600)
     with TestClient(app) as client:
         response = client.post(
             "/previews",
@@ -217,7 +217,7 @@ async def test_a_repos_preview_recipe_reads_back_after_it_is_set() -> None:
     repo = await create_repo(
         tenant_id, key=f"tui{uuid.uuid4().hex[:6]}", name="Terminal app", created_by=owner_id
     )
-    token = issue_token(principal_id=owner_id, tenant_id=tenant_id)
+    token = issue_token(principal_id=owner_id, tenant_id=tenant_id, expires_in_seconds=3600)
 
     with TestClient(app) as client:
         patched = client.patch(

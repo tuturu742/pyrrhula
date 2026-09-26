@@ -59,7 +59,6 @@ class Settings(BaseSettings):
 
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expiry_seconds: int = 60 * 60 * 24
 
     # Legacy ops shortcut into the platform-admin API: a shared bearer token, entirely
     # separate from the per-tenant JWTs above. Empty does NOT stop anything from starting
@@ -90,9 +89,10 @@ class Settings(BaseSettings):
     # address (``pyrrhula_api_1``) meaningless outside the container network. Empty means
     # links are emitted relative, which still works when the reader is already on the UI.
     public_base_url: str = ""
-    # How long a preview environment serves before the reaper stops it. Previews hold a
-    # container for their whole life, so the default is a working session, not a week.
-    preview_ttl_seconds: int = 4 * 3600
+    # The ceiling on how long a preview environment may serve before the reaper stops
+    # it. The default lifetime is an organization preference (core.tenancy.preferences);
+    # this is the bound the operator imposes on every organization, because a preview
+    # holds a container for its whole life.
     preview_max_ttl_seconds: int = 24 * 3600
     # The image previews run. Needs a Python interpreter and nothing else: the serving
     # command is dependency-free stdlib (see core/previews/service.py).

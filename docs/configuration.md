@@ -29,7 +29,6 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_DB_MAX_OVERFLOW` | `10` | Connections an engine may open beyond the pool under load. Ignored when `PYRRHULA_DB_POOL_SIZE` is `0`. Setting it to `0` alongside a pool of 1 deadlocks anything needing two sessions at once — don't. |
 | `PYRRHULA_JWT_SECRET` | — (**required**) | Signs session tokens. Rotating it logs everyone out. |
 | `PYRRHULA_JWT_ALGORITHM` | `HS256` | Token signing algorithm. |
-| `PYRRHULA_JWT_EXPIRY_SECONDS` | `86400` | How long a login lasts. |
 | `PYRRHULA_COOKIE_SECURE` | `false` | Set `true` behind HTTPS so the session cookie is never sent in clear. |
 | `PYRRHULA_ENCRYPTION_KEY` | — | AES-GCM key for secrets and stored credentials. **Required on every container recreate** — without it, previously encrypted data cannot be read. |
 | `PYRRHULA_REQUIRE_ENCRYPTION` | unset | Refuses to boot with the identity (no-op) encryptor. Set it in production so a misconfigured deployment fails loudly instead of storing plaintext. |
@@ -74,8 +73,7 @@ an address, not a model.
 | `PYRRHULA_BLOB_S3_REGION` | `us-east-1` | Bucket region. |
 | `PYRRHULA_BLOB_S3_PREFIX` | unset | Key prefix, so one bucket can host several deployments. |
 | `PYRRHULA_PREVIEW_IMAGE` | `docker.io/library/python:3.12-slim` | Image serving preview artifacts. Fully qualified on purpose: podman prompts on an unqualified name instead of assuming Docker Hub. |
-| `PYRRHULA_PREVIEW_TTL_SECONDS` | `14400` | Default preview lifetime. |
-| `PYRRHULA_PREVIEW_MAX_TTL_SECONDS` | `86400` | Ceiling a requester may ask for. |
+| `PYRRHULA_PREVIEW_MAX_TTL_SECONDS` | `86400` | Ceiling on any preview's lifetime. The default lifetime is an organization preference beneath this. |
 | `PYR_ARTIFACT_URL` / `PYR_ARTIFACT_TOKEN` | injected | Set **by** Pyrrhula inside a preview container so it can fetch its own artifact. Never set these yourself. |
 
 ## Plugins
@@ -132,6 +130,14 @@ to set them. Defaults are the supported configuration.
 - `PYRRHULA_OLLAMA_NUM_CTX` → an adapter constant (16384); a connection's own `num_ctx`
   param overrides it, which is the per-hardware lever that mattered.
 - `PYRRHULA_AUTH_PROVIDER`, `PYRRHULA_ISOLATION_MODE` → deleted; read by nothing.
+- `PYRRHULA_JWT_EXPIRY_SECONDS` → the organization's **session lifetime** (Organization
+  page). MCP dispatch tokens, which used to share it, now carry their own one-hour
+  constant: they are minted per call and used at once.
+- `PYRRHULA_PREVIEW_TTL_SECONDS` → the organization's **preview lifetime**, beneath the
+  operator's `PYRRHULA_PREVIEW_MAX_TTL_SECONDS`.
+- `PYRRHULA_RERANKER_ENABLED` → two switches, one per owner: whether a reranker is
+  loaded at all is the platform admin's (Admin → Models); whether an organization's
+  retrieval uses it is the organization's (Organization page).
 - `PYRRHULA_WEB_SEARCH_ENGINES` → `options.engines` on the `web_search` registration.
   Which engines an instance can actually use is a fact about that instance.
 - `PYRRHULA_HISTORY_CHAR_BUDGET`, `PYRRHULA_CODEGEN_MAX_TOKENS` → connection/persona
@@ -204,7 +210,8 @@ site re-derives it and quietly disagrees about which layer wins.
 
 Settings that use it today: `secret_mode`, `conduct_rules`, `allow_automerge`,
 `max_review_rounds`, `moderation_model`, `assistant_context_max_tokens`,
-`assistant_class_ratios`.
+`assistant_class_ratios`, and the tenant-level `session_lifetime_seconds`,
+`preview_ttl_seconds` and `reranker_enabled` (Organization page).
 
 `assistant_context_max_tokens` is how many tokens of retrieved workspace knowledge the
 assistant may put in front of the model on one question, across `/assist` and the chat
@@ -269,3 +276,13 @@ These were considered and put somewhere a user will actually find them:
 - **Which classifier screens authored content** — `moderation_model` on the workspace.
 - **How much transcript a model is given, and how big a file it may write** —
   `history_char_budget` and `max_tokens` on the connection.
+- **How long a login lasts, how long a preview serves by default, and whether
+  retrieval reranks** — `session_lifetime_seconds`, `preview_ttl_seconds` and
+  `reranker_enabled` on the organization (Organization page, `PUT /tenant/settings`).
+  An enterprise wants eight-hour sessions and a hobby box wants thirty days; a
+  deployment cannot know which it is hosting. Stored values that do not parse, or a
+  preview lifetime above the operator's ceiling, read as the default.
+- **Which models embed and rerank** — deployment-level by nature (one vector column,
+  one width), so not a tenant setting either: **Admin → Models**, applied on the next
+  restart. The gate, moderation and assistant models are each a tenant's own choice in
+  the UI, with no deployment default beneath them.

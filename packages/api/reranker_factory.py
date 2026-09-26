@@ -6,6 +6,8 @@ this returns straight into ``search_and_budget(reranker=...)``, which already tr
 
 from __future__ import annotations
 
+import uuid
+
 from adapters.reranker.local.provider import CrossEncoderReranker
 from adapters.reranker.stub.provider import StubReranker
 from core.deployment_settings import current_retrieval_models
@@ -13,6 +15,17 @@ from core.ports.reranker import Reranker
 
 _reranker: Reranker | None = None
 _reranker_initialized = False
+
+
+async def get_reranker_for(tenant_id: uuid.UUID) -> Reranker | None:
+    """The deployment's reranker, or ``None`` when this organization switched reranking
+    off (Organization page) -- a latency/quality trade that is theirs to make, while
+    which model is loaded stays the platform admin's."""
+    from core.tenancy.preferences import reranker_wanted
+
+    if not await reranker_wanted(tenant_id):
+        return None
+    return get_reranker()
 
 
 def get_reranker() -> Reranker | None:

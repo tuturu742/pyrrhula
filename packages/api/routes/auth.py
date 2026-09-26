@@ -20,6 +20,7 @@ from api.middleware.rate_limit import rate_limit_by_ip
 from api.middleware.tenant import resolve_tenant_for_auth
 from core.config import get_settings
 from core.tenancy.models import Identity, Membership, Principal, Tenant
+from core.tenancy.preferences import session_lifetime_seconds
 from core.tenancy.scope import tenant_scope, unscoped_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -44,7 +45,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-def _set_session_cookie(response: Response, token: str) -> None:
+def _set_session_cookie(response: Response, token: str, *, max_age: int) -> None:
+    """``max_age`` matches the token's own lifetime, so the browser drops the cookie
+    when the token would stop working anyway."""
     response.set_cookie(
         _SESSION_COOKIE,
         token,
@@ -53,7 +56,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
         # PYRRHULA_COOKIE_SECURE=true behind TLS: the browser then refuses to send this
         # cookie over plain http, which is the whole point of terminating TLS.
         secure=get_settings().cookie_secure,
-        max_age=60 * 60 * 24,
+        max_age=max_age,
     )
 
 
@@ -214,8 +217,9 @@ async def register(
                 await session.delete(orphaned_principal)
         raise HTTPException(status_code=409, detail="email already registered") from exc
 
-    token = issue_token(principal_id=principal_id, tenant_id=tenant.id)
-    _set_session_cookie(response, token)
+    lifetime = await session_lifetime_seconds(tenant.id)
+    token = issue_token(principal_id=principal_id, tenant_id=tenant.id, expires_in_seconds=lifetime)
+    _set_session_cookie(response, token, max_age=lifetime)
     return TokenResponse(access_token=token)
 
 
@@ -307,8 +311,9 @@ async def signup(body: SignupRequest, response: Response) -> SignupResponse:
     except Exception:  # noqa: BLE001 -- a flow can be authored later; the account matters
         pass
 
-    token = issue_token(principal_id=principal_id, tenant_id=tenant_id)
-    _set_session_cookie(response, token)
+    lifetime = await session_lifetime_seconds(tenant_id)
+    token = issue_token(principal_id=principal_id, tenant_id=tenant_id, expires_in_seconds=lifetime)
+    _set_session_cookie(response, token, max_age=lifetime)
     return SignupResponse(access_token=token, tenant_slug=slug)
 
 
@@ -341,8 +346,11 @@ async def login(
     if identity is None:
         raise HTTPException(status_code=401, detail="invalid email or password")
 
-    token = issue_token(principal_id=identity.principal_id, tenant_id=tenant.id)
-    _set_session_cookie(response, token)
+    lifetime = await session_lifetime_seconds(tenant.id)
+    token = issue_token(
+        principal_id=identity.principal_id, tenant_id=tenant.id, expires_in_seconds=lifetime
+    )
+    _set_session_cookie(response, token, max_age=lifetime)
     # Trust-ops: authentication is an auditable event -- the hash-chained log is the
     # record of who touched this tenant and when, and a login is the first link.
     await _audit_auth(tenant.id, identity.principal_id, "auth:login")

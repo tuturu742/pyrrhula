@@ -22,6 +22,10 @@ import jwt
 from core.config import get_settings
 
 _AUDIENCE = "mcp"
+# Minted server-side for one dispatch and consumed immediately, so an hour is already
+# generous; it no longer follows the human login lifetime, which an organization may
+# set to weeks.
+_TTL_SECONDS = 3600
 
 
 class InvalidMcpTokenError(Exception):
@@ -46,7 +50,7 @@ def issue_mcp_token(
         "workspace_id": str(workspace_id),
         "aud": _AUDIENCE,
         "iat": now,
-        "exp": now + settings.jwt_expiry_seconds,
+        "exp": now + _TTL_SECONDS,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 

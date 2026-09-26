@@ -27,14 +27,17 @@ class TokenClaims:
     expires_at: int = 0
 
 
-def issue_token(*, principal_id: uuid.UUID, tenant_id: uuid.UUID) -> str:
+def issue_token(*, principal_id: uuid.UUID, tenant_id: uuid.UUID, expires_in_seconds: int) -> str:
+    """``expires_in_seconds`` is the organization's session lifetime
+    (``core.tenancy.preferences.session_lifetime_seconds``) -- required rather than
+    defaulted so no call site can quietly issue a token on a lifetime nobody chose."""
     settings = get_settings()
     now = int(time.time())
     payload = {
         "sub": str(principal_id),
         "tenant_id": str(tenant_id),
         "iat": now,
-        "exp": now + settings.jwt_expiry_seconds,
+        "exp": now + int(expires_in_seconds),
         # A per-token id so logout can actually revoke THIS token: without it a stolen
         # cookie stays valid until natural expiry and "log out" is a client-side lie.
         "jti": uuid.uuid4().hex,

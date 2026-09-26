@@ -45,6 +45,7 @@ from core.previews.service import (
 )
 from core.previews.tokens import mint_preview_token, read_preview_token
 from core.tenancy.context import RequestContext
+from core.tenancy.preferences import preview_ttl_seconds
 
 log = structlog.get_logger()
 
@@ -138,7 +139,7 @@ async def create_preview_endpoint(
         )
 
     ttl = min(
-        int(body.ttl_seconds or settings.preview_ttl_seconds),
+        int(body.ttl_seconds or await preview_ttl_seconds(ctx.tenant_id)),
         settings.preview_max_ttl_seconds,
     )
     from core.exec_engines import get_tenant_engine_key
@@ -278,7 +279,7 @@ async def share_preview_endpoint(
         )
 
     ttl = min(
-        int(body.ttl_seconds or settings.preview_ttl_seconds),
+        int(body.ttl_seconds or await preview_ttl_seconds(ctx.tenant_id)),
         settings.preview_max_ttl_seconds,
     )
     if body.extend:

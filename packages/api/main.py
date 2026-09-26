@@ -33,6 +33,7 @@ from api.routes import (
     resolutions,
     secrets,
     sessions,
+    tenant_settings,
     tenant_users,
     usage,
     vocabulary,
@@ -125,6 +126,7 @@ async def _usage_limit_handler(request: Request, exc: UsageLimitExceededError) -
 app.include_router(auth.router)
 app.include_router(me.router)
 app.include_router(tenant_users.router)
+app.include_router(tenant_settings.router)
 app.include_router(sessions.router)
 app.include_router(sessions.stream_router)
 app.include_router(workspaces.router)
