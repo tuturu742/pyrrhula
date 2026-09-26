@@ -391,7 +391,8 @@ async def _drive_fsm(
     result: DelegationResult,
 ) -> None:
     """Drives the work item through **the** mutation service, with the action as
-    `cause_ref`. Not a direct row update: the mutation service owns guard evaluation, the state-change
+    `cause_ref`. Not a direct row update: the mutation service owns guard evaluation,
+    the state-change
     record, and the idempotency, and a delegation that wrote state itself would be a second
     writer with none of them.
 

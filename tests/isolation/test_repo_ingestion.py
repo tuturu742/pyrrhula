@@ -338,8 +338,8 @@ async def test_repo_readme_injection_content_is_quarantined(
     key = entry_key_for("README.md")
     assert key in flagged
     assert "instruction_override" in flagged[key], (
-        "the injection scan is the import scan, reused -- one quarantine mechanism, not a repo-shaped "
-        "variant of one"
+        "the injection scan is the import scan, reused -- one quarantine mechanism, "
+        "not a repo-shaped variant of one"
     )
 
     retrievable = await _retrievable_keys(tenant_id, report.knowledge_source_id)

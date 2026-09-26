@@ -169,7 +169,7 @@ class ActorSpec(BaseModel):
 
 
 class VisibilitySpec(BaseModel):
-    """"Who sees what", declared per phase -- mandatory, no default. ``secrets`` values
+    """ "Who sees what", declared per phase -- mandatory, no default. ``secrets`` values
     name how the disclosure-state machine is consulted; only the documented vocabulary is
     accepted
     today, deliberately narrow rather than a permissive free string."""

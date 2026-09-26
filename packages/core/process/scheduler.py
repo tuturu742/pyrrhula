@@ -88,7 +88,8 @@ def make_default_candidate_resolver(
 ) -> CandidateResolver:
     """The resolver this module can build on its own: humans via ``workspace_membership``,
     agents via an injected fallback (``None`` = no agent candidates -- correct for a
-    phase with no agent actors; the real ``persona_type`` query is injected by the caller). Initiative values are always ``None`` from this resolver;
+    phase with no agent actors; the real ``persona_type`` query is injected by the
+    caller). Initiative values are always ``None`` from this resolver;
     a caller wanting real initiative order must supply its own resolver that also injects
     entity-field lookups -- see module docstring."""
 
