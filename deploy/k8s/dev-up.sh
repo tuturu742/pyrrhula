@@ -221,7 +221,7 @@ echo "    organization  admin"
 echo "    email         $ADMIN_EMAIL_VALUE"
 echo "    password      $ADMIN_PASSWORD_VALUE"
 echo
-echo "  Or Sign up to create your own organization."
+echo "  Or Register to create your own organization."
 echo
 echo "  Generated on first run and stored in $SECRETS."
 echo "  Change the password IN THE APP after first login -- the account is created once"

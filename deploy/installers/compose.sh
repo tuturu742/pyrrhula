@@ -316,17 +316,18 @@ echo
 # admin. Leading with a generated password would be telling someone to use an account
 # that is not theirs, on their own machine.
 if [ "$SINGLE_TENANT" = true ]; then
-  echo "  Sign up. You will be the owner of this deployment's one organization and"
+  echo "  Register. You will be the owner of this deployment's one organization and"
   echo "  its administrator -- no organization name to type, and nothing to copy from"
   echo "  here. Re-run with --multi-tenant to host several organizations instead."
   echo
   echo "  Next   Admin -> Models: choose and download the retrieval models (needed"
-  echo "         for semantic search), then add a model connection on Connections."
+  echo "         for semantic search), then add a model connection under Personas ->"
+  echo "         Model profiles."
   echo
   echo "  Locked out? A break-glass platform admin exists: organization 'admin',"
   echo "  $(envval .env PYRRHULA_ADMIN_EMAIL '(not set)') / $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)') (also in .env)."
 else
-  echo "  Sign up to create an organization -- every sign-in names its organization."
+  echo "  Register to create an organization -- every sign-in names its organization."
   echo
   echo "  Administer the deployment (tenants, models, plugins) as the platform admin:"
   echo "    organization  admin"
@@ -336,6 +337,7 @@ else
   echo "   after first login -- editing .env afterwards does not rotate it)"
   echo
   echo "  Next   Admin -> Models: choose and download the retrieval models (needed"
-  echo "         for semantic search), then add a model connection on Connections."
+  echo "         for semantic search), then add a model connection under Personas ->"
+  echo "         Model profiles."
 fi
 echo "  Docs   docs/install.md (post-install, TLS, upgrades, troubleshooting)"
