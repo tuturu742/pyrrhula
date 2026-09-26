@@ -296,7 +296,6 @@ credential (model keys, repo tokens). Losing it means re-entering them all.
 |---|---|---|
 | compose | `.env` | `~/.config/pyrrhula/compose.env.bak` |
 | k8s | `deploy/k8s/overlays/dev/secrets.env` | make one (the installer prints a reminder) |
-| aws | Secrets Manager `pyrrhula/encryption-key` | AWS-managed; don't delete the secret |
 
 ## Troubleshooting
 
@@ -320,8 +319,5 @@ credential (model keys, repo tokens). Losing it means re-entering them all.
   fails loudly on restart — delete the cache PVC contents and let it re-download.
 - **k8s: engine declarations from outside the cluster** — use the host's LAN IP
   for `api_base`, not `host.containers.internal` (link-local, doesn't route).
-- **aws: first page load 503s after install** — services pull the freshly pushed
-  images on their next deployment cycle; give them a minute or force a new
-  deployment.
 - **Anything model-shaped hangs or errors** — check the connection's key and the
   usage limits page before debugging deeper; a hit cap pauses sessions by design.

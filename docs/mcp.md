@@ -115,8 +115,7 @@ with three tools grants three tools, even if the server later advertises thirty.
 ## Web search is bundled, and is not an MCP server you attach
 
 Agent web search is a persona toggle, served by a SearXNG instance that ships with the
-deployment — compose runs one, the AWS stack runs one as an ECS task, and Kubernetes
-runs one from `base/searxng.yaml`. You do not attach it as an MCP server; `web_search`
+deployment — compose runs one, and Kubernetes runs one from `base/searxng.yaml`. You do not attach it as an MCP server; `web_search`
 is a reserved key served by its own transport.
 
 Nothing reaches it unless a persona has the toggle on, and it is never exposed outside

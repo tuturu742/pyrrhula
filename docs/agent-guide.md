@@ -289,7 +289,7 @@ tenant), not an archived session.**
 - SSE via a shared hook reconnecting with `Last-Event-ID` = `session_event.event_seq`.
 
 ### Testing
-- Every task file lists acceptance criteria — write the tests first when practical.
+- State the acceptance criteria in the pull request — write the tests first when practical.
 - CI-blocking suites: `tests/isolation/`, `tests/architecture/`, `tests/replay/`,
   `tests/leak/`, `tests/packs/`. Green is a merge requirement; extending them when your
   change touches their subject matter is part of the task, not extra credit.
@@ -351,9 +351,11 @@ tenant), not an archived session.**
 
 ## 9. Definition of done (any task)
 
-1. All acceptance criteria in the task file demonstrably met (tests or reproducible steps).
+1. The acceptance criteria stated in the pull request demonstrably met (tests or
+   reproducible steps).
 2. CI green, including the blocking suites; new tenant-scoped tables covered in isolation tests.
 3. No forbidden vocabulary in core; no new imports violating INV-1; no defaults added to
    principal/phase/scope parameters.
-4. Migrations reversible; append-only grants intact.
-5. Task file updated: checkboxes ticked, status set, deviations noted honestly.
+4. Migrations forward-only and applied from an empty database in CI; append-only grants
+   intact.
+5. Deviations from the stated criteria noted honestly in the pull request.

@@ -26,7 +26,7 @@ managed by Pyrrhula. One product, one codebase.
 > deterministic resolution, the secrets layer (disclosure gate, structural exclusion,
 > post-generation leak check, per-workspace trust modes), the overseer's Director's View,
 > behavioral axes with engine-enforced high-stakes dials, portable `.pyr` workspace
-> bundles, and three verified install paths (compose, k8s, AWS ECS). Four runnable
+> bundles, and two verified install paths (compose, k8s). Seven runnable
 > sample workspaces live in
 > [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples) — start with the
 > murder mystery, or [read a finished session first](https://github.com/tuturu742/pyrrhula-samples/blob/main/hagnaryd-mystery/TRANSCRIPT.md)

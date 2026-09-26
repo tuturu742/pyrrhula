@@ -103,7 +103,7 @@ Details worth knowing:
   deployments skip the component and attach a key to a cloud connection instead.
 
 - **Agent web search**: a SearXNG instance ships in `base/searxng.yaml` and
-  `PYRRHULA_WEB_SEARCH_URL` points at it, matching compose and the AWS stack — k8s
+  `PYRRHULA_WEB_SEARCH_URL` points at it, matching compose — k8s
   previously had neither, so the feature silently did not exist. Not exposed outside the
   cluster; only personas with the web-search toggle reach it. Drop the file and clear the
   setting to disable, or point the setting at your own instance.
