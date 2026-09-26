@@ -27,7 +27,6 @@ from sqlalchemy import select
 from core.agents.models import Agent, Persona
 from core.assembler.visibility import EXPORT, scopes_for
 from core.audit.models import UsageRecordRow
-from core.config import get_settings
 from core.knowledge.retrieval.assemble import search_and_budget
 from core.knowledge.retrieval.priority import class_priority_weights
 from core.knowledge.retrieval.rerank import fetch_chunk_texts
@@ -127,15 +126,12 @@ async def get_workspace_assistant(tenant_id: uuid.UUID, workspace_id: uuid.UUID)
 
 async def ensure_workspace_assistant(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> Persona:
     """Idempotent: the workspace's assistant, created on first need. The model profile is
-    found by name (one per tenant, shared across workspaces) or created from
-    ``Settings.assistant_model`` -- after creation the profile is ordinary, editable
-    tenant data; the setting is only the cold-start default."""
+    found by name (one per tenant, shared across workspaces) or created empty -- the
+    profile is ordinary, editable tenant data, and the personas UI is where it is set."""
     existing = await get_workspace_assistant(tenant_id, workspace_id)
     if existing is not None:
         return existing
 
-    settings = get_settings()
-    provider_kind, _, model = settings.assistant_model.partition("/")
     async with tenant_scope(tenant_id) as session:
         profile = await session.scalar(
             select(Agent).where(
@@ -145,16 +141,16 @@ async def ensure_workspace_assistant(tenant_id: uuid.UUID, workspace_id: uuid.UU
             )
         )
         if profile is None:
-            # No provider guess when nothing is configured: inventing "ollama" here is
-            # what made a fresh install look like it had a working local model. An empty
-            # profile is honest -- the assistant still exists (it is required), and the
-            # first call that needs a model says so instead of failing at the transport.
+            # No provider guess: inventing "ollama" here is what once made a fresh install
+            # look like it had a working local model. An empty profile is honest -- the
+            # assistant still exists (it is required), and the first call that needs a
+            # model says so instead of failing at the transport.
             profile = Agent(
                 tenant_id=tenant_id,
                 name="Assistant model",
-                provider=provider_kind if settings.assistant_model else "",
-                model=(model or settings.assistant_model) if settings.assistant_model else "",
-                api_base=settings.assistant_api_base or None,
+                provider="",
+                model="",
+                api_base=None,
             )
             session.add(profile)
             await session.flush()

@@ -89,7 +89,21 @@ def main() -> int:
     }
 
     found = subprocess.run(
-        ["grep", "-rhoE", PATTERN, "packages/", "scripts/", "deploy/", "docker/", "install.sh"],
+        # Source only: a stale .pyc under __pycache__ still "reads" a variable that the
+        # module it was compiled from no longer names.
+        [
+            "grep",
+            "-rhoE",
+            "--exclude-dir=__pycache__",
+            "--exclude-dir=node_modules",
+            "--exclude=*.pyc",
+            PATTERN,
+            "packages/",
+            "scripts/",
+            "deploy/",
+            "docker/",
+            "install.sh",
+        ],
         capture_output=True,
         text=True,
         cwd=ROOT,

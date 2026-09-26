@@ -1,9 +1,9 @@
 """Which model runs a tenant's disclosure gate.
 
-The gate used to be pointed at a model by ``PYRRHULA_GATE_MODEL``, a deployment-wide
-environment variable. That is the wrong owner for this decision twice over: a deployment
-hosts many tenants and they do not share a model choice, and the person who knows which
-model to use is the tenant's admin, not whoever restarts the process.
+The gate used to be pointed at a model by a deployment-wide environment variable. That
+is the wrong owner for this decision twice over: a deployment hosts many tenants and they
+do not share a model choice, and the person who knows which model to use is the tenant's
+admin, not whoever restarts the process.
 
 So the choice is a tenant setting naming one of the tenant's **own model connections**.
 Naming a connection rather than a provider/model string matters: the credential, api_base

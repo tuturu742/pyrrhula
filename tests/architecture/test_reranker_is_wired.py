@@ -40,12 +40,12 @@ def test_disabling_it_in_config_still_yields_none() -> None:
     tiny deployment has, and it must reach the assembler as an absent reranker rather
     than as an error."""
     from api.reranker_factory import get_reranker
-    from core.config import get_settings
+    from core.deployment_settings import current_retrieval_models
 
-    settings = get_settings()
-    original = settings.reranker_enabled
+    models = current_retrieval_models()
+    original = models.reranker_enabled
     try:
-        settings.reranker_enabled = False
+        models.reranker_enabled = False
         assert get_reranker() is None
     finally:
-        settings.reranker_enabled = original
+        models.reranker_enabled = original

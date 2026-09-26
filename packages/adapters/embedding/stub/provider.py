@@ -5,8 +5,8 @@ re-embed tests are meaningful without needing a real model.
 Default ``dimension=8`` is only safe for the adapter's own isolated unit tests, which
 never touch the real ``knowledge_chunk`` table — that column is a fixed ``vector(1024)``,
 so any test that writes through it must construct this with
-``dimension=1024`` (or, in the worker composition root, let ``Settings.embedding_dimension``
-drive it — see ``worker.embedding_provider_factory``).
+``dimension=1024`` (or, in the worker composition root, let the deployment's retrieval-model
+setting drive it — see ``worker.embedding_provider_factory``).
 """
 
 from __future__ import annotations

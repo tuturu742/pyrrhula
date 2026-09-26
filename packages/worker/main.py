@@ -124,9 +124,9 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
 async def main() -> None:
     configure_tracing(service_name="pyrrhula-worker")
     try:
-        from core.deployment_settings import apply_retrieval_override_to_settings
+        from core.deployment_settings import apply_retrieval_override
 
-        applied = await apply_retrieval_override_to_settings()
+        applied = await apply_retrieval_override()
         if applied:
             log.info("retrieval.override_applied", model=applied.get("embedding_model"))
     except Exception as exc:  # noqa: BLE001 -- never block startup on an optional override

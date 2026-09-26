@@ -83,10 +83,8 @@ def normalise_policy(
 
 
 async def get_policy(tenant_id: uuid.UUID) -> str:
-    """This tenant's policy, or the deployment default when it has not chosen."""
-    from core.config import get_settings
-
-    default = normalise_policy(get_settings().default_registration_policy)
+    """This tenant's policy, or ``closed`` when it has not chosen."""
+    default = DEFAULT_POLICY
     async with unscoped_session() as session:
         tenant = await session.get(Tenant, tenant_id)
         if tenant is None:

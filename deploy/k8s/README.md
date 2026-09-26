@@ -98,10 +98,9 @@ Details worth knowing:
     - ../../components/host-ollama
   ```
 
-  then name a model in `overlays/dev/secrets.env` (keys there reach the app prefixed
-  with `PYRRHULA_`): `ASSISTANT_MODEL=ollama/<tag>` and
-  `ASSISTANT_API_BASE=http://ollama:11434`. Cloud-key deployments skip the component and
-  set `ASSISTANT_MODEL` alone.
+  then, in the UI, point a model connection at `http://ollama:11434` (provider
+  `ollama`, model `<tag>`) -- the "Assistant model" profile, or any persona's. Cloud-key
+  deployments skip the component and attach a key to a cloud connection instead.
 
 - **Agent web search**: a SearXNG instance ships in `base/searxng.yaml` and
   `PYRRHULA_WEB_SEARCH_URL` points at it, matching compose and the AWS stack — k8s

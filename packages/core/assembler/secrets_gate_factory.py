@@ -96,60 +96,33 @@ async def _other_participants(
         return tuple(p for p in rows if p != discloser_principal_id)
 
 
-async def _gate_agent_override(tenant_id: uuid.UUID, encryptor: Encryptor) -> Agent | None:
+async def _gate_agent_override(tenant_id: uuid.UUID) -> Agent | None:
     """Which model runs this tenant's gate, or None to use the acting persona's own.
 
-    The tenant's own choice wins: an admin picks one of the tenant's model connections
-    (core.secrets.gate_config), because a deployment hosts many tenants and they do not
-    share a model. PYRRHULA_GATE_MODEL remains only as the deployment-wide *default* for
-    tenants that have not chosen -- it seeds a connection named "gate-model" the same way
-    settings.assistant_model does.
+    The tenant's own choice is the only choice: an admin picks one of the tenant's model
+    connections (core.secrets.gate_config), because a deployment hosts many tenants and
+    they do not share a model. There is no deployment-wide default underneath -- a tenant
+    that has not chosen runs the gate on the acting persona's model.
 
     The gate is a strict-JSON classifier over gists: it needs schema discipline, not the
     persona's weight class, and pointing it away from the persona's resident model also
     stops a ~1s judgement queueing for minutes on a single-GPU box (measured: 423s avg).
     """
-    from core.agents.authoring import create_agent
-    from core.config import get_settings
     from core.secrets.gate_config import get_gate_connection_id
 
     chosen = await get_gate_connection_id(tenant_id)
-    if chosen is not None:
-        async with tenant_scope(tenant_id) as session:
-            picked = await session.scalar(
-                select(Agent).where(Agent.id == chosen, Agent.archived_at.is_(None))
-            )
-            if picked is not None:
-                session.expunge(picked)
-                return picked
-        # Chosen but gone (archived since): fall through to the deployment default
-        # rather than failing the turn -- the gate still runs, on the persona's model.
-
-    settings = get_settings()
-    model_string = getattr(settings, "gate_model", "")
-    if not model_string or "/" not in model_string:
+    if chosen is None:
         return None
-    provider_kind, model_name = model_string.split("/", 1)
     async with tenant_scope(tenant_id) as session:
-        row = (
-            (
-                await session.execute(
-                    select(Agent).where(Agent.name == "gate-model", Agent.archived_at.is_(None))
-                )
-            )
-            .scalars()
-            .first()
+        picked = await session.scalar(
+            select(Agent).where(Agent.id == chosen, Agent.archived_at.is_(None))
         )
-    if row is not None:
-        return row
-    return await create_agent(
-        tenant_id,
-        "gate-model",
-        provider_kind,
-        model_name,
-        api_base=getattr(settings, "gate_api_base", "") or None,
-        encryptor=encryptor,
-    )
+        if picked is not None:
+            session.expunge(picked)
+            return picked
+    # Chosen but gone (archived since): the gate still runs, on the persona's model,
+    # rather than failing the turn.
+    return None
 
 
 async def resolve_turn_secrets(
@@ -178,7 +151,7 @@ async def resolve_turn_secrets(
     if getattr(phase.visibility, "secrets", "none") != "held_by_actor":
         return (), ()
 
-    override = await _gate_agent_override(tenant_id, encryptor)
+    override = await _gate_agent_override(tenant_id)
     if override is not None:
         agent = override
         if model_provider_factory is not None:

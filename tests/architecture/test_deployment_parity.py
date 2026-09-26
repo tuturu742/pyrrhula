@@ -59,19 +59,24 @@ def test_every_deployment_path_can_produce_a_platform_admin() -> None:
         )
 
 
-def test_no_deployment_bakes_in_an_assistant_model() -> None:
-    """A fresh install has no provider credential. Naming a model anyway points it at
-    something it cannot reach, which is exactly what every path removed once already."""
-    compose = (ROOT / "docker/compose.selfhost.yml").read_text()
-    match = re.search(r"^\s*PYRRHULA_ASSISTANT_MODEL:\s*(.*)$", compose, re.M)
-    assert match is not None, "compose stopped passing PYRRHULA_ASSISTANT_MODEL; update this guard"
-    assert match.group(1).strip() in ('""', "''", "${PYRRHULA_ASSISTANT_MODEL:-}"), (
-        f"compose defaults the assistant model to {match.group(1).strip()!r}; a fresh "
-        "install must not point at a model it has no key for"
-    )
-    kustomize = (ROOT / "deploy/k8s/base/kustomization.yaml").read_text()
-    baked = re.findall(r"^\s*-\s*PYRRHULA_ASSISTANT_MODEL=(\S+)", kustomize, re.M)
-    assert not baked, f"k8s bakes in an assistant model: {baked}"
+def test_no_deployment_names_a_model() -> None:
+    """Which model runs anything is chosen in the UI -- per tenant for the gate,
+    moderation and assistant, in the admin console for retrieval. A deployment file that
+    named one would point a fresh install at something it has no key for, which is
+    exactly what every path removed once already."""
+    model_vars = {
+        "PYRRHULA_ASSISTANT_MODEL",
+        "PYRRHULA_GATE_MODEL",
+        "PYRRHULA_MODERATION_MODEL",
+        "PYRRHULA_EMBEDDING_MODEL",
+        "PYRRHULA_RERANKER_MODEL",
+    }
+    for label, path in (
+        ("compose", "docker/compose.selfhost.yml"),
+        ("k8s", "deploy/k8s/base/kustomization.yaml"),
+    ):
+        named = sorted(_names(path) & model_vars)
+        assert not named, f"{label} names a model in configuration: {named}"
 
 
 def test_the_example_env_lists_what_the_compose_file_consumes() -> None:

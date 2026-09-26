@@ -15,7 +15,6 @@ from core.ports.model_provider import EgressDeniedError
 from core.tenancy.models import Tenant
 from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
-from worker import embedding_provider_factory
 from worker.embedding import handle_embed_chunks, handle_reembed_stale
 
 
@@ -47,7 +46,9 @@ def _use_stub_embedding_model(monkeypatch: pytest.MonkeyPatch) -> None:
     at the default 1024: knowledge_chunk.embedding is a fixed vector(1024) column,
     so the stub must match it here (unlike the adapter's own isolated unit tests, which
     never touch that table)."""
-    monkeypatch.setattr(embedding_provider_factory.get_settings(), "embedding_model", "local/stub")
+    from core.deployment_settings import current_retrieval_models
+
+    monkeypatch.setattr(current_retrieval_models(), "embedding_model", "local/stub")
 
 
 async def test_handle_embed_chunks_end_to_end(db_available: None) -> None:

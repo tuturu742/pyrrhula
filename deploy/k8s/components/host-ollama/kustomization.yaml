@@ -9,11 +9,8 @@ kind: Component
 #   components:
 #     - ../../components/host-ollama
 #
-# then name a model in overlays/dev/secrets.env (values there reach the app prefixed
-# with PYRRHULA_):
-#
-#   ASSISTANT_MODEL=ollama/<your tag>
-#   ASSISTANT_API_BASE=http://ollama:11434
+# then, in the UI, point a model connection at it: provider `ollama`, model `<your tag>`,
+# API base http://ollama:11434 (the "Assistant model" profile, or any persona's).
 #
 # dev-up.sh fills in this machine's IP at apply time -- see the host-endpoint label.
 

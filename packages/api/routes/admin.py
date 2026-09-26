@@ -790,13 +790,12 @@ class RejectRequest(BaseModel):
 
 @router.get("/tenants/{tenant_id}/registration-policy")
 async def get_registration_policy_endpoint(tenant_id: uuid.UUID) -> dict[str, object]:
-    """This tenant's policy, the deployment default, and what the choices mean."""
-    from core.config import get_settings as _s
-    from core.tenancy.registration import POLICIES, get_policy, normalise_policy
+    """This tenant's policy, the default for one that has not chosen, and the choices."""
+    from core.tenancy.registration import DEFAULT_POLICY, POLICIES, get_policy
 
     return {
         "policy": await get_policy(tenant_id),
-        "deployment_default": normalise_policy(_s().default_registration_policy),
+        "deployment_default": DEFAULT_POLICY,
         "choices": sorted(POLICIES),
     }
 

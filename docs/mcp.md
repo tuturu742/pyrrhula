@@ -138,11 +138,8 @@ Earlier builds defaulted to a specific local ollama tag, so every fresh deployme
 pointed at a host and a model that were not there. Now you choose:
 
 - In the UI, set a model on the **Assistant model** profile, and attach the provider key.
-- Or configure it at deploy time — `PYRRHULA_ASSISTANT_MODEL` (e.g.
-  `anthropic/claude-sonnet-5`, or `ollama/<tag>` with `PYRRHULA_ASSISTANT_API_BASE`).
-  On compose that is `.env`; on k8s, `overlays/dev/secrets.env` (keys there reach the app
-  prefixed with `PYRRHULA_`); the AWS stack passes `assistant_model` and defaults it to a
-  cloud model whose key you attach after first login.
+  There is no deploy-time variable for it: a deployment does not know what models its
+  tenants have, so it names none.
 
 Until one is set, the assistant exists but any call returns a 409 saying exactly this.
 

@@ -31,7 +31,6 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_JWT_ALGORITHM` | `HS256` | Token signing algorithm. |
 | `PYRRHULA_JWT_EXPIRY_SECONDS` | `86400` | How long a login lasts. |
 | `PYRRHULA_COOKIE_SECURE` | `false` | Set `true` behind HTTPS so the session cookie is never sent in clear. |
-| `PYRRHULA_AUTH_PROVIDER` | `local` | Which `IdentityProvider` adapter to use. |
 | `PYRRHULA_ENCRYPTION_KEY` | — | AES-GCM key for secrets and stored credentials. **Required on every container recreate** — without it, previously encrypted data cannot be read. |
 | `PYRRHULA_REQUIRE_ENCRYPTION` | unset | Refuses to boot with the identity (no-op) encryptor. Set it in production so a misconfigured deployment fails loudly instead of storing plaintext. |
 
@@ -39,11 +38,9 @@ in a `.env` file; the rest are read directly where they are used.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PYRRHULA_ISOLATION_MODE` | `shared` | `shared` (RLS) or stricter per-tenant isolation. |
 | `PYRRHULA_SINGLE_TENANT_UI` | `false` (but **`true` in compose and k8s**) | Solo/self-host mode: a request with no tenant header resolves to this deployment's single organization. |
 | `PYRRHULA_DEFAULT_TENANT_SLUG` | — (inferred) | Pins single-tenant mode to one tenant slug. Leave unset: with exactly one organization, that one is used. Set it only where several exist and one should be the default. |
 | `PYRRHULA_ALLOW_TENANT_SIGNUP` | `true` | Whether strangers can create their own organisation. |
-| `PYRRHULA_DEFAULT_REGISTRATION_POLICY` | `closed` | What an organisation that has not chosen gets for **joining an existing** one (a different question from creating a new one). `closed` — nobody self-registers; `request` — anyone may apply and an admin approves; `open` — anyone who knows the organisation name gets a viewer account. Each organisation overrides it in the admin console under **Joining**. Anything unrecognised is read as `closed`. |
 | `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD` | generated | The platform admin created on first boot. Changing them afterwards does **not** rotate the account — change the password in the app. |
 | `PYRRHULA_ADMIN_TOKEN` | generated | Legacy admin console token (deprecated). |
 | `PYRRHULA_ADMIN_PORT` | `8100` | Port for that legacy console. |
@@ -53,16 +50,14 @@ in a `.env` file; the rest are read directly where they are used.
 
 ## Models and retrieval
 
+No environment variable names a model. Which model runs the disclosure gate, moderation
+or the workspace assistant is a tenant's choice in the UI; which models embed and rerank
+is the platform admin's, under **Admin → Models** (see below). The one variable here is
+an address, not a model.
+
 | Variable | Default | What it does |
 |---|---|---|
-| `PYRRHULA_EMBEDDING_MODEL` | `local/BAAI/bge-m3` | Embedding model for knowledge retrieval. |
-| `PYRRHULA_EMBEDDING_DIMENSION` | `1024` | Vector width. Must match the model **and** the existing index — changing it needs a re-embed. |
-| `PYRRHULA_RERANKER_ENABLED` | `true` | Whether retrieved chunks are reranked. |
-| `PYRRHULA_RERANKER_MODEL` | `local/BAAI/bge-reranker-v2-m3` | The reranker. |
-| `PYRRHULA_GATE_MODEL` / `PYRRHULA_GATE_API_BASE` | unset | Deployment-wide **default** model for the secret-disclosure gate. A tenant that picks one of its own connections (Admin → gate model) overrides this; unset and unchosen means the gate runs on the acting persona's model. |
-| `PYRRHULA_MODERATION_MODEL` / `PYRRHULA_MODERATION_API_BASE` | unset | Deployment **default** for the moderation classifier. A workspace or tenant that sets `moderation_model` overrides it; unset everywhere means content is not screened. |
-| `PYRRHULA_ASSISTANT_MODEL` / `PYRRHULA_ASSISTANT_API_BASE` | unset | Model for the workspace assistant. **Leave unset on a clean install** — the deployment should assume nothing about what models a user has. |
-| `PYRRHULA_WEB_SEARCH_URL` | unset | SearXNG endpoint backing the `web_search` MCP preset. |
+| `PYRRHULA_WEB_SEARCH_URL` | unset | SearXNG endpoint backing the `web_search` MCP preset. A workspace that wants its own instance edits the `web_search` server's URL in its MCP registry instead. |
 
 ## Execution, previews and repos
 
@@ -107,7 +102,6 @@ to set them. Defaults are the supported configuration.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PYRRHULA_OLLAMA_NUM_CTX` | `16384` | Per-request context window for Ollama. Its default of 4096 makes real prompts return **empty generations silently**, which is why this is forced. |
 | `PYRRHULA_REVIEW_ROUNDS_CEILING` | `10` | Hard ceiling on review→rework cycles. The *number of rounds* is a workspace setting (`max_review_rounds`); this is only the bound a workspace cannot exceed, because an unbounded review loop spends a tenant's API budget in a cycle nobody watched. |
 
 ### Resolved since the audit
@@ -119,16 +113,25 @@ to set them. Defaults are the supported configuration.
 - `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR`, `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` →
   plain constants. No tenant has a reason to want a different multiplier for "the model
   reasoned past its allowance", and something nobody should vary is not configuration.
-- `PYRRHULA_GATE_MODEL`, `PYRRHULA_GATE_API_BASE` → **kept, and correctly layered.** They
-  looked dead (the gate has run on a tenant-chosen connection for some time) and were
-  briefly deleted; `scripts/check_env_docs.py` caught it. They are read through
-  `getattr(settings, "gate_model", "")`, so removing them degrades silently instead of
-  raising — a deployment's gate would quietly fall back to each persona's own model. They
-  are the system default at the bottom of the chain, which is exactly where they belong.
-
-- `PYRRHULA_MODERATION_MODEL` → resolved per tenant/workspace, **without touching the
-  port**. `ModerationProvider.check()` still knows nothing about tenants; the composition
-  root resolves which adapter to build, which is where a selection decision belongs.
+- `PYRRHULA_GATE_MODEL`/`_API_BASE`, `PYRRHULA_MODERATION_MODEL`/`_API_BASE`,
+  `PYRRHULA_ASSISTANT_MODEL`/`_API_BASE` → **deleted.** Each was only the default beneath
+  a choice the tenant already makes in the UI (the gate connection, the workspace's
+  `moderation_model`, the "Assistant model" profile), and none could carry an API key, so
+  they only ever worked for keyless local providers. A default that a working constant
+  covers is not configuration: unchosen, the gate runs on the acting persona's model,
+  moderation is off, and the assistant profile is empty until someone fills it in. The
+  moderation port is untouched — `ModerationProvider.check()` still knows nothing about
+  tenants; the composition root resolves which adapter to build.
+- `PYRRHULA_EMBEDDING_MODEL`, `PYRRHULA_EMBEDDING_DIMENSION`, `PYRRHULA_RERANKER_MODEL`,
+  `PYRRHULA_RERANKER_ENABLED` → **Admin → Models**, stored in `deployment_setting` and
+  applied on the next restart of the api and worker. Deployment-level by nature (every
+  tenant's vectors sit in one column of one width), never per tenant. The built-in
+  defaults are the models the installers pre-download.
+- `PYRRHULA_DEFAULT_REGISTRATION_POLICY` → a constant, `closed`. Each organisation's
+  policy is set in the admin console under **Joining**.
+- `PYRRHULA_OLLAMA_NUM_CTX` → an adapter constant (16384); a connection's own `num_ctx`
+  param overrides it, which is the per-hardware lever that mattered.
+- `PYRRHULA_AUTH_PROVIDER`, `PYRRHULA_ISOLATION_MODE` → deleted; read by nothing.
 - `PYRRHULA_WEB_SEARCH_ENGINES` → `options.engines` on the `web_search` registration.
   Which engines an instance can actually use is a fact about that instance.
 - `PYRRHULA_HISTORY_CHAR_BUDGET`, `PYRRHULA_CODEGEN_MAX_TOKENS` → connection/persona

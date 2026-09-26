@@ -82,8 +82,8 @@ Not everything uses a persona's connection:
   keeps a ~1s judgement from queueing behind a 7B on one GPU.
 - **Moderation** resolves per workspace/tenant (`moderation_model`), then the deployment
   default. Unset everywhere means content is not screened.
-- **The workspace assistant** has its own connection, seeded once from
-  `PYRRHULA_ASSISTANT_MODEL` and ordinary editable data afterwards.
+- **The workspace assistant** has its own connection, created empty and filled in on
+  the "Assistant model" profile in the personas UI.
 - **The admin assistant** uses a connection on the reserved admin organization, so console
   questions are not billed to a tenant.
 - **Embedding and reranking** are deployment-wide by necessity: every tenant's vectors sit

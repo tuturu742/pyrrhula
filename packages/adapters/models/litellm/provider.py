@@ -36,7 +36,6 @@ Anthropic-style) -- both are checked, defaulting to 0 if neither is present.
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from collections.abc import AsyncIterator
@@ -57,6 +56,12 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 _PROMPT_CACHING_MARKERS = ("claude", "gpt-4", "gpt-5", "gemini-1.5", "gemini-2")
+
+
+# Ollama's own default context window is 4096 tokens, which makes real prompts return
+# empty generations silently; every Ollama call carries this unless the connection's
+# `num_ctx` param says otherwise.
+_OLLAMA_NUM_CTX = 16384
 
 
 def _tool_specs_to_litellm(req: GenerationRequest) -> list[dict[str, Any]] | None:
@@ -355,8 +360,8 @@ class LiteLLMModelProvider:
             # Ollama's default context window is 4096 tokens; a real prompt (assembled
             # manifest, repo files for codegen) plus the requested max_tokens easily
             # exceeds it, and Ollama then silently returns EMPTY generations. num_ctx is
-            # the per-request window; deployment-tunable, generous default.
-            extra["num_ctx"] = int(os.environ.get("PYRRHULA_OLLAMA_NUM_CTX", "16384"))
+            # the per-request window; a connection's own `num_ctx` param overrides this.
+            extra["num_ctx"] = _OLLAMA_NUM_CTX
         messages = _anthropic_turn_shim(req.model, messages)
         kwargs: dict[str, Any] = _merge_connection_params(
             {
@@ -575,7 +580,7 @@ class LiteLLMModelProvider:
         extra: dict[str, Any] = {}
         if model.startswith("ollama_chat/"):
             # Same silent-empty-generation hazard as generate(): default num_ctx is 4096.
-            extra["num_ctx"] = int(os.environ.get("PYRRHULA_OLLAMA_NUM_CTX", "16384"))
+            extra["num_ctx"] = _OLLAMA_NUM_CTX
         messages = _anthropic_turn_shim(model, list(req.messages))
         common: dict[str, Any] = _merge_connection_params(
             {

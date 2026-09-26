@@ -6,9 +6,8 @@ picks an adapter now resolves the model for the tenant it is building for, which
 a selection decision belongs.
 
 Two tenants can reasonably want different moderation, so the model is a setting on the
-chain (``core/settings/resolve.py``) with the deployment's environment as the default
-underneath. A deployment that has always set ``PYRRHULA_MODERATION_MODEL`` and no tenant
-setting behaves exactly as before.
+chain (``core/settings/resolve.py``): workspace, then tenant, then nothing -- a
+deployment that configured no classifier anywhere screens nothing, honestly.
 """
 
 from __future__ import annotations
@@ -27,14 +26,11 @@ async def moderation_choice(
     """``(model, api_base)`` for this tenant -- ``("", None)`` meaning allow-all.
 
     ``tenant_id`` is optional for the composition roots that genuinely have no tenant in
-    hand (startup wiring, a health check); those get the deployment default rather than a
-    fabricated tenant.
+    hand (startup wiring, a health check); those get allow-all rather than a fabricated
+    tenant.
     """
-    from core.config import get_settings
-
-    settings = get_settings()
-    model = settings.moderation_model
-    api_base = settings.moderation_api_base
+    model = ""
+    api_base = ""
 
     if tenant_id is not None:
         from core.settings.resolve import resolved_settings

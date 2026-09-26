@@ -30,8 +30,6 @@ configMapGenerator:
     namespace: pyrrhula
     literals:
       - PYRRHULA_REDIS_URL=redis://redis:6379/0
-      - PYRRHULA_AUTH_PROVIDER=local
-      - PYRRHULA_ISOLATION_MODE=shared
       - PYRRHULA_SINGLE_TENANT_UI=true
       - PYRRHULA_REQUIRE_ENCRYPTION=1
       - PYRRHULA_BLOB_STORE_ROOT=/app/data/blobs
@@ -47,10 +45,7 @@ configMapGenerator:
       # apply deploy/k8s/tls, change this to https yourself -- that overlay applies its
       # own resources rather than composing over this ConfigMap, so it cannot.
       - PYRRHULA_PUBLIC_BASE_URL=http://pyrrhula.localhost
-      # No assistant model is configured by default: a fresh install has no provider,
-      # and naming one here pointed every deployment at a host and model tag that did
-      # not exist. Set ASSISTANT_MODEL (and ASSISTANT_API_BASE for a local provider) in
-      # overlays/dev/secrets.env -- they reach the app prefixed with PYRRHULA_ -- or
-      # pick a model on the "Assistant model" profile in the UI. See docs/mcp.md.
+      # No assistant model is configured anywhere in a deployment: pick one on the
+      # "Assistant model" profile in the UI once a provider exists. See docs/mcp.md.
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1

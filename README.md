@@ -145,18 +145,11 @@ Both are permissive and carry no field-of-use restriction, so a commercial deplo
 needs no additional grant. Nothing else is fetched from Hugging Face at runtime.
 
 **Both are swappable.** They are configuration, not architecture — retrieval reaches them
-through the `EmbeddingProvider` and `Reranker` ports:
-
-```bash
-PYRRHULA_EMBEDDING_MODEL=local/BAAI/bge-m3     # any sentence-transformers model
-PYRRHULA_EMBEDDING_DIMENSION=1024              # MUST match the model's output width
-PYRRHULA_RERANKER_MODEL=local/BAAI/bge-reranker-v2-m3
-PYRRHULA_RERANKER_ENABLED=true                 # false = WRRF order, no rerank pass
-```
-
-`PYRRHULA_EMBEDDING_DIMENSION` is the deployment's declared truth and is asserted against
-the loaded model at startup, so a mismatched swap fails loudly on boot instead of quietly
-returning nothing at query time.
+through the `EmbeddingProvider` and `Reranker` ports, and the platform admin picks them
+under **Admin → Models** (any sentence-transformers model; the reranker can be disabled
+outright, which leaves WRRF order untouched). The declared vector width is asserted
+against the loaded model at startup, so a mismatched swap fails loudly on boot instead
+of quietly returning nothing at query time.
 
 Two things to know before changing the embedding model. Existing vectors are **not**
 re-embedded: a swap orphans every stored chunk embedding, so re-index or start clean.

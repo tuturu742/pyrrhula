@@ -3,17 +3,21 @@
 The retrieval models are the case this exists for. Which embedding model runs is not a
 tenant decision -- every tenant's vectors sit in one column of one width, so picking per
 tenant would be incoherent -- but it is also not something an operator should have to
-change by finding whoever restarts the process. So: an env default, overridable from the
-admin console, read here.
+change by finding whoever restarts the process. So: a built-in default, overridable from
+the admin console, read here. There is no environment variable for it: the console is
+the one place to look, and a deployment that never touches it runs the defaults the
+installer already pre-downloads.
 
-Reads fall back to configuration, so a deployment that never touches the admin console
-behaves exactly as its environment says. Writes take effect on the next restart: the
-providers hold a loaded model in memory, and swapping that underneath a running process
-would change what a half-finished retrieval means partway through.
+Writes take effect on the next restart: the providers hold a loaded model in memory, and
+swapping that underneath a running process would change what a half-finished retrieval
+means partway through. ``apply_retrieval_override`` folds the stored row into the
+process-wide ``current_retrieval_models()`` at boot, which is what the synchronous
+provider factories read.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import String, text
@@ -24,6 +28,36 @@ from core.tenancy.models import Base
 from core.tenancy.scope import unscoped_session
 
 RETRIEVAL_MODELS_KEY = "retrieval_models"
+
+# Multilingual, permissively licensed (MIT / Apache-2.0), acceptable on CPU -- a starting
+# point, not a recommendation. The installers pre-download exactly these.
+DEFAULT_EMBEDDING_MODEL = "local/BAAI/bge-m3"
+DEFAULT_EMBEDDING_DIMENSION = 1024
+DEFAULT_RERANKER_MODEL = "local/BAAI/bge-reranker-v2-m3"
+
+
+@dataclass
+class RetrievalModels:
+    """What this process embeds and reranks with. ``embedding_dimension`` is the
+    deployment's declared truth: the provider factories assert the selected adapter
+    produces vectors of this length, so a mismatch is a loud startup error rather than a
+    silent zero-recall bug found at query time."""
+
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    embedding_dimension: int = DEFAULT_EMBEDDING_DIMENSION
+    reranker_model: str = DEFAULT_RERANKER_MODEL
+    # False means the assembler gets ``reranker=None`` and ranking stays in WRRF order --
+    # the degraded mode for a deployment too small to host a cross-encoder.
+    reranker_enabled: bool = True
+
+
+_current = RetrievalModels()
+
+
+def current_retrieval_models() -> RetrievalModels:
+    """The models this process runs on -- the built-in defaults until
+    ``apply_retrieval_override`` has folded a stored admin-console choice in at boot."""
+    return _current
 
 
 class DeploymentSettingRow(Base):
@@ -37,20 +71,19 @@ class DeploymentSettingRow(Base):
 
 
 async def get_retrieval_models() -> dict[str, Any]:
-    """The effective choice: the stored override where present, configuration otherwise.
+    """The effective choice: the stored override where present, the built-in default
+    otherwise.
 
     ``source`` says which, so the admin console can show an operator whether they are
-    looking at this deployment's environment or at something someone changed later.
+    looking at the shipped default or at something someone chose later.
     """
-    from core.config import get_settings
-
-    settings = get_settings()
+    defaults = RetrievalModels()
     effective: dict[str, Any] = {
-        "embedding_model": settings.embedding_model,
-        "embedding_dimension": settings.embedding_dimension,
-        "reranker_model": settings.reranker_model,
-        "reranker_enabled": settings.reranker_enabled,
-        "source": "environment",
+        "embedding_model": defaults.embedding_model,
+        "embedding_dimension": defaults.embedding_dimension,
+        "reranker_model": defaults.reranker_model,
+        "reranker_enabled": defaults.reranker_enabled,
+        "source": "built-in default",
     }
     try:
         async with unscoped_session() as session:
@@ -110,19 +143,17 @@ async def embedded_chunk_count() -> int:
         )
 
 
-async def apply_retrieval_override_to_settings() -> dict[str, Any] | None:
-    """Fold a stored override into the process's cached Settings, once, at startup.
+async def apply_retrieval_override() -> dict[str, Any] | None:
+    """Fold a stored override into ``current_retrieval_models()``, once, at startup.
 
-    The provider factories are synchronous and read ``get_settings()``. Rather than make
-    every call site async to consult a table, the override is applied here while the
-    process boots -- which is also exactly the semantics the admin console promises
-    ("takes effect on the next restart"), rather than a weaker version of it.
+    The provider factories are synchronous. Rather than make every call site async to
+    consult a table, the override is applied here while the process boots -- which is
+    also exactly the semantics the admin console promises ("takes effect on the next
+    restart"), rather than a weaker version of it.
 
     Best-effort: a deployment whose database is not reachable yet, or has not run the
-    migration, keeps its environment configuration.
+    migration, keeps the built-in defaults.
     """
-    from core.config import get_settings
-
     try:
         effective = await get_retrieval_models()
     except Exception:  # noqa: BLE001 -- never block startup on an optional override
@@ -130,7 +161,6 @@ async def apply_retrieval_override_to_settings() -> dict[str, Any] | None:
     if effective.get("source") != "admin console":
         return None
 
-    settings = get_settings()
     for field in (
         "embedding_model",
         "embedding_dimension",
@@ -138,5 +168,5 @@ async def apply_retrieval_override_to_settings() -> dict[str, Any] | None:
         "reranker_enabled",
     ):
         if field in effective:
-            object.__setattr__(settings, field, effective[field])
+            setattr(_current, field, effective[field])
     return effective

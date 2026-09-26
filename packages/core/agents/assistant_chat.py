@@ -483,8 +483,7 @@ async def _chat_inner(
             # letting the stream die on a connection error to a host nobody set up.
             raise ValueError(
                 "no model is configured for the assistant yet -- set one on the "
-                "'Assistant model' profile, or start the deployment with "
-                "PYRRHULA_ASSISTANT_MODEL"
+                "'Assistant model' profile under Personas"
             )
         session.expunge(profile)
     from core.usage_limits import ensure_within_limits

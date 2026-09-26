@@ -107,9 +107,7 @@ async def assist_endpoint(
             status_code=409,
             detail=(
                 "no model is configured for the assistant yet -- set one on the "
-                "'Assistant model' profile, or start the deployment with "
-                "PYRRHULA_ASSISTANT_MODEL (and PYRRHULA_ASSISTANT_API_BASE for a local "
-                "provider)"
+                "'Assistant model' profile under Personas"
             ),
         )
 

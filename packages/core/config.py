@@ -37,8 +37,6 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
 
-    auth_provider: str = "local"
-    isolation_mode: str = "shared"
     single_tenant_ui: bool = False
     # PYRRHULA_SINGLE_TENANT_UI pins requests to one tenant when no X-Pyrrhula-Tenant
     # header is present -- "the MVP UI exposes one tenant's worth of
@@ -79,30 +77,6 @@ class Settings(BaseSettings):
     # server when a persona's search switch is first enabled. Empty = the preset's
     # unreachable placeholder (structure without egress).
     web_search_url: str = ""
-    # Model-backed moderation: full "provider/model" string; empty = the
-    # allow-all provider (moderation effectively off beyond per-tenant keyword policy).
-    # Deployment-wide DEFAULT gate model, for tenants that have not chosen one of their
-    # own connections (core.secrets.gate_config holds that choice, and it wins). Read via
-    # getattr in secrets_gate_factory, so deleting these fields degrades silently rather
-    # than loudly -- which is exactly how they nearly got removed as "dead".
-    gate_model: str = ""
-    gate_api_base: str = ""
-    moderation_model: str = ""
-    moderation_api_base: str = ""
-
-    # The workspace assistant's default model connection ("provider/model" + api_base),
-    # used only when a workspace has no assistant yet and one is lazily created --
-    # afterwards the assistant's own model profile (editable in the personas UI) is the
-    # source of truth. Defaults match the dev stack's local Ollama.
-    # Cold-start default for the workspace assistant's model profile. Deliberately
-    # empty: a fresh install has no model provider yet, and baking in a specific local
-    # model pointed every clean deployment at an ollama host and a model tag that were
-    # not there. Set these (or edit the "Assistant model" profile in the UI) once a
-    # provider exists -- e.g. "anthropic/claude-sonnet-5", or "ollama/<tag>" with
-    # assistant_api_base pointing at the ollama host.
-    assistant_model: str = ""
-    assistant_api_base: str = ""
-
     # Where exec environments reach the hosted git store over smart-HTTP (routes/git_http).
     # Local sibling containers use the api's in-network name; k8s/cloud runners need a
     # routable URL. Replaces the old store-volume mount entirely.
@@ -126,14 +100,6 @@ class Settings(BaseSettings):
     # Self-serve organization signup (POST /auth/signup). Disable on deployments where
     # only the platform admin creates tenants.
     allow_tenant_signup: bool = True
-    # What a tenant that has not chosen gets for `POST /auth/register` -- joining an
-    # EXISTING organization, which is a different question from creating a new one.
-    # `closed` (nobody self-registers), `request` (an admin approves each applicant) or
-    # `open`. Closed by default: the behaviour this replaced was ungated, so a
-    # deployment that upgraded into a permissive default would gain the setting and keep
-    # the hole. A tenant overrides it in `tenant.settings.registration_policy`.
-    default_registration_policy: str = "closed"
-
     # Per-principal budget must absorb a normal SPA session: the session view alone
     # polls ~5 queries every 10s, and a second tab doubles that. 60/min starved real
     # browsers into 429 loops (observed live on the SSE stream).
@@ -157,19 +123,6 @@ class Settings(BaseSettings):
     blob_s3_endpoint: str = ""
     blob_s3_region: str = "us-east-1"
     blob_s3_prefix: str = ""
-
-    # "dimension pinned in config" -- embedding_dimension is the deployment's
-    # declared truth; get_embedding_provider() asserts the selected adapter actually
-    # produces vectors of this length at startup, so a config/adapter mismatch is a loud
-    # startup error, not a silent zero-recall bug discovered at query time.
-    embedding_model: str = "local/BAAI/bge-m3"
-    embedding_dimension: int = 1024
-
-    # "config to disable reranking (degraded mode for tiny deployments)" --
-    # reranker_enabled=False means core.knowledge.retrieval.assemble.search_and_budget
-    # gets reranker=None, and ranking falls back to WRRF order untouched.
-    reranker_enabled: bool = True
-    reranker_model: str = "local/BAAI/bge-reranker-v2-m3"
 
     def model_post_init(self, __context: object) -> None:
         if not self.jwt_secret:

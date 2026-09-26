@@ -2,7 +2,7 @@
 Mirrors ``api.encryptor_factory``'s composition-root pattern (CLAUDE.md rule 12).
 
 The choice is resolved **per tenant** (workspace setting, then tenant setting, then
-``PYRRHULA_MODERATION_MODEL``): two tenants can reasonably want different moderation, and
+allow-all): two tenants can reasonably want different moderation, and
 a composition root is exactly where that selection belongs -- the port itself stays
 tenant-agnostic.
 """

@@ -66,9 +66,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:  # noqa: BLE001
         log.warning("admin_bootstrap.failed", error=str(exc)[:300])
     try:
-        from core.deployment_settings import apply_retrieval_override_to_settings
+        from core.deployment_settings import apply_retrieval_override
 
-        applied = await apply_retrieval_override_to_settings()
+        applied = await apply_retrieval_override()
         if applied:
             log.info("retrieval.override_applied", model=applied.get("embedding_model"))
     except Exception as exc:  # noqa: BLE001

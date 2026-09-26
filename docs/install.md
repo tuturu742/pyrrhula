@@ -245,20 +245,14 @@ workspace assistant.
 ## Choosing the retrieval models
 
 The short version is above: pick them in **Admin → Models** after installing. This
-section is the detail — what the choice means, and how to set a default in configuration
-before anyone logs in.
+section is the detail — what the choice means. There is no environment variable for
+it: the console is the one place, and a change applies on the next restart of the api
+and worker.
 
-Set them in `.env` (compose) or `deploy/k8s/overlays/dev/secrets.env` (k8s):
+The defaults are `local/BAAI/bge-m3` (1024-wide vectors) and
+`local/BAAI/bge-reranker-v2-m3`; any sentence-transformers model works in either slot.
 
-```bash
-# Examples, not recommendations -- any sentence-transformers model works.
-PYRRHULA_EMBEDDING_MODEL=local/BAAI/bge-m3
-PYRRHULA_EMBEDDING_DIMENSION=1024      # must match the model's output width
-PYRRHULA_RERANKER_MODEL=local/BAAI/bge-reranker-v2-m3
-PYRRHULA_RERANKER_ENABLED=true         # false = skip reranking entirely
-```
-
-Those particular models are the configured default because they are multilingual,
+Those particular models are the built-in default because they are multilingual,
 permissively licensed (MIT and Apache-2.0) and run acceptably on CPU. They are a starting
 point, not a recommendation: a smaller model is faster and cheaper to host, a
 domain-specific one may retrieve better on your content, and a deployment that never
@@ -266,9 +260,9 @@ searches non-English text has no reason to pay for multilingual weights.
 
 Two rules when changing them:
 
-- **The dimension must match the model.** `PYRRHULA_EMBEDDING_DIMENSION` is the
-  deployment's declared truth and is checked against the loaded model at startup, so a
-  mismatch fails on boot rather than returning nothing at query time.
+- **The dimension must match the model.** The width you enter is the deployment's
+  declared truth and is checked against the loaded model at startup, so a mismatch
+  fails on boot rather than returning nothing at query time.
 - **Existing vectors are not migrated.** Embeddings from a different model are not
   comparable; changing the embedding model on a deployment that already has knowledge
   orphans what is stored, and that content has to be re-indexed. Decide before you

@@ -1,12 +1,11 @@
 """Model-backed ModerationProvider: a classifier prompt through the
-existing ``ModelProvider`` port -- real judgment without new infrastructure, local
-ollama by default and anything the deployment configures otherwise.
+existing ``ModelProvider`` port -- real judgment without new infrastructure, on whatever
+model the workspace or tenant chose.
 
-Configuration (deployment-level, ``core.config.Settings``):
-
-- ``PYRRHULA_MODERATION_MODEL`` e.g. ``ollama/qwen3.8:27b`` (empty = adapter unused;
-  the factory keeps returning allow-all)
-- ``PYRRHULA_MODERATION_API_BASE`` e.g. ``http://ollama:11434``
+Configuration is the ``moderation_model`` / ``moderation_api_base`` settings on the
+resolve chain (workspace, then tenant); e.g. ``ollama/qwen3.8:27b`` with
+``http://ollama:11434``. Empty everywhere = adapter unused; the factory keeps returning
+allow-all.
 
 Failure posture: **fail-open with a flag** -- moderation here is the advisory tier;
 withholding every message because the moderation model is down would make the

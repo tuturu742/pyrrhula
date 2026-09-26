@@ -141,8 +141,8 @@ tenant card:
 
 `closed` is the default because the behaviour it replaced was the vulnerability: a
 deployment that upgraded into a permissive default would have gained the setting and kept
-the hole. `PYRRHULA_DEFAULT_REGISTRATION_POLICY` changes what an organization that has
-not chosen gets. A stored value that is not one of the three — a typo, a hand-edited row
+the hole. An organization that has not chosen is `closed`; there is no deployment-wide
+default to loosen that. A stored value that is not one of the three — a typo, a hand-edited row
 — is read as `closed`, because failing the other way puts an organization on the internet
 over a misspelling.
 
