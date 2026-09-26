@@ -66,8 +66,7 @@ EOF
 fi
 
 # Top-up for deployments created before the installer generated an admin login. Without
-# these the only way into the admin console is the deprecated token app, which is not
-# what the docs tell people to use.
+# these there is no way to sign in as the platform admin at all.
 if ! grep -q '^ADMIN_EMAIL=' "$SECRETS"; then
   echo "== adding a platform-admin login to $SECRETS"
   {

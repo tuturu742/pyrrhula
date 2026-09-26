@@ -148,7 +148,7 @@ else
 fi
 
 # Top-up for stacks created before the installer generated an admin login: without these
-# the admin console can only be reached through the deprecated token app.
+# there is no way to sign in as the platform admin at all.
 if ! grep -q '^PYRRHULA_ADMIN_EMAIL=' .env; then
   say "adding a platform-admin login to .env"
   {
@@ -208,7 +208,6 @@ services:
   api:     { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
   worker:  { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
   migrate: { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
-  admin:   { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
   searxng: { dns: [ "${PYRRHULA_COMPOSE_DNS}" ] }
 YAML
   CARGS+=(-f docker/compose.dns.yml)
@@ -226,7 +225,7 @@ fi
 # left alone: postgres and redis hold the deployment's state, restarting them costs
 # every open connection, and neither has code in this image.
 say "recreating application containers so they run the image just built"
-"${COMPOSE[@]}" "${CARGS[@]}" up -d --force-recreate --no-deps api worker web admin
+"${COMPOSE[@]}" "${CARGS[@]}" up -d --force-recreate --no-deps api worker web
 
 say "waiting for the stack"
 WEB_PORT=$(envval .env PYRRHULA_WEB_PORT 5173)
