@@ -1,5 +1,5 @@
 """D1.3/INV-7: a message's resolution records are visible per message via API, and the
-contradiction badge (C1.7) rides along as a per-record flag -- never derived from prose.
+contradiction badge rides along as a per-record flag -- never derived from prose.
 """
 
 from __future__ import annotations

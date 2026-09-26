@@ -1,4 +1,4 @@
-/** Wire shapes for F3.11's schema authoring endpoints -- a hand-written mirror of
+/** Wire shapes for the schema authoring endpoints -- a hand-written mirror of
  * `packages/core/entities/schema.py` / `fsm.py` / `views.py`'s Pydantic models, same
  * rationale as `entity-sheets/types.ts`: simple, direct types for the editor components
  * without every one of them reaching into the generated `schema.ts`. */
@@ -106,7 +106,7 @@ export interface SchemaValidationIssue {
   message: string;
 }
 
-/** §16.5's "start from blank exists but is explicitly secondary" -- a guided minimal
+/** 's "start from blank exists but is explicitly secondary" -- a guided minimal
  * template (one identity field), never a truly empty field list, so a blank canvas is
  * still an immediately-renderable schema. */
 export function blankSchemaDefinition(): EntitySchemaDefinitionDoc {

@@ -1,8 +1,8 @@
-"""PNG `tEXt` chunk read/write for Character Card V2/V3 files (G4.8, plan §11.3).
+"""PNG `tEXt` chunk read/write for Character Card V2/V3 files.
 
 A card is a PNG whose metadata carries a base64-encoded JSON document in a `tEXt` chunk --
 `chara` for V2, `ccv3` for V3, and card-writing frontends emit both for backward compatibility.
-This module is the narrow parsing slice §11.3 recommends porting from `character-foundry`
+This module is the narrow parsing slice recommends porting from `character-foundry`
 rather than running a Node sidecar for one import path.
 
 Deliberately stdlib-only (`struct`, `zlib`, `base64`): a PNG chunk is length + type + data
@@ -26,7 +26,7 @@ from typing import Any
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 # Card keywords, most-preferred first: a file carrying both is a V3 card that also wrote a
-# V2 chunk for older tools, so `ccv3` wins (§11.3).
+# V2 chunk for older tools, so `ccv3` wins.
 CARD_KEYWORDS: tuple[str, ...] = ("ccv3", "chara")
 
 
@@ -109,7 +109,7 @@ def extract_card(data: bytes) -> tuple[str, dict[str, Any]]:
 
 def write_text_chunks(image: bytes, chunks: dict[str, bytes]) -> bytes:
     """Rewrites ``image`` with ``chunks`` inserted before `IEND`, replacing any existing
-    `tEXt` chunk of the same keyword. Used by G4.9's export; here because reading and
+    `tEXt` chunk of the same keyword. Used by the export; here because reading and
     writing the same byte format from two modules is how they drift apart."""
     if not image.startswith(_PNG_SIGNATURE):
         raise NotAPngError("data does not start with the PNG signature")

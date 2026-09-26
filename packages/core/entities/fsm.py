@@ -1,4 +1,4 @@
-"""Declarative FSMs on entity schemas (F3.2, plan §10.3, §12.5): states with tags and
+"""Declarative FSMs on entity schemas: states with tags and
 enter/exit effects, transitions with CEL guards and triggers. The req-18 bet in one
 definition shape: ``healthy -> bloodied -> unconscious -> dead`` and
 ``draft -> submitted -> in_review -> approved -> archived`` are the same structure --
@@ -11,7 +11,7 @@ this vocabulary (``set_field``, ``emit_event``, ``invoke_tool``, ``apply_modifie
 (rule 9).
 
 ``ANY_STATE`` (``"*"``) lets a transition's ``from`` match every declared state --
-needed for the "reachable from any active state" shape F3.13's swdev ``work_item``
+needed for the "reachable from any active state" shape the swdev ``work_item``
 schema uses (``blocked``), built here rather than patched in later once a real pack
 needs it.
 """
@@ -184,9 +184,9 @@ def _check_reachability(
 def validate_state_machines(
     field_types: Mapping[str, str], machines: list[StateMachineDef]
 ) -> list[FSMValidationIssue]:
-    """Static validation (F3.2): reachability from ``initial``, no transition to/from an
+    """Static validation: reachability from ``initial``, no transition to/from an
     undeclared state (``ANY_STATE`` excepted for ``from``), guards compile, effects
-    reference real fields/machines -- reuses F3.1's CEL compile-check and validator
+    reference real fields/machines -- reuses the CEL compile-check and validator
     patterns (``core.process.dsl.validator``'s reachability shape)."""
     issues: list[FSMValidationIssue] = []
     machine_keys = {m.key for m in machines}
@@ -267,11 +267,11 @@ def guard_passes(transition: TransitionDef, fields: Mapping[str, object]) -> boo
 
 class EntityStateChangeRow(Base):
     """Append-only (CLAUDE.md rule 5): every state change -- FSM-driven or a plain field
-    edit (F3.5's ``mutate()``) -- lands here. ``entity_id`` has no FK yet: the ``entity``
+    edit (the ``mutate()``) -- lands here. ``entity_id`` has no FK yet: the ``entity``
     table doesn't exist until F3.3, which ALTERs this table to add the constraint once
     its target exists (the same incremental-schema-growth pattern
     ``core.tenancy.models.Workspace.vocabulary_overlay_id`` documents for an identical
-    forward-reference reason). ``session_id``/``event_seq`` are nullable -- G4.2's future
+    forward-reference reason). ``session_id``/``event_seq`` are nullable -- the future
     out-of-session mutations have neither."""
 
     __tablename__ = "entity_state_change"
@@ -315,8 +315,8 @@ async def evaluate_and_record_transition(
     cause: str = "fsm",
     cause_ref: str | None = None,
 ) -> str | None:
-    """The interpreter's transition step, in isolation from F3.5's locking/idempotency
-    (that transactional wrapping is F3.5's own job -- this function owns the "does the
+    """The interpreter's transition step, in isolation from the locking/idempotency
+    (that transactional wrapping is its own job -- this function owns the "does the
     transition fire, and if so what gets recorded" question, callable identically for
     the HP-style and ticket-style fixtures with zero domain branching).
 

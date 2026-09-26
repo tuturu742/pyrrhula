@@ -15,7 +15,7 @@ The first target use case is **AI-managed tabletop RPG campaigns**. The core eng
 domain-neutral, so two further use cases run on the same engine with different vocabulary
 overlays and content packs: **structured enterprise multi-agent workflows** (multi-perspective
 strategy discussions and planning simulations, sequential review/approval loops) and — since
-plan v1.2 (D15) — **multi-agent software development**, where a facilitator agent acts as an
+plan v1.2  — **multi-agent software development**, where a facilitator agent acts as an
 engineering manager proposing tasks and participant agents act as engineers on a shared
 repository, with implementation delegated to external coding agents over MCP. The stated end
 state of the third use case is dogfooding: Pyrrhula's own backlog worked by a team of agents
@@ -166,19 +166,10 @@ with `HF_HUB_OFFLINE=1`, so a new model needs the cache refreshed with offline m
 
 ## Status and roadmap
 
-The first four phases of the build are **done and verified**: the walking skeleton,
-the core loop, secrets/overseer/disclosure gate, all three workflow packs on an
-unchanged core, and portability (`.pyr` round-trip, CCv3 cards, sanitised reports,
-delegated coding work). One phase-4 exit criterion is honestly unmet: the dogfood
-pilot session was never run ([docs/dogfood-pilot.md](docs/dogfood-pilot.md) — the loop
-is built and tested; the recorded session is not).
-
-Ahead:
-
-| Phase | Name | Exit criterion |
-|---|---|---|
-| 5 | Enterprise overlay | SSO login, custom roles, audit export, tamper-evidence verification, Helm chart |
-| 6 | Scale & hardening | p95 turn latency < 8s at 100 concurrent sessions |
+The core is built and verified: the walking skeleton, the core loop, the
+secrets/overseer/disclosure gate, three workflow packs on an unchanged core, and
+portability (`.pyr` round-trip, CCv3 cards, sanitised reports, delegated coding work).
+What comes next is in [ROADMAP.md](ROADMAP.md).
 
 ## Repository guide
 

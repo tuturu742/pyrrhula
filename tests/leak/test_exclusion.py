@@ -1,4 +1,4 @@
-"""E2.6's acceptance criteria for context exclusion (`core.assembler.context_assembler`
+"""the acceptance criteria for context exclusion (`core.assembler.context_assembler`
 step 8 + `core.secrets.exclusion`): a concealed secret's plaintext is structurally absent
 from the assembled context, concealment injects the behavioral directive in its place,
 and a reveal commits the disclosure event + holder update atomically.
@@ -142,7 +142,7 @@ async def test_conceal_injects_behavioral_directive_in_place_of_content(
     assert directive in manifest.rendered_context
     assert any(r.reason == "concealed" for r in manifest.redactions)
 
-    # Removing the directive (E2.2's empty-directive lint scenario) leaves neither fact
+    # Removing the directive (the empty-directive lint scenario) leaves neither fact
     # nor motivation -- a content bug, not this module's job to paper over.
     empty_directive_resolved = ResolvedSecretDecision(
         secret_id=resolved.secret_id,

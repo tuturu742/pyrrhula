@@ -1,4 +1,4 @@
-"""`behavioral_fidelity` (E2.8, plan §8.6): a blind pairwise LLM judge. Does malice=80
+"""`behavioral_fidelity` : a blind pairwise LLM judge. Does malice=80
 read more malicious than malice=20? If the judge can't tell the two transcripts apart,
 the axis is cosmetic -- cut it, don't keep shipping a slider nobody can perceive.
 
@@ -89,7 +89,7 @@ async def behavioral_fidelity(
     """1.0 if the judge correctly identifies `high_transcript` (the higher axis value)
     as more pronounced than `low_transcript`, 0.0 if it gets it backwards -- a single
     pair's score; a real harness run averages this across many scenario/axis pairs.
-    Takes a `judge` callback (same injection-seam shape as E2.7's `regenerate`) so the
+    Takes a `judge` callback (same injection-seam shape as the `regenerate`) so the
     A/B assignment and the actual provider call are the caller's composition, not baked
     in here -- this function only knows "high" and "low", never which label the caller
     assigned to which."""

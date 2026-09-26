@@ -1,4 +1,4 @@
-"""`.pyr` export + import endpoints (G4.5/G4.6, plan §11.2/§11.4/§16.6).
+"""`.pyr` export + import endpoints.
 
 Two endpoints and no more: request an export (which enqueues a job and returns its id),
 and download a finished one. Deliberately *not* a synchronous `GET /export` returning a
@@ -181,7 +181,7 @@ async def download_export(
     )
 
 
-# ── G4.6: import ────────────────────────────────────────────────────────────────────
+# ── import ────────────────────────────────────────────────────────────────────
 
 
 class ImportResponse(BaseModel):
@@ -287,7 +287,7 @@ async def import_bundle_endpoint(
     lands or is refused, and the caller needs that answer (with the *location* of a broken
     resolution chain) in the response, not in a job they have to go poll for.
 
-    The ingestion disclaimer §16.6 asks for is the UI's job, not this route's: it is
+    The ingestion disclaimer asks for is the UI's job, not this route's: it is
     posture shown before a user chooses to import, whereas the envelope and the scanner
     are the mitigations, and putting the disclaimer text here would imply otherwise."""
     data = await file.read()
@@ -355,7 +355,7 @@ async def import_bundle_endpoint(
 async def list_quarantine(
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[QuarantinedEntryResponse]:
-    """The review queue behind §16.6's "human reviews each in a dedicated UI"."""
+    """The review queue behind 's "human reviews each in a dedicated UI"."""
     entries = await list_quarantined_entries(ctx.tenant_id)
     return [
         QuarantinedEntryResponse(
@@ -378,7 +378,7 @@ async def approve_quarantine(
     return Response(status_code=204)
 
 
-# ── G4.8: CCv2/CCv3 card import ─────────────────────────────────────────────────────
+# ── CCv2/CCv3 card import ─────────────────────────────────────────────────────
 
 
 class CardImportResponse(BaseModel):
@@ -396,7 +396,7 @@ async def import_card_endpoint(
     file: UploadFile = File(...),
     ctx: RequestContext = Depends(get_request_context),
 ) -> CardImportResponse:
-    """The ecosystem's front door (§11.3): a PNG card, or the plain JSON some tools share
+    """The ecosystem's front door: a PNG card, or the plain JSON some tools share
     instead. Both spec versions land on the same internal shape before anything is written.
 
     Embedding is enqueued rather than done here. Until it runs the imported lore still
@@ -435,7 +435,7 @@ async def import_card_endpoint(
     )
 
 
-# ── G4.9: CCv3 card export ──────────────────────────────────────────────────────────
+# ── CCv3 card export ──────────────────────────────────────────────────────────
 
 
 class LossItemResponse(BaseModel):
@@ -446,7 +446,7 @@ class LossItemResponse(BaseModel):
 
 class CardExportPreviewResponse(BaseModel):
     """The loss report, *before* download. Its own endpoint rather than a header on the
-    download, because §11.3 requires the user to see what a card cannot carry and then
+    download, because requires the user to see what a card cannot carry and then
     decide -- and a report delivered alongside the file has already lost that argument."""
 
     persona_id: uuid.UUID

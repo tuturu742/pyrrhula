@@ -1,4 +1,4 @@
-"""F3.5's own acceptance tests: concurrent-transition serialisation, idempotent replay,
+"""its own acceptance tests: concurrent-transition serialisation, idempotent replay,
 atomic rollback on a planted effect failure, and permission-before-locking.
 """
 
@@ -202,7 +202,7 @@ async def test_failed_effect_rolls_back_the_whole_transition(
     await _grant(tenant_a, workspace_id, principal_id, "facilitator")
 
     # "zero_field" is always 0 in real data; the effect's CEL divides by it -- passes
-    # F3.1's dummy-value compile-check (dummy zero_field=1, 1/1=1, no error) but fails
+    # the dummy-value compile-check (dummy zero_field=1, 1/1=1, no error) but fails
     # for real at transition time.
     machine = StateMachineDef.model_validate(
         {

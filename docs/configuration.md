@@ -182,7 +182,7 @@ Values that two tenants might reasonably disagree about are settings, not enviro
 variables, and they resolve through one chain:
 
 ```
-workspace.settings  ->  tenant.settings  ->  the deployment default (below)
+workspace.settings ->  tenant.settings ->  the deployment default (below)
 ```
 
 **Absent means inherit; present means chosen.** A key that is not in a settings dict falls

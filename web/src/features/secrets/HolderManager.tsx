@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
 
 /**
- * E2.2: who knows the secret. `holder_kind` is `author|discovered|told` (E2.1's schema) --
+ * who knows the secret. `holder_kind` is `author|discovered|told` (the schema) --
  * a facilitator adding a holder here is almost always recording "told", since "author" is
  * set automatically at creation and "discovered" is meant to come from in-session events,
  * not manual entry, but the field is left free so a facilitator can correct history.

@@ -1,4 +1,4 @@
-"""`ReportTemplate` -- pack content, not code (G4.10, plan §11.5, CLAUDE.md rule 9).
+"""`ReportTemplate` -- pack content, not code (G4.10, CLAUDE.md rule 9).
 
 A template says *what kind of report* to produce: who it is for, what steps the pipeline
 runs, and what formats it renders to. It is declarative JSON validated by Pydantic, exactly
@@ -42,7 +42,7 @@ class Step(BaseModel):
     max_tokens: int = 600
     # Only meaningful for `fact_frame`: which record kinds enter the frame. Empty means all
     # three -- a template that wanted none of them would be asking for a summary of prose,
-    # which is the thing §11.5 exists to prevent.
+    # which is the thing exists to prevent.
     fact_kinds: list[str] = Field(default_factory=list)
 
     @field_validator("max_tokens")
@@ -72,7 +72,7 @@ class ReportTemplate(BaseModel):
     # Explicitly typed rather than a bare lambda: mypy cannot narrow `list[str]` to
     # `list[OutputFormat]` through `default_factory`, and the annotation is the honest fix.
     output_formats: list[OutputFormat] = Field(default_factory=_default_formats)
-    # A template may require human review before its artifacts are downloadable (G4.11).
+    # A template may require human review before its artifacts are downloadable.
     # Default False: most reports are not sensitive, and a review gate everywhere is a
     # review gate nobody reads.
     requires_review: bool = False

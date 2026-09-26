@@ -1,4 +1,4 @@
-"""Deterministic tools over MCP (G4.13, plan §9.1, §13.7, INV-7).
+"""Deterministic tools over MCP (INV-7).
 
 **The registry drives the tool list.** `randomizer` is not special-cased here; every
 `tool_definition` row of kind `deterministic` becomes an MCP tool, so a pack that registers

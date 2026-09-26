@@ -1,4 +1,4 @@
-"""MCP registry admin (G4.12, plan §13.7, req 12).
+"""MCP registry admin (G4.12, req 12).
 
 The registry is workspace configuration, and configuration is exactly where the allowlist
 lives -- so this is the surface that decides what agents in a workspace can reach. It is
@@ -157,7 +157,7 @@ class PresetResponse(BaseModel):
 
 @router.get("/presets")
 async def list_presets() -> list[PresetResponse]:
-    """§13.7's web-search preset: a registry entry a deployment enables, not a special code
+    """'s web-search preset: a registry entry a deployment enables, not a special code
     path. "Web search is just an MCP server behind a workspace policy flag" is only true if
     it is registered the same way everything else is."""
     return [PresetResponse(**WEB_SEARCH_PRESET)]  # type: ignore[arg-type]

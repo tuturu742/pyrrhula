@@ -1,4 +1,4 @@
-"""Secret authoring endpoints (E2.2): create/edit a secret's four faces, manage its
+"""Secret authoring endpoints: create/edit a secret's four faces, manage its
 holder set, and AI-assisted drafting of the directive/hint. Talks to
 `core.secrets.authoring`/`core.secrets.drafting` — never `core.secrets.repo`, which INV-1
 reserves for `core.assembler`/`core.overseer` (see `core.secrets.repo`'s docstring for why
@@ -205,7 +205,7 @@ async def get_secret_endpoint(
 ) -> SecretResponse:
     """Plaintext (`content`/`hint_text`/`behavioral_directive`) is populated only for a
     principal passing `secret:author` on the secret's workspace -- everyone else gets
-    the same response shape with those three fields `null` and `gist` intact (E2.2)."""
+    the same response shape with those three fields `null` and `gist` intact."""
     try:
         view = await get_secret_view(
             ctx.tenant_id,
@@ -355,7 +355,7 @@ async def draft_endpoint(
     encryptor: Encryptor = Depends(get_encryptor),
     permission_service: PermissionService = Depends(get_permission_service),
 ) -> DraftResponse:
-    """Draft-and-approve, not autopilot (§8.4): this endpoint only ever proposes. Saving
+    """Draft-and-approve, not autopilot: this endpoint only ever proposes. Saving
     the draft is a separate `PATCH /secrets/{id}` call the client makes only on explicit
     author acceptance -- nothing here writes to the secret itself."""
     try:

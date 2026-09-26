@@ -191,7 +191,7 @@ async def test_repo_snapshot_ingests_with_path_glob_class_mapping(
     assert by_key[entry_key_for("tasks/phase-4/G4.15.md")] == "lore"
     assert by_key[entry_key_for("CLAUDE.md")] == "rules"
     assert by_key[entry_key_for("docs/adr/0001-ports.md")] == "rules"
-    # Source code lands in `misc` and is named as experimental, so §15.9's code-aware
+    # Source code lands in `misc` and is named as experimental, so 's code-aware
     # chunking evaluation can find exactly what was treated naively.
     assert by_key[entry_key_for("src/main.py")] == "misc"
     assert "src/main.py" in report.experimental

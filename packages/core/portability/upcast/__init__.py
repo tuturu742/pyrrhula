@@ -1,4 +1,4 @@
-"""`pyr_format` upcast chain (G4.6, plan §11.2/§16.6).
+"""`pyr_format` upcast chain.
 
 Compatibility is `pyr_format`-major: export always writes current, import supports the
 current major and the one before it, and gets from one to the other by applying pure
@@ -39,7 +39,7 @@ def _upcast_0_to_1(
     ``chunks/<chunk_id>.json`` file per chunk.
 
     Format 0 kept every chunk of a source in a single JSON object keyed by chunk id.
-    Format 1 gives each chunk its own file for the same reason §11.2 gives for entry
+    Format 1 gives each chunk its own file for the same reason gives for entry
     bodies as `.md`: a bundle should diff at the granularity people actually edit at, and
     a one-line change inside a thousand-chunk map diffs as a change to the whole map.
 

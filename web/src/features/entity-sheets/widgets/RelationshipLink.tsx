@@ -5,7 +5,7 @@ export interface RelationshipLinkProps {
   value: string;
 }
 
-/** F3.4's `relationship` tag -- a project's owner, a work item's assignee, a skill's
+/** the `relationship` tag -- a project's owner, a work item's assignee, a skill's
  * governing attribute: a reference to something else, rendered as a link-styled chip
  * (not a real router link -- the referenced id's own entity type isn't known here,
  * only that this field points at one). */

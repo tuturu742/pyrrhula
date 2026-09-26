@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Single-image entrypoint: the first argument selects which process this container runs.
-# See plan §13.8 — the only difference between self-host and SaaS is configuration.
+# See  — the only difference between self-host and SaaS is configuration.
 set -eu
 
 case "${1:-api}" in

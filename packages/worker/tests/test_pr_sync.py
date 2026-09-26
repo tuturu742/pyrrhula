@@ -86,7 +86,7 @@ async def test_an_open_pull_request_moves_nothing() -> None:
 
 def test_the_sweep_runs_on_the_workers_idle_tick() -> None:
     """Wiring, asserted on source: the sync existing and never being called is the exact
-    shape of the bug that made it necessary (F3.6's renderer was complete and unwired for
+    shape of the bug that made it necessary (the renderer was complete and unwired for
     the same reason)."""
     import inspect
 

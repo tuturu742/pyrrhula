@@ -1,4 +1,4 @@
-"""Keyword activation (plan §3.3, §6.4, A1.5) — the keyed-lore convention of chat frontends,
+"""Keyword activation  — the keyed-lore convention of chat frontends,
 deliberately borrowed (not reinvented): keyword matching with AND/OR/NOT secondary-key
 logic, `constant` entries, and temporal activation state (`sticky`/`cooldown`/`delay`)
 that solves "the tavern lore shouldn't re-inject every turn while we're in the tavern, but
@@ -7,12 +7,12 @@ also shouldn't vanish after one turn" — nothing in the plain-RAG literature do
 Pure function over already-fetched entries, not a DB-touching module: the caller (the
 future assembler, C1.2) fetches entries and recent-turn scan text, and is responsible for
 persisting the returned ``new_state`` as part of session-derived state — that mechanism is
-B1.4's job (event log + checkpoints), which doesn't exist yet. This module owns the
+the job (event log + checkpoints), which doesn't exist yet. This module owns the
 activation *logic* and its state *shape* only; ``prior_state``/``new_state`` are plain
 JSON-able dicts specifically so whatever B1.4 builds can store them without this module
 needing to know how.
 
-Secondary-key logic, condensed to fit the 3-value ``logic`` CHECK constraint (A1.1) rather
+Secondary-key logic, condensed to fit the 3-value ``logic`` CHECK constraint rather
 than the classic 4-mode ``AND_ANY``/``AND_ALL``/``NOT_ANY``/``NOT_ALL``: primary
 ``keys[]`` always match on OR (any key present triggers); ``logic`` then governs how
 ``secondary_keys[]`` modifies that verdict --
@@ -47,7 +47,7 @@ class UnsafeRegexError(ValueError):
 
 
 def validate_regex_keys(keys: list[str]) -> None:
-    """Compile-checked at save (plan §6.4): catches a syntax error immediately, while the
+    """Compile-checked at save: catches a syntax error immediately, while the
     author is still looking at the form, rather than the key silently never matching."""
     for key in keys:
         try:

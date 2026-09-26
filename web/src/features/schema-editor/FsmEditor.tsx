@@ -60,7 +60,7 @@ function blankEffect(): EffectDef {
 }
 
 /**
- * F3.11's FSM editor: states as nodes, transitions as labelled edges, on the exact same
+ * the FSM editor: states as nodes, transitions as labelled edges, on the exact same
  * React Flow shell the process editor's own phase canvas renders through
  * (`@/features/process-editor/FlowCanvas` -- one shared module, not a parallel
  * React Flow tree with its own copy-pasted chrome). Transitions/effects are edited as

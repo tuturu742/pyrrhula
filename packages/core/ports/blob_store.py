@@ -1,5 +1,5 @@
 """BlobStore port. v1 is local filesystem; S3-compatible adapter is a swap behind this
-port for the SaaS deployment mode (§13.8) without touching call sites."""
+port for the SaaS deployment mode without touching call sites."""
 
 from __future__ import annotations
 

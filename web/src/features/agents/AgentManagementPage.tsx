@@ -15,7 +15,7 @@ import type { components } from "@/lib/api-client/schema";
 type AgentResponse = components["schemas"]["api__routes__agents__PersonaResponse"];
 
 /**
- * D1.5: create and configure agents for a workspace -- persona, model profile, role
+ * create and configure agents for a workspace -- persona, model profile, role
  * type -- plus tenant-wide model-profile management (provider credentials never
  * redisplayed once entered).
  */

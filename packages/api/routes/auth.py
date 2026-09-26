@@ -1,8 +1,8 @@
-"""Register/login/logout (T0.6). Local password auth via IdentityProvider (T0.3).
+"""Register/login/logout. Local password auth via IdentityProvider.
 
 Self-registration grants ``role='viewer'`` — the least-privilege default. Granting
 'owner' happens via the tenant-provisioning flow (``core.tenancy.seed`` today; a real
-provisioning API is out of T0.6's scope), not self-service registration.
+provisioning API is out of the scope), not self-service registration.
 """
 
 from __future__ import annotations

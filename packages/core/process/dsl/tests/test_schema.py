@@ -1,4 +1,4 @@
-"""B1.1: structural (Pydantic-level) schema constraints -- the layer that catches a bad
+"""structural (Pydantic-level) schema constraints -- the layer that catches a bad
 document one field at a time, before validator.py's whole-document graph/semantic checks
 even run.
 """

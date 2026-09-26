@@ -1,4 +1,4 @@
-"""Embedding job handlers (A1.3) — the worker-side wiring ``core.knowledge.embedding``
+"""Embedding job handlers  — the worker-side wiring ``core.knowledge.embedding``
 needs but can't import itself: which ``EmbeddingProvider`` adapter
 (``worker.embedding_provider_factory``), and the tenant's D14 egress policy
 (``Tenant.settings["egress_policy"]``). Registered in ``worker.main``'s job dispatch

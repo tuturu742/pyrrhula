@@ -1,4 +1,4 @@
-"""Secret authoring (E2.2, plan §8.4): create/edit a secret's four faces and manage its
+"""Secret authoring: create/edit a secret's four faces and manage its
 holder set. Freely importable — unlike `core.secrets.repo`, which INV-1 reserves for
 `core.assembler`/`core.overseer` — mirroring `core.knowledge.authoring`'s identical
 exemption from the same lint (see `core.secrets.repo`'s docstring for why).
@@ -43,15 +43,15 @@ class SecretNotFoundError(Exception):
 class SecretAccessDeniedError(Exception):
     """Raised on a write attempt (create/update/holder management) by a principal
     lacking `secret:author` on the secret's workspace. Reads never raise this — see
-    `SecretView`, which degrades to a gist-only view instead (E2.2's own acceptance
+    `SecretView`, which degrades to a gist-only view instead (its own acceptance
     criterion: a participant's request for the same secret returns gist-level fields
     only, not a 403)."""
 
 
 class SecretContentRejectedError(Exception):
-    """Raised when the authoring-time moderation hook (§16.7) disallows `content` — the
+    """Raised when the authoring-time moderation hook disallows `content` — the
     v1 `AllowAllModerationProvider` never actually raises this (it allows everything),
-    but the call site exists now so G4.14's real provider is a pure adapter swap, not a
+    but the call site exists now so the real provider is a pure adapter swap, not a
     retrofit touching every secret write path. Secret content is user-authored text like
     any other; the secrets model does not blind moderation."""
 
@@ -132,7 +132,7 @@ async def create_secret(
     behavioral_directive: str | None = None,
     publication: str = "guarded",
 ) -> SecretRow:
-    """`content` is encrypted before it ever touches a row (D11) — the plaintext argument
+    """`content` is encrypted before it ever touches a row  — the plaintext argument
     itself is not retained anywhere past this call returning.
 
     `publication` defaults to `guarded`: a secret is publishable only because someone
@@ -279,7 +279,7 @@ async def update_secret_fields(
     behavioral_directive: str | None | object = UNSET,
     publication: str | None = None,
 ) -> SecretRow:
-    """Any accepted edit — manual or an accepted AI-assist draft — bumps `version` (E2.1's
+    """Any accepted edit — manual or an accepted AI-assist draft — bumps `version` (the
     schema; there is no separate version-history table for secrets, unlike knowledge
     sources). `content`/`gist` use "omitted (`None`) means unchanged" (neither can
     legally be cleared to empty); `hint_text`/`behavioral_directive` use the `UNSET`

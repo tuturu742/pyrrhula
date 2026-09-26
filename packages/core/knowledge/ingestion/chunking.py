@@ -1,4 +1,4 @@
-"""Entry body -> retrieval-ready chunks (plan §6.3, A1.2): paragraph-aware, targeting
+"""Entry body -> retrieval-ready chunks: paragraph-aware, targeting
 ~400 tokens with overlap so a chunk boundary rarely falls mid-idea. Token counting is
 injected (``count_tokens``) rather than imported directly — this is ``core``, and tokenizer
 selection is an adapter concern (``ModelProvider.count_tokens``, T0.3); the worker-side job

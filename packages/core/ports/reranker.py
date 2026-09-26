@@ -1,8 +1,8 @@
-"""Reranker port (D9, §13.3, A1.7): class-blind cross-encoder rerank, in-process (no API
+"""Reranker port: class-blind cross-encoder rerank, in-process (no API
 call). "Class-blind by design" isn't a policy enforced elsewhere that this port could
 still violate — it's structural: the signature below has no ``class_`` parameter at all,
 so an adapter has nothing to condition on even if it wanted to. Class priority lives in
-bucket allocation (A1.6), where it's auditable; baking it into the reranker would hide the
+bucket allocation, where it's auditable; baking it into the reranker would hide the
 policy inside a model instead.
 """
 

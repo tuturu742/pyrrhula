@@ -1,6 +1,6 @@
-"""F3.10's acceptance criterion over real HTTP: a private-tagged field is present in
+"""the acceptance criterion over real HTTP: a private-tagged field is present in
 the response for an authorized viewer and absent (not blanked) for one who isn't --
-the wire contract F3.10's React sheet renders from.
+the wire contract the React sheet renders from.
 """
 
 from __future__ import annotations

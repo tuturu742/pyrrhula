@@ -20,7 +20,7 @@ nothing in a brand workshop or a dinner-party mystery has a lifecycle worth trac
 | `constraints` | CEL predicates that must hold after any write |
 
 None of this is code. User-authored logic in Pyrrhula is JSON Schema, declarative FSMs
-and CEL expressions — there is no `eval`, and no place to put a script (D7).
+and CEL expressions — there is no `eval`, and no place to put a script.
 
 ## A state machine
 
@@ -29,18 +29,18 @@ and CEL expressions — there is no `eval`, and no place to put a script (D7).
   "key": "health",
   "initial": "healthy",
   "states": [
-    { "key": "healthy",  "label_key": "status.healthy" },
+    { "key": "healthy", "label_key": "status.healthy" },
     { "key": "bloodied", "label_key": "status.bloodied" },
-    { "key": "down",     "label_key": "status.unconscious", "on_enter": [
+    { "key": "down", "label_key": "status.unconscious", "on_enter": [
       { "kind": "set_field", "field": "hit_points", "value": "0" }
     ]}
   ],
   "transitions": [
-    { "from": "healthy",  "to": "bloodied", "trigger": "wound",
+    { "from": "healthy", "to": "bloodied", "trigger": "wound",
       "guard": "fields.hit_points <= fields.max_hit_points / 2" },
-    { "from": "bloodied", "to": "down",     "trigger": "wound",
+    { "from": "bloodied", "to": "down", "trigger": "wound",
       "guard": "fields.hit_points <= 0" },
-    { "from": "bloodied", "to": "healthy",  "trigger": "heal" }
+    { "from": "bloodied", "to": "healthy", "trigger": "heal" }
   ]
 }
 ```

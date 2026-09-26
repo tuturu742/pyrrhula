@@ -22,7 +22,7 @@ export interface FieldWidgetProps {
 /**
  * The one dispatcher every field goes through: tag -> widget id (`tagWidgetRegistry`)
  * -> component. No domain knowledge anywhere in this file -- adding a pack never
- * touches it (F3.10's own acceptance criterion).
+ * touches it (its own acceptance criterion).
  */
 export function FieldWidget({
   field,

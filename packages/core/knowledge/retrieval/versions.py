@@ -1,4 +1,4 @@
-"""Which knowledge *versions* a workspace actually reads (A1.8's pin-vs-follow, resolved).
+"""Which knowledge *versions* a workspace actually reads (the pin-vs-follow, resolved).
 
 ``knowledge_chunk`` keeps every published version's chunks side by side: publishing a new
 version inserts new rows and leaves the old ones exactly where they were (chunking a

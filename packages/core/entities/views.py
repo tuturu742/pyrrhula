@@ -1,9 +1,9 @@
-"""ViewDef (F3.4, plan §10.4): layout (grouping, ordering, tabs) referencing fields by
+"""ViewDef: layout (grouping, ordering, tabs) referencing fields by
 key. Making a sheet *feel* native is a ``ViewDef`` **content** problem -- pack authoring,
-F3.7/F3.8/F3.13's own job -- not an engine problem: the engine only resolves field keys
+F3.7/F3.8/its own job -- not an engine problem: the engine only resolves field keys
 to widgets (``core.entities.tags``) and lays out groups/tabs in the declared order.
-F3.10's React components read a ``ViewDef`` at render time; a field the ``ViewDef``
-doesn't mention still renders (F3.10's "falls into a default group, never disappears"),
+the React components read a ``ViewDef`` at render time; a field the ``ViewDef``
+doesn't mention still renders (the "falls into a default group, never disappears"),
 so a dangling field reference here is a authoring mistake to flag, never a silent drop.
 """
 

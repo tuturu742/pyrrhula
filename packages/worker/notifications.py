@@ -1,4 +1,4 @@
-"""Notification + digest job handlers (G4.3) -- the worker-side wiring
+"""Notification + digest job handlers -- the worker-side wiring
 ``core.sessions.notifications`` needs but can't import itself (composition root: which
 ``Notifier`` and which ``PermissionService`` adapter). Registered in ``worker.main``'s
 dispatch table under ``"notify_await_opened"`` and ``"send_digest"``.

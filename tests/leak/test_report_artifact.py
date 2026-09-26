@@ -1,4 +1,4 @@
-"""G4.10's leak criterion: a participant recap generated over a session containing
+"""the leak criterion: a participant recap generated over a session containing
 concealed secrets contains no trace of them. Scanned at the artifact level -- the report's
 own `content_md`, plus its stored row -- with the same three detectors G4.7 uses.
 

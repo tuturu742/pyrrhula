@@ -1,4 +1,4 @@
-"""Rule-system validation (C1.5, plan §9.2 step 2/§9.3): the API that closes the "I have
+"""Rule-system validation: the API that closes the "I have
 +5" hallucination. A model emits a REQUEST (an expression + a check type + which entity it
 claims to be); this module -- not the model -- decides whether that request is legal and
 what the actual modifier is, reading it from ``actor_fields`` rather than trusting

@@ -1,4 +1,4 @@
-"""INV-10 across the export boundary (G4.5, plan §11.2): rebuild a turn's rendered
+"""INV-10 across the export boundary: rebuild a turn's rendered
 knowledge block from a `.pyr` bundle alone and check it against the hash the manifest
 recorded, with no database in the loop.
 

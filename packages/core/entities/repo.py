@@ -1,4 +1,4 @@
-"""EntitySchema repository (F3.1). Not INV-1-restricted -- entity schemas/data are not
+"""EntitySchema repository. Not INV-1-restricted -- entity schemas/data are not
 knowledge or secrets; nothing about them is "stored text that reaches a model" in the
 sense INV-1 protects (they're deterministically injected, F3.6, not retrieved). Freely
 importable, unlike ``core.secrets.repo``/``core.knowledge.repo``.
@@ -84,7 +84,7 @@ async def next_version(tenant_id: uuid.UUID, workspace_id: uuid.UUID | None, key
 async def list_schema_versions(
     tenant_id: uuid.UUID, workspace_id: uuid.UUID | None, key: str
 ) -> list[EntitySchemaRow]:
-    """Every version of one schema key, newest first -- F3.11's version history panel
+    """Every version of one schema key, newest first -- the version history panel
     (`list_latest_schemas` deliberately collapses to one row per key, so it can't serve
     this; a distinct query, not a filter over that one's results)."""
     async with tenant_scope(tenant_id) as session:
@@ -106,7 +106,7 @@ async def list_latest_schemas(
     tenant_id: uuid.UUID, workspace_id: uuid.UUID | None
 ) -> list[EntitySchemaRow]:
     """The latest version of each distinct schema key for this ``(tenant, workspace)``
-    pair -- ``workspace_id=None`` is F3.11's template gallery (pack-provided schemas,
+    pair -- ``workspace_id=None`` is the template gallery (pack-provided schemas,
     never tied to one workspace). Small counts (a handful of schemas per pack/
     workspace), so "fetch all, keep the max version per key in Python" is simpler than a
     window-function query and not a real cost at this scale."""

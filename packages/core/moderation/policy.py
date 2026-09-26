@@ -1,6 +1,6 @@
-"""Per-tenant moderation policy (G4.14, plan §16.7 (Q6), req 31).
+"""Per-tenant moderation policy (G4.14 (Q6), req 31).
 
-§16.7 identifies two scans as the *real* controls, and this module is what they consult:
+ identifies two scans as the *real* controls, and this module is what they consult:
 
 * **at authoring** -- secrets, knowledge entries, and personas are user-authored text, and
   a DB-connected scanner reads them at write time. Crucially it reads a secret's `content`
@@ -12,7 +12,7 @@ Neither depends on an overseer existing, which is the point: Q6's rule is that a
 multi-human workspace needs an overseer **or** moderation with overseer-equivalent
 visibility, and an arm that only worked when an overseer was present would satisfy nothing.
 
-**Policy lives in `tenant.settings`, and the default is permissive** (§14.4's seam
+**Policy lives in `tenant.settings`, and the default is permissive** ('s seam
 principle). A platform that arrived pre-censoring would be a platform tenants fight; one
 that cannot be configured to block anything is a platform enterprises cannot buy. So: a
 seam, off by default, with the categories and the action a tenant's own decision.
@@ -106,7 +106,7 @@ async def set_policy(tenant_id: uuid.UUID, policy: ModerationPolicy) -> None:
 class ScanOutcome:
     """What a scan decided. ``reasons`` are the provider's category labels -- never the
     text itself, which is the same reason the audit row records a target id rather than
-    content (§16.7): a moderation log full of the content it flagged is a second copy of
+    content: a moderation log full of the content it flagged is a second copy of
     every sensitive thing anyone wrote."""
 
     allowed: bool

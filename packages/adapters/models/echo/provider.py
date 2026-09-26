@@ -1,6 +1,6 @@
 """Deterministic test/demo ``ModelProvider``: echoes the last user message back, split
 into word-sized chunks to exercise real streaming semantics. **Not a production
-adapter.** Exists so T0.8's walking skeleton — and its automated tests, and anyone doing
+adapter.** Exists so the walking skeleton — and its automated tests, and anyone doing
 a live demo without Ollama running or API keys configured — can prove the
 agent-runtime -> streaming -> persistence pipeline deterministically.
 """

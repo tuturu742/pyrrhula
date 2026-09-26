@@ -1,6 +1,6 @@
-"""E2.6's INV-10 replay claim: a turn with concealments reproduces the exact same
+"""the INV-10 replay claim: a turn with concealments reproduces the exact same
 rendered context (and therefore the exact same ``content_hash``) on a second call with
-the same recorded inputs -- the same determinism property C1.3's own replay test proves
+the same recorded inputs -- the same determinism property its own replay test proves
 for retrieval, extended to cover the exclusion step this task adds.
 """
 

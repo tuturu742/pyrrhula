@@ -1,4 +1,4 @@
-"""Designated-overseer requirement (E2.10, Q6/§16.7): a workspace with multiple
+"""Designated-overseer requirement (E2.10, Q6/): a workspace with multiple
 unrelated humans, or any enterprise-tenant workspace, must have a principal holding the
 `overseer` workspace role before it can be configured -- an agent-only or solo-human
 workspace does not. "Enterprise-tenant" is read from the workspace's own resolved

@@ -1,5 +1,4 @@
-"""Between-session state: the workspace clock and scheduled entity effects (G4.2, plan
-§12.5, req 21).
+"""Between-session state: the workspace clock and scheduled entity effects (G4.2, req 21).
 
 Workspaces are not only alive during sessions. Time passes between game nights; a ticket
 ages between review cycles; a work item is unblocked while nobody is in a session. Three
@@ -16,7 +15,7 @@ deciding that a fictional month is 30 real days.
 
 **Schedules are declarative data, not code** (CLAUDE.md rule 10). An ``entity_schedule``
 row says *when* (``at clock >= X`` or ``every N``) and *what* (a field-change map handed
-straight to F3.5's ``mutate``). There is no expression to evaluate and nothing user-
+straight to the ``mutate``). There is no expression to evaluate and nothing user-
 supplied to execute.
 
 **Exactly-once is rule 8's mechanism, not a bespoke one.** Every application derives its
@@ -96,7 +95,7 @@ class EntityScheduleRow(Base):
         PG_UUID(as_uuid=True), ForeignKey("entity.id", ondelete="CASCADE"), nullable=False
     )
     key: Mapped[str] = mapped_column(String(63), nullable=False)
-    # 'at'    -- fires once, on the first tick at or after ``threshold``.
+    # 'at' -- fires once, on the first tick at or after ``threshold``.
     # 'every' -- fires on every tick that is a multiple of ``threshold``.
     kind: Mapped[str] = mapped_column(String(8), nullable=False)
     threshold: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -203,7 +202,7 @@ async def apply_due_schedules(
     permission_service: PermissionService,
 ) -> list[AppliedEffect]:
     """Applies every enabled schedule's due effects across ``(from_clock, to_clock]``,
-    each through F3.5's ``mutate`` with its own ``(schedule, tick)`` idempotency key.
+    each through the ``mutate`` with its own ``(schedule, tick)`` idempotency key.
 
     Separate from ``advance_clock`` so a crashed advance can be re-driven by the worker
     over the same range without re-advancing the clock: replaying a range is a no-op by
@@ -263,7 +262,7 @@ async def advance_clock(
     *,
     permission_service: PermissionService,
 ) -> ClockAdvance:
-    """The one and only way ``workspace.clock_value`` moves (G4.2). Permission-gated on
+    """The one and only way ``workspace.clock_value`` moves. Permission-gated on
     ``workspace:advance_clock`` through the port (CLAUDE.md rule 12 -- never inline role
     logic) and forward-only.
 
@@ -302,8 +301,8 @@ async def advance_clock(
 @dataclass(frozen=True)
 class ChangeFeedRow:
     """One row of the between-sessions change feed -- a *record*, not prose. The overseer
-    UI renders these directly; nothing here is summarised or narrated (that is G4.1's job,
-    on the way into a resumed session's context, and G4.10's at report scale)."""
+    UI renders these directly; nothing here is summarised or narrated (that is the job,
+    on the way into a resumed session's context, and the at report scale)."""
 
     change_id: uuid.UUID
     entity_id: uuid.UUID

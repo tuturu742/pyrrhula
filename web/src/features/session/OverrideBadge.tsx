@@ -1,5 +1,5 @@
 /**
- * G4.4 (req 10): the badge that makes a human-in-place-of-agent turn visible.
+ * the badge that makes a human-in-place-of-agent turn visible.
  *
  * There is no "hide me" prop and no conditional on the message's content: if a turn was a
  * human override, this renders. Whether *participants* see it at all is decided upstream

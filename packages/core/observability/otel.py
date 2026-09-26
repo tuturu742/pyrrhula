@@ -1,6 +1,6 @@
 """OpenTelemetry wiring, on from day one.
 
-Per-turn traces are how context assembly gets debugged (plan §13.1) — this is not
+Per-turn traces are how context assembly gets debugged  — this is not
 premature instrumentation, it's the only way anyone will understand why a given turn's
 context looked the way it did. Exporter is OTLP over gRPC/HTTP when
 ``PYRRHULA_OTEL_EXPORTER_ENDPOINT`` is set; otherwise spans are created against a no-op

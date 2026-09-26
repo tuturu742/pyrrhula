@@ -85,8 +85,8 @@ async def _seed_constant_entry(
     entry_key: str,
     body_text: str,
 ) -> None:
-    """A ``constant: true`` entry -- always active regardless of query (C1.4's stable
-    knowledge). ``seed_chunk`` (A1.4's test helper) hardcodes ``constant=false``, so this
+    """A ``constant: true`` entry -- always active regardless of query (the stable
+    knowledge). ``seed_chunk`` (the test helper) hardcodes ``constant=false``, so this
     is a local, minimal insert for exactly the one field it doesn't expose."""
     async with tenant_scope(tenant_id) as session:
         await session.execute(
@@ -524,7 +524,7 @@ async def test_default_seams_are_true_no_ops(db_available: None) -> None:
     assert manifest.token_counts["entity_state"] == 0
 
 
-# ── C1.4: stable/volatile layout ─────────────────────────────────────────────────────
+# ── stable/volatile layout ─────────────────────────────────────────────────────
 
 
 async def test_two_consecutive_turns_share_a_byte_identical_stable_prefix(

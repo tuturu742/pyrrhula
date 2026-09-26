@@ -1,6 +1,6 @@
 """Process-wide settings, read once from the environment.
 
-Two database URLs on purpose (plan §12.1, T0.2): ``database_url`` is the migration/admin
+Two database URLs on purpose: ``database_url`` is the migration/admin
 connection (table owner, used only by the ``migrate`` entrypoint); ``app_database_url`` is
 what every API/worker process uses, connecting as the non-superuser, non-BYPASSRLS
 ``pyrrhula_app`` role so row-level security actually applies to it. Handing the app
@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     isolation_mode: str = "shared"
     single_tenant_ui: bool = False
     # PYRRHULA_SINGLE_TENANT_UI pins requests to one tenant when no X-Pyrrhula-Tenant
-    # header is present (T0.6) -- "the MVP UI exposes one tenant's worth of
-    # functionality" is a feature flag over a multi-tenant core (plan §13.8), not a
+    # header is present -- "the MVP UI exposes one tenant's worth of
+    # functionality" is a feature flag over a multi-tenant core, not a
     # different build.
     #
     # Empty by default, meaning "infer it". This used to default to "dev", a tenant no
@@ -141,7 +141,7 @@ class Settings(BaseSettings):
     rate_limit_tenant_requests: int = 1200
     rate_limit_window_seconds: int = 60
 
-    # BlobStore is the local filesystem by default (A1.2). Setting blob_s3_bucket below
+    # BlobStore is the local filesystem by default. Setting blob_s3_bucket below
     # selects the S3-compatible adapter instead -- the swap happens in the composition
     # root (api/blob_store_factory.py), which is a config branch, exactly one level up
     # from these fields. This comment used to deny that branch existed.
@@ -151,21 +151,21 @@ class Settings(BaseSettings):
     # subdirectory holding a plugin.json is registered and synced at boot. Mount a host
     # directory or a ConfigMap here; the platform only ever reads it.
     plugin_drop_dir: str = "/app/plugins-local"
-    # S3-compatible blob storage (§13.8): a bucket selects the S3 adapter over the
+    # S3-compatible blob storage: a bucket selects the S3 adapter over the
     # local filesystem store. Credentials come from the ambient AWS chain, never here.
     blob_s3_bucket: str = ""
     blob_s3_endpoint: str = ""
     blob_s3_region: str = "us-east-1"
     blob_s3_prefix: str = ""
 
-    # A1.3: "dimension pinned in config" -- embedding_dimension is the deployment's
+    # "dimension pinned in config" -- embedding_dimension is the deployment's
     # declared truth; get_embedding_provider() asserts the selected adapter actually
     # produces vectors of this length at startup, so a config/adapter mismatch is a loud
     # startup error, not a silent zero-recall bug discovered at query time.
     embedding_model: str = "local/BAAI/bge-m3"
     embedding_dimension: int = 1024
 
-    # A1.7: "config to disable reranking (degraded mode for tiny deployments)" --
+    # "config to disable reranking (degraded mode for tiny deployments)" --
     # reranker_enabled=False means core.knowledge.retrieval.assemble.search_and_budget
     # gets reranker=None, and ranking falls back to WRRF order untouched.
     reranker_enabled: bool = True

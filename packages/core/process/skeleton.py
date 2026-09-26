@@ -1,7 +1,7 @@
 """The deliberately dumb, deletable T0.8 walking skeleton: a hardcoded two-phase process
 (``prompt`` — waiting for a user message — and ``respond`` — the agent is generating).
 
-This exists only to prove the pipe end to end (plan §15.3) before any real feature
+This exists only to prove the pipe end to end before any real feature
 exists: request -> tenant-scoped persistence -> a real model call through the
 ``ModelProvider`` port -> streaming -> durable, same-transaction usage metering. The real
 interpreter, arbitrary phase graphs, checkpoints, and await/resume land at B1.1-B1.6 and
@@ -108,7 +108,7 @@ async def submit_user_message(
             await session.flush()
 
         if on_event is not None:
-            # D1.3: the message's own id, so the session view can fetch its
+            # the message's own id, so the session view can fetch its
             # citations/resolutions (GET /messages/{id}/citations|resolutions) -- SSE
             # payloads never carried this before, which made both endpoints unreachable
             # from a live-streamed message.
@@ -157,7 +157,7 @@ async def generate_agent_response(
 ) -> AsyncIterator[str]:
     """The 'respond' phase: call the agent's model through the ModelProvider port,
     optionally streaming chunks live via ``on_chunk``, then persist the assistant
-    message + its session_event + its usage_record in ONE transaction (§12.8: usage
+    message + its session_event + its usage_record in ONE transaction (: usage
     metering that can drift from the thing it meters will drift), and transition back to
     'prompt'.
     """

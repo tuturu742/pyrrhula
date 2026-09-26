@@ -1,16 +1,16 @@
-"""Secret schema (plan §7.3, D3, E2.1): a first-class record with its own holder set,
+"""Secret schema: a first-class record with its own holder set,
 disclosure state machine, and provenance — the substrate everything else in Phase 2
 (gate, exclusion, overseer) operates on. A secret is a property of a *relationship*
-between a fact and its holders, not a field on Entity or Persona (D3): two conspirators
+between a fact and its holders, not a field on Entity or Persona: two conspirators
 share one row, one holder each, not a copy per holder.
 
-``SecretRow.gist_embedding`` isn't mapped here. Like ``knowledge_chunk.embedding`` (A1.1),
+``SecretRow.gist_embedding`` isn't mapped here. Like ``knowledge_chunk.embedding``,
 it needs the pgvector ``vector`` type, which isn't wired into the SQLAlchemy type system —
 it's added via raw SQL in the migration and excluded from autogenerate via
 ``migrations/env.py``'s ``_RAW_SQL_COLUMNS`` (a column-level sibling of ``_RAW_SQL_TABLES``:
 unlike ``knowledge_chunk``, every other column on ``secret`` needs real ORM-backed CRUD
 from day one, so excluding the whole table isn't the right shape here). Nothing in E2.1
-populates it — that starts when the disclosure gate (E2.5) or overseer (E2.10) needs
+populates it — that starts when the disclosure gate or overseer needs
 semantic search over gists.
 """
 
@@ -37,12 +37,12 @@ from core.tenancy.models import Base
 
 
 class SecretRow(Base):
-    """The record itself (D3). ``content_ciphertext`` is routed through the ``Encryptor``
+    """The record itself. ``content_ciphertext`` is routed through the ``Encryptor``
     port at the repo layer (identity impl for now, D11) — never read directly by anything
     outside ``core.secrets.repo``/``core.assembler``/``core.overseer`` (INV-1). ``gist`` is
-    the only field the disclosure gate (E2.5) will ever see. ``behavioral_directive`` is
+    the only field the disclosure gate will ever see. ``behavioral_directive`` is
     nullable in the schema but not optional in spirit (E2.2 treats an empty one as a lint
-    warning) — it's the field that makes exclusion (E2.6) produce an agent with a
+    warning) — it's the field that makes exclusion produce an agent with a
     motivation instead of a lobotomy."""
 
     __tablename__ = "secret"
@@ -57,7 +57,7 @@ class SecretRow(Base):
         PG_UUID(as_uuid=True), ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False
     )
     # Polymorphic subject, no per-kind FK -- same shape as audit_log.resource_type/
-    # resource_id (T0.7): the target table varies by subject_kind, so a single FK
+    # resource_id: the target table varies by subject_kind, so a single FK
     # constraint can't express it.
     subject_kind: Mapped[str] = mapped_column(String(16), nullable=False)
     subject_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
@@ -131,7 +131,7 @@ class SecretHolderRow(Base):
 
 
 class SecretDisclosureEventRow(Base):
-    """Append-only (CLAUDE.md rule 5): what actually got said, to whom, and how (D3). The
+    """Append-only (CLAUDE.md rule 5): what actually got said, to whom, and how. The
     migration REVOKEs UPDATE/DELETE from the app role on this table, the same control
     ``audit_log``/``knowledge_source_version`` use."""
 
@@ -173,7 +173,7 @@ class SecretDisclosureEventRow(Base):
 
 
 class DisclosureDecisionRow(Base):
-    """Append-only (CLAUDE.md rule 5): the gate's recorded rationale (D3, §12.6) — evidence,
+    """Append-only (CLAUDE.md rule 5): the gate's recorded rationale  — evidence,
     not a source of truth for what happened (that's ``secret_disclosure_event``). Q11 (Phase
     5, Legal) owns its retention question; this schema doesn't pre-judge it."""
 

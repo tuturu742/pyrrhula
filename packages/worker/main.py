@@ -2,7 +2,7 @@
 
 Same image as the API, different command. Claims jobs via the ``JobQueue`` port (Postgres
 ``SELECT ... FOR UPDATE SKIP LOCKED``, T0.3) and dispatches by ``kind`` to a handler
-registered in ``_HANDLERS`` — this finishes what T0.3's stub docstring promised ("T0.3
+registered in ``_HANDLERS`` — this finishes what the stub docstring promised ("T0.3
 replaces this with JobQueue.poll()") but never actually landed; A1.2 is the first task
 that needs a real out-of-process job to run.
 """

@@ -1,4 +1,4 @@
-"""CCv3 card export, lossy and honest about it (G4.9, plan §11.3).
+"""CCv3 card export, lossy and honest about it.
 
 **Import: day one. Export: best-effort with loss warnings. Native format: never.** A card
 cannot carry a behaviour profile, a secret, a process definition, or a per-phase budget --
@@ -11,7 +11,7 @@ The loss report is not a courtesy. Exporting a workspace's agent to a card and h
 to someone is a moment where a person forms a belief about what they just shared. A silent
 lossy export lets them believe they shared everything.
 
-**Secrets are excluded unconditionally.** Card export is not one of G4.7's export *modes* --
+**Secrets are excluded unconditionally.** Card export is not one of the export *modes* --
 there is no "full card". It is always sanitised-equivalent for secret content, and
 `tests/leak/test_card_export.py` scans the produced bytes to prove it. The reasoning is
 that a `.pyr` bundle goes to someone the exporter chose deliberately with a mode they had
@@ -103,7 +103,7 @@ class CardExportResult:
 async def export_agent_as_card(
     tenant_id: uuid.UUID, workspace_id: uuid.UUID, persona_id: uuid.UUID
 ) -> CardExportResult:
-    """The inverse of G4.8's mapping, sharing its model and its `EXTENSIONS_KEY` -- one
+    """The inverse of the mapping, sharing its model and its `EXTENSIONS_KEY` -- one
     constant for both directions, so they cannot disagree about where native data lives."""
     async with tenant_scope(tenant_id) as session:
         agent = await session.get(Persona, persona_id)

@@ -1,4 +1,4 @@
-"""Pyrrhula as an MCP server (G4.13, plan §9.1, §13.7).
+"""Pyrrhula as an MCP server.
 
 **One implementation, two surfaces.** Every handler here calls the same service the HTTP
 route calls. That is not a style preference: the permission model, the visibility

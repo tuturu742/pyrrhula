@@ -1,4 +1,4 @@
-"""MCP tool-call tokens (E2.12, §9.1, §13.7): `(tenant, workspace, principal)` claims --
+"""MCP tool-call tokens: `(tenant, workspace, principal)` claims --
 one more than the HTTP session token (`api.auth.tokens.TokenClaims`), since a human's HTTP
 request carries its own workspace in the URL/body while an MCP tool call has no such
 per-call channel, so the token itself must carry it.

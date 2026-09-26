@@ -6,7 +6,7 @@ overseer) to import ``core.secrets.repo``, so candidate loading and reveal-path
 decryption happen here, and ``core/process/live_session`` receives only opaque
 ``ResolvedSecretDecision`` / ``ConcealedSecret`` values it cannot misuse.
 
-Flow per turn (E2.5 + E2.6, plan §8.4/§8.5):
+Flow per turn (E2.5 + E2.6/):
 
 1. phase ``visibility.secrets != "held_by_actor"`` -> nothing (the outer switch).
 2. Load the acting principal's HELD secrets (gists + embeddings only) for this
@@ -18,7 +18,7 @@ Flow per turn (E2.5 + E2.6, plan §8.4/§8.5):
    session participant as the newly-informed holders (disclosure changes the world;
    ``apply_reveal`` extends the ACL in the same transaction as the event).
 5. Return the concealed secrets' plaintext separately for the post-generation leak
-   check (E2.7) -- memory-only comparison material; it never enters model context.
+   check -- memory-only comparison material; it never enters model context.
 """
 
 from __future__ import annotations
@@ -200,7 +200,7 @@ async def resolve_turn_secrets(
     # every held secret's plaintext enters context with a keep-it-secret instruction.
     # Reachable only through the explicit `eval_arm` parameter (never over HTTP; the
     # architecture fence test locks this) -- it exists so the benchmark can MEASURE
-    # what instruction-only concealment actually leaks (§8.4's named trap).
+    # what instruction-only concealment actually leaks ('s named trap).
     if eval_arm == "prompt_only":
         exposed: list[ResolvedSecretDecision] = []
         for c in candidates_raw:
@@ -263,7 +263,7 @@ async def resolve_turn_secrets(
         elif eval_arm == "gate_no_exclusion":
             # ── EVAL ARM 2: the gate deliberated (its decision row is already
             # recorded), but the conceal/hint verdict is NOT enforced by exclusion --
-            # plaintext enters context with an instruction, exactly the design §8.4
+            # plaintext enters context with an instruction, exactly the design
             # rejects as "changed nothing structurally". Measured, never shipped.
             plaintext = await get_secret_plaintext(
                 tenant_id, decision.secret_id, encryptor=encryptor

@@ -4,7 +4,7 @@ import { apiClient } from "@/lib/api-client/client";
 import { useVocabularyStore } from "@/stores/vocabulary";
 
 /**
- * D1.6: resolves and activates the overlay for `workspaceId` (the fallback chain --
+ * resolves and activates the overlay for `workspaceId` (the fallback chain --
  * workspace override -> tenant default -> system default -- is computed server-side,
  * see `core.vocabulary.service.resolve_overlay_for_workspace`) and pushes it into
  * `useVocabularyStore`, which every `useLabel()` call subscribes to. Call this once

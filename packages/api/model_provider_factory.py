@@ -1,4 +1,4 @@
-"""The one place a concrete ``ModelProvider`` adapter is selected (T0.8). ``core`` never
+"""The one place a concrete ``ModelProvider`` adapter is selected. ``core`` never
 imports ``adapters`` directly — it depends on the ``ModelProvider`` port and takes a
 factory as a parameter; this is that factory, wired at the api layer (the composition
 root), matching ``core.process.skeleton.ModelProviderFactory``.

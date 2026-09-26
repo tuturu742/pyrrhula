@@ -1,5 +1,5 @@
-"""Reranking within a fused, budget-bucketed candidate list (plan §6.3 step 5, A1.7):
-class-blind cross-encoder rerank of the top 32 WRRF-fused (A1.6) candidates, keeping the
+"""Reranking within a fused, budget-bucketed candidate list:
+class-blind cross-encoder rerank of the top 32 WRRF-fused candidates, keeping the
 top 16 by rerank score. Runs *between* WRRF fusion and bucket fill — fuse-before-rerank is
 the empirically better cascade (plan cites TREC iKAT 2025 and the standard two-stage
 pattern); do not "optimise" this order.

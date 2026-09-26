@@ -1,7 +1,7 @@
 # CLAUDE.md — ground rules for coding agents
 
 Pyrrhula is a multi-tenant, multi-agent orchestration platform (tabletop-RPG-first,
-enterprise-second, software-development-third — D15) built around one claim: **who-knows-what
+enterprise-second, software-development-third) built around one claim: **who-knows-what
 is enforced by the system, not requested of the model.** Read `docs/agent-guide.md` before
 your first implementation task.
 
@@ -63,13 +63,13 @@ decisions and still means it is settled.
 9. **Packs are content, not code.** pack content lives in workflow-plugin repos (pinned via `deploy/plugins.json`, fetched to `.plugins/` -- run `scripts/fetch_plugins.py`) and may not import from `packages/core/`. If a pack
    needs a core import, the core is missing an abstraction — raise it, don't work around it.
 10. **No user-authored code, ever.** User-supplied logic is JSON Schema + declarative FSMs +
-    CEL expressions only. No `eval`, no RestrictedPython, no exceptions (D7).
+    CEL expressions only. No `eval`, no RestrictedPython, no exceptions.
 11. **Usage metering** (`usage_record`) is written in the same transaction as the message it
     meters, with a `purpose` value (generation | gate | rerank | embed | report | rewrite |
-    delegation — the last added in v1.2 for D15 delegated coding-agent work). The egress
-    policy check lives inside the `ModelProvider` port, keyed on the same `purpose` taxonomy
-    (D14); delegated MCP work is egress-controlled by the workspace MCP **allowlist**, not by
-    D14 — do not extend D14 to cover it.
+    delegation — for delegated coding-agent work). The egress policy check lives inside
+    the `ModelProvider` port, keyed on the same `purpose` taxonomy; delegated MCP work is
+    egress-controlled by the workspace MCP **allowlist** instead — do not extend the egress
+    policy to cover it.
 12. **Ports, not features.** Cross-cutting concerns go through the ports in `core/ports/`
     — `PermissionService`, `IdentityProvider`, `TenantRouter`, `VectorStore`,
     `ModelProvider`, `JobQueue`, `BlobStore`, `Encryptor`, `ModerationProvider`, and since
@@ -91,11 +91,9 @@ the existing layout — do not invent alternative structure.
 
 - One task, one branch, one pull request. Say in the PR what the task was and how you know
   it is done — a reviewer should not have to infer the acceptance criteria from the diff.
-- Asked to work a whole track sequentially instead (a human says so explicitly)? One branch
-  for the track, one commit per task in dependency order, one PR at the end.
 - CI-blocking suites you must keep green and must extend when relevant:
-  `tests/isolation/` (T0.4), `tests/architecture/` (INV-1 lint), `tests/replay/` (INV-10),
-  `tests/packs/` (INV-9, from Phase 3), `tests/leak/` (from Phase 2).
+  `tests/isolation/`, `tests/architecture/` (INV-1 lint), `tests/replay/` (INV-10),
+  `tests/packs/` (INV-9), `tests/leak/`.
 - Acceptance criteria are falsifiable on purpose. If a criterion is untestable as written,
   say so in the PR rather than quietly reinterpreting it.
 - Never commit provider API keys; `agent.credential_ref` points into a secret

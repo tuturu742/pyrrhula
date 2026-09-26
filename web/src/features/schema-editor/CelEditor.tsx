@@ -7,8 +7,8 @@ interface CelEditorProps {
 }
 
 /**
- * F3.11's CEL editor: a plain textarea (no syntax highlighting -- nothing in this repo
- * ships a CEL grammar for CodeMirror/Monaco, and D7's own boundary is "no user code, CEL
+ * the CEL editor: a plain textarea (no syntax highlighting -- nothing in this repo
+ * ships a CEL grammar for CodeMirror/Monaco, and its own boundary is "no user code, CEL
  * expressions only", not "a bespoke editor experience") plus the live, expression-
  * anchored error list the page-level debounced `/entities/schemas/validate` call
  * produces. The page owns validation timing; this component only renders whatever

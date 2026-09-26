@@ -85,7 +85,7 @@ async def test_upload_enqueues_job_and_worker_processes_it(
     elapsed = time.monotonic() - start
     assert ingest_resp.status_code == 202, ingest_resp.text
     # The api process only writes a blob and enqueues a job -- no parsing/chunking here,
-    # so this stays fast regardless of document size (A1.2's "200-page PDF" criterion).
+    # so this stays fast regardless of document size (the "200-page PDF" criterion).
     assert elapsed < 2.0
     job_id = uuid.UUID(ingest_resp.json()["job_id"])
 

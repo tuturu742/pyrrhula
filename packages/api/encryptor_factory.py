@@ -1,4 +1,4 @@
-"""The one place a concrete ``Encryptor`` adapter is selected (D1.5). Mirrors
+"""The one place a concrete ``Encryptor`` adapter is selected. Mirrors
 ``api.model_provider_factory``/``api.permission_service_factory``'s composition-root
 pattern for the same port (CLAUDE.md rule 12).
 

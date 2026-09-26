@@ -1,5 +1,5 @@
 """The secrets repository — the only way `Secret`/`SecretHolder` plaintext (`content`,
-`hint_text`, `behavioral_directive`) is read (§7.3, D3). **INV-1: only `core.assembler`
+`hint_text`, `behavioral_directive`) is read. **INV-1: only `core.assembler`
 and `core.overseer` may import this module** — enforced by
 `tests/architecture/test_inv1_import_graph.py`.
 
@@ -12,11 +12,11 @@ call in `core.secrets.drafting` that *does* reach a model is a distinct, sanctio
 purpose (`'rewrite'`, D14), scoped to content the author already possesses and consented
 to send, not the disclosure/exclusion path this module's allowlist protects.
 
-Persisting a `DisclosureDecision`/`SecretDisclosureEvent` (E2.5/E2.6) lives in
+Persisting a `DisclosureDecision`/`SecretDisclosureEvent` lives in
 `core.secrets.decisions` instead, also freely importable — writing one never reads
 `content_ciphertext`, only already-computed gist-based judgments and ids, so it was never
 really part of the plaintext-read surface this module's allowlist protects. That split
-mirrors the authoring/repo one: `core/secrets/gate.py` (E2.5) needs to persist its own
+mirrors the authoring/repo one: `core/secrets/gate.py` needs to persist its own
 output but must never be able to import this module, so the write path had to live
 somewhere gate.py *can* reach.
 """
@@ -43,7 +43,7 @@ async def get_secret_plaintext(
     """The one path that ever sees `content_ciphertext` decrypted for the in-session/
     overseer surface. Reserved for the overseer's audited reads (INV-5: the audit row for
     a plaintext read is written in the *same transaction* as the read, D3) — the
-    disclosure gate (E2.5) never calls this; it only ever sees `gist`."""
+    disclosure gate never calls this; it only ever sees `gist`."""
     row = await get_secret(tenant_id, secret_id)
     if row is None:
         return None

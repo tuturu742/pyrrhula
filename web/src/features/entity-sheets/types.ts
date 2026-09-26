@@ -1,4 +1,4 @@
-/** Wire shapes for F3.10's entity view -- kept as a small, hand-written mirror of
+/** Wire shapes for the entity view -- kept as a small, hand-written mirror of
  * `packages/api/routes/entities.py`'s response models (the generated `schema.ts` types
  * these structurally match) so the widget components below have simple, direct types
  * to import without every one of them reaching into the generated schema file. */

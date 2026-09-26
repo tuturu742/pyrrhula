@@ -1,4 +1,4 @@
-"""Redis cache over the per-class retrieval cascade (plan §6.3 cost note, §16.1, A1.9):
+"""Redis cache over the per-class retrieval cascade ( cost note, A1.9):
 within a scene, the same content re-queries for many turns, so hit rates should be high —
 cache the expensive part (post-WRRF fusion, pre-rerank candidates) and let reranking
 (query-specific and cheap) run fresh every time.
@@ -6,7 +6,7 @@ cache the expensive part (post-WRRF fusion, pre-rerank candidates) and let reran
 Cache key is ``(query_hash, scope_set, class, version_set)`` — **the scope set is part of
 the key**: a cache that ignores scope is a leak surface, the same INV-4 concern retrieval
 itself has to take seriously. ``version_set`` (the resolved effective version id per
-knowledge source relevant to this scope+class — A1.8's ``resolve_effective_version_id``)
+knowledge source relevant to this scope+class — the ``resolve_effective_version_id``)
 makes publishing a new version self-invalidating: the key simply changes, so a stale
 cached list is never reachable again, no explicit bust needed for that event specifically.
 

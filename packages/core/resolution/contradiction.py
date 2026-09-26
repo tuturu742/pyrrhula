@@ -1,9 +1,9 @@
-"""Contradiction check (C1.7, plan §9.2 step 7/§16.4, Q4 resolved 2026-07-16): best-effort
+"""Contradiction check (C1.7, Q4 resolved 2026-07-16): best-effort
 scan of a reply against its turn's resolution records. Flags for a UI correction badge --
 **no regeneration, ever**. The resolution widget already renders the truth straight from
 ``ResolutionRecord`` (INV-7); a contradicting narration is cosmetic and self-correcting --
 the reader sees the badge and the real number sits right there. That is a strictly
-different, much lower-stakes failure mode than §8.7's secret-leak check (which *does*
+different, much lower-stakes failure mode than 's secret-leak check (which *does*
 regenerate) -- **do not generalise this module's no-regen posture to that one.**
 
 **Conservative by design** (the task's own words: "prefer false negatives over noisy
@@ -112,7 +112,7 @@ def scan_for_contradictions(
 async def flag_contradictions(
     tenant_id: uuid.UUID, message_id: uuid.UUID, flags: list[ContradictionFlag]
 ) -> None:
-    """Persists flags onto the message (§12.7's ``moderation_flags`` column) -- a no-op if
+    """Persists flags onto the message ('s ``moderation_flags`` column) -- a no-op if
     ``flags`` is empty, leaving ``moderation_flags`` at its default ``{}}`` rather than
     writing an empty ``contradiction`` key (so "flagged" is exactly "the key is present
     and non-empty", not "the key exists but is empty")."""
@@ -128,7 +128,7 @@ async def flag_contradictions(
 
 
 async def contradiction_rate(tenant_id: uuid.UUID, session_id: uuid.UUID) -> float:
-    """§16.4: "measure the rate from the first session; under ~1% the badge is the
+    """: "measure the rate from the first session; under ~1% the badge is the
     permanent answer." Fraction of assistant messages in a session carrying a
     contradiction flag -- 0.0 on a session with no assistant messages yet, not a
     division-by-zero error."""

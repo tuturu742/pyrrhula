@@ -1,5 +1,5 @@
 """Canonical JSON serialisation: stable key order, compact separators, no float drift.
-Shared by the audit hash chain (§7.4) and any future content-hash user (e.g.
+Shared by the audit hash chain and any future content-hash user (e.g.
 ``knowledge_source_version.content_hash``, A1.1) — one canonicalisation rule, not one per
 caller that quietly drift apart.
 

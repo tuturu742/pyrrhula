@@ -1,21 +1,15 @@
-"""G4.17: the dogfood loop, driven end to end over the real machinery.
+"""The delegation loop, driven end to end over the real machinery.
 
-**What this is, stated before anything else.** The task asks for a *recorded pilot
-session* -- this repository ingested as knowledge, an EM agent proposing a task, a real
-coding agent producing a real branch and PR, a human approving a merge -- plus three tests
-over its artifacts. The tests are here and they are real. **The recorded session is not**,
-and cannot be from this environment: there is no coding agent reachable over MCP, no
-sandbox git remote, no provider credentials, and no human to approve. `tasks/phase-4/
-G4.17-dogfood-pilot.md`'s scope note says so plainly, and `docs/dogfood-pilot.md` is the
-write-up of what was and was not exercised.
+Everything a delegated piece of work touches is the shipped code: this repository is
+ingested as knowledge, the swdev pack's `work_item` FSM walks its real lifecycle, dispatch
+and reconciliation run against a coding-agent double that models the far side's state,
+`checklist_eval` writes a real `ResolutionRecord` through the real rule system, and every
+transition is asserted to have a record-level cause. Substituting a scripted external
+agent for a real one is the *only* substitution.
 
-What *is* exercised is the loop itself, over the components that will run it: G4.15 ingests
-this repository's own `tasks/` and `CLAUDE.md`, the swdev pack's `work_item` FSM walks its
-real lifecycle, G4.16 dispatches and reconciles against a coding-agent double that models
-the far side's state, `checklist_eval` writes a real `ResolutionRecord` through the real
-rule system, and every transition is asserted to have a record-level cause. Substituting a
-scripted external agent for a real one is the *only* substitution; everything it talks to
-is the shipped code.
+What these tests do NOT do is run a live pilot with a real coding agent, a real remote and
+a human approving a merge -- that needs credentials and people this environment does not
+have. The loop is proven here; the pilot is an operator's exercise, not a test.
 """
 
 from __future__ import annotations
@@ -233,7 +227,7 @@ async def _record_human_decision(pilot: _Pilot, decision: str, event_seq: int) -
     """The Engineering Director's approval is a **recorded event**, and the transition that
     follows cites it.
 
-    The Director holds `overseer`, which by design carries no `entity:mutate` (E2.10's
+    The Director holds `overseer`, which by design carries no `entity:mutate` (the
     model: an overseer sees and decides, and does not write entity state). So the decision
     is recorded as a `session_event` and the transition is applied citing that event's id.
     Granting the overseer write permission to make this tidier would quietly change the

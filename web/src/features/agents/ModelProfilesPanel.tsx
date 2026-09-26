@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
 
 /**
- * D1.5: tenant-wide model profiles (provider/model/params/fallback/credentials).
+ * tenant-wide model profiles (provider/model/params/fallback/credentials).
  * "Key entry -> masked forever after": the create/edit form has an `api_key` input, but
  * no response from the backend ever carries a key or ciphertext back -- only the opaque
  * `credential_ref`, rendered here as a fixed "key on file" badge, never the value itself.

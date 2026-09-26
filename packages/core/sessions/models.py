@@ -1,4 +1,4 @@
-"""Minimal ``session``/``session_event``/``message`` (plan §12.7) for T0.8's walking
+"""Minimal ``session``/``session_event``/``message`` for the walking
 skeleton: a hardcoded 2-phase process (``prompt`` -> ``respond``). The real interpreter,
 full phase engine, checkpoints, and await/resume machinery land at B1.2-B1.6; this schema
 is the forward-compatible subset those tasks extend in place, not a throwaway.
@@ -25,13 +25,13 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-# C1.3: MessageRow.context_manifest_id FKs to context_manifest.id by string reference --
+# MessageRow.context_manifest_id FKs to context_manifest.id by string reference --
 # SQLAlchemy only resolves that at mapper-configuration time, which requires
 # ContextManifestRow's module to have been imported by *someone* first. Importing it here
 # guarantees that regardless of what a caller of this module imports.
 import core.assembler.models  # noqa: E402, F401
 
-# B1.2: same reasoning, for SessionRow.process_definition_id -> process_definition.id.
+# same reasoning, for SessionRow.process_definition_id -> process_definition.id.
 import core.process.models  # noqa: E402, F401
 from core.tenancy.models import Base
 
@@ -51,7 +51,7 @@ class SessionRow(Base):
     persona_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent.id", ondelete="CASCADE"), nullable=False
     )
-    # T0.8's hardcoded two-phase process used 'prompt'/'respond' (fit in 16 chars); B1.2's
+    # the hardcoded two-phase process used 'prompt'/'respond' (fit in 16 chars); the
     # real interpreter runs an arbitrary DSL phase graph, so this is widened to match
     # process_definition phase-key lengths (B1.2 migration 9a4e7c2f1b63).
     current_phase: Mapped[str] = mapped_column(String(63), nullable=False, default="prompt")
@@ -80,8 +80,8 @@ class SessionRow(Base):
         String(16), nullable=False, server_default=text("'auto'"), default="auto"
     )
     next_event_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # B1.2: the DSL's state:-declared session variables. NOT NULL, defaults to '{}' --
-    # T0.8's hardcoded skeleton sessions never touch this and keep working unmodified.
+    # the DSL's state:-declared session variables. NOT NULL, defaults to '{}' --
+    # the hardcoded skeleton sessions never touch this and keep working unmodified.
     state: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     # Which definition (and immutable version of it) this session is running -- pinned at
     # session start, nullable because T0.8-skeleton sessions have none.
@@ -89,11 +89,11 @@ class SessionRow(Base):
         UUID(as_uuid=True), ForeignKey("process_definition.id", ondelete="SET NULL"), nullable=True
     )
     process_definition_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # B1.3: the turn scheduler's persisted position within the current phase's actor
+    # the turn scheduler's persisted position within the current phase's actor
     # rotation (core.process.scheduler) -- survives kill/resume without skipping or
     # double-acting an actor. NOT NULL, defaults to '{}' (= "no cursor yet").
     actor_cursor: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
-    # B1.4: a fork is a new session rooted at a specific checkpoint. Nullable -- most
+    # a fork is a new session rooted at a specific checkpoint. Nullable -- most
     # sessions are never forked. No inline ForeignKey: session and checkpoint FK to each
     # other (a checkpoint FKs to its session; the session's fork-origin pointer FKs to a
     # checkpoint) -- use_alter (in __table_args__ below) defers this one to a separate
@@ -102,15 +102,15 @@ class SessionRow(Base):
     forked_from_checkpoint_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    # B1.5: optimistic lock, incremented on every committed advance (core.process.locking).
+    # optimistic lock, incremented on every committed advance (core.process.locking).
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # B1.5: the watchdog-aware claim marker -- a real SELECT ... FOR UPDATE is held only
+    # the watchdog-aware claim marker -- a real SELECT ... FOR UPDATE is held only
     # for the brief claim/commit critical sections, never across a slow external model
     # call, so these two columns (not a DB lock) are what a crash mid-call leaves behind
     # for a timeout-aware re-claim to recognise as abandoned.
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     claimed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # C1.6: HMAC key for this session's seeded randomizer results (plan §9.2 step 3) -- generated
+    # HMAC key for this session's seeded randomizer results -- generated
     # lazily on first resolution, not at session creation, so every pre-existing session
     # (and every session that never rolls a randomizer call) never needs one. Server-side only until
     # deliberately revealed to players post-session for roll verification -- revealing it
@@ -169,7 +169,7 @@ class SessionEventRow(Base):
         UUID(as_uuid=True), ForeignKey("session.id", ondelete="CASCADE"), nullable=False
     )
     event_seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    # Subset of the full kind enum (§12.7): message|phase_transition for T0.8.
+    # Subset of the full kind enum: message|phase_transition for T0.8.
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     actor_principal_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
@@ -204,25 +204,25 @@ class MessageRow(Base):
         ForeignKey("context_manifest.id", ondelete="SET NULL"),
         nullable=True,
     )
-    # C1.7: {"contradiction": ["<resolution_record id>", ...]} when the contradiction
+    # {"contradiction": ["<resolution_record id>", ...]} when the contradiction
     # scanner flags this reply against one or more of its turn's resolution records --
-    # empty dict otherwise. Plan §12.7 also reserves this column for future moderation
+    # empty dict otherwise. Plan also reserves this column for future moderation
     # signals (content-filter flags etc); C1.7 is the first real writer.
     moderation_flags: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
-    # C1.8: the validated citation set -- [{citation_id, entry_key, source_id,
-    # version_id}, ...], version-pinned at generation time (plan §6.5/§12.7). Populated
+    # the validated citation set -- [{citation_id, entry_key, source_id,
+    # version_id}, ...], version-pinned at generation time. Populated
     # by core.assembler.citations.apply_citation_validation, never the raw cited ids the
     # reply text mentions (those might include hallucinated ones -- see bad_citation in
     # moderation_flags for that signal).
     citations: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default=list)
-    # D1.3: every ResolutionRecord (C1.6) produced by a tool call during this turn --
+    # every ResolutionRecord produced by a tool call during this turn --
     # written by core.agents.runtime._commit_turn regardless of whether a contradiction
     # was found, so the session view's resolution widget (INV-7) can render a turn's
     # mechanical results straight from the record even when the narration matched perfectly.
-    # `moderation_flags["contradiction"]` (C1.7) is the subset of these ids the narration
+    # `moderation_flags["contradiction"]` is the subset of these ids the narration
     # actually conflicted with, not a separate id space.
     resolution_record_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    # G4.4 (req 10, plan §12.7): a human replied in place of an agent.
+    # a human replied in place of an agent.
     # ``author_principal_id`` deliberately stays the *agent's* principal -- the scheduler
     # and the transcript must treat this as that agent's turn, or it isn't an override,
     # it's a different actor speaking out of order. ``overridden_by_principal_id`` is
@@ -240,7 +240,7 @@ class MessageRow(Base):
 
 
 class CheckpointRow(Base):
-    """Append-only (plan §5.4, §12.7, B1.4): a snapshot of ``{phase, state, actor_cursor,
+    """Append-only: a snapshot of ``{phase, state, actor_cursor,
     entity_versions, knowledge_version_pins}`` written at every phase transition. The app
     role has no UPDATE/DELETE grant (migration 5e2c9b4f8a13) -- a checkpoint is a
     historical fact, never edited after the fact, same shape as
@@ -278,7 +278,7 @@ class CheckpointRow(Base):
 
 
 class AwaitStateRow(Base):
-    """The interrupt primitive (plan §5.2 ``await``, §12.7, B1.6). ``tenant_id`` is added
+    """The interrupt primitive ( ``await``, B1.6). ``tenant_id`` is added
     beyond the plan's literal (gap-y) schema snippet -- see the migration's docstring for
     why. ``outcome`` is ``NULL`` while pending, ``'satisfied'`` or ``'timed_out'`` once
     resolved -- exactly one of ``core.process.awaits.satisfy_await``/``resolve_timeout``
@@ -306,7 +306,7 @@ class AwaitStateRow(Base):
     on_timeout_phase: Mapped[str] = mapped_column(String(63), nullable=False)
     outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
     satisfied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # G4.3: when this await's one nudge is due, resolved at creation from the phase's own
+    # when this await's one nudge is due, resolved at creation from the phase's own
     # ``reminder_at`` or the definition's ``pacing.reminder_at``. NULL = no reminder was
     # configured (the default for every await created before G4.3, and for every process
     # whose author never asked for one).

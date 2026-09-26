@@ -1,7 +1,7 @@
-"""Deterministic entity injection (F3.6, plan §6.3 step 7, §3.4, §12.7): the real
+"""Deterministic entity injection: the real
 ``EntityStateRenderer`` for ``core.assembler.context_assembler.assemble()``, replacing
 the Phase-1 no-op default. Entity state is injected because it is **current**, never
-retrieved because it scored well against a query (§3.4's lesson: state is not
+retrieved because it scored well against a query ('s lesson: state is not
 knowledge) -- this module never touches ``core.knowledge.retrieval``/``search_and_
 budget``, has no query text or embedding parameter, and runs as its own assembler step
 entirely separate from the knowledge retrieval pipeline.
@@ -9,13 +9,13 @@ entirely separate from the knowledge retrieval pipeline.
 **Visibility.** Reuses ``core.assembler.visibility.scopes_for`` (the one INV-4
 resolver every retrieval call already goes through) to decide which entities are
 "relevant to the phase" -- every entity in the workspace whose ``scope_key`` is in the
-viewer's resolved scope set. A field tagged ``private`` (F3.4) additionally requires
+viewer's resolved scope set. A field tagged ``private`` additionally requires
 *its own* declared ``scope_key`` to be in that same set -- absent from the rendered
 block entirely when it isn't, never blanked, so a viewer's client can't distinguish
-"hidden" from "field doesn't exist" (the same contract F3.10's sheet renderer needs on
+"hidden" from "field doesn't exist" (the same contract the sheet renderer needs on
 the wire).
 
-**Known limitation.** Derived fields (``DerivedDef``) carry no tags/scope_key in F3.1's
+**Known limitation.** Derived fields (``DerivedDef``) carry no tags/scope_key in the
 model, so they're always rendered (computed from the entity's full, unfiltered data --
 otherwise a derived expression referencing a field the viewer can't see would raise,
 since ``compute_derived`` evaluates for real, not against dummy values). A derived value
@@ -25,7 +25,7 @@ needs it.
 
 **Stable rendering.** Entities and fields are rendered in sorted-key order -- the same
 data always produces the same string, so a turn where entity state didn't change
-doesn't invalidate C1.4's prompt-cache prefix.
+doesn't invalidate the prompt-cache prefix.
 """
 
 from __future__ import annotations

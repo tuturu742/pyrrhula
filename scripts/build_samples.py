@@ -1829,9 +1829,9 @@ Run it (stdlib only, no installs):
 
 then register it on the workspace (Workspace -> MCP servers -> Add):
 
-    key            evidence
-    url            http://<host-as-your-deployment-sees-it>:8765
-    enabled tools  evidence_check
+    key evidence
+    url http://<host-as-your-deployment-sees-it>:8765
+    enabled tools evidence_check
 
 The bundled flow offers the tool to the inspector's phases only; suspects never see it.
 

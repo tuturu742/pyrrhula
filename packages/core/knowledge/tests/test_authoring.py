@@ -104,7 +104,7 @@ async def test_republish_without_changes_is_reproducible_and_chains_parent(
 
     assert v2.version_number == 2
     assert v2.parent_version_id == v1.id
-    # Unchanged entries -> identical content_hash across versions (plan §6.1).
+    # Unchanged entries -> identical content_hash across versions.
     assert v2.content_hash == v1.content_hash
 
 
@@ -175,7 +175,7 @@ async def test_upsert_draft_entry_rejects_unknown_source(db_available: None) -> 
 async def test_upsert_draft_entry_rejects_invalid_regex_key_at_save(
     db_available: None,
 ) -> None:
-    """A1.5: 'compile-checked at save' -- an author saving a broken regex key finds out
+    """'compile-checked at save' -- an author saving a broken regex key finds out
     immediately, not the first time the entry silently never activates."""
     from core.knowledge.activation import UnsafeRegexError
 

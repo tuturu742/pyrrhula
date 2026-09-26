@@ -1,9 +1,9 @@
-"""AI-assisted drafting (E2.2, plan §8.4): given a secret's plaintext content, propose a
+"""AI-assisted drafting: given a secret's plaintext content, propose a
 behavioral directive and a bounded hint the author can accept, edit, or discard.
 `purpose='rewrite'` (D14 taxonomy) — a distinct, sanctioned reason to send secret content
-to a model, separate from the disclosure gate's gists-only path (E2.5) and from generation.
+to a model, separate from the disclosure gate's gists-only path and from generation.
 
-Draft-and-approve, not autopilot (§8.4's own framing): this module only ever proposes.
+Draft-and-approve, not autopilot ('s own framing): this module only ever proposes.
 Nothing here writes to `secret` — accepting a proposal is a separate call to
 `core.secrets.authoring.update_secret_fields`, made by the caller (the API route), not by
 this module. The one write this module performs is its own `usage_record`, since a model

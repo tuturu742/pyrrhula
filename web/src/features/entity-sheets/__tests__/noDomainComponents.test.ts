@@ -5,7 +5,7 @@ import path from "node:path";
 const FEATURE_DIR = path.resolve(__dirname, "..");
 
 // Every file this feature is allowed to contain -- one component per core tag
-// contract (F3.4), plus the generic dispatcher/layout/data-fetching plumbing. A file
+// contract, plus the generic dispatcher/layout/data-fetching plumbing. A file
 // named after a pack concept (e.g. "CharacterSheet.tsx", "TicketView.tsx") would mean
 // domain knowledge leaked into this folder.
 const ALLOWED_FILES = new Set([

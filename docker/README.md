@@ -30,7 +30,7 @@ podman compose -f docker/compose.selfhost.yml down -v   # -v also drops the data
 Running one entrypoint directly, without compose:
 
 ```bash
-podman build -t pyrrhula:dev -f docker/Dockerfile .
+podman build -t pyrrhula:dev -f docker/Dockerfile.
 podman run --rm -p 8000:8000 pyrrhula:dev api
 podman run --rm pyrrhula:dev worker
 podman run --rm -e PYRRHULA_DATABASE_URL=... pyrrhula:dev migrate

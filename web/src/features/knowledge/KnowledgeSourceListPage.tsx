@@ -6,9 +6,9 @@ import { apiClient } from "@/lib/api-client/client";
 import { useLabel } from "@/lib/vocabulary/useLabel";
 
 /**
- * D1.1: source list, tenant-wide (a knowledge source isn't workspace-scoped — it's
+ * source list, tenant-wide (a knowledge source isn't workspace-scoped — it's
  * attached to zero or more workspaces, each with its own scope/priority/pin; see
- * KnowledgeSourceDetailPage's attachments panel). Library sources (D13/A1.10) show up
+ * KnowledgeSourceDetailPage's attachments panel). Library sources show up
  * here transparently via the backend's RLS disjunct, badged read-only.
  */
 export function KnowledgeSourceListPage() {

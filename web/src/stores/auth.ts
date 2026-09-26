@@ -10,7 +10,7 @@ interface AuthState {
 }
 
 /**
- * Session-local auth state (T0.9). The JWT is also set as an httponly cookie by the
+ * Session-local auth state. The JWT is also set as an httponly cookie by the
  * backend (see `api.routes.auth`), which is what actually protects it from XSS reading
  * it — this store's copy is only what lets the frontend attach an `Authorization: Bearer`
  * header explicitly (needed for the SSE `EventSource`, which can't send custom headers,

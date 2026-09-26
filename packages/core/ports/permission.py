@@ -1,4 +1,4 @@
-"""PermissionService port (D11, §14.3, §12.1). v1 implementation is a ``role_permission``
+"""PermissionService port. v1 implementation is a ``role_permission``
 table lookup; Phase 5 adds ``permission_grant(principal, action, resource_id)`` for
 fine-grained RBAC alongside it. Call sites never change — always
 ``PermissionService.check(principal_id, action, resource_type, resource_id)``.

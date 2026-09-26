@@ -20,39 +20,67 @@ repository, implementation delegated to external coding agents over MCP; end sta
 dogfooding (Pyrrhula's own backlog worked by a Pyrrhula-managed team, G4.17). One product,
 no separate SKU (Q1).
 
-The organizing principle of the architecture (§4.1):
+The organizing principle of the architecture:
 
 > **There is exactly one code path that decides what text reaches a model, and it takes a
 > principal as a required argument.** (`assemble(viewer, phase, ...)`)
 
 Everything else protects that invariant.
 
-## 2. The decision record (D1–D15) — final, do not reopen
+## 2. Design principles — settled, not up for re-litigation
 
-| # | Decision |
-|---|---|
-| D1 | Process Definition engine is **custom-built**: an interpreter over a declarative, versioned JSON DSL. Not LangGraph (its graphs are code; ours are user data). Borrow its concepts: session_id cursor, checkpoint per transition, await/resume, fork-from-checkpoint. |
-| D2 | Rule-vs-lore priority = **budget allocation** (per-class token quotas per phase + weighted RRF), never score multipliers. |
-| D3 | Secrets are a first-class **`Secret` record type** with holder set and disclosure state machine — not a field on Entity or Agent. |
-| D4 | Secret-leak control is **context exclusion**, not instruction. Gate decides; assembler removes the plaintext. The single most important design claim. |
-| D5 | Deterministic results are **rendered from the `ResolutionRecord`**, never parsed from model text. |
-| D6 | Two abstractions: **`DeterministicTool`** (pure, replayable) vs **`EffectfulAction`** (side-effecting, suspendable). Approval routing is a process-engine `await`, not a tool. |
-| D7 | Entity Schemas = **JSON Schema 2020-12 subset + declarative FSM + CEL**. No user code ever. **Semantic tags** drive rendering. |
-| D8 | **One Postgres 16** for relational, vector (pgvector), JSONB, lexical (tsvector), and job queue. Qdrant is a designed-for swap behind `VectorStore`, not a v1 dependency. |
-| D9 | **Python 3.12 + FastAPI** backend; **React 18 + Vite + TS** frontend. |
-| D10 | **SSE** for streaming (POST for commands). WebSockets only if multi-participant presence demands it later. |
-| D11 | **Ports with trivial v1 impls** for permissions, identity, tenant routing, vector store, models, jobs, blobs, encryption, moderation — from day one. |
-| D12 | The **leak-eval harness ships before the malice slider**. High-stakes behavioral axes are gated on measured results per provider. |
-| D13 | Pack seed content lives in a read-only **library tenant**; the knowledge RLS policy has exactly one named exception for it. Tenants fork-on-edit. |
-| D14 | **Per-tenant egress policy keyed on `purpose`**, enforced inside the `ModelProvider` port. |
-| D15 | **Software development is the third use case, as "pack + MCP delegation"** (§14.5): the swdev workflow plugin (`.plugins/`) + `swdev_v1` overlay; repos ingest as knowledge (pinned to a commit SHA, docs-first); engineering side effects are MCP `EffectfulAction`s; code execution is **delegated** to external coding agents whose brief comes from `core.assembler.context_assembler.assemble()` under the dispatching principal's visibility. **No native code runtime, ever** — Pyrrhula never runs, edits, or hosts code. |
+These are the decisions the codebase is built on. They are stated as rules because each
+one closes a question a contributor would otherwise reopen; the reasoning is inline so
+the rule can be checked against it rather than taken on faith.
 
-Resolved product questions (Q1–Q6): one product; **no pack marketplace** (out-of-band `.pyr`
-sharing + import-time injection scan); **no cross-tenant knowledge sharing** (within-tenant
-only; library tenant is the sole exception); contradicting narration gets a **badge, no
-regeneration** (does *not* apply to secret leaks — those regenerate once then fall back);
-**all three deployment modes** (local/cloud/hybrid) supported; overseer **required only for
-multi-human workspaces** and all enterprise tenants.
+- **The process engine is custom-built**: an interpreter over a declarative, versioned
+  JSON DSL. Not a graph library — a library's graphs are code, and ours are user data
+  that must import, export, version and diff. The useful concepts are borrowed: a
+  session cursor, a checkpoint per transition, await/resume, fork-from-checkpoint.
+- **Rule-versus-lore priority is budget allocation**, never score multipliers: per-class
+  token quotas per phase, fused by weighted reciprocal rank. A multiplier is a claim
+  about relevance; a budget is a claim about how much room each class gets, and only
+  the second is something an author can reason about.
+- **Secrets are a first-class record** with a holder set and a disclosure state machine
+  — not a field on an entity or a persona.
+- **Secret-leak control is context exclusion, not instruction.** The gate decides; the
+  assembler removes the plaintext. Nothing asks the model to keep a secret it can see.
+  This is the single most important design claim in the system.
+- **Deterministic results render from the record**, never from model text. A die roll,
+  a rule check, a lab result: the UI and reports read the `ResolutionRecord`; whatever
+  the model says about it is decoration.
+- **Two tool abstractions**: a `DeterministicTool` is pure and replayable; an
+  `EffectfulAction` has side effects and can suspend. Approval routing is a process-engine
+  await, not a tool.
+- **Entity schemas are a JSON Schema 2020-12 subset plus a declarative FSM plus CEL.**
+  No user-authored code, ever. Semantic tags drive rendering.
+- **One Postgres 16** for relational data, vectors (pgvector), JSONB, lexical search
+  (tsvector) and the job queue. Another vector store is a designed-for swap behind the
+  `VectorStore` port, not a dependency.
+- **Python 3.12 + FastAPI** backend; **React 18 + Vite + TypeScript** frontend.
+- **SSE for streaming, POST for commands.** WebSockets only where multi-participant
+  presence genuinely demands them.
+- **Ports with trivial first implementations** for permissions, identity, tenant routing,
+  vector store, models, jobs, blobs, encryption, moderation — from day one, so the
+  composition roots are the only place an adapter is chosen.
+- **The leak-evaluation harness ships before any high-stakes behavioural axis.** A
+  malice or deception slider is gated on measured results per provider, not on intent.
+- **Pack seed content lives in a read-only library tenant**; the knowledge RLS policy
+  has exactly one named exception for it. Tenants fork on edit.
+- **Egress policy is per tenant and keyed on `purpose`**, enforced inside the
+  `ModelProvider` port. Delegated MCP work is governed by the workspace MCP allowlist
+  instead — a different mechanism on purpose; do not extend one to cover the other.
+- **Software development is "pack plus delegation".** The swdev workflow plugin and its
+  vocabulary overlay; repositories ingest as knowledge pinned to a commit; engineering
+  side effects are MCP effectful actions; the code itself is written and run by external
+  coding agents inside isolated execution environments the platform provisions, briefed
+  through the same assembler under the dispatching principal's visibility. Pyrrhula
+  never runs or edits code inside its own process.
+
+Resolved product questions, for the same reason: one product, not a family; **no pack
+marketplace** (bundles are shared out of band and scanned for injection at import);
+**no cross-tenant knowledge sharing** (the library tenant is the sole exception);
+contradicting narration gets a **badge, not a rewrite**.
 
 ## 3. The invariants (each has a CI test)
 
@@ -135,7 +163,7 @@ Clients (Web UI · Overseer Console · Public API · MCP clients)
   → External: Ollama / OpenAI / Anthropic / Gemini · MCP servers
 ```
 
-### The Context Assembler's 10 steps (§6.3)
+### The Context Assembler's 10 steps
 
 1. Resolve visible scope keys for (viewer, phase, session) — hard filter.
 2. Split the phase's token budget across knowledge classes by `phase.budget.ratio`.
@@ -150,7 +178,7 @@ Clients (Web UI · Overseer Console · Public API · MCP clients)
    invalidates the whole cached prefix).
 10. Emit `ContextManifest` (entries, ranks, why, redactions, hashes) — persisted.
 
-### The deterministic trust chain (§9.2)
+### The deterministic trust chain
 
 Model emits a *request* → `ResolutionService` validates expression and modifiers against the
 rule system and **actual entity state** (the model never asserts its own modifier) → seeded
@@ -158,7 +186,7 @@ execution (`seed = HMAC(session_secret, session_id || event_seq || expression)`)
 hash-chained `ResolutionRecord` → injected into context as a system-authored fact → **UI
 renders from the record** → best-effort contradiction check flags (badge, no regen).
 
-### Secrets pipeline (§8.4)
+### Secrets pipeline
 
 Should-fire prefilter (no model call: holder has in-scope secrets ∧ phase not `mechanical` ∧
 gist topicality above τ) → disclosure gate (one structured call on a small model, input =
@@ -167,7 +195,7 @@ as `DisclosureDecision`; **fail closed to conceal**) → context construction pe
 generate → post-generation leak check (fuzzy + embedding match vs concealed plaintext;
 regenerate once, then safe fallback + overseer alert).
 
-## 6. Data model quick reference (§12)
+## 6. Data model quick reference
 
 Tenant-scoped tables carry `tenant_id` + RLS (`†` in the plan); append-only tables (`‡`) have
 no UPDATE/DELETE grant.
@@ -302,7 +330,7 @@ tenant), not an archived session.**
   unscoped read on that pooled connection instead of failing safe to zero rows. Discovered and
   fixed during T0.2; every future tenant-scoped table's policy must use the same shape.
 - **Export runs through `VisibilityResolver`** with the `EXPORT` pseudo-phase — export must
-  never have its own visibility logic (§11.4).
+  never have its own visibility logic.
 - **Foreign keys are enforced independently of RLS.** A FK referencing a row in a *different*
   tenant still satisfies the constraint — FK checks run with elevated internal privileges that
   bypass RLS policies. Any endpoint that accepts an id meant to reference another tenant-scoped
@@ -311,7 +339,7 @@ tenant), not an archived session.**
   the FK constraint alone to prove the referenced row belongs to the caller's tenant.
 - **Reports** filter the input event stream by the target principal's visibility *before*
   the model sees it — never scrub after.
-- **Delegated coding-agent work (D15):** the delegation brief comes from
+- **Delegated coding-agent work:** the delegation brief comes from
   `assemble(<dispatching engineer principal>, phase)` — a second, ad-hoc
   brief-assembly path is an INV-1/INV-8 violation across the delegation boundary. The
   external agent is not a principal; it inherits the dispatcher's visibility. Everything it

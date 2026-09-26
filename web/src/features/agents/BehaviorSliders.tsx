@@ -15,7 +15,7 @@ type Axis = {
 };
 
 /**
- * E2.9's user surface: one slider per pack-defined behavior axis. Saving appends a NEW
+ * the user surface: one slider per pack-defined behavior axis. Saving appends a NEW
  * profile version (history is immutable — every past turn's manifest pins the version
  * it ran under). High-stakes axes (gate-bound: disclosure, deception, malice) carry a
  * badge because they change what the disclosure gate lets this persona do, not just

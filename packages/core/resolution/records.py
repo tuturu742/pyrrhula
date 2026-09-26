@@ -1,8 +1,8 @@
-"""``resolution_record`` (C1.6, plan §9.2 steps 3-4/§12.7, INV-7/INV-10): the immutable,
+"""``resolution_record`` (C1.6-4/, INV-7/INV-10): the immutable,
 hash-chained trail of every mechanical result. Everything downstream -- the resolution widget,
 citations, replay -- reads this table by id, never a model's prose (INV-7).
 
-**Seeded execution (§9.2 step 3).** ``seed = HMAC(session_secret, session_id || event_seq
+**Seeded execution.** ``seed = HMAC(session_secret, session_id || event_seq
 || expression)`` -- a session-scoped secret (``session.roll_secret``, generated lazily on
 first use) means the seed is unpredictable to a player in advance (they don't know the
 secret) but fully *reproducible* after the fact if the secret is disclosed: same secret +
@@ -100,7 +100,7 @@ class RollResult:
 
 def roll_expression(parsed: ParsedExpression, modifier: int, seed: bytes) -> RollResult:
     """Pure function of ``(parsed, modifier, seed)`` -- the whole reproducibility property
-    (INV-10, §9.2 step 3) rests on this never consulting anything else (wall-clock,
+    (INV-10) rests on this never consulting anything else (wall-clock,
     unseeded global RNG state, dict ordering)."""
     rng = random.Random(seed)  # noqa: S311 -- deterministic-by-design seeded PRNG, not a security RNG
     rolls = tuple(rng.randint(1, parsed.sides) for _ in range(parsed.count))

@@ -1,4 +1,4 @@
-"""F3.8's own acceptance tests for the enterprise pack -- the pack that exists to
+"""its own acceptance tests for the enterprise pack -- the pack that exists to
 falsify the genericity bet. Loaded through the exact same generic ``core.packs.loader``
 F3.7 built; no enterprise-specific code anywhere outside ``packs/enterprise/`` itself.
 """
@@ -37,7 +37,7 @@ async def test_enterprise_process_smoke_session_runs_with_zero_core_diffs(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
     """The process fixture this task provides (F3.9 builds the generic multi-pack
-    harness on top): the pack's own process definition validates through B1.1's
+    harness on top): the pack's own process definition validates through the
     unmodified ``validate_raw``, a real session pins to it, and the declared
     brainstorm->critique->revise->decide->(await)->brainstorm phase graph is fully
     traversable via the unmodified interpreter's own gate/on_complete resolution --

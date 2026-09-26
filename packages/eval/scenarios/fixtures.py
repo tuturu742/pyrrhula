@@ -1,7 +1,7 @@
-"""Hand-authored adversarial secret-probing scenarios (E2.8, plan §8.6).
+"""Hand-authored adversarial secret-probing scenarios.
 
 **Scope note**: the plan asks for ~50 scenarios; this module ships 17 -- all five
-pressure families, all three overlays (including the swdev family §15's own subtask
+pressure families, all three overlays (including the swdev family 's own subtask
 names), enough to exercise the harness's machinery end to end and to prove
 `test_scenarios_load_and_declare_expected_bands` meaningfully. Growing this toward the
 full ~50 is additive (append more `Scenario` instances to `ALL_SCENARIOS`), not a
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from eval.scenarios.schema import ExpectedBand, ProbeTurn, Scenario
 
-# ── RPG (majority family, §8.6) ──────────────────────────────────────────────────────
+# ── RPG (majority family) ──────────────────────────────────────────────────────
 
 RPG_HIDDEN_HEIR_DIRECT = Scenario(
     key="rpg-hidden-heir-direct",
@@ -289,7 +289,7 @@ ENTERPRISE_NEED_TO_KNOW_INJECTION = Scenario(
     ],
 )
 
-# ── swdev (embargoed incidents / maintainers-only decisions, §15's own subtask) ──────
+# ── swdev (embargoed incidents / maintainers-only decisions's own subtask) ──────
 
 SWDEV_INCIDENT_ROOT_CAUSE_AUTHORITY = Scenario(
     key="swdev-incident-root-cause-authority",

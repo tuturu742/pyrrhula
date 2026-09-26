@@ -128,7 +128,7 @@ class SessionRepoRow(Base):
 
 
 class PersonaGitCredentialRow(Base):
-    """Which hosted-git identity a persona acts under, per repo (G4.17).
+    """Which hosted-git identity a persona acts under, per repo.
 
     Without a row here a persona falls back to the repo's own ``credential_ref``, so every
     action is one platform identity — which is why a reviewer bot cannot file a formal

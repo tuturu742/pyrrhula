@@ -3,7 +3,7 @@ import { BackLink } from "@/components/BackLink";
 import { useQuery } from "@tanstack/react-query";
 import { PermissionDeniedError, disclosureTimeline } from "./api";
 
-/** E2.11: `secret_disclosure_event` stream for one secret, oldest first, with a mode
+/** `secret_disclosure_event` stream for one secret, oldest first, with a mode
  * badge (full/hint/inferred/leaked) per row. */
 export function DisclosureTimelinePage() {
   const { workspaceId, secretId } = useParams<{ workspaceId: string; secretId: string }>();

@@ -1,17 +1,17 @@
-"""RuleSystem (C1.5, plan §9.3): pack content, tenant-scoped storage. Defines which
+"""RuleSystem: pack content, tenant-scoped storage. Defines which
 mechanical expressions are legal and how modifiers derive from actor state, so the engine
--- not the model -- computes the "+5" (§9.2 step 2's anti-hallucination property).
+-- not the model -- computes the "+5" ('s anti-hallucination property).
 
 No Entity system exists anywhere in Phase 1 (F3.6 is Phase 3) -- ``modifier_resolver``
 (CEL) evaluates over a caller-supplied ``actor_fields: dict[str, object]``, an injection
-seam matching C1.2's entity-state stub, not a live Entity table read. F3.6 replaces the
+seam matching the entity-state stub, not a live Entity table read. F3.6 replaces the
 *source* of ``actor_fields``, not this module's shape.
 
-Unlike ``process_definition`` (B1.1), this is **not** append-only/versioned: a rule
+Unlike ``process_definition``, this is **not** append-only/versioned: a rule
 system is mutable, upserted-by-key content (matching ``knowledge_source``'s shape), not
-an immutable history a running session pins to a specific version of. Nothing in C1.5's
+an immutable history a running session pins to a specific version of. Nothing in the
 task list asks for that; if a real need for pinned rule-system versions surfaces later
-(mirroring A1.8's knowledge versioning), it's an additive change, not a redesign.
+(mirroring the knowledge versioning), it's an additive change, not a redesign.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class RuleSystemRow(Base):
 
 class RuleSystemDefinitionSchema(BaseModel):
     """Validated authoring-time shape, checked by ``validate_definition`` before a
-    ``RuleSystemRow`` is written -- mirrors B1.1's ``ProcessDefinitionDSL``/validator
+    ``RuleSystemRow`` is written -- mirrors the ``ProcessDefinitionDSL``/validator
     split."""
 
     model_config = ConfigDict(extra="forbid")
@@ -123,7 +123,7 @@ class OutcomeBandingError(Exception):
 
 def _compile_check(source: str) -> None:
     """Authoring-time check: the expression must at least parse. Cannot check
-    evaluate-safety against ``actor_fields`` the way B1.1's ``compile_check`` does for
+    evaluate-safety against ``actor_fields`` the way the ``compile_check`` does for
     process state -- ``actor_fields`` has no fixed declared schema (a d20 system and a
     a banded system use completely different field names) -- a documented, real limitation,
     not a silent gap."""
@@ -149,7 +149,7 @@ def validate_definition(definition: RuleSystemDefinitionSchema) -> None:
 def resolve_outcome(
     total: int, target: int | None, outcome_bands: tuple[dict[str, object], ...]
 ) -> str:
-    """§9.3: outcome modes. ``target`` set -> simple threshold (">= target: success", the
+    """: outcome modes. ``target`` set -> simple threshold (">= target: success", the
     d20-vs-DC shape). ``target`` unset with ``outcome_bands`` declared -> ordered bands
     matched against ``total`` alone (the "10+ / 7-9 / 6 or under" shape), first match wins.
 
@@ -214,7 +214,7 @@ async def create_rule_system(
 
 
 async def get_or_create_default_rule_system(tenant_id: uuid.UUID) -> RuleSystemRow:
-    """B1.8: a live turn's ``randomizer`` tool needs *some* ``RuleSystemDefinition`` to
+    """a live turn's ``randomizer`` tool needs *some* ``RuleSystemDefinition`` to
     validate against, and nothing seeds one per-tenant today. One tenant-wide default is
     enough for the exit gate's slice -- no per-ProcessDefinition rule-system link exists
     in the schema, and Phase 1 doesn't need one. ``create_rule_system`` is already an
@@ -234,7 +234,7 @@ async def get_rule_system(tenant_id: uuid.UUID, key: str) -> RuleSystemRow | Non
         return row
 
 
-# ── MVP fixtures (C1.5's own subtask: a d20-like system + a coin-flip, both exercised by
+# ── MVP fixtures (its own subtask: a d20-like system + a coin-flip, both exercised by
 # the same validator code path with no core branching on system kind -- the real INV-9
 # test this task cares about). Richer systems ship as workflow-pack or bundle content,
 # F3.7; these are core-neutral-named placeholders for the Phase-1 exit slice only. ──

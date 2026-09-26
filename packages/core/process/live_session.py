@@ -1,6 +1,6 @@
-"""B1.8: composition-root glue wiring the real interpreter (B1.2), scheduler (B1.3),
-checkpoints (B1.4), awaits (B1.6), budget-aware context assembler (C1.2), and
-tool-calling agent runtime (B1.7) together for a process-definition-backed session.
+"""composition-root glue wiring the real interpreter, scheduler,
+checkpoints, awaits, budget-aware context assembler, and
+tool-calling agent runtime together for a process-definition-backed session.
 Every individual piece was already complete and tested before this module existed; this
 is the first real caller of all of them together, matching this project's own
 established "build the seam, wire it in once the real pieces exist" discipline.
@@ -237,13 +237,13 @@ async def run_one_persona_turn(
     # provenance for the transcript: scheduler | conducted | override | driver
     triggered_by: str = "unknown",
 ) -> ActorTurnResult:
-    """One model-generated persona turn: context assembly (C1.2) + manifest write (C1.3) +
-    tool-loop generation (B1.7), committed by ``run_agent_turn`` at the given ``event_seq``.
+    """One model-generated persona turn: context assembly  + manifest write  +
+    tool-loop generation, committed by ``run_agent_turn`` at the given ``event_seq``.
 
-    ``eval_arm`` is the benchmark-only switch (plan §8.6 arms): no HTTP surface passes
+    ``eval_arm`` is the benchmark-only switch ( arms): no HTTP surface passes
     it, only the eval runner's direct core call -- enforced by
     ``tests/architecture/test_eval_arm_fence.py``. Arms 1/2 deliberately weaken
-    exclusion to measure the designs §8.4 rejects; the leak check is skipped for them
+    exclusion to measure the designs rejects; the leak check is skipped for them
     (the runner measures leaks itself -- regenerating away the evidence would defeat
     the measurement).
 
@@ -305,7 +305,7 @@ async def run_one_persona_turn(
     # a factory failure here concedes nothing (no decisions -> exclusion-by-default,
     # concealed plaintext simply never enters selection). INV-1: the factory lives in
     # core/assembler and hands back opaque decisions -- this module touches no secrets
-    # repo. `concealed_secrets` feeds the post-generation leak check (E2.7).
+    # repo. `concealed_secrets` feeds the post-generation leak check.
     resolved_secret_decisions: tuple[Any, ...] = ()
     concealed_secrets: tuple[Any, ...] = ()
     async with tenant_scope(tenant_id) as session:
@@ -315,10 +315,10 @@ async def run_one_persona_turn(
     # Secret handling is a per-workspace trust level, on phases whose pack declared
     # the capability (visibility.secrets = held_by_actor):
     #   excluded (default) -- held secrets never enter context. Leak-proof, dramaless.
-    #   trust             -- the holder's own briefs enter its context, directive and
+    #   trust -- the holder's own briefs enter its context, directive and
     #                        all, and the acting model plays them. Zero extra calls;
     #                        for models smart enough to keep character.
-    #   gate              -- a per-turn classifier decides conceal/hint/reveal and the
+    #   gate -- a per-turn classifier decides conceal/hint/reveal and the
     #                        verdict is enforced by exclusion. One extra call per
     #                        secret-holding turn; for models you do not trust with the
     #                        plaintext, and for tables where a reveal must update
@@ -385,7 +385,7 @@ async def run_one_persona_turn(
                 structlog.get_logger().warning("secrets.gate_factory_failed", error=str(exc)[:300])
                 resolved_secret_decisions, concealed_secrets = (), ()
 
-    # G4.1: when the phase RESERVES history budget (BudgetSpec.history_ratio > 0), the
+    # when the phase RESERVES history budget (BudgetSpec.history_ratio > 0), the
     # elapsed transcript beyond the replayed tail is summarised (map-reduce, mechanical
     # facts rendered from records) and placed as one provenance-stamped block. Phases
     # that reserve nothing keep the old behaviour exactly: no summary, no model call.
@@ -435,7 +435,7 @@ async def run_one_persona_turn(
         session_id=session_id,
         query_text=query_text,
         query_embedding=query_embedding,
-        # G4.1: the history section is governed by the phase's own declared slice
+        # the history section is governed by the phase's own declared slice
         # (BudgetSpec.history_ratio), not a hardcoded zero. Every already-authored
         # phase declares no ratio, so this is still 0 for all of them -- the number
         # now comes from the definition instead of from this call site.
@@ -446,7 +446,7 @@ async def run_one_persona_turn(
         event_seq=event_seq,
         history_summary=history_summary,
         reranker=reranker,
-        # F3.6's real renderer, which has existed since F3.6 and was never passed by
+        # the real renderer, which has existed since F3.6 and was never passed by
         # any caller. Without it an entity created in one phase is invisible in the
         # next: the ids live only in a tool result, and the transcript does not replay
         # those. A lead that filed six work items was then asked to hand them to coding
@@ -786,7 +786,7 @@ async def run_one_persona_turn(
         # declares no prompt.
         messages.append({"role": "user", "content": instruction_as_user or "(You have the floor.)"})
 
-    # S2 (E2.7): the reply is checked against this turn's CONCEALED secrets before it
+    # S2: the reply is checked against this turn's CONCEALED secrets before it
     # is ever persisted -- regenerate once with a nudge, then fall back to an in-voice
     # deflection + overseer alert. No concealed secrets -> passthrough closure -> the
     # common path costs nothing.
@@ -1074,7 +1074,7 @@ async def run_process_definition_session(
         next_actor_fn=next_actor_fn,
         execute_turn=execute_turn,
         checkpoint_hook=make_checkpoint_hook(workspace_id),
-        # G4.3: the definition carries the pacing defaults an individual phase's await
+        # the definition carries the pacing defaults an individual phase's await
         # may inherit -- passing it here is what makes reminders reach a real session.
         on_await=make_await_hook(definition),
         on_event=on_event,

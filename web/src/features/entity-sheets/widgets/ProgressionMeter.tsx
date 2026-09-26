@@ -9,7 +9,7 @@ export interface ProgressionMeterProps {
   nextThreshold: number | null;
 }
 
-/** F3.4's `progression` tag -- XP-to-next-level and a work item's story-point rollup
+/** the `progression` tag -- XP-to-next-level and a work item's story-point rollup
  * are the same meter, differing only in `curve_ref`/metadata values. */
 export function ProgressionMeter({ labelKey, value, nextThreshold }: ProgressionMeterProps) {
   const t = useLabel();

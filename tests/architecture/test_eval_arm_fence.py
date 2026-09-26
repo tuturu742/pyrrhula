@@ -1,5 +1,5 @@
 """The eval-arm fence: arms 1-2 deliberately put concealed plaintext into model context
-(the designs plan §8.4 rejects), so the switch must be structurally unreachable from
+(the designs rejects), so the switch must be structurally unreachable from
 production. Two locks:
 
 1. `eval_arm=` is PASSED as an argument only from eval-runner code and tests -- never

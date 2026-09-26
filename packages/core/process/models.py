@@ -1,5 +1,5 @@
-"""``process_definition`` ORM model (plan §12.2, B1.1). Each row is one immutable version
-of one process definition -- "publish = new immutable version" (B1.1's subtask wording) is
+"""``process_definition`` ORM model. Each row is one immutable version
+of one process definition -- "publish = new immutable version" (the subtask wording) is
 an authoring-layer convention (``authoring.py`` always INSERTs, never UPDATEs an existing
 row's ``definition``), not a grant-level restriction; see the migration's docstring for why
 this table isn't marked append-only (‡) the way ``knowledge_source_version`` is.

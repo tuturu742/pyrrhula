@@ -1,4 +1,4 @@
-"""Principal resolution for authenticated routes (T0.6): token -> principal -> tenant
+"""Principal resolution for authenticated routes: token -> principal -> tenant
 membership check -> ``RequestContext``.
 
 The tenant comes from the JWT's signed claims, never from a client-supplied header — a

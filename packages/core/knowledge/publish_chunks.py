@@ -86,7 +86,7 @@ async def chunk_published_entries(
                         "token_count": chunk.token_count,
                         "class_": class_,
                         "scope_key": scope_key,
-                        # sha256 matches A1.2's pipeline. The embedding cache is keyed on
+                        # sha256 matches the pipeline. The embedding cache is keyed on
                         # content_hash, so agreeing on the digest is what lets text shared
                         # between two ingestion paths be embedded once, not once per path.
                         "content_hash": hashlib.sha256(chunk.text.encode()).hexdigest(),

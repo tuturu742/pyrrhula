@@ -1,4 +1,4 @@
-"""Fixtures for the replay suite (INV-10, C1.3). Mirrors ``tests/isolation/conftest.py``'s
+"""Fixtures for the replay suite (INV-10). Mirrors ``tests/isolation/conftest.py``'s
 skip-if-unreachable pattern -- this suite needs a live Postgres with the C1.3 migration
 applied.
 """

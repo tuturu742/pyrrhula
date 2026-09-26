@@ -1,4 +1,4 @@
-"""Vocabulary overlay resolution (D1.6, plan §12.2): list available overlays, resolve
+"""Vocabulary overlay resolution: list available overlays, resolve
 the one effective for a workspace (fallback chain: workspace override -> tenant default
 -> system default -> [frontend falls back to the key itself]), and switch either.
 """

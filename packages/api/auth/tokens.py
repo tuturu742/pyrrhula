@@ -1,4 +1,4 @@
-"""JWT issuance/verification for local sessions (T0.6). Stateless: there is no
+"""JWT issuance/verification for local sessions. Stateless: there is no
 server-side revocation list in v1 — logout clears the client's cookie, but a token
 already issued remains valid until it expires. Acceptable for a dev-stage MVP; a
 revocation/deny-list is a Phase-5-adjacent hardening item, not a Phase-0 requirement.

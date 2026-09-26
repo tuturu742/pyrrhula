@@ -1,4 +1,4 @@
-"""IdentityProvider port (D11, §12.1). v1 is local password auth; OIDC/SAML (H5.1) are
+"""IdentityProvider port. v1 is local password auth; OIDC/SAML are
 adapter swaps behind the same port — nothing downstream references a human-specific
 "user" table, only ``Principal`` + ``Identity``.
 

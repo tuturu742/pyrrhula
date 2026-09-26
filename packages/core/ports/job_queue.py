@@ -1,5 +1,5 @@
-"""JobQueue port (D11, §13.1, §5.6). v1 is a Postgres table polled with
-``SELECT ... FOR UPDATE SKIP LOCKED``; Temporal (H5.9) is a swap behind this port, done
+"""JobQueue port. v1 is a Postgres table polled with
+``SELECT ... FOR UPDATE SKIP LOCKED``; Temporal is a swap behind this port, done
 only if operational data says the Postgres queue is inadequate — not on principle.
 
 Jobs are cross-tenant, system/operational data (a worker must be able to claim work for

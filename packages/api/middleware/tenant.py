@@ -1,7 +1,7 @@
 """Tenant resolution for the *pre-authentication* surface (register/login) — before a
 JWT exists, the client has to say which tenant it means to reach. ``X-Pyrrhula-Tenant``
 (a tenant slug) does that; when absent and ``PYRRHULA_SINGLE_TENANT_UI=true``, the
-configured default tenant is used instead (plan §13.8: single-tenant mode is a feature
+configured default tenant is used instead (: single-tenant mode is a feature
 flag over the same multi-tenant core, not a different build).
 
 Authenticated routes do **not** use this — see ``middleware/auth.py``: once a JWT exists,
@@ -89,7 +89,7 @@ async def resolve_tenant_for_auth(
                 return sole
         raise HTTPException(status_code=404, detail=f"unknown tenant: {slug!r}")
     if tenant.is_library:
-        # A1.10 (D13): the library tenant has no memberships and must never gain one --
+        # the library tenant has no memberships and must never gain one --
         # this is the explicit guard, not just an absence this could otherwise slip past.
         raise HTTPException(status_code=404, detail=f"unknown tenant: {slug!r}")
     if tenant.deactivated_at is not None:

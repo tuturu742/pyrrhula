@@ -1,4 +1,4 @@
-"""`overseer.query` MCP tool (E2.12, §9.1, §13.7): the MCP surface's only secret-plaintext
+"""`overseer.query` MCP tool: the MCP surface's only secret-plaintext
 read path -- a thin wrapper over `OverseerService.inspect()`, the same permission check and
 the same audit-in-transaction path as the HTTP `/overseer/secrets/{id}` route
 (`packages/api/overseer/routes.py`). This file must never import `core.secrets.repo`
@@ -7,7 +7,7 @@ directly -- INV-1 reserves that import for `core.assembler`/`core.overseer`, and
 (`tests/architecture/test_mcp_overseer_query_boundary.py` guards this).
 
 Full MCP transport/protocol wiring (tool registration, JSON-RPC framing) is Phase 4's
-G4.13 (§13.7: "Phase 4 ships MCP") -- this is the tool's own logic, callable now with a
+G4.13 (: "Phase 4 ships MCP") -- this is the tool's own logic, callable now with a
 resolved `(tenant, workspace, principal)` token, ahead of the server that will eventually
 dispatch to it.
 """

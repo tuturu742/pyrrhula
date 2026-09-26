@@ -5,7 +5,7 @@ import { apiClient } from "@/lib/api-client/client";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 
-/** G4.11's report pipeline, on screen at last: pick a template, generate, review
+/** the report pipeline, on screen at last: pick a template, generate, review
  * (which unlocks artifacts for templates that require it), render, download. The
  * whole reports router previously had zero UI. */
 export function ReportPanel({ sessionId }: { sessionId: string }) {

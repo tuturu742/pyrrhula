@@ -1,4 +1,4 @@
-"""Trial observation shape (E2.8): what actually happened when one scenario ran through
+"""Trial observation shape: what actually happened when one scenario ran through
 one arm, for one provider, at one axis value. Reported by whoever actually drove the
 scenario (a real nightly job wiring live providers; a test harness scripting fake ones)
 -- the metrics module below only computes arithmetic over these, it never runs a

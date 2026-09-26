@@ -1,13 +1,13 @@
-"""Knowledge content model (plan §6.1, §12.3): Source -> Version (immutable,
+"""Knowledge content model: Source -> Version (immutable,
 content-addressed) -> Entry (unit of authorship) -> Chunk (unit of retrieval, derived).
 
-``knowledge_chunk`` isn't mapped here. Like ``vector_store_item`` (T0.3), it needs the
+``knowledge_chunk`` isn't mapped here. Like ``vector_store_item``, it needs the
 ``vector`` column type, which isn't wired into the SQLAlchemy type system — it's created
 via raw SQL in the migration and excluded from autogenerate via ``migrations/env.py``'s
 ``_RAW_SQL_TABLES``. Nothing in A1.1 needs to read or write it (that starts at A1.2/A1.3),
 so there's no ORM model to keep in sync with a schema no code touches yet.
 
-Two deliberate deviations from the plan's §12.3 sketch, both required to reconcile
+Two deliberate deviations sketch, both required to reconcile
 "entries are added to a draft before publish" with CLAUDE.md's append-only rule for
 ``knowledge_source_version`` (no UPDATE/DELETE grant — see the migration):
 
@@ -100,9 +100,9 @@ class KnowledgeSource(Base):
 
 
 class KnowledgeSourceVersion(Base):
-    """Immutable, content-addressed (plan §6.1). Append-only in practice, not just
+    """Immutable, content-addressed. Append-only in practice, not just
     intent: the migration REVOKEs UPDATE/DELETE from the app role on this table, the same
-    control ``audit_log`` uses (T0.7). Only ever INSERTed by
+    control ``audit_log`` uses. Only ever INSERTed by
     ``core.knowledge.authoring.publish_version``, with every column already final."""
 
     __tablename__ = "knowledge_source_version"
@@ -130,7 +130,7 @@ class KnowledgeSourceVersion(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # F3.12: set when this version was published from an approved AI-drafted edit
+    # set when this version was published from an approved AI-drafted edit
     # proposal rather than a manual edit -- `created_by` still names the human who
     # approved it (an accepted proposal is never anonymous), this just distinguishes how
     # the content was drafted.
@@ -144,7 +144,7 @@ class KnowledgeSourceVersion(Base):
 
 
 class KnowledgeEntry(Base):
-    """The unit of authorship (plan §6.1, §6.4). ``version_id IS NULL`` means "current
+    """The unit of authorship. ``version_id IS NULL`` means "current
     draft"; entry-key uniqueness is therefore two partial unique indexes (one per state) —
     a plain ``UniqueConstraint`` can't express a ``WHERE``-qualified index, so these are
     declared as ``Index(..., postgresql_where=...)`` instead, and created via raw
@@ -174,8 +174,8 @@ class KnowledgeEntry(Base):
     body_md: Mapped[str] = mapped_column(Text, nullable=False)
     class_: Mapped[str] = mapped_column("class", String(32), nullable=False)
     scope_key: Mapped[str] = mapped_column(String(255), nullable=False)
-    # G4.6: flagged by the import/ingestion injection scan and excluded from retrieval
-    # until a human clears it (plan §16.6). Duplicated onto ``knowledge_chunk`` so the
+    # flagged by the import/ingestion injection scan and excluded from retrieval
+    # until a human clears it. Duplicated onto ``knowledge_chunk`` so the
     # retrieval filter stays a chunk-local pushdown; ``approve_quarantined_entry`` clears
     # both in one transaction so they cannot drift.
     quarantined: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -227,7 +227,7 @@ class KnowledgeEntry(Base):
 
 
 class WorkspaceKnowledgeAttachment(Base):
-    """The workspace's opinion about a shared source (plan §6.1, reqs 3+4) — priority,
+    """The workspace's opinion about a shared source (reqs 3+4) — priority,
     scope, and version pin all live here, never on the source itself, so the same source
     can be attached to two workspaces with different settings."""
 

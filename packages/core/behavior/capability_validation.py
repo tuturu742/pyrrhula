@@ -1,4 +1,4 @@
-"""Capability enforcement (E2.9, plan §8.6/§13.6): assigning a `behavior_profile` with a
+"""Capability enforcement: assigning a `behavior_profile` with a
 high-stakes axis to an agent whose model fails that axis's capability check is a
 validation error, not a silent downgrade -- a behavioural parameter a model can't
 actually honor is worse than an absent one; it gives the author false confidence.
@@ -22,7 +22,7 @@ async def validate_profile_capability(
     tenant_id: uuid.UUID, persona_id: uuid.UUID, pack_id: str, axis_values: dict[str, int]
 ) -> None:
     """Only `stakes: high` axes are enforced -- a low-stakes axis (`prompt_directive`
-    only) degrading on an incapable model is a style-quality concern (E2.8's
+    only) degrading on an incapable model is a style-quality concern (the
     `behavioral_fidelity` metric already tracks it), not a correctness one, so it never
     blocks assignment the way a high-stakes axis does."""
     async with tenant_scope(tenant_id) as session:

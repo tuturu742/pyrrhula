@@ -1,4 +1,4 @@
-"""Checkpoints (B1.4, plan §5.4, §12.7): derived snapshots written at every phase
+"""Checkpoints: derived snapshots written at every phase
 transition, enabling resume, fork, and time-travel. The session log
 (``session_event``) is the source of truth and is append-only; a checkpoint is a
 convenience snapshot *of* it, not a second source of truth -- ``reconstruct_state``
@@ -6,12 +6,12 @@ below proves this by rebuilding the same state purely from a checkpoint plus the
 session_event tail after it, independent of whatever the live ``session`` row currently
 holds.
 
-``make_checkpoint_hook`` produces B1.2's exact ``CheckpointHook`` seam
+``make_checkpoint_hook`` produces the exact ``CheckpointHook`` seam
 (``Callable[[InterpreterContext], Awaitable[None]]``, left as an optional no-op there) --
-this is the real implementation B1.2's docstring said would land here.
+this is the real implementation the docstring said would land here.
 
-``knowledge_version_pins`` is real (A1.8's ``resolve_effective_version_id`` per attached
-source); ``entity_versions`` (F3.6) is real too now -- every entity in the workspace
+``knowledge_version_pins`` is real (the ``resolve_effective_version_id`` per attached
+source); ``entity_versions`` is real too now -- every entity in the workspace
 pinned at its current version, the same "everything, not a viewer's subset" shape
 ``knowledge_version_pins`` already uses (a checkpoint is for fork/resume correctness,
 not visibility).
@@ -83,7 +83,7 @@ async def write_checkpoint(
 
 
 def make_checkpoint_hook(workspace_id: uuid.UUID) -> CheckpointHook:
-    """B1.2's ``CheckpointHook`` seam, for real: pass this to
+    """the ``CheckpointHook`` seam, for real: pass this to
     ``advance_session(checkpoint_hook=...)`` to write a real checkpoint at every
     transition instead of the documented no-op default."""
 
@@ -94,7 +94,7 @@ def make_checkpoint_hook(workspace_id: uuid.UUID) -> CheckpointHook:
 
 
 async def list_checkpoints(tenant_id: uuid.UUID, session_id: uuid.UUID) -> list[CheckpointRow]:
-    """D1.3: the fork-from-checkpoint UI's picker list -- oldest first, same ordering
+    """the fork-from-checkpoint UI's picker list -- oldest first, same ordering
     ``reconstruct_state`` walks forward from."""
     async with tenant_scope(tenant_id) as session:
         rows = (
@@ -131,7 +131,7 @@ async def reconstruct_state(
     don't mutate state (see ``core.process.interpreter``), so they're skipped here.
     ``actor_cursor`` is deliberately *not* reconstructed by this function: it is
     continuously, transactionally live-persisted on the session row by the scheduler
-    (B1.3) independent of checkpoint boundaries, and no event kind records its
+     independent of checkpoint boundaries, and no event kind records its
     turn-by-turn deltas -- reconstructing it from the log alone isn't possible with the
     current event schema, a documented boundary, not a silent gap.
     """
@@ -175,9 +175,9 @@ class PinnedDefinitionMissingError(Exception):
 
 @dataclass(frozen=True)
 class RestoredSession:
-    """What a long-dormant session needs to run its next turn (G4.1). ``phase``/``state``
+    """What a long-dormant session needs to run its next turn. ``phase``/``state``
     come from ``reconstruct_state`` (checkpoint + event tail -- the log is the source of
-    truth, §5.4), ``actor_cursor`` and the two pin maps from the checkpoint itself, and
+    truth), ``actor_cursor`` and the two pin maps from the checkpoint itself, and
     ``definition`` from the session's *pinned* ``process_definition_id``."""
 
     session_id: uuid.UUID
@@ -205,7 +205,7 @@ async def restore_session_from_checkpoint(
        row already agrees (the normal case) this is a no-op write, and when it doesn't,
        the log wins, because the log is the source of truth and the row is a cache of it.
     2. **Resolves the process definition by its pinned id**, never by "latest version of
-       this key". ``process_definition`` rows are immutable one-version-each (B1.1), so
+       this key". ``process_definition`` rows are immutable one-version-each, so
        pinning by id *is* pinning by version -- an edit published while the session slept
        created a different row and does not apply here. Upgrading is
        ``upgrade_session_definition``, an explicit action a human takes, and the version

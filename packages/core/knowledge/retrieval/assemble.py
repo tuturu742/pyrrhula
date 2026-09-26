@@ -1,18 +1,18 @@
-"""Search + fuse + (optionally rerank) + budget, tied together (plan §6.3 steps 2-6,
-A1.6/A1.7) — the slice of the future ``ContextAssembler`` (C1.2) that makes rule-vs-lore
+"""Search + fuse + (optionally rerank) + budget, tied together (-6,
+A1.6/A1.7) — the slice of the future ``ContextAssembler`` that makes rule-vs-lore
 priority real: per-class dense+sparse+keyed retrieval, WRRF fusion, class-blind rerank,
 then bucketed budget fill. Deliberately *not* the full assembler: no
-``VisibilityResolver`` (C1.1), no entity-state rendering, no secrets gate, no prompt
-layout, no ``ContextManifest`` persistence (C1.3) — those are later tasks' jobs. This
+``VisibilityResolver``, no entity-state rendering, no secrets gate, no prompt
+layout, no ``ContextManifest`` persistence  — those are later tasks' jobs. This
 function's whole purpose is the one property the plan calls the core design bet: change a
 budget ratio, get a deterministically different, fully explainable included set, with a
 rules entry and a lore entry never once competing for the same slot.
 
 ``reranker=None`` (default) skips reranking entirely — ranking falls back to WRRF order,
-unbounded by the reranker's top-32-in/16-out cap (A1.7's "config to disable reranking,
+unbounded by the reranker's top-32-in/16-out cap (the "config to disable reranking,
 degraded mode for tiny deployments").
 
-``cache`` (A1.9) memoizes the *fully fused* per-class candidate list — including the
+``cache`` memoizes the *fully fused* per-class candidate list — including the
 keyed/activation contribution, not just dense+sparse — keyed by ``(query_hash, scope_set,
 class, version_set)``. That means a cache hit can reflect a slightly stale activation
 state (sticky/cooldown windows) for up to the cache's TTL, a deliberate, bounded

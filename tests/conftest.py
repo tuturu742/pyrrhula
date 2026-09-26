@@ -1,7 +1,7 @@
 """Shared pytest fixtures.
 
 Tenant/DB fixtures (two tenants + the library tenant, per-table row seeding) land with
-T0.4. Kept minimal here so T0.1's CI has something real to collect.
+T0.4. Kept minimal here so the CI has something real to collect.
 
 The one thing that lives here rather than in a per-suite conftest is tenant cleanup.
 ``tests/isolation`` alone had left 23,558 tenants in the development database, more than

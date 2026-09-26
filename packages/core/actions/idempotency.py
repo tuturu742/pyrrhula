@@ -1,9 +1,9 @@
-"""The ``@idempotent`` decorator (§5.6). Every side-effecting operation — model call,
+"""The ``@idempotent`` decorator. Every side-effecting operation — model call,
 tool execution, entity mutation, external MCP call — takes an idempotency key derived
 from ``(session_id, event_seq, attempt_target)``. On retry or resume, the key hits
 ``completed_operation`` and returns the stored result rather than re-executing.
 
-This is not optional and it is not deferrable (plan §5.6): resume-from-checkpoint
+This is not optional and it is not deferrable: resume-from-checkpoint
 re-executes work, so a node that made a paid API call before an interrupt point charges
 the tenant's key twice on resume unless every side-effecting call site goes through this.
 
@@ -121,7 +121,7 @@ def idempotent(
 
 
 async def clear_failed_operation(tenant_id: uuid.UUID, idempotency_key: str) -> bool:
-    """B1.8: `@idempotent` marks a key `status="failed"` permanently on any exception --
+    """`@idempotent` marks a key `status="failed"` permanently on any exception --
     correct for a genuine duplicate-side-effect guard, but a real problem once the
     wrapped operation is something that can fail *transiently* (a model provider outage
     inside `run_agent_turn`, reached through the interpreter's own turn-execution key).

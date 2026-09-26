@@ -1,7 +1,7 @@
-"""Keyword-activated entries -> chunk-level candidates for WRRF (plan §6.3 step 3/4,
-A1.6). Activation (A1.5) operates at the *entry* granularity (an entry either activates or
+"""Keyword-activated entries -> chunk-level candidates for WRRF. Activation operates at the
+*entry* granularity (an entry either activates or
 doesn't); WRRF fuses at the *chunk* granularity (the unit of retrieval, and the manifest's
-unit — plan §6.3 step 7 lists ``chunk_id`` per row). This is the adapter between them: each
+unit —  lists ``chunk_id`` per row). This is the adapter between them: each
 activated entry's chunks (ordinal-ordered) all inherit that entry's activation rank, with
 the ordinal as a stable tiebreak so multi-chunk entries don't collide on one rank.
 """
@@ -40,7 +40,7 @@ async def expand_activated_entries_to_chunks(
                     "FROM knowledge_chunk c "
                     "JOIN knowledge_entry e ON e.id = c.entry_id "
                     "WHERE c.tenant_id = :tenant_id AND c.entry_id = ANY(:entry_ids) "
-                    # G4.6: quarantined content never activates either.
+                    # quarantined content never activates either.
                     "AND NOT c.quarantined "
                     "ORDER BY c.entry_id, c.ordinal"
                 ),

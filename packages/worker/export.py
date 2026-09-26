@@ -1,9 +1,9 @@
-"""Export job handler (G4.5) -- the worker-side wiring ``core.portability.export`` needs
+"""Export job handler -- the worker-side wiring ``core.portability.export`` needs
 but can't import itself (composition root: which ``BlobStore``, ``Encryptor``, and
 ``PermissionService`` adapter). Registered in ``worker.main``'s dispatch table under
 ``"export_workspace"``.
 
-Export is a job rather than a synchronous download for the reason §11.2 implies and a
+Export is a job rather than a synchronous download for the reason implies and a
 year-old workspace makes obvious: a bundle spans every session, every knowledge version,
 and every chunk body in the workspace, and none of that belongs inside an HTTP request.
 The handler returns a blob key; the API hands it back for the caller to poll and fetch.

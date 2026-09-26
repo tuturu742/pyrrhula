@@ -1,6 +1,6 @@
-"""RPG axis-pack fixtures (E2.3's own subtask): the §8.2 examples (chattiness,
+"""RPG axis-pack fixtures (its own subtask): the examples (chattiness,
 cooperativeness, secret_disclosure_propensity, deception_propensity), used by this task's
-validation fixtures and by E2.5's disclosure gate tests. The enterprise axis pack lands
+validation fixtures and by the disclosure gate tests. The enterprise axis pack lands
 in F3.8 and the swdev axis pack (`review_strictness`, `escalation_propensity`,
 `risk_tolerance` with `stakes: high`) in F3.13 -- this module is the machinery's own
 proof it works, not a claim about pack completeness.
@@ -67,10 +67,10 @@ COOPERATIVENESS: dict[str, object] = {
     ],
 }
 
-# stakes:high (§8.3) -- this is the axis E2.5's disclosure gate prefilter and posture
+# stakes:high -- this is the axis the disclosure gate prefilter and posture
 # both key off. A prompt-only version of this axis is exactly the "malice slider that
 # can't be authored at all" the validation rule exists to prevent. The prompt_directive
-# binding here renders *in addition to* the gate binding, never instead of it -- E2.3's
+# binding here renders *in addition to* the gate binding, never instead of it -- the
 # own rule is what guarantees the gate is present at all.
 SECRET_DISCLOSURE_PROPENSITY: dict[str, object] = {
     "pack_id": RPG_AXIS_PACK_ID,
@@ -120,7 +120,7 @@ RPG_AXIS_PACK: tuple[dict[str, object], ...] = (
     DECEPTION_PROPENSITY,
 )
 
-# A deliberately-invalid fixture (E2.3's own acceptance criterion): stakes:high with no
+# A deliberately-invalid fixture (its own acceptance criterion): stakes:high with no
 # gate binding at all -- what `validate_axis_definition` must reject.
 INVALID_HIGH_STAKES_WITHOUT_GATE: dict[str, object] = {
     "pack_id": RPG_AXIS_PACK_ID,

@@ -1,4 +1,4 @@
-"""Citation resolution (C1.8, plan §6.5): resolve a message's validated citations to
+"""Citation resolution: resolve a message's validated citations to
 their pinned-version entry content -- the UI renders these as links that stay correct
 even after the rulebook changes.
 """
@@ -38,7 +38,7 @@ class ResolvedCitationResponse(BaseModel):
 
 class MessageCitationsResponse(BaseModel):
     valid: list[ResolvedCitationResponse]
-    # D1.4: cited ids the reply used that weren't actually present in the manifest that
+    # cited ids the reply used that weren't actually present in the manifest that
     # produced its context (core.assembler.citations.apply_citation_validation writes
     # these onto message.moderation_flags.bad_citation) -- the inspector's hallucinated-
     # citation flag reads straight from here, never re-derived from the reply text.

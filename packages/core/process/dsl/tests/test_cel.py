@@ -1,4 +1,4 @@
-"""B1.1: CEL compile-check -- proves both failure modes celpy itself splits across two
+"""CEL compile-check -- proves both failure modes celpy itself splits across two
 different phases (compile-time syntax vs evaluate-time undeclared reference) are caught
 uniformly by ``compile_check``.
 """

@@ -1,4 +1,4 @@
-"""Static validation for a ProcessDefinition (B1.1, plan §5.2): everything Pydantic's
+"""Static validation for a ProcessDefinition: everything Pydantic's
 schema-level constraints (schema.py -- required ``visibility``, known agent roles, exactly-
 one-selector shapes, valid durations) can't check because it requires looking at the
 *document as a whole* rather than one field at a time: transition-graph integrity, budget
@@ -6,14 +6,14 @@ ratio sums, and CEL expression validity against the document's own declared stat
 
 ``validate_raw`` is the single entrypoint the API/authoring layer calls: it does both
 Pydantic's structural pass and this module's graph/semantic pass, normalising both failure
-modes into the same field-addressed ``ValidationIssue`` shape so a caller (D1.2's editor)
+modes into the same field-addressed ``ValidationIssue`` shape so a caller (the editor)
 never needs to know which layer caught a given problem.
 
-**"No loops except declared ones" (plan §5.2) is not a separate rule enforced here.** The
+**"No loops except declared ones" is not a separate rule enforced here.** The
 DSL has no implicit iteration construct (no ``while``/``for``) -- the *only* way a cycle
 can exist in the transition graph is if an author's own ``gates``/``on_complete``/
 ``await.on_timeout`` explicitly points back at an earlier phase, which is precisely what
-"declared" means. The plan's own §5.2 example is itself cyclic (``open_discussion`` <->
+"declared" means. The plan's own example is itself cyclic (``open_discussion`` <->
 ``action_phase`` <-> ``resolution``, and ``resolution`` -> ``feedback_loop`` ->
 ``open_discussion``) and must validate cleanly -- so "reject cycles" would be a bug, not a
 missing feature. What *is* checked (dangling-transition + reachability, below) already

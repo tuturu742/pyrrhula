@@ -1,4 +1,4 @@
-"""Behaviour framework storage (E2.3): `axis_definition` upsert-by-key (matching
+"""Behaviour framework storage: `axis_definition` upsert-by-key (matching
 `core.resolution.rule_system.create_rule_system`'s idempotent pack-load shape) and
 `behavior_profile`'s append-only version history.
 """

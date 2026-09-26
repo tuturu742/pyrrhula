@@ -401,7 +401,7 @@ async def test_decision_summary_selects_only_decision_shaped_facts(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
     """Not a named criterion, but the `decision_summary` template's whole point: the
-    artefact §11.5 says competitors cannot produce is a *decision* log, and one padded
+    artefact says competitors cannot produce is a *decision* log, and one padded
     with every dice roll in the session buries the thing it exists for."""
     tenant_id, _tenant_b = two_tenants
     workspace_id = await _workspace_of(tenant_id)

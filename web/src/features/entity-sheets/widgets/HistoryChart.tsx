@@ -7,7 +7,7 @@ export interface HistoryChartProps {
 }
 
 /**
- * Per-field timeline from `entity_state_change` (F3.10) -- a numeric field's
+ * Per-field timeline from `entity_state_change` -- a numeric field's
  * progression chart and any other numeric field's history are *the same component*,
  * just a different `fieldPath`; there is no separate "progression chart" widget.
  */

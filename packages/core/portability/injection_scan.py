@@ -1,4 +1,4 @@
-"""Prompt-injection scanning for imported text (G4.6, plan §16.6).
+"""Prompt-injection scanning for imported text.
 
 A `.pyr` bundle, a character card, or a repository README is **attacker-controlled input**
 headed for a tool-calling agent's context. Q2 killed the marketplace, not the threat:

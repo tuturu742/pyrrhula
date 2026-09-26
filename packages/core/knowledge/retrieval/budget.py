@@ -1,4 +1,4 @@
-"""Bucketed token budget (plan §6.2 D2, §6.3 steps 2/6, A1.6): priority is a share of the
+"""Bucketed token budget: priority is a share of the
 context budget, never a score multiplier. A rules bucket and a lore bucket never compete
 for the same slot because they are never the same slot — this is what makes priority
 deterministic and explainable ("rules got 75% of the budget because the phase says so"),
@@ -28,7 +28,7 @@ def split_budget(ratios: dict[str, float], max_tokens: int) -> dict[str, int]:
 def apply_priority_weight_override(
     base_ratios: dict[str, float], priority_weights: dict[str, float]
 ) -> dict[str, float]:
-    """``workspace_knowledge_attachment.priority_weight`` (A1.1) scales a class's base
+    """``workspace_knowledge_attachment.priority_weight`` scales a class's base
     ratio before the split — two workspaces sharing the same ``phase.budget.ratio`` can
     still end up with different effective splits if one attached its rules source at a
     higher ``priority_weight`` than the other."""
@@ -128,7 +128,7 @@ def fill_all_buckets(
 
 @dataclass(frozen=True)
 class BudgetedChunk:
-    """The manifest's raw material (plan §6.3 step 7, C1.3): every included chunk carries
+    """The manifest's raw material: every included chunk carries
     enough to answer "why is this here" without a further query."""
 
     chunk_id: uuid.UUID

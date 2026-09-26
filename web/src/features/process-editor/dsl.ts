@@ -1,5 +1,5 @@
 /**
- * D1.2: hand-written mirror of the backend's authored-document shape
+ * hand-written mirror of the backend's authored-document shape
  * (`packages/core/process/dsl/schema.py`'s `ProcessDefinitionDSL` and friends).
  *
  * This can't come from the generated OpenAPI schema (`schema.ts`) because the wire type

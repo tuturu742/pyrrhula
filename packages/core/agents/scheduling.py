@@ -1,4 +1,4 @@
-"""B1.8: the real ``persona_candidate_resolver`` implementation
+"""the real ``persona_candidate_resolver`` implementation
 ``core.process.scheduler.make_default_candidate_resolver`` has had an injection seam
 for since B1.3 -- ``Persona.persona_type`` (added at B1.7) is exactly what this resolves
 against; nothing wired it into the scheduler until now.

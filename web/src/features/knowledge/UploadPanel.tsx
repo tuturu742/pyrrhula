@@ -9,7 +9,7 @@ interface UploadPanelProps {
 const _TERMINAL_STATUSES = new Set(["done", "failed"]);
 
 /**
- * D1.1's upload/ingestion flow: file drop -> enqueue (A1.2's worker job, never parsed
+ * the upload/ingestion flow: file drop -> enqueue (the worker job, never parsed
  * in-process) -> poll job status until it reaches a terminal state -> the draft entries
  * it produced show up in EntryList once the panel's own query invalidation fires.
  */

@@ -1,4 +1,4 @@
-"""E2.12's own acceptance criterion: the `overseer.query` MCP tool handler contains no
+"""its own acceptance criterion: the `overseer.query` MCP tool handler contains no
 import of `core.secrets.repo` -- `OverseerService` is the only boundary it may cross to
 reach a secret. This is a narrower, tool-specific companion to
 `test_inv1_import_graph.py`'s repo-wide sweep (which already proves the same thing at

@@ -874,7 +874,7 @@ async def reject_registration_endpoint(
     return {"rejected": True}
 
 
-# ── audit chain verification (E2.10's verifier, as an operable endpoint) ─────────────
+# ── audit chain verification (the verifier, as an operable endpoint) ─────────────
 @router.get("/tenants/{tenant_id}/audit/verify")
 async def verify_audit_chain_endpoint(tenant_id: uuid.UUID) -> dict[str, object]:
     """Recompute every audit row's hash chain for this tenant and report breaks.

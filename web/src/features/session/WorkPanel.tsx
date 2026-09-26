@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
  * here is done being worked and only clutters the list it is still offered in. */
 const FINISHED_STATES = new Set(["merged", "done"]);
 
-/** D15's human half, finally on screen: the session's work items with their FSM
+/** the human half, finally on screen: the session's work items with their FSM
  * status, delegate selected ones to coding agents, and approve / request changes on
  * items that came back for review. The endpoints existed with zero UI — the whole
  * review loop ran over curl. Shown only when the session has repos bound. */

@@ -1,4 +1,4 @@
-"""A policy-driven local `ModerationProvider` (G4.14).
+"""A policy-driven local `ModerationProvider` .
 
 Not a real classifier and not pretending to be one: it flags text containing any of the
 tenant's configured category terms. That makes per-tenant policy *testable* -- the same

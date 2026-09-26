@@ -1,4 +1,4 @@
-"""The api composition root for ``BlobStore`` selection (A1.2).
+"""The api composition root for ``BlobStore`` selection.
 
 The local filesystem adapter rooted at ``Settings.blob_store_root``, unless
 ``blob_s3_bucket`` is set -- then the S3-compatible one. Choosing between them *is* what a
@@ -19,7 +19,7 @@ _blob_store: BlobStore | None = None
 
 def get_blob_store() -> BlobStore:
     # A configured bucket swaps the whole store behind the port -- call sites
-    # never learn which one they got (§13.8).
+    # never learn which one they got.
     from adapters.blob.s3.provider import s3_store_from_settings
 
     s3 = s3_store_from_settings()

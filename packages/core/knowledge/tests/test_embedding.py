@@ -54,7 +54,7 @@ async def test_end_to_end_uploaded_doc_produces_searchable_vectors(db_available:
         count_tokens=_word_count,
     )
 
-    # knowledge_chunk.embedding is a fixed vector(1024) column (A1.1); dimension=1024
+    # knowledge_chunk.embedding is a fixed vector(1024) column; dimension=1024
     # keeps this test's stub provider writable through it -- the "8-dim stub" the task's
     # acceptance criteria describes is for a lightweight test surrogate table
     # (vector_store_item, T0.3), not the real production-shaped chunk table this test
@@ -86,7 +86,7 @@ async def test_identical_content_hash_reuses_cached_embedding_not_recomputed(
         count_tokens=_word_count,
     )
 
-    # knowledge_chunk.embedding is a fixed vector(1024) column (A1.1); dimension=1024
+    # knowledge_chunk.embedding is a fixed vector(1024) column; dimension=1024
     # keeps this test's stub provider writable through it -- the "8-dim stub" the task's
     # acceptance criteria describes is for a lightweight test surrogate table
     # (vector_store_item, T0.3), not the real production-shaped chunk table this test

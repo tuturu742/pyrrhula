@@ -273,7 +273,7 @@ async def test_retry_storm_produces_exactly_one_record_per_logical_roll(
     assert len(rows) == 1
 
 
-# ── system-authored fact rendering (§9.2 step 5) ────────────────────────────────────
+# ── system-authored fact rendering  ────────────────────────────────────
 
 
 async def test_render_resolution_fact_is_authoritative_and_instructs_no_contradiction(

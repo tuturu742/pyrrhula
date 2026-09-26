@@ -1,6 +1,6 @@
 """v1 self-hosted EmbeddingProvider: bge-m3 (1024-dim) via sentence-transformers, CPU by
 default (torch picks up a GPU automatically if one is visible — "GPU optional, CPU
-workable", plan §13.9). ``sentence_transformers``/``torch`` are imported lazily, inside
+workable"). ``sentence_transformers``/``torch`` are imported lazily, inside
 ``_load()``, not at module import time — importing this module (or constructing the
 adapter) never requires the ~2GB of model weights to already be downloaded/cached; only
 the first real ``.embed()`` call does. Mirrors ``LiteLLMModelProvider``'s lazy

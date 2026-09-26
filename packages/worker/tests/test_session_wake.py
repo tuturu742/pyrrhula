@@ -118,7 +118,7 @@ async def test_a_second_worker_declines_a_session_already_being_advanced(
         raise SessionClaimTimeoutError("claimed by worker:deadbeef (0.2s ago)")
         yield  # pragma: no cover
 
-    async def must_not_run(*_a, **_k):  # noqa: ANN001  -- pragma: no cover
+    async def must_not_run(*_a, **_k):  # noqa: ANN001 -- pragma: no cover
         raise AssertionError("a declined advance must not run a turn")
 
     monkeypatch.setattr("core.sessions.lifecycle.get_session", fake_get_session)
@@ -150,7 +150,7 @@ async def test_an_archived_session_is_not_advanced(monkeypatch) -> None:  # noqa
             archived_at="2026-09-23T07:30:00Z",
         )
 
-    async def must_not_run(*_a, **_k):  # noqa: ANN001  -- pragma: no cover
+    async def must_not_run(*_a, **_k):  # noqa: ANN001 -- pragma: no cover
         raise AssertionError("an archived session must not be advanced")
 
     monkeypatch.setattr("core.sessions.lifecycle.get_session", fake_get_session)

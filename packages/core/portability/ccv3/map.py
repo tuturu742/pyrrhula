@@ -1,4 +1,4 @@
-"""Card -> Pyrrhula objects (G4.8, plan §11.3): an `Persona`, an entity instance, and a
+"""Card -> Pyrrhula objects: an `Persona`, an entity instance, and a
 `KnowledgeSource(class=lore)` whose entries carry the card's activation fields.
 
 This is the ecosystem's front door. A user with a folder of cards should be able to drop
@@ -8,7 +8,7 @@ the card's *activation behaviour* -- which lore fires, when, where it lands in t
 
 **Everything imported runs the injection scan.** Cards are the classic carrier: a lore
 entry is free text authored by a stranger and destined for a tool-calling agent's context.
-Flagged entries import quarantined, exactly as `.pyr` bundles do (G4.6) -- one quarantine
+Flagged entries import quarantined, exactly as `.pyr` bundles do -- one quarantine
 mechanism, not a card-shaped variant of one.
 
 **`extensions` survives byte-for-byte**, on the agent and on every entry. The spec reserves
@@ -271,7 +271,7 @@ async def _store_entry_extensions(
 
 
 async def read_card_extensions(tenant_id: uuid.UUID, persona_id: uuid.UUID) -> dict[str, Any]:
-    """What ``_store_entry_extensions`` put away, for G4.9's export and for the round-trip
+    """What ``_store_entry_extensions`` put away, for the export and for the round-trip
     test. ``{}`` when the agent did not come from a card."""
     async with tenant_scope(tenant_id) as session:
         agent = await session.get(Persona, persona_id)

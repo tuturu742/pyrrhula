@@ -1,4 +1,4 @@
-"""T0.2's narrower cousin of INV-1 (T0.5 owns the full import-graph lint): *production*
+"""the narrower cousin of INV-1 (T0.5 owns the full import-graph lint): *production*
 code must only ever open a database session via ``core.tenancy.scope`` —
 ``tenant_scope()`` or ``unscoped_session()``. Anything else constructing a SQLAlchemy
 engine/sessionmaker directly has bypassed the one place that guarantees the RLS GUC is

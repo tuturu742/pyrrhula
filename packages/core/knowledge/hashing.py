@@ -1,5 +1,5 @@
-"""``KnowledgeSourceVersion.content_hash`` (plan §6.1): ``sha256`` of the canonicalised
-entry set, reusing T0.7's canonical serializer so this and the audit hash chain can't
+"""``KnowledgeSourceVersion.content_hash`` : ``sha256`` of the canonicalised
+entry set, reusing the canonical serializer so this and the audit hash chain can't
 quietly drift on what "the hash of a row" means.
 
 Deliberately hashes a fixed, stable subset of ``KnowledgeEntry`` fields, not the whole

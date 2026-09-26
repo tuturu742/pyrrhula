@@ -1,4 +1,4 @@
-"""ORM model for ``completed_operation`` — idempotency (§5.6). Resume-from-checkpoint
+"""ORM model for ``completed_operation`` — idempotency. Resume-from-checkpoint
 re-executes work; a node that made a paid API call before an interrupt point charges the
 tenant's key twice on resume unless every side-effecting operation checks here first.
 

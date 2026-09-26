@@ -1,6 +1,6 @@
-"""Overseer query endpoints (E2.10): the HTTP surface over `OverseerService` -- the
-Director's View UI (E2.11) is this router's own consumer; the `overseer.query` MCP tool
-(E2.12) calls the same `OverseerService` methods directly, not through HTTP, but both
+"""Overseer query endpoints: the HTTP surface over `OverseerService` -- the
+Director's View UI is this router's own consumer; the `overseer.query` MCP tool
+ calls the same `OverseerService` methods directly, not through HTTP, but both
 paths audit identically since there is exactly one service underneath.
 """
 

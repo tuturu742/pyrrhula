@@ -1,6 +1,6 @@
-"""CEL compile-check (B1.1, plan §5.2/§5.3): every ``gates[].when`` and ``effects[].to``
+"""CEL compile-check: every ``gates[].when`` and ``effects[].to``
 expression is checked at save time so a bad expression is an authoring-time error, never
-an interpreter-time fault (B1.2).
+an interpreter-time fault.
 
 celpy's ``Environment.compile()`` only catches *syntax* errors -- referencing an
 undeclared name (anything other than ``state.<declared var>`` plus CEL's own operators/

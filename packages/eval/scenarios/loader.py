@@ -1,4 +1,4 @@
-"""Scenario loading (E2.8): the one entrypoint the harness and its tests use, so adding a
+"""Scenario loading: the one entrypoint the harness and its tests use, so adding a
 new scenario is "append to `ALL_SCENARIOS`", never touching this module.
 """
 

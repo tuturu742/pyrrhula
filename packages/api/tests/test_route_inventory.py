@@ -1,4 +1,4 @@
-"""T0.6's route-inventory acceptance criterion: no route reachable without a resolved
+"""the route-inventory acceptance criterion: no route reachable without a resolved
 principal, except the documented health/auth exceptions. Walks FastAPI's dependant tree
 (not just each route's direct dependencies) so a dependency-of-a-dependency — e.g.
 ``rate_limit_by_principal`` pulling in ``get_request_context`` — still counts.

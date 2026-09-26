@@ -1,6 +1,6 @@
-"""Query embedding for retrieval (plan §6.3 step 3, A1.4): "embed the query once per
+"""Query embedding for retrieval: "embed the query once per
 turn, cached." A single turn calls ``search_dense`` once per class (rules/lore/misc,
-A1.6's bucketing), always with the *same* query text — without this, that's one
+the bucketing), always with the *same* query text — without this, that's one
 embedding inference per class instead of one for the whole turn.
 
 This is a per-turn, in-process memo, not the persistent cross-turn cache A1.9 builds

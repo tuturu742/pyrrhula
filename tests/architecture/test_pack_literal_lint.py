@@ -1,4 +1,4 @@
-"""F3.9's core-side half of the zero-core-diff assertion (plan §4.2 INV-9): no module
+"""the core-side half of the zero-core-diff assertion (INV-9): no module
 under ``packages/core/`` may reference a pack identifier (``rpg``, ``enterprise``,
 ``swdev``) as a string literal -- the generic engine must never know which pack it's
 running. Complements ``test_packs_independence.py`` (the other direction: packs may

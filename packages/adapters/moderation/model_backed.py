@@ -4,7 +4,7 @@ ollama by default and anything the deployment configures otherwise.
 
 Configuration (deployment-level, ``core.config.Settings``):
 
-- ``PYRRHULA_MODERATION_MODEL``   e.g. ``ollama/qwen3.8:27b`` (empty = adapter unused;
+- ``PYRRHULA_MODERATION_MODEL`` e.g. ``ollama/qwen3.8:27b`` (empty = adapter unused;
   the factory keeps returning allow-all)
 - ``PYRRHULA_MODERATION_API_BASE`` e.g. ``http://ollama:11434``
 

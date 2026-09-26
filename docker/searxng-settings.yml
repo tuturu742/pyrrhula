@@ -14,11 +14,11 @@
 #    `duckduckgo news` and `yahoo news` all answer from this host, which matters
 #    enormously for anything reporting on this week. Measured here, one query each:
 #
-#        bing news        10 results, and the only one that honours a time filter (7)
-#        duckduckgo news  25 results, but ZERO once a time filter is applied
-#        yahoo news       69 results, likewise zero filtered
-#        qwant news        7 results, and the ONLY engine that dates every one
-#        google news      dead, filtered or not
+#        bing news 10 results, and the only one that honours a time filter (7)
+#        duckduckgo news 25 results, but ZERO once a time filter is applied
+#        yahoo news 69 results, likewise zero filtered
+#        qwant news 7 results, and the ONLY engine that dates every one
+#        google news dead, filtered or not
 #
 #    So the set leans on news engines, which are fresh by construction, rather than on
 #    a time filter that two of the three silently answer with nothing.

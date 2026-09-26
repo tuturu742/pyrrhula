@@ -317,7 +317,7 @@ function ExecEnvironmentsCard() {
   );
 }
 
-/** Which hosted-git identity each persona acts under on one repo (G4.17).
+/** Which hosted-git identity each persona acts under on one repo.
  *
  * Anything unbound falls back to the repo's own token, which is why a reviewer persona
  * could not file an approval on a pull request its own identity had opened -- both

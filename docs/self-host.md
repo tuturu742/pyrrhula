@@ -13,9 +13,9 @@ with the compose plugin; ~4 GB RAM for the stack itself (models are extra).
 git clone <this repo> && cd pyrrhula
 cp docker/env.example .env
 # Fill in the five required secrets:
-#   openssl rand -base64 48   -> PYRRHULA_JWT_SECRET
-#   openssl rand -base64 32   -> PYRRHULA_ENCRYPTION_KEY  (exactly 32 decoded bytes)
-#   openssl rand -hex 24      -> the two passwords + admin token
+#   openssl rand -base64 48 -> PYRRHULA_JWT_SECRET
+#   openssl rand -base64 32 -> PYRRHULA_ENCRYPTION_KEY (exactly 32 decoded bytes)
+#   openssl rand -hex 24 -> the two passwords + admin token
 $EDITOR .env
 
 # Exec environments (agents building/testing code in containers) need the engine socket:

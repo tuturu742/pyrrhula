@@ -5,7 +5,7 @@ export interface StatusChipRowProps {
   values: string[];
 }
 
-/** F3.4's `status_set` tag -- an array-of-enum field (conditions, blockers, a work
+/** the `status_set` tag -- an array-of-enum field (conditions, blockers, a work
  * item's lifecycle tags) renders as a chip row, whatever domain it came from. */
 export function StatusChipRow({ labelKey, values }: StatusChipRowProps) {
   const t = useLabel();

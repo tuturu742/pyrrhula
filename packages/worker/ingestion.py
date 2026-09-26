@@ -1,4 +1,4 @@
-"""Ingestion job handler (A1.2) — the worker-side wiring `core.knowledge.ingestion`
+"""Ingestion job handler  — the worker-side wiring `core.knowledge.ingestion`
 needs but can't import itself (composition root: which ``BlobStore``/``ModelProvider``
 adapter, same rule ``core.process.skeleton`` follows). Registered in ``worker.main``'s job
 dispatch table under kind ``"knowledge_ingest"``.
@@ -56,7 +56,7 @@ async def run_ingestion_job(
     )
 
     # Chained job, not inline embedding: "ingestion job (parse/split/chunk) -> embedding
-    # job (A1.3)" (plan §15.4). Runs inside the idempotent-wrapped function so an
+    # job " . Runs inside the idempotent-wrapped function so an
     # idempotent replay (cache hit, not a real re-run) never double-enqueues this.
     await get_job_queue().enqueue(
         tenant_id,

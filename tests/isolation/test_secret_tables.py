@@ -1,14 +1,14 @@
-"""E2.1's own isolation negative tests (T0.4 shape) for the four secret schema tables.
+"""its own isolation negative tests (T0.4 shape) for the four secret schema tables.
 
 Cross-tenant filter omission and the append-only grant catalog check are also covered
 generically by ``test_filter_omission_matrix.py``/``test_coverage_guard.py`` and
 ``test_append_only_grants.py`` respectively (both extended in this PR to name these four
-tables) -- the tests here additionally prove the specific claims E2.1's acceptance
+tables) -- the tests here additionally prove the specific claims the acceptance
 criteria name: a secret attaches to all four subject kinds through one polymorphic column
 pair, and an UPDATE/DELETE against an append-only table is rejected *in practice*, not
 just absent from the grant catalog.
 
-The library-tenant matrix (D13, §16.8) does not apply here: unlike knowledge sources,
+The library-tenant matrix does not apply here: unlike knowledge sources,
 secrets have no cross-tenant "shared library" concept in the plan -- every secret belongs
 to exactly one tenant's one workspace, so there is nothing for a library-matrix test to
 exercise.
@@ -42,7 +42,7 @@ _MODERATION = AllowAllModerationProvider()
 async def _grant_author(
     tenant_id: uuid.UUID, workspace_id: uuid.UUID, principal_id: uuid.UUID
 ) -> None:
-    """`create_secret`/`add_holder` (E2.2) are permission-gated -- `secret:author` on the
+    """`create_secret`/`add_holder` are permission-gated -- `secret:author` on the
     workspace, granted to the 'facilitator' role (622a637f3fe0). Idempotent per (tenant,
     workspace, principal) via the same unique constraint `WorkspaceMembership` itself
     carries."""

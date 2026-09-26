@@ -29,14 +29,14 @@ dependencies = [
   "orjson>=3.9",
   "tiktoken>=0.8",
   "pypdf>=5.0",
-  # A1.3: self-hosted embeddings (bge-m3). torch is pinned to the CPU-only build via
+  # self-hosted embeddings (bge-m3). torch is pinned to the CPU-only build via
   # [tool.uv.sources]/[[tool.uv.index]] below -- "CPU workable, GPU optional" (plan
-  # §13.9) means the default self-host image must not carry CUDA wheels it doesn't need.
+  # ) means the default self-host image must not carry CUDA wheels it doesn't need.
   # Listed directly (not just pulled in transitively by sentence-transformers) so uv
   # actually applies that source override to it.
   "torch>=2.0",
   "sentence-transformers>=3.0",
-  # A1.5: keyword-activation regex keys need a real per-match timeout to guard against
+  # keyword-activation regex keys need a real per-match timeout to guard against
   # catastrophic backtracking. Stdlib `re` can't be interrupted mid-match (no GIL release,
   # no periodic check) even from a worker thread with a concurrent.futures timeout --
   # `regex` performs its own internal timeout checks and can actually abort a runaway
@@ -44,7 +44,7 @@ dependencies = [
   # transformers version dropping it doesn't silently remove this safety guard.
   "regex>=2024.0.0",
   "cel-python>=0.5.0",
-  # G4.11: Markdown -> HTML for report rendering (HTML feeds WeasyPrint's PDF path and the
+  # Markdown -> HTML for report rendering (HTML feeds WeasyPrint's PDF path and the
   # EPUB content document). Already present transitively via litellm/rich; declared
   # directly for the same reason `regex` is -- a future transitive change must not
   # silently remove a renderer the report pipeline depends on. `commonmark` mode makes the
@@ -58,7 +58,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# G4.11: PDF rendering. Kept out of the base install because it needs system libraries
+# PDF rendering. Kept out of the base install because it needs system libraries
 # (pango, cairo, gobject) that a slim environment has no reason to carry -- Markdown,
 # HTML and EPUB render without it. The shipped container installs this extra, so a
 # deployment can export a PDF while `pip install` of the package alone stays small.
@@ -72,7 +72,7 @@ dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "pytest-cov>=6.0",
-  # Test-fixture generation only (A1.2): real, valid PDF bytes for parse_pdf tests, so
+  # Test-fixture generation only: real, valid PDF bytes for parse_pdf tests, so
   # the parser is proven against pypdf's actual extraction rather than hand-rolled bytes.
   "fpdf2>=2.8",
   "types-regex",
@@ -155,7 +155,7 @@ strict = false
 module = "boto3.*"
 ignore_missing_imports = true
 
-# G4.11: WeasyPrint is an *optional* runtime dependency -- PDF rendering needs it plus
+# WeasyPrint is an *optional* runtime dependency -- PDF rendering needs it plus
 # system libraries (pango, cairo, gobject), and a deployment without them renders
 # Markdown/HTML/EPUB perfectly well (see core.reporting.render). It is imported inside a
 # guarded branch and is not installed here, so mypy has no stubs to find. Declaring that
@@ -171,7 +171,7 @@ testpaths = ["packages", "tests"]
 addopts = "-ra"
 
 # INV-1 (only core/assembler and core/overseer may import the knowledge/secrets repos) and
-# the packs-import-nothing-from-core contract are configured in tests/architecture/ (T0.5),
+# the packs-import-nothing-from-core contract are configured in tests/architecture/ ,
 # not here — they need a custom allowlist contract type that this file doesn't own.
 
 [tool.coverage.run]

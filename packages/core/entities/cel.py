@@ -1,4 +1,4 @@
-"""CEL compile-check for EntitySchema derived fields and constraints (F3.1, D7, §10.2).
+"""CEL compile-check for EntitySchema derived fields and constraints.
 
 Mirrors ``core.process.dsl.cel``'s real-evaluation-not-just-syntax approach: celpy's
 ``Environment.compile()`` only catches *syntax* errors, so this module also evaluates the

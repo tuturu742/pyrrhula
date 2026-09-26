@@ -1,5 +1,5 @@
 """The worker's composition root for ``BlobStore`` selection — mirrors
-``api.blob_store_factory`` (A1.2). Same local-filesystem root as the api process (shared
+``api.blob_store_factory`` . Same local-filesystem root as the api process (shared
 volume in the compose stack) so a blob the api wrote is readable here.
 """
 
@@ -14,7 +14,7 @@ _blob_store: BlobStore | None = None
 
 def get_blob_store() -> BlobStore:
     # A configured bucket swaps the whole store behind the port -- call sites
-    # never learn which one they got (§13.8).
+    # never learn which one they got.
     from adapters.blob.s3.provider import s3_store_from_settings
 
     s3 = s3_store_from_settings()

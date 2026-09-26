@@ -7,7 +7,7 @@ interface VocabularySwitcherProps {
 }
 
 /**
- * D1.6: per-workspace overlay switcher. Switching relabels the entire UI live -- on a
+ * per-workspace overlay switcher. Switching relabels the entire UI live -- on a
  * successful PATCH, the response's own `{key, labels}` is pushed straight into
  * `useVocabularyStore`, so every `useLabel()` consumer re-renders immediately, no reload
  * and no waiting on the invalidated query to refetch.

@@ -25,7 +25,7 @@ interface UseSSEResult {
 }
 
 /**
- * Wraps the browser's native `EventSource` for a session's stream (T0.9).
+ * Wraps the browser's native `EventSource` for a session's stream.
  *
  * `Last-Event-ID` resume needs no manual handling here: it's a *native* EventSource
  * behaviour — the browser remembers the last `id:` field it saw and automatically sends

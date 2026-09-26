@@ -1,4 +1,4 @@
-"""The one place a concrete ``ModerationProvider`` adapter is selected (E2.2/G4.14).
+"""The one place a concrete ``ModerationProvider`` adapter is selected.
 Mirrors ``api.encryptor_factory``'s composition-root pattern (CLAUDE.md rule 12).
 
 The choice is resolved **per tenant** (workspace setting, then tenant setting, then

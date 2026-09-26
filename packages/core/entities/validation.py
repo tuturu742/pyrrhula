@@ -12,8 +12,8 @@ Two distinct passes, mirroring ``core.process.dsl.validator``'s split:
   ``core.entities.schema``), then constraints are checked against the *combined*
   raw+derived activation, naming the failing predicate on violation.
 
-``validate_schema_definition`` also runs F3.2's ``core.entities.fsm.validate_state_
-machines`` (reachability, dangling transitions, guard/effect CEL) and F3.4's
+``validate_schema_definition`` also runs the ``core.entities.fsm.validate_state_
+machines`` (reachability, dangling transitions, guard/effect CEL) and the
 ``core.entities.tags.validate_tags``/``core.entities.views.validate_views`` (unknown
 tags, missing tag-metadata, dangling view references) -- one save-time entrypoint,
 matching ``core.process.dsl.validator.validate_raw``'s "a caller never needs to know
@@ -183,7 +183,7 @@ def _loc_to_path(loc: tuple[object, ...]) -> str:
 def validate_raw(
     raw: dict[str, object],
 ) -> tuple[EntitySchemaDefinition | None, list[SchemaValidationIssue]]:
-    """F3.11's dry-run entrypoint (mirrors ``core.process.dsl.validator.validate_raw``
+    """the dry-run entrypoint (mirrors ``core.process.dsl.validator.validate_raw``
     exactly): structural (Pydantic) validation first -- a document that fails it (bad
     shape, unknown field type, malformed range) never reaches the semantic pass below,
     which assumes a structurally valid document to walk. A caller (the schema editor's

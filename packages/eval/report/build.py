@@ -1,6 +1,6 @@
-"""Publishable three-arm report (E2.8): renders a matrix of `MatrixCell`s (per
+"""Publishable three-arm report: renders a matrix of `MatrixCell`s (per
 (model/provider, axis-value, arm)) into a markdown write-up -- the Phase-2 exit gate
-requires this exist and be readable by a human deciding whether §8 actually works,
+requires this exist and be readable by a human deciding whether actually works,
 not just a machine-readable pass/fail.
 """
 

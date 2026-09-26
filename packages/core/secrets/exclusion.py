@@ -1,10 +1,10 @@
-"""Context exclusion (E2.6, plan §8.4 (D4), §6.3 step 8, INV-8): assembler step 8 made
-real. Per gate decision (E2.5), **conceal** removes the secret's plaintext from the
+"""Context exclusion (INV-8): assembler step 8 made
+real. Per gate decision, **conceal** removes the secret's plaintext from the
 generation context entirely and injects `behavioral_directive` instead; **hint** injects
 `hint_text` (+ directive), plaintext still absent; **reveal_full** injects `content` and
 commits the world-changing side effects (disclosure event + holder update) atomically.
 
-"The single most important design claim" (§8.4): exclusion happens at *selection*, not by
+"The single most important design claim" : exclusion happens at *selection*, not by
 post-hoc scrubbing. `render_injection` never has a `content` field to reach for unless
 the action is `reveal_full` -- a concealed secret's fact is structurally absent from this
 module's own output, not redacted out of a buffer that once held it.
@@ -54,7 +54,7 @@ def render_injection(resolved: ResolvedSecretDecision) -> tuple[str, ExclusionRe
     """No decision at all, or an unrecognised action, defaults to conceal -- the
     assembler enforces fail-closed independently of E2.5 doing the same (this task's own
     subtask); a bug that let an unvalidated action string through must not become a leak."""
-    # EVAL ARMS ONLY (plan §8.6 arms 1-2), checked BEFORE the fail-closed normalizer on
+    # EVAL ARMS ONLY ( arms 1-2), checked BEFORE the fail-closed normalizer on
     # purpose -- these are the deliberately-broken designs the benchmark must measure:
     # plaintext in context WITH an instruction to keep it secret. Only
     # `core.assembler.secrets_gate_factory.resolve_turn_secrets` constructs this action,
@@ -105,7 +105,7 @@ async def apply_reveal(
     """The reveal path's atomic side effect: the disclosure event and the extended
     holder set commit together (`core.secrets.decisions.record_reveal`) -- subsequent
     turns' visibility reflects the new holder set immediately, since the world changed
-    the moment the fact was spoken (§8.4's "the reveal updates ACLs because disclosure
+    the moment the fact was spoken ('s "the reveal updates ACLs because disclosure
     changes the world"). The caller (context_assembler) is responsible for actually
     calling this only when `resolved.action == 'reveal_full'`."""
     return await record_reveal(

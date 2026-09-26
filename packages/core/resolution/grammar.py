@@ -1,4 +1,4 @@
-"""Randomizer-expression grammar + parser (C1.5, plan §9.3). Deliberately generic, not
+"""Randomizer-expression grammar + parser. Deliberately generic, not
 d20-specific: ``NdM[kK][+-]MOD...`` where ``M`` (die sides) has no fixed value set here --
 a coin flip is just ``1d2``, so "a coin-flip system must be expressible" falls out of the
 same grammar rather than needing a special case. Which sides/counts/keep-syntax are
@@ -20,7 +20,7 @@ _MOD_TERM_RE = re.compile(r"(?P<sign>[+-])(?P<term>\d+|[A-Za-z_][A-Za-z0-9_]*)")
 
 # A sanity bound, not a rule-system policy: no legitimate expression needs more terms than
 # this, and without it a fuzzer/adversarial caller could ask for an absurd allocation
-# further down the pipeline (C1.6's actual rolling).
+# further down the pipeline (the actual rolling).
 _MAX_COUNT = 1000
 
 

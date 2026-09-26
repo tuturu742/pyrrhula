@@ -1,4 +1,4 @@
-"""Async / play-by-post notification pipeline (G4.3, plan §5.2/§12.7, req 21).
+"""Async / play-by-post notification pipeline (G4.3/, req 21).
 
 A play-by-post game and a week-long enterprise review cycle are the same mechanism: an
 ``await_state`` with a long timeout and humans who need to be told it is their turn. This
@@ -49,7 +49,7 @@ from core.tenancy.models import Base, Principal, WorkspaceMembership
 from core.tenancy.roles import roles_satisfying
 from core.tenancy.scope import tenant_scope
 
-# Which ``any_of`` tokens (DSL §5.2) name a *human*. An agent actor needs no email.
+# Which ``any_of`` tokens (DSL ) name a *human*. An agent actor needs no email.
 _HUMAN_TOKENS = frozenset({"human_participant", "human_overseer"})
 _TOKEN_ROLES = {"human_participant": "participant", "human_overseer": "overseer"}
 
@@ -342,7 +342,7 @@ async def build_digest(
     between_sessions_since: datetime | None = None,
 ) -> Digest:
     """The recipient's own digest: what they are holding up, and what has happened that
-    they may see. The second half goes through ``collect_visible_facts`` -- G4.1's
+    they may see. The second half goes through ``collect_visible_facts`` -- the
     visibility-filtered fact frame -- so a digest is filtered by the same resolver as a
     resumed turn's context and an export. Never present beats scrubbed after."""
     pending = await _pending_awaits_for(tenant_id, workspace_id, viewer.id)

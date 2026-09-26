@@ -1,4 +1,4 @@
-"""MCP transport port (G4.12, plan §13.7, D6).
+"""MCP transport port.
 
 The wire protocol is an adapter's problem. What core needs is two operations -- "what tools
 does this server offer" and "call one" -- and a shape for their results. Keeping the

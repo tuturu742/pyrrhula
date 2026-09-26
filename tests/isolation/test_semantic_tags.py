@@ -1,4 +1,4 @@
-"""F3.4's own acceptance tests: the closed tag vocabulary, the tag->widget registry's
+"""its own acceptance tests: the closed tag vocabulary, the tag->widget registry's
 totality/domain-blindness, and cross-domain resource-widget resolution.
 """
 

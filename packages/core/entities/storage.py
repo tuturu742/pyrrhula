@@ -1,9 +1,9 @@
-"""Entity storage (F3.3, plan §10.5, §12.5): one shared, JSONB-backed ``entity`` table
+"""Entity storage: one shared, JSONB-backed ``entity`` table
 for every schema, with **generated columns** hoisted per-schema for fields marked
 ``indexed: true`` -- JSONB flexibility with real btree index performance on the two or
 three fields a workspace actually queries (initiative, status, owner).
 
-**Why one shared table, not one table per schema.** A schema is authored data (F3.1),
+**Why one shared table, not one table per schema.** A schema is authored data,
 created and versioned at runtime by tenants and packs -- there is no fixed, compile-time
 set of "entity types" to give their own tables. JSONB plus per-field generated columns is
 how this project gets index performance without a runtime `CREATE TABLE`.
@@ -54,8 +54,8 @@ _PG_TYPE_BY_FIELD_TYPE: dict[str, str] = {
 class EntityRow(Base):
     """One entity instance, any schema. ``fsm_states`` is the render-time projection
     F3.6 injects (``{"health": "bloodied", "quest": "active"}``); ``data`` holds raw
-    field values only -- derived values are never stored (F3.1's design decision).
-    Row-lock semantics for concurrent writes are F3.5's job, not this module's -- this
+    field values only -- derived values are never stored (the design decision).
+    Row-lock semantics for concurrent writes are the job, not this module's -- this
     task owns shape, not mutation policy."""
 
     __tablename__ = "entity"
@@ -234,7 +234,7 @@ async def list_entities_for_scope(
 async def list_all_entities_for_workspace(
     tenant_id: uuid.UUID, workspace_id: uuid.UUID
 ) -> list[EntityRow]:
-    """Unfiltered by scope -- for provenance snapshots (F3.6's checkpoint entity-version
+    """Unfiltered by scope -- for provenance snapshots (the checkpoint entity-version
     pins), not for anything viewer-facing. Mirrors ``core.knowledge.authoring
     .list_workspace_attachments``'s identical "every attached source, not a viewer's
     visible subset" shape for ``knowledge_version_pins``: a checkpoint captures what

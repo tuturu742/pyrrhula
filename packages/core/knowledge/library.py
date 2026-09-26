@@ -1,4 +1,4 @@
-"""The reserved library tenant (plan D13, §16.8, A1.10): a well-known, read-only tenant
+"""The reserved library tenant: a well-known, read-only tenant
 holding pack seed content, embedded once rather than once per consuming tenant. Every
 other tenant can *read* a library source through the RLS disjunct the
 ``6b3e9f2d1a47_library_tenant`` migration adds to ``knowledge_source``/``_version``/
@@ -46,7 +46,7 @@ async def _find_existing_fork(
 ) -> uuid.UUID | None:
     """A previous edit may have already forked this exact library source for this
     tenant -- reuse it instead of forking again on every subsequent entry edit. Detected
-    by walking A1.8's own provenance link (``parent_version_id``, recorded on the fork's
+    by walking its own provenance link (``parent_version_id``, recorded on the fork's
     first publish) rather than a new column: a source has no "forked from" pointer of its
     own in this schema, only its *versions* do, which is enough to answer the question."""
     async with tenant_scope(tenant_id) as session:
@@ -83,7 +83,7 @@ async def fork_if_library(
 ) -> uuid.UUID:
     """Fork-on-edit: if ``source_id`` names a library source, returns the id of
     ``tenant_id``'s own editable fork of it (reusing an existing fork if this tenant has
-    already made one, otherwise forking fresh via A1.8's ``fork_source``) -- the library
+    already made one, otherwise forking fresh via the ``fork_source``) -- the library
     copy is never touched. If ``source_id`` isn't a library source, returns it unchanged;
     this makes the function safe to call unconditionally in front of any entry edit.
     """

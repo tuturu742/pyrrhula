@@ -1,4 +1,4 @@
-"""Filter-omission coverage (T0.4/A1.1) for the five knowledge tables: ``knowledge_source``,
+"""Filter-omission coverage for the five knowledge tables: ``knowledge_source``,
 ``knowledge_source_version``, ``knowledge_entry``, ``knowledge_chunk``,
 ``workspace_knowledge_attachment``. Same pattern as ``test_filter_omission_matrix.py`` —
 a raw query with no ``WHERE tenant_id = ...`` clause, scoped to tenant A, must never
@@ -93,7 +93,7 @@ async def test_knowledge_source_filter_omission(two_tenants: tuple[uuid.UUID, uu
     async with tenant_scope(tenant_a) as session:
         rows = (await session.execute(text("SELECT tenant_id FROM knowledge_source"))).all()
     tenant_ids = {row[0] for row in rows}
-    # A1.10: the library tenant's rows are the one documented, intentional exception to
+    # the library tenant's rows are the one documented, intentional exception to
     # "only my own tenant_id" -- see tests/isolation/test_library_matrix.py.
     assert tenant_ids <= {tenant_a, LIBRARY_TENANT_ID}
     assert tenant_b not in tenant_ids

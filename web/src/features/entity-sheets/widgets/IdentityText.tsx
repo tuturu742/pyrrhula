@@ -5,7 +5,7 @@ export interface TextFieldProps {
   value: string | number | boolean;
 }
 
-/** F3.4's `identity` tag -- a name, a title, whatever the pack calls the "what is
+/** the `identity` tag -- a name, a title, whatever the pack calls the "what is
  * this thing" field. */
 export function IdentityText({ labelKey, value }: TextFieldProps) {
   const t = useLabel();

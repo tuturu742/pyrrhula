@@ -1,4 +1,4 @@
-"""C1.4: the cost/cache-hit dashboard is visible per session via API."""
+"""the cost/cache-hit dashboard is visible per session via API."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ async def test_session_usage_endpoint_reports_cache_hit_rate(
 async def test_message_usage_endpoint_reports_the_owning_messages_spend(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """D1.4: per-message token spend, distinct from another message's in the same
+    """per-message token spend, distinct from another message's in the same
     session -- proves UsageRecordRow.message_id actually discriminates, not just that
     the column exists."""
     slug = f"usage-msg-{uuid.uuid4().hex[:8]}"

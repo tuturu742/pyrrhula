@@ -1,18 +1,18 @@
-"""``scope`` (C1.1, plan §7.2/§12.6): named visibility compartments within a workspace.
+"""``scope`` : named visibility compartments within a workspace.
 Every ``KnowledgeEntry``/``Entity``/``EntityField`` carries a ``scope_key`` (already true
 for ``knowledge_entry``/``knowledge_chunk`` since A1.1); this table is what gives those
 free-text keys real membership semantics.
 
-``members`` JSONB shape (the plan's own §12.6 snippet just says "principal/role refs" --
+``members`` JSONB shape (the plan's own snippet just says "principal/role refs" --
 this is the concrete shape this codebase uses, documented here since it's the one place
 both the writer (``seed_default_scopes``) and reader (``scopes_for``) must agree on it):
 
-  kind='public'           -- members unused (``{}``); granted to anyone with a workspace
+  kind='public' -- members unused (``{}``); granted to anyone with a workspace
                              role at all (see ``visibility.py``).
-  kind='role'              -- {"roles": ["facilitator", ...]} -- workspace/agent role names
+  kind='role' -- {"roles": ["facilitator", ...]} -- workspace/agent role names
                              that qualify. Matched against ``WorkspaceMembership.role``
                              (human/service principals) or ``Persona.persona_type`` (agents).
-  kind='group'|'private'   -- {"principal_ids": ["<uuid>", ...]} -- explicit principal
+  kind='group'|'private' -- {"principal_ids": ["<uuid>", ...]} -- explicit principal
                              membership, agents included via their own principal id.
 
 The ``agent_private:<principal_id>`` convention (per-principal compartment, groundwork for
@@ -67,8 +67,8 @@ class ScopeRow(Base):
 
 
 class ContextManifestRow(Base):
-    """The persisted record of exactly what a model saw and why (C1.3, plan §6.3 step
-    10/§12.7, INV-10). One row per ``(session_id, event_seq)`` -- the same event_seq the
+    """The persisted record of exactly what a model saw and why (INV-10). One row per
+    ``(session_id, event_seq)`` -- the same event_seq the
     message it renders context for is stamped with. Append-only (‡): the migration
     revokes UPDATE/DELETE, matching ``checkpoint``/``session_event``.
 
@@ -102,7 +102,7 @@ class ContextManifestRow(Base):
     behavior_profile_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_counts: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False, default=dict)
     rendered_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    # G4.1: which elapsed-history range a resume summary covered, and the hash of the
+    # which elapsed-history range a resume summary covered, and the hash of the
     # summary text itself -- INV-10 across a resume needs both (the range says which
     # events to re-summarise, the hash says whether you rebuilt the same text). All three
     # NULL on a turn that injected no summary, which is every turn before G4.1.

@@ -1,4 +1,4 @@
-"""B1.8: the real persona_type-based candidate resolver -- the scheduler injection seam
+"""the real persona_type-based candidate resolver -- the scheduler injection seam
 core.process.scheduler.make_default_candidate_resolver has had since B1.3.
 """
 

@@ -1,4 +1,4 @@
-"""A1.8: diff/fork/effective-version endpoints over real HTTP."""
+"""diff/fork/effective-version endpoints over real HTTP."""
 
 from __future__ import annotations
 

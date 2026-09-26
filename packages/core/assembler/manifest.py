@@ -1,8 +1,8 @@
-"""ContextManifest persistence + read access control (C1.3, plan §6.3 step 10/§12.7,
-INV-10). Replay verification itself (re-running ``assemble()`` from a stored manifest's
+"""ContextManifest persistence + read access control (INV-10). Replay verification itself
+(re-running ``assemble()`` from a stored manifest's
 own recorded inputs and checking ``sha256(rendered) == rendered_hash``) is CI-blocking and
 lives in ``tests/replay/``, not here -- this module owns writing a manifest and reading
-one back, which the replay test (and D1.4's inspector) both build on.
+one back, which the replay test (and the inspector) both build on.
 
 **Not auto-wired into ``core.agents.runtime``.** Nothing in Phase 1 yet calls
 ``assemble()`` as part of an actual agent turn -- that integration needs C1.5/C1.6 (a real
@@ -72,7 +72,7 @@ async def write_context_manifest(
     transaction rather than assuming co-transaction with a message write -- the caller
     decides how tightly to couple the two; see module docstring.
 
-    ``behavior_profile_version`` (E2.3, plan §8.7): the version in effect for the acting
+    ``behavior_profile_version`` : the version in effect for the acting
     agent at generation time, resolved by the caller (``core.behavior.repo
     .get_current_behavior_profile``) rather than looked up here -- this module has no
     opinion about which agent a manifest belongs to beyond what the caller already
@@ -123,7 +123,7 @@ async def get_manifest_for_message(
     *,
     permission_service: PermissionService,
 ) -> ContextManifestRow:
-    """D1.4's read path (§7.4-style access control, applied to manifests rather than
+    """the read path (-style access control, applied to manifests rather than
     secrets): the exact viewer of a manifest may always read it back; anyone else needs a
     workspace role granted the ``read_any_manifest`` action (facilitator/overseer by
     default -- see the C1.3 migration's ``role_permission`` seed), checked through the

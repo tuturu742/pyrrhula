@@ -1,5 +1,5 @@
 """v1 Encryptor: the identity function. Swapped for per-tenant KMS/BYOK at H5.7 without
-touching any call site (D11)."""
+touching any call site."""
 
 from __future__ import annotations
 

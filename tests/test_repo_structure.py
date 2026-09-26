@@ -4,7 +4,7 @@ The CI-blocking suites (tests/isolation, tests/architecture, tests/replay, tests
 tests/packs) are owned by later tasks (T0.4, T0.5, C1.3, Phase 2, Phase 3 respectively)
 and are empty until those tasks land. This test makes sure their directories — and the
 rest of the Appendix B layout — can't quietly disappear in the meantime; each owning task
-adds the real, content-level guard (e.g. T0.4's per-table coverage check).
+adds the real, content-level guard (e.g. the per-table coverage check).
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def test_required_directories_exist() -> None:
 
 
 def test_only_one_application_dockerfile() -> None:
-    """One APPLICATION image, config not forks (plan §13.8) -- catch a second app
+    """One APPLICATION image, config not forks -- catch a second app
     Dockerfile early. Optional deploy-side sidecars (deploy/mcp-sidecars: the Godot
     engine bridge, the ComfyUI bridge) are separate workloads an operator runs beside
     Pyrrhula, never variants of the app image, so they live under deploy/ and are

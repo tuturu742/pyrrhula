@@ -66,7 +66,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
       - run: uv sync --extra dev
       # A live Postgres and Redis here (not just in the isolation job) matter: most
-      # port/adapter contract tests (T0.3) and the auth/rate-limit tests (T0.6) skip
+      # port/adapter contract tests and the auth/rate-limit tests skip
       # cleanly without them for local dev convenience, but that means CI must actually
       # provide both or those tests quietly never run for real.
       - name: Apply migrations

@@ -1,4 +1,4 @@
-"""Document -> draft entries -> chunks (plan §6.1/§15.4, A1.2). Runs entirely against
+"""Document -> draft entries -> chunks. Runs entirely against
 *draft* entries (``version_id IS NULL``) — publishing is a separate, explicit authoring
 action (``core.knowledge.authoring.publish_version``), not something ingestion does on a
 caller's behalf. Chunks are keyed by the draft entry's stable id, which is what makes
@@ -62,7 +62,7 @@ async def _upsert_chunk(
     content_hash: str,
 ) -> str:
     """Returns 'created', 'updated', or 'unchanged'. A hash match is treated as a no-op
-    on purpose — it's the mechanism that keeps an unchanged chunk's embedding (A1.3)
+    on purpose — it's the mechanism that keeps an unchanged chunk's embedding
     untouched rather than invalidating vectors that don't need to be recomputed."""
     async with tenant_scope(tenant_id) as session:
         existing = (
@@ -102,7 +102,7 @@ async def _upsert_chunk(
             return "unchanged"
 
         # Content changed: text/hash update, and the (now stale) embedding is cleared —
-        # A1.3's embed job re-embeds any chunk with a NULL embedding.
+        # the embed job re-embeds any chunk with a NULL embedding.
         await session.execute(
             text(
                 "UPDATE knowledge_chunk SET text = :text, token_count = :token_count, "

@@ -1,4 +1,4 @@
-"""ModerationProvider port (§16.7, G4.14). v1 is a no-op allow-all; real providers plug
+"""ModerationProvider port. v1 is a no-op allow-all; real providers plug
 in at Phase 4 without changing the pre/post hook call sites."""
 
 from __future__ import annotations

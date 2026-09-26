@@ -1,4 +1,4 @@
-"""Composition root for `McpTransport` (G4.12).
+"""Composition root for `McpTransport` .
 
 Returns the real server-side git transport (D15 delegated coding work) when a repo root is
 configured, else the unreachable stub. Everything that makes MCP calls *safe* (allowlist,

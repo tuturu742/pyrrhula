@@ -1,4 +1,4 @@
-"""AuditService: the one write path for ``audit_log`` (INV-6, §7.4). Every row's hash
+"""AuditService: the one write path for ``audit_log`` (INV-6). Every row's hash
 covers the previous row's hash, forming a per-tenant chain — a verifier
 (``core.audit.verify``) can detect any row that was altered or deleted after the fact
 without a matching chain break.
@@ -8,7 +8,7 @@ transaction lock keyed on the tenant id, so two simultaneous ``append()`` calls 
 read the same ``prev_hash`` and produce two rows claiming the same predecessor — that
 would silently fork the chain and defeat the point of chaining it at all.
 
-``append_in_session`` (E2.10) is the same logic taking a caller-supplied session instead
+``append_in_session`` is the same logic taking a caller-supplied session instead
 of opening its own ``tenant_scope()`` — for a call site (``core.overseer.service
 .inspect``, INV-5) that must commit the audit row in the *same* transaction as the read
 it documents, not a second, independently-committing one. ``append()`` is unchanged and

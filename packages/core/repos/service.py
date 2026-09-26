@@ -38,7 +38,7 @@ RUNTIME_CATALOG = BUILTIN_RUNTIMES
 async def resolve_git_identity(
     tenant_id: uuid.UUID, repo_id: uuid.UUID, persona_id: uuid.UUID | None
 ) -> uuid.UUID | None:
-    """The credential a persona acts under on this repo's hosted remote (G4.17).
+    """The credential a persona acts under on this repo's hosted remote.
 
     The persona's own binding if it has one, else the repo's default ``credential_ref``.
     One function so every call site -- push, comment, review, merge -- agrees on the

@@ -1,10 +1,10 @@
 /**
- * Frontend mirror of `core.entities.tags.TAG_WIDGET_REGISTRY` (F3.4/F3.10) -- the same
+ * Frontend mirror of `core.entities.tags.TAG_WIDGET_REGISTRY` -- the same
  * fixed, closed 9-tag vocabulary maps to the same widget ids here. Kept as a small,
  * duplicated data table (not fetched from the API) because it's a *rendering* contract,
  * not tenant data; a future task could expose it as an endpoint if keeping the two
  * copies in sync ever becomes a real problem, but nothing about that is load-bearing
- * for F3.10's own acceptance criteria.
+ * for its own acceptance criteria.
  *
  * Total and domain-blind, same as the backend registry: every core tag maps to
  * something, and this file never references a pack/domain literal.

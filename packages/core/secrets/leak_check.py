@@ -1,6 +1,6 @@
-"""Post-generation leak check (E2.7, plan §8.4 step 5, §16.4): defence in depth behind
-exclusion (E2.6), not the control. `unauthorized_disclosure_rate == 0` must hold from
-exclusion alone -- E2.8's eval harness treats a nonzero value as a P0 assembler bug, not
+"""Post-generation leak check: defence in depth behind
+exclusion, not the control. `unauthorized_disclosure_rate == 0` must hold from
+exclusion alone -- the eval harness treats a nonzero value as a P0 assembler bug, not
 something this check is meant to paper over. This module exists for what exclusion
 structurally can't see: hint drift, a model inferring the fact from a too-specific
 directive, an author-written directive that gives the game away.
@@ -66,7 +66,7 @@ def _words(text: str) -> list[str]:
 
 
 def _fuzzy_leak(content: str, reply_text: str) -> bool:
-    """Same shape as `core.secrets.drafting`'s plaintext-leak detector (E2.2): a
+    """Same shape as `core.secrets.drafting`'s plaintext-leak detector: a
     contiguous run of shared words, not raw characters -- paraphrase-with-identical-
     words is the actual risk, not an incidental short substring."""
     content_words = _words(content)
@@ -102,8 +102,8 @@ async def check_for_leak(
 ) -> LeakCheckResult:
     """Fuzzy token-overlap OR embedding similarity above `tau_leak` against each
     concealed secret's *content* -- either signal alone is enough to flag; this errs
-    toward over-flagging (defence in depth), unlike the disclosure gate's prefilter
-    (E2.5), which deliberately errs the other way (a false skip there costs the plot; a
+    toward over-flagging (defence in depth), unlike the disclosure gate's prefilter,
+    which deliberately errs the other way (a false skip there costs the plot; a
     false flag here costs one regeneration)."""
     if not concealed_secrets:
         return LeakCheckResult(leaked_secret_ids=())
@@ -152,7 +152,7 @@ async def run_post_generation_check(
     regenerate: RegenerateFn,
     tau_leak: float = 0.75,
 ) -> PostGenerationOutcome:
-    """Regenerate-once, then fallback (§8.4 step 5): `regenerate` is called at most once,
+    """Regenerate-once, then fallback: `regenerate` is called at most once,
     regardless of outcome -- a concealed agent that keeps leaking gets replaced with a
     bland in-voice deflection and an overseer alert, never a third generation attempt."""
     if not concealed_secrets:

@@ -1,4 +1,4 @@
-"""B1.1: process definition authoring against a live Postgres -- create/publish never
+"""process definition authoring against a live Postgres -- create/publish never
 persists an invalid definition, versions increment correctly within (tenant, workspace,
 key), and tenant-template (workspace_id NULL) rows version independently per tenant.
 """

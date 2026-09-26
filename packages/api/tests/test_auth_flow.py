@@ -1,4 +1,4 @@
-"""End-to-end auth flow (T0.6): register -> login -> /me, plus the two properties the
+"""End-to-end auth flow: register -> login -> /me, plus the two properties the
 brief cares most about -- a valid token for tenant A cannot be pointed at tenant B, and
 a disabled principal loses access immediately (not just after token expiry).
 """
@@ -192,7 +192,7 @@ async def test_register_without_tenant_header_and_no_single_tenant_mode_is_400(
     assert response.status_code == 400
 
 
-# ── single-tenant mode (T0.6, plan §13.8) ────────────────────────────────────────────
+# ── single-tenant mode  ────────────────────────────────────────────
 #
 # Compose and Kubernetes both switch this on by default, and it had never been exercised:
 # `default_tenant_slug` defaulted to "dev", a tenant no installer creates, so a deployment

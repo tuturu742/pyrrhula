@@ -1,4 +1,4 @@
-"""Catalog-based RLS coverage check (T0.4). Doesn't need seeded data or per-table
+"""Catalog-based RLS coverage check. Doesn't need seeded data or per-table
 knowledge: it walks Postgres's own catalogs and asserts every table with a ``tenant_id``
 column has RLS enabled *and* forced, except the one documented exception.
 

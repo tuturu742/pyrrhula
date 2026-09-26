@@ -1,4 +1,4 @@
-"""E2.3's acceptance criteria: the stakes:high validation rule, behavior_profile's
+"""the acceptance criteria: the stakes:high validation rule, behavior_profile's
 append-only version history (T0.4 shape: isolation + the grant is asserted, not assumed),
 and the ContextManifest.behavior_profile_version wiring's replay-relevant property --
 a pinned version resolves to the value in effect *at that time*, not whatever the agent's

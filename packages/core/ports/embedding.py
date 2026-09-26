@@ -1,7 +1,7 @@
-"""EmbeddingProvider port (D9, §13.3, §13.9). Self-hosted embedding (bge-m3, CPU/GPU) is
+"""EmbeddingProvider port. Self-hosted embedding (bge-m3, CPU/GPU) is
 the default; a cloud adapter exists behind the same port for tenants who opt in, gated by
 the D14 egress policy on ``purpose='embed'`` — full-local is a supported deployment mode;
-embedding through a paid API must never be *required* (plan §13.9).
+embedding through a paid API must never be *required* .
 
 Model names use a ``local/`` prefix for self-hosted adapters (``provider_kind`` in
 ``core.ports.model_provider`` treats that the same as generation's ``ollama/`` prefix) and
@@ -25,7 +25,7 @@ from core.ports.model_provider import check_egress
 
 class EmbeddingDimensionMismatchError(Exception):
     """A provider returned vectors whose length doesn't match its declared ``dimension``
-    — the config/adapter are out of sync, and that's a hard error (A1.3), not a silent
+    — the config/adapter are out of sync, and that's a hard error, not a silent
     zero-recall bug at query time."""
 
 

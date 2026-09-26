@@ -208,7 +208,7 @@ kubectl -n pyrrhula exec "$POD" -- python -c "import weasyprint"
 
 # a seeded tenant has its content -- personas AND the secrets that carry private briefs
 psql -tAc "select (select count(*) from persona where tenant_id=t.id),
-                  (select count(*) from secret  where tenant_id=t.id)
+                  (select count(*) from secret where tenant_id=t.id)
              from tenant t where t.slug='hagnaryd-mystery'"
 ```
 

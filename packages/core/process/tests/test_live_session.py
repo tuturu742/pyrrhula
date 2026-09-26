@@ -1,4 +1,4 @@
-"""B1.8's own acceptance criteria, and the concrete proof for
+"""its own acceptance criteria, and the concrete proof for
 ``tasks/phase-1/EXIT-GATE.md`` item 1: a real, non-stubbed ``advance_session``/
 ``run_agent_turn`` call chain runs a session end to end through the real interpreter,
 scheduler, tool loop, and context assembler -- not just a direct-call-only test of one
@@ -230,7 +230,7 @@ async def test_minimal_mvp_flow_runs_two_rounds_through_the_real_interpreter_and
             if resolve_message.context_manifest_id
             else None
         )
-        # The context assembler (C1.2) actually ran for this turn -- a manifest was
+        # The context assembler actually ran for this turn -- a manifest was
         # written and linked, not skipped.
         assert manifest_row is not None
 

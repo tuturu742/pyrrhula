@@ -1,7 +1,7 @@
-"""D1.5: agent + model-profile management over real HTTP -- persona/role editing,
+"""agent + model-profile management over real HTTP -- persona/role editing,
 provider credentials that are never redisplayed, capability hints, and the create-two-
 agents-that-both-take-turns acceptance criterion (proven here at the CRUD/data level;
-D1.3's session view is what actually lets them take turns).
+the session view is what actually lets them take turns).
 """
 
 from __future__ import annotations

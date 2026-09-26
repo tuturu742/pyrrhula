@@ -1,4 +1,4 @@
-"""ContextAssembler (C1.2, plan §4.1/§6.3, INV-1/2/8) — the ONLY code path from stored
+"""ContextAssembler (INV-1) — the ONLY code path from stored
 text to a model's context. Everything else in the architecture is arranged around
 protecting this one invariant (INV-1): only this module and ``core.overseer`` may import
 ``core.knowledge.repo``/``core.secrets.repo``.
@@ -8,13 +8,13 @@ first two parameters, required and defaultless -- omitting either is both a mypy
 (no ``Optional``, no default) and a runtime ``TypeError`` (explicit guard below, in case a
 call site ever bypasses static typing).
 
-The 10 steps of §6.3, and which task owns each:
+The 10 steps of, and which task owns each:
 
-1. **Scope** (C1.1) -- ``VisibilityResolver.scopes_for`` -- done, real.
-2. **Budget split** (A1.6) -- ``phase.budget.ratio``/``.max_tokens`` -- done, real.
+1. **Scope**  -- ``VisibilityResolver.scopes_for`` -- done, real.
+2. **Budget split**  -- ``phase.budget.ratio``/``.max_tokens`` -- done, real.
 3-6. **Per-class hybrid retrieve, WRRF fuse, rerank, bucket fill** (A1.4-A1.7) --
    ``search_and_budget`` -- done, real.
-7. **Entity state** (F3.6) -- ``entity_state_renderer`` is an injection seam, still
+7. **Entity state**  -- ``entity_state_renderer`` is an injection seam, still
    defaulting to a no-op here (every live turn now calls ``assemble()`` via
    core/process/live_session.py -- same "not
    yet wired into the runtime" gap every other injection seam in this module
@@ -22,7 +22,7 @@ The 10 steps of §6.3, and which task owns each:
    implementation a caller passes explicitly; it isn't imported as the default here to
    avoid a module cycle (``core.entities`` already depends on this module for
    ``EntityStateBlock``'s shape).
-8. **Secrets + disclosure gate** (E2.6, plan §8.4 (D4), INV-8) -- ``resolved_secret_
+8. **Secrets + disclosure gate** (INV-8) -- ``resolved_secret_
    decisions`` carries each relevant secret's already-resolved disposition (action +
    plaintext fields *only* populated when the action legally allows it -- see
    ``core.secrets.exclusion.ResolvedSecretDecision``), resolved by the caller from
@@ -38,21 +38,21 @@ The 10 steps of §6.3, and which task owns each:
    still-no-op seam for a different, narrower concern (scrubbing retrieved *knowledge*
    text that happens to restate a secret verbatim) that no task has actually needed yet;
    don't conflate the two.
-9. **Layout stable->volatile** (C1.4, plan §6.3 step 9/§16.1) -- entity state and
+9. **Layout stable->volatile**  -- entity state and
    constant-why knowledge entries (unchanging within a session) go in
    ``LayoutSections.stable``; ranked/retrieved (non-constant) knowledge, recent history,
    and rendered secret injections (different every turn -- a gate decision can flip
    turn to turn as pressure changes, so this can never be cache-stable the way
    ``behavior_directives_text`` is) go in ``.volatile``. Enforced structurally by
    ``core.assembler.layout.LayoutSections``, not by string-concatenation order that a
-   future edit could quietly get backwards. ``behavior_directives_text`` (E2.4) is
+   future edit could quietly get backwards. ``behavior_directives_text`` is
    pre-rendered banded prompt-directive text for the acting agent's current behavior
    profile -- resolved by the caller (``core.process.live_session``, which already
    fetches the profile for the manifest's ``behavior_profile_version``), not here; it
    belongs in ``stable`` because it only changes when the profile version does, same as
    entity state.
 10. **Manifest** -- built here as a plain in-memory dataclass (not yet persisted --
-    persistence + replay is C1.3's job).
+    persistence + replay is the job).
 
 **Determinism.** Given a fixed corpus (pinned knowledge versions), a fixed query, and
 ``reranker=None`` (skips the one call this module can't otherwise guarantee is
@@ -124,7 +124,7 @@ class ContextManifest:
     tenant_id: uuid.UUID
     session_id: uuid.UUID
     rendered_context: str
-    # C1.4: the same text as ``rendered_context``, split at the prompt-cache boundary --
+    # the same text as ``rendered_context``, split at the prompt-cache boundary --
     # ``stable_prefix + volatile_suffix == rendered_context`` (with the same single blank
     # -line join `LayoutSections.render()` uses). Exposed separately so a caller building a
     # real provider request can mark exactly this boundary as cacheable.
@@ -135,12 +135,12 @@ class ContextManifest:
     resolution_ids: tuple[uuid.UUID, ...]
     token_counts: dict[str, int]
     content_hash: str
-    # F3.6: exactly which entity versions were injected this turn -- ``{entity_id:
+    # exactly which entity versions were injected this turn -- ``{entity_id:
     # version}``. Persisted onto ``context_manifest.entity_versions``/``checkpoint
     # .entity_versions`` (both existed as ``{}``-always placeholders since C1.3/B1.4),
     # so a replayed/forked turn can tell which entity state it was generated against.
     entity_versions: dict[str, int] = field(default_factory=dict)
-    # G4.1 (INV-10 across a resume): which elapsed-history range the injected summary
+    # which elapsed-history range the injected summary
     # covered, and the hash of the summary text itself. ``None`` on a turn that injected
     # no summary -- the overwhelmingly common case, and every pre-G4.1 caller.
     history_summary_from_seq: int | None = None
@@ -157,7 +157,7 @@ class EntityStateBlock:
 
 @dataclass(frozen=True)
 class HistorySummaryBlock:
-    """G4.1's pre-rendered elapsed-history summary, resolved by the caller exactly the
+    """the pre-rendered elapsed-history summary, resolved by the caller exactly the
     way ``EntityStateBlock``/``behavior_directives_text`` are -- ``core.sessions.history
     .summarise_history`` builds it (a worker job, a model call, and per-viewer visibility
     filtering, none of which belong inside the assembler), this module only places it and
@@ -189,7 +189,7 @@ async def _default_entity_state_renderer(
     viewer: Principal,
     phase: PhaseSpec,
 ) -> EntityStateBlock:
-    """MVP: no entity system exists yet (F3.6, Phase 3) -- renders nothing."""
+    """MVP: no entity system exists yet -- renders nothing."""
     del tenant_id, workspace_id, session_id, viewer, phase
     return EntityStateBlock(rendered_text="", token_count=0)
 
@@ -197,7 +197,7 @@ async def _default_entity_state_renderer(
 async def _noop_secrets_gate(
     rendered_knowledge: str, viewer: Principal, phase: PhaseSpec, session_id: uuid.UUID
 ) -> tuple[str, tuple[Redaction, ...]]:
-    """MVP: no SecretsService exists yet (E2.6, Phase 2) -- passes through unchanged."""
+    """MVP: no SecretsService exists yet -- passes through unchanged."""
     del viewer, phase, session_id
     return rendered_knowledge, ()
 
@@ -205,11 +205,11 @@ async def _noop_secrets_gate(
 def citation_envelope(
     citation_id: str, class_: str, source_name: str, entry_title: str, body: str
 ) -> str:
-    """§6.5's citation envelope. Contents are DATA, never instructions -- the standing
+    """'s citation envelope. Contents are DATA, never instructions -- the standing
     system rule that makes this safe against knowledge-borne prompt injection lives in the
     agent's system prompt (outside this module's scope), not in the envelope shape itself.
 
-    Public (G4.5) so ``core.portability.replay`` rebuilds a turn's knowledge block from a
+    Public so ``core.portability.replay`` rebuilds a turn's knowledge block from a
     bundle using *this* envelope rather than a copy of it. A second implementation of the
     envelope would make the cross-boundary replay test pass by agreeing with itself."""
     return (
@@ -220,18 +220,18 @@ def citation_envelope(
 
 def token_proxy(rendered: str) -> int:
     """Token proxy for sections with no precomputed token_count (history, entity state,
-    G4.1's history summary) -- coarse, but consistent with the ± one chunk/message
+    the history summary) -- coarse, but consistent with the ± one chunk/message
     tolerance the budget acceptance criterion already allows for. Knowledge chunks use
-    their real, ingestion-time ``token_count`` (A1.2) instead, not this proxy.
+    their real, ingestion-time ``token_count`` instead, not this proxy.
 
-    Public (G4.1) so ``core.sessions.history`` sizes a summary with the *same* proxy this
+    Public so ``core.sessions.history`` sizes a summary with the *same* proxy this
     module then charges it against the history budget with -- two different counters
     either side of that hand-off would make the budget arithmetic quietly wrong."""
     return len(rendered.split())
 
 
 class HistoryBudgetExceededError(Exception):
-    """G4.1: an injected ``HistorySummaryBlock`` claims more tokens than the turn's whole
+    """an injected ``HistorySummaryBlock`` claims more tokens than the turn's whole
     history budget allows. Loud rather than silently truncated -- the summariser owns
     fitting the summary to the budget it was given (``core.sessions.history
     .summarise_history(max_tokens=...)``), and a mismatch here means a caller passed a
@@ -289,7 +289,7 @@ async def _render_history(
     Each line is prefixed with the speaker's name rather than the message's role -- see
     ``_speaker_names`` for why that is load-bearing rather than decorative.
 
-    ``after_event_seq`` (G4.1) excludes messages a resume summary already covers: including
+    ``after_event_seq`` excludes messages a resume summary already covers: including
     them verbatim *and* in the summary would double-charge the same history against the
     budget and hand the model the same turn twice. ``None`` = no summary, include
     everything (every pre-G4.1 caller)."""
@@ -326,7 +326,7 @@ async def _render_knowledge(
 ) -> tuple[list[str], list[str], tuple[ManifestEntry, ...]]:
     """Splits rendered knowledge blocks into stable (``why == "constant"`` -- always
     active regardless of query, so identical across every turn of a session) and volatile
-    (ranked/retrieved -- differs by query) for C1.4's layout contract. Citation ids are
+    (ranked/retrieved -- differs by query) for the layout contract. Citation ids are
     still assigned by final render order (stable entries first) so they stay stable too."""
     chunk_texts = await fetch_chunk_texts(tenant_id, [c.chunk_id for c in budgeted_chunks])
     source_names = await knowledge_repo.get_source_names(
@@ -558,7 +558,7 @@ async def assemble(
             )
             scope_span.set_attribute("pyrrhula.scope_count", len(scope_set))
 
-        # G4.1: the history slice comes out of the phase budget *before* retrieval runs,
+        # the history slice comes out of the phase budget *before* retrieval runs,
         # not as a truncation of what retrieval already spent -- see BudgetSpec
         # .history_ratio. `history_slice_tokens()` is 0 for every phase that never
         # declared one, so this subtraction is a no-op for all pre-G4.1 definitions.
@@ -625,7 +625,7 @@ async def assemble(
             volatile_knowledge = "\n\n".join(volatile_blocks)
 
         with _tracer.start_as_current_span("assembler.secrets_gate"):
-            # Applied separately to each side of the layout boundary (C1.4) so a gate
+            # Applied separately to each side of the layout boundary so a gate
             # that redacts content doesn't collapse the stable/volatile split back into
             # one string -- see module docstring on why the split is structural, not
             # string-concatenation order.
@@ -638,7 +638,7 @@ async def assemble(
             redactions = stable_redactions + volatile_redactions
 
         with _tracer.start_as_current_span("assembler.secrets_exclusion") as exclusion_span:
-            # E2.6: exclusion at selection, not scrubbing after -- render_injection never
+            # exclusion at selection, not scrubbing after -- render_injection never
             # has `content` to reach for unless the action is reveal_full, so a
             # concealed secret's fact is structurally never constructed as a candidate
             # string here.

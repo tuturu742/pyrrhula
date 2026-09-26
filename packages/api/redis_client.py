@@ -1,5 +1,5 @@
-"""Shared Redis client accessor. Used by rate limiting (T0.6) and SSE pub/sub fan-out
-(T0.8) — one client, one loop-rebinding policy, not two copies that could drift.
+"""Shared Redis client accessor. Used by rate limiting and SSE pub/sub fan-out
+— one client, one loop-rebinding policy, not two copies that could drift.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ def get_redis() -> Redis:
     there is exactly one loop for the process's lifetime, so this never fires; it matters
     in tests that mix direct async calls (pytest-asyncio's loop) with ``TestClient``
     requests (its own, separate internal loop) — an async Redis connection created on one
-    loop cannot be used from another. See docs/agent-guide.md §7 for the general pattern.
+    loop cannot be used from another. See docs/agent-guide.md for the general pattern.
     """
     global _redis, _redis_loop
     current_loop = asyncio.get_running_loop()

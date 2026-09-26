@@ -1,5 +1,5 @@
-"""C1.6's Phase-1 exit gate acceptance criterion: a model asserting a false modifier is
-rejected, proven through the *real* agent tool loop (B1.7), not just a direct call to
+"""the Phase-1 exit gate acceptance criterion: a model asserting a false modifier is
+rejected, proven through the *real* agent tool loop, not just a direct call to
 ``resolve()``. Ties B1.7 + C1.5 + C1.6 together end to end.
 """
 
@@ -198,7 +198,7 @@ async def test_valid_roll_through_the_real_tool_loop_writes_exactly_one_record(
 async def test_contradicting_narration_still_shows_the_records_truth_through_the_real_tool_loop(
     db_available: None,
 ) -> None:
-    """D1.3's Phase-1 exit-gate demonstration (INV-7): a reply narrating the wrong
+    """the Phase-1 exit-gate demonstration (INV-7): a reply narrating the wrong
     outcome doesn't change what's recorded, and gets flagged. ``target=100`` against a
     ``1d20+3`` roll (max possible total 23) makes the true outcome deterministically
     "failure" regardless of the actual roll -- the scripted reply then claims success,

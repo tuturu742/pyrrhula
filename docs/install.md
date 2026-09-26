@@ -3,8 +3,8 @@
 Three supported deployment targets, one entry point:
 
 ```bash
-./install.sh compose   # docker or podman on one machine  -- smallest footprint
-./install.sh k8s       # a Kubernetes cluster              -- built against k3s
+./install.sh compose   # docker or podman on one machine -- smallest footprint
+./install.sh k8s       # a Kubernetes cluster -- built against k3s
 ```
 
 Add `--check` to any target to verify prerequisites without changing anything.

@@ -1,7 +1,7 @@
-"""G4.9's leak test: no secret content, in any of its four fields, reaches an exported
+"""the leak test: no secret content, in any of its four fields, reaches an exported
 card. Same method as G4.7 -- scan the produced bytes, not the code path.
 
-Card export is deliberately *not* one of G4.7's export modes: there is no "full card". A
+Card export is deliberately *not* one of the export modes: there is no "full card". A
 `.pyr` bundle goes to someone the exporter chose, with a mode they had to pick; a card goes
 into an ecosystem of sharing sites. The least surprising thing a card can do is carry no
 secrets at all, and this test is what makes that a property of the bytes rather than an

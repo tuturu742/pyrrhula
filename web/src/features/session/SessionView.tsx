@@ -53,7 +53,7 @@ interface MessagePayload {
   triggered_by?: "scheduler" | "conducted" | "driver" | "unknown" | string;
 }
 
-/** G4.4: a `human_override` event carries the same fields a `message` does, plus who/how. */
+/** a `human_override` event carries the same fields a `message` does, plus who/how. */
 interface HumanOverridePayload extends MessagePayload {
   agent_id: string;
   rewrite_applied: boolean;
@@ -85,7 +85,7 @@ interface ExecEnvironmentPayload {
 }
 
 /**
- * D1.3: the live play surface -- message stream over the shared SSE hook (T0.9's
+ * the live play surface -- message stream over the shared SSE hook (the
  * reconnect-via-Last-Event-ID already works natively through the browser's EventSource,
  * see useSSE's docstring), the phase banner, phase-transition/await markers rendered
  * inline in the stream, the resolution widget (INV-7) + contradiction badge per
@@ -780,7 +780,7 @@ interface RosterPersona {
 }
 
 /** #7: one roster persona in the conductor panel — direct a model turn for them, or answer
- * in their place (reusing G4.4's verbatim/voice override). */
+ * in their place (reusing the verbatim/voice override). */
 function ConductorRow({
   sessionId,
   persona,

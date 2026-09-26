@@ -1,11 +1,11 @@
-"""Rough cost/cache-hit dashboard data (C1.4, plan §16.1): "build the rough one in Phase 1
+"""Rough cost/cache-hit dashboard data: "build the rough one in Phase 1
 rather than Phase 5" -- tokens + estimated spend + cache-hit rate, aggregated straight from
 ``usage_record``. No new table: this is a read-only query layer over data B1.7/T0.8 already
 write every turn.
 
 Cache-hit rate is ``cached_tokens / prompt_tokens`` -- the fraction of prompt tokens that
 were served from a provider's prompt cache rather than freshly processed, which is exactly
-what C1.4's layout work (stable prefix before volatile content) is trying to maximise.
+what the layout work (stable prefix before volatile content) is trying to maximise.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ async def session_usage_summary(tenant_id: uuid.UUID, session_id: uuid.UUID) -> 
 
 
 async def message_usage_summary(tenant_id: uuid.UUID, message_id: uuid.UUID) -> UsageSummary:
-    """D1.4: per-message token spend -- the generation call(s) that produced this one
+    """per-message token spend -- the generation call(s) that produced this one
     reply (a tool loop's intermediate calls and its final answer all share the message
     they together produced, correlated via ``UsageRecordRow.message_id``)."""
     async with tenant_scope(tenant_id) as session:

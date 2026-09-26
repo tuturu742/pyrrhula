@@ -1,5 +1,5 @@
-"""C1.5 acceptance criteria for the anti-hallucination validator itself (plan §9.2 step
-2/§9.3). No live DB needed -- ``validate()`` is a pure function over a
+"""Acceptance criteria for the anti-hallucination validator itself. No live DB needed --
+``validate()`` is a pure function over a
 ``RuleSystemDefinition`` and a caller-supplied ``actor_fields`` dict.
 """
 

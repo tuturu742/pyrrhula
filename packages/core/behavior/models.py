@@ -1,4 +1,4 @@
-"""Behaviour framework schema (E2.3, plan §8.1, §8.7, §12.4): `axis_definition` (pack
+"""Behaviour framework schema: `axis_definition` (pack
 content -- mutable, upserted by key, matching `rule_system`'s shape, not an immutable
 history) and `behavior_profile` (‡ append-only versions per agent -- "what disposition was
 this agent running when it concealed that?" must be answerable six months later; a mutable
@@ -67,7 +67,7 @@ class BehaviorProfileRow(Base):
     """Append-only (CLAUDE.md rule 5): a change to an agent's dial settings is always a
     new version, never an edit -- the migration REVOKEs UPDATE/DELETE from the app role
     on this table, the same control every other append-only table in this codebase uses.
-    Every `ContextManifest` records the version in effect at generation time (C1.3's
+    Every `ContextManifest` records the version in effect at generation time (the
     `behavior_profile_version` column, wired in this task)."""
 
     __tablename__ = "behavior_profile"

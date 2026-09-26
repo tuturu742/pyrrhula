@@ -8,7 +8,7 @@ Ciphertexts are version-prefixed (``enc1:<b64(nonce || ct+tag)>``) so rows writt
 the identity era are recognizable: ``decrypt`` passes anything without the prefix
 through unchanged (legacy plaintext keeps working), and the one-shot
 ``python -m core.credentials.reencrypt`` command wraps those legacy rows in place.
-Per-tenant KMS/BYOK (H5.7) remains a later adapter swap behind the same port.
+Per-tenant KMS/BYOK remains a later adapter swap behind the same port.
 """
 
 from __future__ import annotations

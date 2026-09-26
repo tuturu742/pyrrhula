@@ -1,4 +1,4 @@
-"""The only sanctioned way to open a database session (plan §12.1, INV-3).
+"""The only sanctioned way to open a database session (INV-3).
 
 Row-level security enforces tenant isolation at the database, but only if every session:
 
@@ -22,7 +22,7 @@ deliberately not RLS-covered, since a worker must be able to claim work for any 
 see ``core.ports.job_queue``) — have nothing to scope. Using it for anything else is
 exactly the mistake this module exists to prevent.
 
-``admin_ddl_session()`` is a second, even narrower exception: F3.3's per-schema
+``admin_ddl_session()`` is a second, even narrower exception: the per-schema
 generated-column/index generator (``core.entities.storage``) needs ``ALTER TABLE``/
 ``CREATE INDEX`` privileges the RLS-restricted ``pyrrhula_app`` role does not have and
 should never be granted (a DDL grant is a far bigger blast radius than the DML grants an

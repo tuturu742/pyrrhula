@@ -1,4 +1,4 @@
-"""Session/message endpoints + SSE stream. T0.8's walking skeleton
+"""Session/message endpoints + SSE stream. the walking skeleton
 (``core.process.skeleton``) still powers a session created *without* a
 ``process_definition_id``; one created *with* one runs through the real interpreter +
 tool-calling agent runtime (B1.8, ``core.process.live_session``) instead. Both paths
@@ -123,7 +123,7 @@ class CreateSessionRequest(BaseModel):
     # #7: 'auto' (autonomous scheduler) or 'directed' (a human conducts each discussion
     # turn). Defaults to autonomous; it is also toggleable live via PATCH /turn-policy.
     turn_policy: Literal["auto", "directed"] = "auto"
-    # B1.8: omitted (the default) keeps the T0.8 walking-skeleton path exactly as it
+    # omitted (the default) keeps the T0.8 walking-skeleton path exactly as it
     # was; supplying a real, immutable process_definition_id (a specific version --
     # ProcessDefinitionRow rows are never "latest", see core.process.authoring's own
     # docstring) pins the session to the real interpreter instead.
@@ -321,7 +321,7 @@ async def list_sessions_endpoint(
 async def get_session_endpoint(
     session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> SessionResponse:
-    """D1.3: the session view's initial-load/refresh fetch -- the SSE stream (below)
+    """the session view's initial-load/refresh fetch -- the SSE stream (below)
     only ever *replays events*, it never hands a caller today's already-current snapshot
     if they connect having missed nothing, e.g. right after ``create_session_endpoint``."""
     sess = await get_session(ctx.tenant_id, session_id)
@@ -718,7 +718,7 @@ async def delegate_endpoint(
     body: DelegateRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
-    """D15: the facilitator approves the plan and delegates each work item to a coding agent.
+    """the facilitator approves the plan and delegates each work item to a coding agent.
     One background job per item (worked in parallel), each producing a real branch + PR on the
     server-side git store. Gated on session:conduct."""
     sess = await get_session(ctx.tenant_id, session_id)
@@ -996,17 +996,17 @@ class RecapResponse(BaseModel):
 async def request_session_recap(
     session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> RecapResponse:
-    """G4.3's "resume into context": a human arriving from a digest link (or simply
+    """the "resume into context": a human arriving from a digest link (or simply
     returning after a long absence) asks for the elapsed history to be repopulated, and
     gets back a job to poll rather than a request that blocks on a map-reduce over a
     month of session log.
 
-    The recap is built **for the calling principal** -- G4.1's summariser filters its fact
+    The recap is built **for the calling principal** -- the summariser filters its fact
     frame through that principal's own visibility, so two people opening the same link get
     two different, each-correct recaps. That is why the principal comes from the request
     context and is not a parameter a caller could set to somebody else.
 
-    This is the entry point G4.1's scope note named as G4.3's to build; the summariser
+    This is the entry point the scope note named as the to build; the summariser
     itself, its budget, and its provenance recording were all complete before this route
     existed."""
     sess = await get_session(ctx.tenant_id, session_id)
@@ -1075,8 +1075,8 @@ class CheckpointResponse(BaseModel):
 async def list_checkpoints_endpoint(
     session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> list[CheckpointResponse]:
-    """D1.3's fork-from-checkpoint entry point's picker list (B1.4's checkpoints, plan
-    §5.4) -- oldest first, one row per phase transition this session has made."""
+    """The fork-from-checkpoint picker list: the checkpoints, oldest first, one row per
+    phase transition this session has made."""
     checkpoints = await list_checkpoints(ctx.tenant_id, session_id)
     return [
         CheckpointResponse(
@@ -1092,7 +1092,7 @@ class ForkSessionRequest(BaseModel):
 
 @router.post("/{session_id}/fork", status_code=201)
 async def fork_session_endpoint(
-    session_id: uuid.UUID,  # noqa: ARG001 -- the checkpoint id alone identifies the parent (B1.4)
+    session_id: uuid.UUID,  # noqa: ARG001 -- the checkpoint id alone identifies the parent
     body: ForkSessionRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> SessionResponse:
@@ -1137,7 +1137,7 @@ _MAX_ADVANCE_CONTINUATIONS = 20
 async def _run_process_definition_advance(
     tenant_id: uuid.UUID, session_id: uuid.UUID, process_definition_id: uuid.UUID
 ) -> None:
-    """B1.8's background task: drives the real interpreter (possibly several agent
+    """the background task: drives the real interpreter (possibly several agent
     turns + phase transitions in one call) instead of skeleton's one-shot generation."""
     definition_row = await get_definition(tenant_id, process_definition_id)
     assert definition_row is not None  # start_session already pinned a real row
@@ -1192,7 +1192,7 @@ async def submit_message_endpoint(
     if sess is None:
         raise HTTPException(status_code=404, detail=f"no session {session_id}")
 
-    # S3 (G4.14): human-authored session messages pass the authoring scan; a policy
+    # S3: human-authored session messages pass the authoring scan; a policy
     # whose action is 'block' withholds the message with the reasons.
     from core.moderation.hooks import scan_authored
 
@@ -1281,7 +1281,7 @@ async def satisfy_await_endpoint(
     background_tasks: BackgroundTasks,
     ctx: RequestContext = Depends(get_request_context),
 ) -> dict[str, bool]:
-    """B1.8: the HTTP entry point for resolving a real ``await_state`` row (B1.6) --
+    """the HTTP entry point for resolving a real ``await_state`` row --
     e.g. the ``feedback_loop``-style phases in ``STANDARD_SESSION_FLOW``. Advancing
     further afterward needs the same interpreter-driven background task human-turn
     submission does."""

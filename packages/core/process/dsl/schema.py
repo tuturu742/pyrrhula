@@ -1,21 +1,21 @@
-"""ProcessDefinition DSL (plan §5.2, D1, B1.1): the declarative, versioned JSON document
-that drives the process interpreter (B1.2). Restricted vocabulary; no expressions except
-CEL; every phase statically validated on save so the interpreter (B1.2) can trust its
+"""ProcessDefinition DSL: the declarative, versioned JSON document
+that drives the process interpreter. Restricted vocabulary; no expressions except
+CEL; every phase statically validated on save so the interpreter can trust its
 input completely — a definition that passes ``validate_definition`` (validator.py) is
 never allowed to make the interpreter fault on structural grounds.
 
-The plan's §5.2 YAML block is illustrative prose, not literal, parseable syntax — it uses
+The YAML block is illustrative prose, not literal, parseable syntax — it uses
 ``-> target_phase`` as informal transition shorthand and a gate entry shaped like
 ``{ on: actor_declares_action, -> action_phase }``, which isn't valid YAML/JSON (a mapping
 entry needs a ``key: value`` shape; a bare ``-> action_phase`` isn't one). This module
 defines a concrete, unambiguous, round-trippable JSON representation of the *same semantic
-content*: transitions are always an explicit ``to:`` field, matching how B1.1's own
+content*: transitions are always an explicit ``to:`` field, matching how its own
 acceptance criterion ("parse -> validate -> serialize identically") requires something
 that is actually re-parseable.
 
 ``id``/``version``/``key`` are deliberately *not* fields on this model — those are
 ``process_definition`` row/versioning metadata (assigned by the authoring/publish layer),
-not part of the authored document's own content, mirroring A1.1's KnowledgeSource-vs-
+not part of the authored document's own content, mirroring the KnowledgeSource-vs-
 KnowledgeSourceVersion split between identity/versioning and content.
 """
 
@@ -26,7 +26,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# Agents ARE principals with one of these three roles (plan §12.4, requirement 8).
+# Agents ARE principals with one of these three roles (requirement 8).
 KNOWN_PERSONA_TYPES = frozenset({"supervisor", "participant"})
 
 # The vocabulary an actors[].any_of entry may draw from: a persona-type-based token
@@ -59,7 +59,7 @@ _TIMEOUT_EVENT_RE = re.compile(r"^timeout\((\d+[hmsd])\)$")
 
 class StateVarSpec(BaseModel):
     """One entry of the DSL's ``state:`` block — a session-scoped, typed variable with a
-    default applied at session start (B1.2)."""
+    default applied at session start."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -119,7 +119,7 @@ class ActorSpec(BaseModel):
     def _selector_shape(self) -> ActorSpec:
         """At most one of persona_type/any_of/human_participant selects eligible actors by
         role. If none is set, ``order: initiative`` must be -- eligibility is then
-        implicit: whoever has the referenced entity field (plan §5.2's own example omits
+        implicit: whoever has the referenced entity field ('s own example omits
         an explicit selector on its initiative-ordered actor entry, relying on exactly
         this). Any other combination -- two selectors, or no selector with a non-
         initiative order -- is ambiguous and rejected."""
@@ -169,7 +169,7 @@ class ActorSpec(BaseModel):
 
 
 class VisibilitySpec(BaseModel):
-    """§4.1/§6.3's "who sees what" declared per-phase -- mandatory, no default (requirement
+    """/'s "who sees what" declared per-phase -- mandatory, no default (requirement
     13 made structural). ``secrets`` values are provisional pending C1.1/Phase 2's full
     disclosure-state machine; only the vocabulary the plan's own example uses is accepted
     today, deliberately narrow rather than a permissive free string."""
@@ -183,10 +183,10 @@ class VisibilitySpec(BaseModel):
 
 
 class BudgetSpec(BaseModel):
-    """Per-phase token budget (D2, A1.6) -- this is where rule-vs-lore priority actually
-    lives. ``spill`` mirrors A1.6's ``budget.py`` policy names directly.
+    """Per-phase token budget -- this is where rule-vs-lore priority actually
+    lives. ``spill`` mirrors the ``budget.py`` policy names directly.
 
-    ``history_ratio`` (G4.1) is the *reservation* elapsed-history repopulation takes out
+    ``history_ratio`` is the *reservation* elapsed-history repopulation takes out
     of ``max_tokens`` **before** retrieval runs, not a truncation applied to whatever
     retrieval already spent: ``search_and_budget`` is handed
     ``max_tokens - int(max_tokens * history_ratio)``, so a resumed session's recap can
@@ -220,7 +220,7 @@ class BudgetSpec(BaseModel):
 class GateSpec(BaseModel):
     """A phase's ``gates:`` entry, evaluated once the scheduler has no next actor.
     Exactly one of ``on``/``when``/``else_`` selects when this gate fires; declaration
-    order is the evaluation order (first match wins), matching B1.2's interpreter loop."""
+    order is the evaluation order (first match wins), matching the interpreter loop."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -254,7 +254,7 @@ class GateSpec(BaseModel):
 
 
 class EffectSpec(BaseModel):
-    """A phase's ``effects:`` entry, applied atomically with its transition (B1.2):
+    """A phase's ``effects:`` entry, applied atomically with its transition:
     ``state.<set>`` is assigned the result of evaluating the ``to`` CEL expression."""
 
     model_config = ConfigDict(extra="forbid")
@@ -264,7 +264,7 @@ class EffectSpec(BaseModel):
 
 
 class AwaitSpec(BaseModel):
-    """The interrupt primitive (§5.2, B1.6): a phase suspends until satisfied or
+    """The interrupt primitive: a phase suspends until satisfied or
     ``timeout`` elapses, at which point ``on_timeout`` is the transition target.
 
     Two things are worth waiting for. ``human_input`` is the original: a person has to
@@ -278,8 +278,8 @@ class AwaitSpec(BaseModel):
     differs is who -- a person through the HTTP endpoint, or the worker, when the last
     job belonging to the session finishes.
 
-    ``reminder_at`` (G4.3) is pacing data, not new engine semantics: the elapsed duration
-    after which a human who hasn't acted gets one nudge. B1.6's timeout sweep reads it;
+    ``reminder_at`` is pacing data, not new engine semantics: the elapsed duration
+    after which a human who hasn't acted gets one nudge. the timeout sweep reads it;
     the interpreter never sees it. ``None`` inherits the definition-level
     ``pacing.reminder_at``, and if that is absent too, no reminder is sent -- silence is
     the correct default for a process whose author never asked for one."""
@@ -376,9 +376,9 @@ class PhaseCompletionSpec(BaseModel):
     entities_touched: int = Field(default=0, ge=0, le=1000)
 
     # What to do when the actors are exhausted and the requirement is not met.
-    #   repeat   -- run the phase's actors again, up to `max_repeats`, then move on
-    #   hold     -- the same, but pause the session for a human when repeats run out
-    #   warn     -- record that it was unmet and move on regardless
+    #   repeat -- run the phase's actors again, up to `max_repeats`, then move on
+    #   hold -- the same, but pause the session for a human when repeats run out
+    #   warn -- record that it was unmet and move on regardless
     # Moving on is the default end state in every case except `hold`: a campaign stuck
     # forever on a beat nobody can satisfy is a worse failure than a thin beat.
     on_unmet: Literal["repeat", "hold", "warn"] = "repeat"
@@ -438,7 +438,7 @@ class PhaseSpec(BaseModel):
     on_complete: str | None = None
 
     def history_slice_tokens(self) -> int:
-        """G4.1: the phase budget's declared history reservation, in tokens. ``0`` for a
+        """the phase budget's declared history reservation, in tokens. ``0`` for a
         phase with no budget or no ``history_ratio`` -- the pre-G4.1 default, so every
         already-authored phase keeps its exact previous retrieval budget."""
         if self.budget is None:

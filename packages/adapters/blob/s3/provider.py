@@ -1,12 +1,12 @@
-"""S3-compatible BlobStore adapter (§13.8): the same port the local filesystem store
+"""S3-compatible BlobStore adapter: the same port the local filesystem store
 implements, backed by S3/MinIO/R2/Spaces via botocore (already a dependency through the
 AWS exec engine).
 
 Configuration (``core.config.Settings``):
-- ``PYRRHULA_BLOB_S3_BUCKET``    -- set = this adapter is selected by the factories
-- ``PYRRHULA_BLOB_S3_ENDPOINT``  -- MinIO/R2/Spaces base URL; empty = real AWS S3
-- ``PYRRHULA_BLOB_S3_REGION``    -- default ``us-east-1``
-- ``PYRRHULA_BLOB_S3_PREFIX``    -- optional key prefix so one bucket can host several
+- ``PYRRHULA_BLOB_S3_BUCKET`` -- set = this adapter is selected by the factories
+- ``PYRRHULA_BLOB_S3_ENDPOINT`` -- MinIO/R2/Spaces base URL; empty = real AWS S3
+- ``PYRRHULA_BLOB_S3_REGION`` -- default ``us-east-1``
+- ``PYRRHULA_BLOB_S3_PREFIX`` -- optional key prefix so one bucket can host several
   deployments without collisions
 
 Credentials come from the ambient AWS chain (instance role, IRSA, env vars) -- never

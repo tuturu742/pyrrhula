@@ -1,4 +1,4 @@
-"""v1 IdentityProvider: local email+password auth, Argon2id hashed. OIDC/SAML (H5.1) are
+"""v1 IdentityProvider: local email+password auth, Argon2id hashed. OIDC/SAML are
 siblings under packages/adapters/identity/ implementing the same port."""
 
 from __future__ import annotations

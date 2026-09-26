@@ -1,4 +1,4 @@
-"""Tenancy, identity, and access data model (plan §12.1).
+"""Tenancy, identity, and access data model.
 
 ``†`` in the plan means "tenant-scoped, RLS-covered" — every such table here carries an
 explicit ``tenant_id`` column (denormalised onto child tables too, e.g. ``identity``, so
@@ -48,10 +48,10 @@ class Tenant(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # 'shared' (RLS in one DB) | 'schema' | 'database' — D11/H5.6 escalation hook.
     isolation_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="shared")
-    # Read by the TenantRouter port (T0.3); v1 impl ignores it and returns one DSN.
+    # Read by the TenantRouter port; v1 impl ignores it and returns one DSN.
     region: Mapped[str] = mapped_column(String(63), nullable=False, default="default")
     settings: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
-    # A1.10 (D13): the one reserved, read-only tenant holding pack seed content. No
+    # the one reserved, read-only tenant holding pack seed content. No
     # memberships ever exist for it; this flag is the explicit, defense-in-depth guard
     # ``resolve_tenant_for_auth`` checks so register/login can never target it even if
     # that otherwise-true absence of memberships weren't the case.
@@ -72,7 +72,7 @@ class Tenant(Base):
 
 class Principal(Base):
     """Unifies humans, service accounts, and agents. Everything downstream references
-    ``principal``, never a human-specific "user" table (D11) — SSO in Phase 5 adds an
+    ``principal``, never a human-specific "user" table  — SSO in Phase 5 adds an
     ``identity`` row, not a new FK everywhere."""
 
     __tablename__ = "principal"
@@ -127,7 +127,7 @@ class Identity(Base):
 class Membership(Base):
     """Tenant-level role: owner|admin|editor|participant|viewer (requirement 29's minimum
     five roles). Superseded at finer grain by Phase 5's ``permission_grant`` — call sites
-    go through ``PermissionService.check()``, never this table directly (D11)."""
+    go through ``PermissionService.check()``, never this table directly."""
 
     __tablename__ = "membership"
 
@@ -152,7 +152,7 @@ class Membership(Base):
 
 class Workspace(Base):
     """Minimal for T0.2. ``vocabulary_overlay_id`` and ``default_process_definition_id``
-    (plan §12.2) are added by ALTER TABLE migrations once those tables exist (D1.6, B1.1) —
+     are added by ALTER TABLE migrations once those tables exist  —
     the same incremental-schema-growth pattern T0.8 uses for ``session``."""
 
     __tablename__ = "workspace"
@@ -165,7 +165,7 @@ class Workspace(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     settings: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
-    # D1.6 (plan §12.2): per-workspace vocabulary overlay override. NULL = fall back to
+    # per-workspace vocabulary overlay override. NULL = fall back to
     # the tenant default (tenant.settings) then the system default (core.vocabulary.
     # service's fallback chain) -- see core/vocabulary/models.py's module docstring for
     # why this is a plain string-referenced FK (no inline import of that module here:
@@ -178,7 +178,7 @@ class Workspace(Base):
         ForeignKey("vocabulary_overlay.id", ondelete="SET NULL"),
         nullable=True,
     )
-    # G4.2 (plan §12.5, req 21): the workspace's own timeline, advanced only by a
+    # the workspace's own timeline, advanced only by a
     # deliberate `core.entities.schedule.advance_clock` call. Explicitly NOT wall-clock --
     # process/fictional time and real time are different things, and a value that moved
     # itself on read would make "what changed between sessions" unanswerable. The unit is
@@ -226,10 +226,10 @@ class WorkspaceMembership(Base):
 
 
 class RolePermission(Base):
-    """v1 implementation of ``PermissionService`` (T0.3): data, not code. Global — not
+    """v1 implementation of ``PermissionService`` : data, not code. Global — not
     tenant-scoped, not RLS-covered. Phase 5 adds ``permission_grant(principal, action,
     resource_id)`` alongside this for fine-grained RBAC; call sites (``PermissionService
-    .check(principal, action, resource)``) never change (D11)."""
+    .check(principal, action, resource)``) never change."""
 
     __tablename__ = "role_permission"
 

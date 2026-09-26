@@ -1,4 +1,4 @@
-"""Prompt layout for caching (C1.4, plan §6.3 step 9/§16.1): a design constraint on
+"""Prompt layout for caching: a design constraint on
 prompt layout, not an optimisation. Provider prompt caching (and local KV-cache prefix
 reuse) only hits if the stable prefix -- system + persona + entity schema + constant
 knowledge + rule system, unchanging within a session -- comes strictly *before* volatile

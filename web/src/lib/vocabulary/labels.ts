@@ -1,5 +1,5 @@
 /**
- * Vocabulary overlay resolver (D1.6; plan §12.2, Appendix A, requirement 32).
+ * Vocabulary overlay resolver (D1.6; , Appendix A, requirement 32).
  *
  * Core code and the API only ever emit `label_key`s (e.g. `"role.facilitator"`); the UI
  * resolves those through an overlay to get the domain-specific display string. Nothing in
@@ -65,13 +65,13 @@ export const DEFAULT_LABELS: Record<string, string> = {
   "phase.framing": "Framing",
   "phase.regroup": "Regroup",
   "phase.synthesis": "Synthesis",
-  // F3.10: generic sheet-renderer chrome, not pack vocabulary -- same value regardless
+  // generic sheet-renderer chrome, not pack vocabulary -- same value regardless
   // of overlay, so it lives only here (no per-overlay divergence to seed in a
   // migration).
   "sheet.default_group": "Other",
 };
 
-/** Collected in dev mode only -- D1.6's "missing-key report" subtask. Read via
+/** Collected in dev mode only -- the "missing-key report" subtask. Read via
  * `getMissingKeysReport()`, e.g. from `MissingVocabularyKeysBadge` in `AppShell`. */
 const _missingKeys = new Set<string>();
 

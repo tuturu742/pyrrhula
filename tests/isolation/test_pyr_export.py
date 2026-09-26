@@ -119,7 +119,7 @@ async def _seed_two_scoped_entries(
 
 async def _seed_chunks_for_published_entries(tenant_id: uuid.UUID) -> None:
     """Published entries carry no chunks -- chunking is the ingestion pipeline's job
-    (A1.2) -- and both the assembler and the export's chunk section work on *chunks*. One
+     -- and both the assembler and the export's chunk section work on *chunks*. One
     chunk per published entry, seeded the same way ``test_context_assembler`` does, plus
     ``constant = true`` so activation includes them without a real embedding model in the
     loop. Each chunk inherits its entry's ``scope_key``, which is what makes the chunk
@@ -226,7 +226,7 @@ async def test_participant_export_matches_visibility_and_lists_redactions(
 
 
 def test_export_service_delegates_all_visibility_to_the_resolver() -> None:
-    """A *static* assertion over `export.py`'s own source (§11.4: "ExportService must not
+    """A *static* assertion over `export.py`'s own source (: "ExportService must not
     have its own visibility logic"). Runtime tests can only ever show that today's export
     happens to agree with the resolver; this shows there is no second implementation to
     disagree with it tomorrow."""

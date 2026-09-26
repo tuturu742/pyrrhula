@@ -1,15 +1,15 @@
-"""The turn scheduler (B1.3, plan §5.2 actors, §5.3): who acts next within a phase, in
-what order, until when. Produces a ``NextActorFn`` (B1.2's exact injection point) backed
+"""The turn scheduler (B1.3 actors): who acts next within a phase, in
+what order, until when. Produces a ``NextActorFn`` (the exact injection point) backed
 by a real, persisted cursor (``session.actor_cursor``) that survives kill/resume without
 skipping or double-acting an actor.
 
 **Candidate resolution is split between real and injected, by what actually exists.**
 ``human_participant``/``any_of``'s human-based tokens resolve against a real
-``workspace_membership`` query -- that table exists (T0.2). Persona-role-based tokens
+``workspace_membership`` query -- that table exists. Persona-role-based tokens
 (``persona_type``, ``any_of``'s ``"<role>_agent"`` tokens) and initiative order's entity-
 field lookups are **injected**, not queried here: ``agent.persona_type`` doesn't exist as a
 column until B1.7, and there is no ``entity``/``entity_schema`` table at all in Phase 1 --
-neither exists to query. This mirrors B1.2's own injection of ``next_actor_fn`` for the
+neither exists to query. This mirrors its own injection of ``next_actor_fn`` for the
 identical reason (build against schema that exists, wire in the rest when it does), one
 layer down: this module's ``CandidateResolver`` is the seam B1.7 (real agent-role queries)
 and the entity-schema task (real ``entity_field`` lookups, not yet on any Phase-1 task
@@ -19,7 +19,7 @@ list) plug real implementations into.
 (free/generate/generate_as) is orthogonal -- it says whether the resulting turn is
 human-typed or model-generated, and this module never inspects it beyond passing it
 through on the returned ``ActorRef``. Do not confuse the two fields; the DSL schema itself
-(B1.1) keeps them separate for exactly this reason.
+ keeps them separate for exactly this reason.
 """
 
 from __future__ import annotations
@@ -278,7 +278,7 @@ async def _next_from_entry(
     if spec.order == "free":
         # Deterministic pick among currently-eligible candidates -- no fixed order is
         # cached, so a change in the eligible pool is picked up on the very next call.
-        # (A human free-mode candidate being "selected" here only matters once B1.6's
+        # (A human free-mode candidate being "selected" here only matters once the
         # await/satisfaction gates whether the interpreter actually waits for their
         # input -- this module only decides eligibility + rotation, not readiness.)
         ordered = sorted(fresh, key=lambda c: str(c.principal_id))
@@ -321,7 +321,7 @@ async def _next_from_entry(
 
 
 def make_scheduler(resolve_candidates: CandidateResolver) -> NextActorFn:
-    """Returns a ``NextActorFn`` (B1.2's exact injection point) backed by a persisted
+    """Returns a ``NextActorFn`` (the exact injection point) backed by a persisted
     cursor. Safe to call repeatedly across separate ``advance_session`` invocations --
     kill/resume mid-rotation reads the same cursor back and continues exactly where it
     left off, never re-offering a turn already given or skipping the next one."""

@@ -1,4 +1,4 @@
-"""Per-persona hosted-git identity (G4.17): binding, rotation, fallback.
+"""Per-persona hosted-git identity: binding, rotation, fallback.
 
 The table and ``resolve_git_identity`` shipped without any write path, so the resolver's
 persona branch was never exercised -- every persona acted under the repo's one identity,

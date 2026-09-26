@@ -1,4 +1,4 @@
-"""A1.10 (D13) over real HTTP: editing a library entry as tenant B forks it into B's own
+"""A1.10 over real HTTP: editing a library entry as tenant B forks it into B's own
 tenant and edits the fork, leaving the library copy untouched; register/login against the
 library tenant's own slug is refused.
 """

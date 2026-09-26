@@ -1,11 +1,11 @@
-"""The two moderation scans §16.7 names (G4.14, req 31).
+"""The two moderation scans names (G4.14, req 31).
 
 **Authoring** (`scan_authored`) -- secrets, knowledge entries, and personas at write time.
 It reads a secret's `content` regardless of `disclosure_state`, deliberately: concealment
 governs what reaches a *model*, and a scanner that honoured it would be a scanner the
-secrets system blinded. That is the whole point of §16.7 calling this a DB-connected scan.
+secrets system blinded. That is the whole point of calling this a DB-connected scan.
 
-**Generation** (`scan_generated`) -- replies before delivery, following E2.7's ladder
+**Generation** (`scan_generated`) -- replies before delivery, following the ladder
 exactly: regenerate once, then a safe fallback, then an overseer alert where an overseer
 exists. Not a new ladder; the same one, because a leak and a policy violation have the same
 shape from a reader's point of view (something reached them that shouldn't have) and two
@@ -81,7 +81,7 @@ async def scan_generated(
     audit_service: AuditService | None = None,
     policy: ModerationPolicy | None = None,
 ) -> tuple[str, ScanOutcome]:
-    """The generation hook, following E2.7's ladder. Returns ``(final_text, outcome)``.
+    """The generation hook, following the ladder. Returns ``(final_text, outcome)``.
 
     ``regenerate`` is called **at most once**, whatever happens. An agent that keeps
     producing blocked content gets the fallback and an alert, never a third attempt --
@@ -165,7 +165,7 @@ async def _audit(
 async def _write_overseer_alert(
     tenant_id: uuid.UUID, session_id: uuid.UUID, event_seq: int, outcome: ScanOutcome
 ) -> None:
-    """The same `session_event` stream E2.7's leak alert uses, with a distinct kind. One
+    """The same `session_event` stream the leak alert uses, with a distinct kind. One
     attention feed for the overseer, whether the near-miss was a leak or a policy
     violation -- two feeds is one feed nobody checks."""
     async with tenant_scope(tenant_id) as session:

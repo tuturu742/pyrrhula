@@ -1,4 +1,4 @@
-"""Timeout sweep (B1.6, plan §5.2 await, §12.7): fires the ``on_timeout`` transition for
+"""Timeout sweep (B1.6 await): fires the ``on_timeout`` transition for
 any ``await_state`` row whose ``timeout_at`` has passed and that hasn't already been
 satisfied. Run via ``python -m worker.timeouts`` (a separate small loop, not a
 ``JobQueue`` handler -- see ``core.process.awaits``'s module docstring for why a periodic
@@ -16,7 +16,7 @@ this loop being careful -- so two sweepers, or a restarted one, still produce on
 completely and correctly -- but actually taking further interpreter steps from there
 (running `advance_session`/`advance_session_locked`) needs a real scheduler
 (`next_actor_fn`) and agent runtime (`execute_turn`), neither of which exist yet outside
-test doubles (B1.7). Whatever eventually calls `advance_session_locked` for a live
+test doubles. Whatever eventually calls `advance_session_locked` for a live
 session (the real HTTP layer, once B1.7 exists) will simply see the session already
 sitting in its post-timeout phase, ready to continue, the next time it runs -- no state is
 lost by not chaining automatically here.
@@ -63,7 +63,7 @@ async def _due_await_ids_for_tenant(tenant_id: uuid.UUID) -> list[uuid.UUID]:
 
 async def sweep_expired_awaits_for_tenant(tenant_id: uuid.UUID) -> int:
     """One tenant's worth of the timeout sweep. Split out from the cross-tenant loop
-    (G4.3) because "sweep this one tenant" is a real operation on its own -- retrying a
+     because "sweep this one tenant" is a real operation on its own -- retrying a
     tenant whose sweep failed, or draining one before a migration, shouldn't require
     walking every other tenant in the deployment."""
     resolved = 0

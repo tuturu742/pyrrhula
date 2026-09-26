@@ -1,4 +1,4 @@
-"""G4.3's isolation + acceptance tests: notification/reminder/timeout firing exactly once
+"""the isolation + acceptance tests: notification/reminder/timeout firing exactly once
 each, visibility-filtered digests, and a long await surviving a process restart.
 
 Lives under ``tests/isolation/`` because `notification` is a new tenant-scoped RLS table

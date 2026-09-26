@@ -1,4 +1,4 @@
-"""Fixtures for the pack-matrix harness (F3.9). Mirrors ``tests/isolation/conftest.py``'s
+"""Fixtures for the pack-matrix harness. Mirrors ``tests/isolation/conftest.py``'s
 ``db_available``/``two_tenants`` shape -- a separate, self-contained conftest rather than
 a cross-package import, matching this repo's existing convention of each test suite
 owning its own fixtures.

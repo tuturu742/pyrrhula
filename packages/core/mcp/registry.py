@@ -1,9 +1,9 @@
-"""Per-workspace MCP registry (G4.12, plan §13.7, req 12).
+"""Per-workspace MCP registry (G4.12, req 12).
 
 **Allowlist, not blocklist.** `enabled_tools` is the complete set of tools that exist as
 far as this workspace is concerned. A tool the server offers and the workspace has not
-listed is never discovered, never described to a model, and never callable. §16.6 and
-`docs/agent-guide.md` §8 say plainly that user-authored lore reaches tool-calling agents;
+listed is never discovered, never described to a model, and never callable. and
+`docs/agent-guide.md` say plainly that user-authored lore reaches tool-calling agents;
 a blocklist's failure mode under that threat model is a tool nobody thought to block, which
 is precisely the tool an attacker looks for.
 
@@ -141,7 +141,7 @@ class CredentialInRegistryError(ValueError):
 
 
 # Deliberately crude. This is a guardrail against the obvious mistake (pasting a key into
-# the field marked "credential"), not a secret detector -- G4.15's declarative
+# the field marked "credential"), not a secret detector -- the declarative
 # secret-pattern scan is the real one, and pretending this is that would be worse than
 # having neither.
 _KEY_PREFIXES = ("sk-", "sk_live", "ghp_", "github_pat_", "xoxb-", "AKIA", "AIza")
@@ -385,7 +385,7 @@ def apply_allowlist(row: McpServerRow, discovered: list[McpToolSpec]) -> list[Al
     ]
 
 
-# The web-search preset §13.7 asks for: a registry entry a deployment can enable, not a
+# The web-search preset asks for: a registry entry a deployment can enable, not a
 # special code path. "Web search is just an MCP server behind a workspace policy flag" is
 # only true if it is registered the same way everything else is.
 # The resolution preset: the tenant's registered deterministic tools (whatever the

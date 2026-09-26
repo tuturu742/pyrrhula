@@ -6,10 +6,10 @@ interface ContextInspectorPanelProps {
 }
 
 /**
- * D1.4: per-message transparency (plan §15.4 -- "a differentiator, not a debug tool").
+ * per-message transparency ( -- "a differentiator, not a debug tool").
  * Everything here reads straight from the durably-written ContextManifest (INV-10) and
  * usage_record -- nothing is recomputed or guessed at render time. Permission-checked
- * server-side by C1.3's own get_manifest_for_message (a 403 renders as a plain "not
+ * server-side by its own get_manifest_for_message (a 403 renders as a plain "not
  * visible to you" message, not a silent empty panel).
  */
 export function ContextInspectorPanel({ messageId }: ContextInspectorPanelProps) {

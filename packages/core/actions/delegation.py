@@ -1,4 +1,4 @@
-"""`delegate_work_item` (G4.16 ★, D15, plan §14.5/§9.4/§13.7, CLAUDE.md rules 8/10/11).
+"""`delegate_work_item` (G4.16 ★, D15//, CLAUDE.md rules 8/10/11).
 
 An engineer agent dispatches a work item to an external coding agent over MCP; the session
 suspends; the structured outcome drives the work item's FSM. Five decisions carry this, and
@@ -28,7 +28,7 @@ the PR?) before anything is dispatched. Re-dispatch happens only when the work i
 absent.
 
 **Returned prose is untrusted.** The summary, the PR body, and any diff excerpt enter
-context only inside G4.12's injection envelope; they never influence tool authorisation,
+context only inside the injection envelope; they never influence tool authorisation,
 and the FSM transition is driven by the outcome *record*, never by what the summary claims.
 
 Metering: one `usage_record` with ``purpose='delegation'`` (the v1.2 taxonomy addition),
@@ -390,7 +390,7 @@ async def _drive_fsm(
     permission_service: PermissionService,
     result: DelegationResult,
 ) -> None:
-    """Drives the work item through **F3.5's** mutation service, with the action as
+    """Drives the work item through **the** mutation service, with the action as
     `cause_ref`. Not a direct row update: F3.5 owns guard evaluation, the state-change
     record, and the idempotency, and a delegation that wrote state itself would be a second
     writer with none of them.

@@ -13,7 +13,7 @@ assignment. There is nothing to sign and no account to create.
 
 ## 2. Read the invariants before touching the core
 
-`docs/agent-guide.md` §3 lists them, each with a CI test that enforces it. The ones that
+`docs/agent-guide.md` lists them, each with a CI test that enforces it. The ones that
 bite hardest:
 
 - **Vocabulary.** Nothing under `packages/core/` may contain a domain word — no
@@ -39,7 +39,7 @@ know it works.
 ```bash
 uv sync --extra dev
 uv run pytest                 # the whole suite
-uv run ruff check . && uv run ruff format --check .
+uv run ruff check. && uv run ruff format --check.
 ```
 
 Acceptance criteria in task files are falsifiable on purpose. If one cannot be tested as

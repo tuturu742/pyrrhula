@@ -1,17 +1,17 @@
-"""The process interpreter (B1.2, plan §5.3): the loop that executes a validated
-ProcessDefinition (B1.1) against a session. Replaces T0.8's hardcoded 2-phase
+"""The process interpreter: the loop that executes a validated
+ProcessDefinition against a session. Replaces the hardcoded 2-phase
 ``core.process.skeleton`` as the *real* engine -- but does not delete or rewire it yet.
 ``core.process.skeleton`` still powers the existing ``/sessions`` HTTP flow; nothing in
 this task's own file scope (``packages/core/process/interpreter.py``) touches that
-surface. Wiring a live endpoint to this interpreter needs a real agent runtime (B1.7) to
-supply ``execute_turn`` and a real scheduler (B1.3) to supply ``next_actor_fn`` -- until
+surface. Wiring a live endpoint to this interpreter needs a real agent runtime to
+supply ``execute_turn`` and a real scheduler to supply ``next_actor_fn`` -- until
 then this module is complete, tested, and callable, but not yet load-bearing for any HTTP
 route. This mirrors how A1.6 built ``search_and_budget`` fully before C1.2 ever calls it.
 
 **Actor resolution is entirely injected, not implemented here.** Two reasons: (1) the
 ``agent`` table doesn't have an ``persona_type`` column yet -- that lands with B1.7 -- so
 this module cannot query "which agents have role X" even if it wanted to; (2) turn
-ordering (declared/initiative/free, cursor persistence across resume) is B1.3's whole job,
+ordering (declared/initiative/free, cursor persistence across resume) is the whole job,
 not something to half-build inline here just because it runs first in the dependency
 order. ``next_actor_fn``/``execute_turn`` are the seam B1.3/B1.7 slot real implementations
 into later, matching the ``model_provider_factory``/``on_chunk`` injection pattern T0.8
@@ -71,7 +71,7 @@ class InterpreterFaultError(Exception):
 
 
 class HumanTurnPendingError(Exception):
-    """B1.8: raised by an ``execute_turn`` implementation when ``actor.mode == "free"``
+    """raised by an ``execute_turn`` implementation when ``actor.mode == "free"``
     -- a human-typed turn can't be synthesized synchronously the way a model-generated
     one can. Not a fault: ``advance_session`` catches this specifically and returns
     ``'awaiting_human'`` without pausing the session. This is what makes a phase like
@@ -95,7 +95,7 @@ class ActorRef:
 @dataclass(frozen=True)
 class ActorTurnResult:
     content_md: str
-    # B1.8: set by an execute_turn implementation that already performed its own full
+    # set by an execute_turn implementation that already performed its own full
     # commit (core.agents.runtime.run_agent_turn's _commit_turn writes the message,
     # usage records, resolution correlation, and contradiction scan all in one
     # transaction) -- _run_actor_turn must not write a second, poorer MessageRow for the
@@ -116,7 +116,7 @@ class InterpreterContext:
     phase_key: str
     phase: PhaseSpec
     state: dict[str, Any]
-    # B1.8: the event_seq this turn's execute_turn call must claim if it does its own
+    # the event_seq this turn's execute_turn call must claim if it does its own
     # commit (see ActorTurnResult.already_persisted) -- only meaningful inside
     # _run_actor_turn's own ctx construction, where it's the real peeked value; every
     # other ctx construction in this module (next_actor_fn/checkpoint_hook/on_await) has
@@ -127,14 +127,14 @@ class InterpreterContext:
 NextActorFn = Callable[[InterpreterContext], Awaitable[ActorRef | None]]
 ActorTurnExecutor = Callable[[ActorRef, InterpreterContext], Awaitable[ActorTurnResult]]
 CheckpointHook = Callable[[InterpreterContext], Awaitable[None]]
-# B1.6: called when the interpreter yields at an unsatisfied await, before falling back
-# to the plain status='awaiting' flip. None (the default) preserves B1.2's original
+# called when the interpreter yields at an unsatisfied await, before falling back
+# to the plain status='awaiting' flip. None (the default) preserves the original
 # behaviour exactly -- core.process.awaits.make_await_hook is the real implementation
 # that persists a real await_state row instead.
 OnAwaitHook = Callable[[InterpreterContext], Awaitable[None]]
-# B1.8: live SSE delivery for interpreter-driven events -- matches
+# live SSE delivery for interpreter-driven events -- matches
 # core.process.skeleton's identical OnEvent shape (not imported from there: skeleton is
-# T0.8's deliberately deletable walking skeleton, this module must not depend on it).
+# the deliberately deletable walking skeleton, this module must not depend on it).
 OnEvent = Callable[[int, str, dict[str, Any]], Awaitable[None]]
 
 
@@ -154,8 +154,8 @@ async def start_session(
     process_definition_version: int,
 ) -> None:
     """Pins a session to a specific, immutable definition version and applies the DSL's
-    declared ``state:`` defaults -- once, at start, matching §5.2's "defaults applied at
-    session start" (B1.1's schema declares the defaults; this is where they're realised)."""
+    declared ``state:`` defaults -- once, at start, matching 's "defaults applied at
+    session start" (the schema declares the defaults; this is where they're realised)."""
     defaults: dict[str, object] = {name: spec.default for name, spec in definition.state.items()}
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SessionRow, session_id)
@@ -178,7 +178,7 @@ def _eval_cel(expression: str, state: dict[str, Any]) -> Any:
 
 
 def evaluate_gates(phase: PhaseSpec, state: dict[str, Any]) -> str | None:
-    """Declaration order, first match wins (B1.1's validator already guarantees an
+    """Declaration order, first match wins (the validator already guarantees an
     ``else`` gate, if any, is last). Returns the target phase key, or None if nothing
     matched -- ``on:`` event gates never match here (no event has occurred; the
     interpreter only calls this once a phase's actors are exhausted, not on an external
@@ -455,7 +455,7 @@ async def _transition(
 ) -> _TransitionOutcome:
     """One transaction: apply effects, evaluate the target, write the new state +
     phase_transition event. Raises InterpreterFaultError (never partially commits) if the
-    target is missing -- B1.1's validator should make that impossible for a definition
+    target is missing -- the validator should make that impossible for a definition
     that ever passed validation, but this is the backstop, not a trust exercise."""
     payload: dict[str, Any] = {}
     async with tenant_scope(tenant_id) as session:
@@ -512,7 +512,7 @@ async def _run_turn_idempotent(
     ctx: InterpreterContext,
     execute_turn: ActorTurnExecutor,
 ) -> dict[str, Any]:
-    """The idempotency-keyed unit (T0.7, plan §5.6): a resumed/retried advance must never
+    """The idempotency-keyed unit: a resumed/retried advance must never
     execute the same turn's side effect twice. ``event_seq`` here is *peeked*, not
     claimed, by the caller (``_run_actor_turn``) -- see that function's docstring for why
     that distinction is what makes this key actually stable across a crash-and-retry."""
@@ -534,9 +534,9 @@ async def _run_actor_turn(
     on_event: OnEvent | None = None,
 ) -> None:
     """External calls (a real model call, later, via B1.7) must not run inside a DB
-    transaction/lock (B1.5's own principle: "model calls happen outside the row lock").
+    transaction/lock (its own principle: "model calls happen outside the row lock").
     That forces this into (at least) two transactions bracketing the external call --
-    which creates exactly the idempotency-key trap plan §5.6 warns about if the two
+    which creates exactly the idempotency-key trap warns about if the two
     transactions don't share a *stable* key. An earlier version of this function claimed
     (incremented and committed) ``next_event_seq`` in the first transaction, before the
     idempotent call -- so a crash between that claim and the final commit meant a retry
@@ -551,7 +551,7 @@ async def _run_actor_turn(
     result instead of re-invoking ``execute_turn``.
 
     The defensive re-check before the final claim (below) is a documented, deliberate
-    limitation, not a hidden one: true concurrent-writer safety is B1.5's job (full
+    limitation, not a hidden one: true concurrent-writer safety is the job (full
     ``SELECT ... FOR UPDATE`` session locking); this function assumes a single advancing
     caller, matching every other B1.2 subtask's explicit "full locking in B1.5" carve-out.
     """
@@ -618,7 +618,7 @@ async def _run_actor_turn(
             )
             await session.flush()
     else:
-        # B1.8: the execute_turn adapter already performed its own full commit (e.g.
+        # the execute_turn adapter already performed its own full commit (e.g.
         # core.agents.runtime.run_agent_turn, given this same event_seq) -- verify it
         # actually claimed the slot it was handed rather than silently trusting it.
         # The counter may legitimately sit further ahead: worker jobs (delegation and
@@ -663,7 +663,7 @@ async def submit_human_turn(
     *,
     on_event: OnEvent | None = None,
 ) -> MessageRow:
-    """B1.8: the HTTP layer's entry point for a free-mode human actor's turn (see
+    """the HTTP layer's entry point for a free-mode human actor's turn (see
     ``HumanTurnPendingError``) -- the scheduler already durably advanced its cursor past
     this actor when ``advance_session`` raised, so this only needs to write the message
     itself. Same peek-then-claim shape as ``_run_actor_turn``/``core.process.skeleton``:
@@ -727,7 +727,7 @@ async def advance_session(
     on_event: OnEvent | None = None,
     max_steps: int = _MAX_STEPS_PER_ADVANCE,
 ) -> AdvanceResult:
-    """The interpreter loop (plan §5.3). Runs until: a phase's actors are exhausted and
+    """The interpreter loop. Runs until: a phase's actors are exhausted and
     it has an unsatisfied ``await`` (returns 'awaiting'); a free-mode human actor is next
     but hasn't submitted yet (returns 'awaiting_human', B1.8 -- see
     ``HumanTurnPendingError``); a transition has no target (returns 'terminal');
@@ -735,7 +735,7 @@ async def advance_session(
     this as a bug in the definition or the injected scheduler, not call it in a tight
     retry loop, so this returns 'active' rather than raising); or a fault occurs, in
     which case the session is paused (status='paused') via a *separate* clean
-    transaction and 'paused' is returned -- never a stuck lock, per B1.2's subtask.
+    transaction and 'paused' is returned -- never a stuck lock, per the subtask.
     """
     with _tracer.start_as_current_span("interpreter.advance_session") as span:
         span.set_attribute("pyrrhula.session_id", str(session_id))

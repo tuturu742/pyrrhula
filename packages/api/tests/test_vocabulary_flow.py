@@ -1,4 +1,4 @@
-"""D1.6: vocabulary overlay listing/resolution/switching over real HTTP -- the fallback
+"""vocabulary overlay listing/resolution/switching over real HTTP -- the fallback
 chain (workspace override -> tenant default -> system default) and live relabelling.
 """
 
@@ -42,7 +42,7 @@ async def test_list_overlays_includes_the_three_shipped_system_overlays(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     """F3.13 added `swdev_v1` as a third shipped system overlay (a fresh INSERT,
-    D1.6's own base migration never pre-seeded it) -- this test's own name and
+    its own base migration never pre-seeded it) -- this test's own name and
     assertion set grew from two to three for exactly that reason."""
     slug = f"vocab-list-{uuid.uuid4().hex[:8]}"
     await seed_dev_tenant(slug=slug)

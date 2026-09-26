@@ -161,7 +161,7 @@ Details worth knowing:
   ```
 
   After that, an image update is just:
-  `podman build -t pyrrhula:dev -f docker/Dockerfile . && podman push --tls-verify=false localhost/pyrrhula:dev 127.0.0.1:5000/pyrrhula:dev && kubectl -n pyrrhula rollout restart deploy/pyrrhula-api deploy/pyrrhula-worker`.
+  `podman build -t pyrrhula:dev -f docker/Dockerfile. && podman push --tls-verify=false localhost/pyrrhula:dev 127.0.0.1:5000/pyrrhula:dev && kubectl -n pyrrhula rollout restart deploy/pyrrhula-api deploy/pyrrhula-worker`.
 - **Verification**: `dev-up.sh` runs the post-install check itself and fails if the
   stack cannot do real work. To re-run it later:
 

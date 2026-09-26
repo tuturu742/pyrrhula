@@ -105,7 +105,7 @@ def test_count_tokens_openai_and_fallback() -> None:
     assert provider.count_tokens("hello world", "ollama/llama3") > 0
 
 
-# ── C1.4: prompt-cache boundary marking + cached_tokens extraction ─────────────────
+# ── prompt-cache boundary marking + cached_tokens extraction ─────────────────
 
 
 def test_apply_cache_boundary_marks_the_given_message() -> None:

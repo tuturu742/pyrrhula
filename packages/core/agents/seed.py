@@ -1,5 +1,5 @@
 """Dev seed helper: a demo agent + model profile in a workspace. Not a runtime path —
-used by T0.8's walking-skeleton tests and by manual/live demos so there's something to
+used by the walking-skeleton tests and by manual/live demos so there's something to
 create a session against without building full agent-management CRUD (that's D1.5,
 Phase 1).
 """

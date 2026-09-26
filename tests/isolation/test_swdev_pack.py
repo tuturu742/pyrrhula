@@ -1,4 +1,4 @@
-"""F3.13's own acceptance tests for the swdev pack -- the third pack, keeping the D5/
+"""its own acceptance tests for the swdev pack -- the third pack, keeping the D5/
 INV-7 trust chain and the genericity bet (INV-9) exercised in a domain that is neither a
 tabletop RPG nor an enterprise workflow. Loaded through the exact same generic
 ``core.packs.loader`` F3.7 built; no swdev-specific code anywhere outside
@@ -89,7 +89,7 @@ async def test_merge_guard_is_pure_cel_over_the_generic_interpreter(
 ) -> None:
     """A ``pull_request`` whose linked ``build`` is not ``passed`` cannot transition to
     ``approved``; flipping the build to ``passed`` allows it -- both through the
-    unmodified FSM interpreter (F3.2/F3.5), no core changes. The cross-entity link
+    unmodified FSM interpreter, no core changes. The cross-entity link
     (``pull_request.build_status`` mirroring the linked ``build`` entity's own FSM
     state) is plain entity data a pack schema declares, not a new core mechanism --
     there is no cross-entity guard primitive in ``core.entities.fsm`` today, so this is
@@ -205,10 +205,10 @@ async def test_merge_guard_is_pure_cel_over_the_generic_interpreter(
 async def test_checklist_verdict_renders_from_resolution_record_not_prose(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """``checklist_eval`` writes a ``ResolutionRecord`` (C1.5/C1.6's unmodified
+    """``checklist_eval`` writes a ``ResolutionRecord`` (C1.5/the unmodified
     ``ResolutionService``) and the verdict renders from that record (INV-7) -- a model
     asserting "all checks passed" contrary to the record would be decoration, flagged by
-    C1.7's existing check, not something this pack has to reimplement."""
+    the existing check, not something this pack has to reimplement."""
     tenant_a, _tenant_b = two_tenants
     workspace_id = await _workspace_id(tenant_a)
     await load_pack(_PACK_DIR, tenant_a, workspace_id)
@@ -259,7 +259,7 @@ async def test_checklist_verdict_renders_from_resolution_record_not_prose(
 
 def test_swdev_high_stakes_axis_requires_gate_binding() -> None:
     """``risk_tolerance`` (as shipped) is ``stakes: high`` with a real gate binding --
-    E2.3's own rule, exercised on swdev content. Stripping the gate binding from the
+    its own rule, exercised on swdev content. Stripping the gate binding from the
     exact shipped definition must fail validation, proving the rule actually fires here
     rather than merely being satisfied by coincidence."""
     raw = json.loads((_PACK_DIR / "axes" / "risk_tolerance.json").read_text())
@@ -278,7 +278,7 @@ async def test_work_item_renders_via_the_same_resource_widget_as_other_packs(
 ) -> None:
     """``remaining_estimate`` [resource] resolves through the exact same tag->widget
     registry entry as the RPG pack's ``hit_points`` -- the third domain, same widget,
-    zero new components (F3.10's own INV-9 discipline)."""
+    zero new components (its own INV-9 discipline)."""
     tenant_a, _tenant_b = two_tenants
     workspace_id = await _workspace_id(tenant_a)
 

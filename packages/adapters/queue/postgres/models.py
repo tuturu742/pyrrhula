@@ -1,7 +1,7 @@
 """ORM model for the v1 (Postgres-backed) JobQueue adapter. Registered on the shared
 ``core.tenancy.models.Base`` metadata so Alembic picks it up, but owned here rather than
 in ``core.tenancy`` because this table's *shape* is specific to this adapter's strategy —
-a future Temporal-backed adapter (H5.9) wouldn't have one at all.
+a future Temporal-backed adapter wouldn't have one at all.
 """
 
 from __future__ import annotations

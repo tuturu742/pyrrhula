@@ -11,7 +11,7 @@ A preview serves a **build artifact**, so the repo has to produce one. On the re
 
 | Field | Example |
 |---|---|
-| **Build command** | `npm run build && tar czf dist.tgz -C dist .` |
+| **Build command** | `npm run build && tar czf dist.tgz -C dist.` |
 | **Artifact file** | `dist.tgz` |
 
 **Both are required.** With either missing there is no build step at all, no artifact is
@@ -127,7 +127,7 @@ artifact or use an image that has them:
 **A terminal application**, through `ttyd` — the TUI itself, in a browser tab:
 
 ```json
-{ "image": "registry/my-tui-preview:1", "cmd": "chmod +x ./my-tui && ttyd -p 8080 -W ./my-tui", "port": 8080 }
+{ "image": "registry/my-tui-preview:1", "cmd": "chmod +x./my-tui && ttyd -p 8080 -W./my-tui", "port": 8080 }
 ```
 
 The image is one you build, because of the requirements above and because `ttyd`'s own

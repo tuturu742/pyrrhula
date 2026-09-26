@@ -9,12 +9,12 @@ pair was the ungated one.
 
 Each tenant now states a policy and the deployment supplies the default:
 
-``closed``   nobody self-registers; an admin creates accounts. The default, because
+``closed`` nobody self-registers; an admin creates accounts. The default, because
              the behaviour this replaces is the vulnerability, and a deployment that
              silently kept it would be no better off for the setting existing.
-``request``  anyone may apply; an admin approves or rejects. The application holds the
+``request`` anyone may apply; an admin approves or rejects. The application holds the
              password hash so approving does not need the applicant back.
-``open``     the old behaviour, now chosen rather than assumed.
+``open`` the old behaviour, now chosen rather than assumed.
 
 The policy lives in ``tenant.settings`` because it is the organization's decision, not
 the host's; the host only says what a tenant that has not decided gets.

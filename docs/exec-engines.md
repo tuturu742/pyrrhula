@@ -55,11 +55,11 @@ is synthesized.
 
 ```json
 [
-  {"key": "local",  "kind": "socket", "socket": "/var/run/podman.sock",
+  {"key": "local", "kind": "socket", "socket": "/var/run/podman.sock",
    "network": "pyrrhula-envs", "label": "Local containers"},
   {"key": "docker", "kind": "socket", "socket": "/var/run/docker.sock",
    "label": "Docker host"},
-  {"key": "k8s",    "kind": "kubernetes", "namespace": "pyrrhula-envs",
+  {"key": "k8s", "kind": "kubernetes", "namespace": "pyrrhula-envs",
    "label": "Shared cluster",
    "api_base": "https://k8s.example:6443", "token_file": "/secrets/k8s-token",
    "ca_file": "/secrets/k8s-ca.crt", "image_pull_secret": "regcred",

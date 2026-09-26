@@ -1,4 +1,4 @@
-"""T0.4's library-tenant matrix (A1.10, D13, §16.8): parameterised {tenant A, tenant B,
+"""the library-tenant matrix: parameterised {tenant A, tenant B,
 library} -- B reads library, B cannot read A, nobody writes library. Referenced (as "not
 here yet") in ``test_filter_omission_matrix.py``'s module docstring; this is that matrix,
 landed now that the library tenant exists.

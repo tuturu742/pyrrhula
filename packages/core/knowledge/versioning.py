@@ -1,11 +1,11 @@
-"""Pin-vs-follow resolution and fork-from-version (plan §6.1, §5.4 req 5, A1.8) — how
+"""Pin-vs-follow resolution and fork-from-version ( req 5, A1.8) — how
 rules iterate without breaking whatever is currently reading them.
 
 Pin-vs-follow operates at the granularity the schema actually has: a workspace's
 attachment of a source (``workspace_knowledge_attachment.version_pin``), not a
 per-session pin — no session-level "which version did I start with" field exists yet
-(that needs B1.4's session/checkpoint model, which doesn't exist yet either). "An active
-session pins the version it started with" (plan §5.4) is achieved through this same
+(that needs the session/checkpoint model, which doesn't exist yet either). "An active
+session pins the version it started with" is achieved through this same
 mechanism today: a workspace operator sets ``version_pin`` before a session starts, and
 retrieval consistently reads that pinned version regardless of what gets published to the
 source afterward — proven by ``test_editing_a_source_after_pinning_does_not_change_the_
@@ -61,7 +61,7 @@ async def fork_source(
     back to the *origin's* version (``parent_version_id`` crosses source boundaries —
     schema-legal, since that FK only targets ``knowledge_source_version.id``, not a
     specific source). Chunks aren't copied — copying entries only is what "an independent,
-    editable copy" needs; re-deriving chunks is ingestion's job (A1.2), and A1.2's own
+    editable copy" needs; re-deriving chunks is ingestion's job, and its own
     content-hash skip means a forked entry's chunks cost nothing extra to (re-)embed if
     the content is unchanged from the origin.
     """

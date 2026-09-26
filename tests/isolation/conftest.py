@@ -1,7 +1,7 @@
 """Fixtures for the isolation negative-test suite.
 
 The full per-table matrix, filter-omission coverage on every tenant-scoped table, the
-pooler-leak test, and the library-tenant matrix are T0.4's job. This module's tests
+pooler-leak test, and the library-tenant matrix are the job. This module's tests
 (landed with T0.2) are the first, smaller proof that ``tenant_scope()`` actually enforces
 isolation — extended, not replaced, by T0.4.
 

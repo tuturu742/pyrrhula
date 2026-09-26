@@ -1,4 +1,4 @@
-"""Filter-omission coverage (T0.4/T0.8) for the walking skeleton's tables:
+"""Filter-omission coverage for the walking skeleton's tables:
 ``agent``, ``agent``, ``session``, ``session_event``, ``message``,
 ``usage_record``. Same pattern as ``test_filter_omission_matrix.py`` — a raw query with
 no ``WHERE tenant_id = ...`` clause, scoped to tenant A, must never surface tenant B's

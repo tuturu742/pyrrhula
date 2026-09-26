@@ -1,10 +1,10 @@
 """v1 VectorStore: pgvector. Table and column names are constructor arguments — this
 class doesn't own a schema.
 
-Update (A1.4): this stayed pointed at ``vector_store_item``, not ``knowledge_chunk`` as
+Update: this stayed pointed at ``vector_store_item``, not ``knowledge_chunk`` as
 originally sketched here. ``VectorSearchResult(payload: dict)`` assumes one JSONB payload
 column; ``knowledge_chunk``'s useful fields are several real columns plus a join
-(``entry_id``, ``version_id``, ``source_id``), and WRRF (A1.6) needs a ``rank`` this
+(``entry_id``, ``version_id``, ``source_id``), and WRRF needs a ``rank`` this
 generic shape has no place for. The real knowledge dense-search path is
 ``core.knowledge.retrieval.dense.search_dense`` — a dedicated, richer-shaped read function
 for that one table, not a configuration change to this class. This adapter/port still

@@ -1,4 +1,4 @@
-"""``agent`` and ``agent`` (plan §12.4). T0.8 built the minimal subset needed to
+"""``agent`` and ``agent`` . T0.8 built the minimal subset needed to
 call a model through the ``ModelProvider`` port; B1.7 (the full agent runtime -- tool loop,
 retries, fallback profile) extends this schema in place rather than replacing it, adding
 ``agent.persona_type`` and ``agent.fallback_agent_id``.
@@ -27,7 +27,7 @@ from core.tenancy.models import Base
 
 
 class ProviderCredentialRow(Base):
-    """D1.5: tenant-scoped storage for a provider API key, encrypted at rest through the
+    """tenant-scoped storage for a provider API key, encrypted at rest through the
     injected ``Encryptor`` port (v1: identity -- real KMS/BYOK is H5.7). Never read back
     through any API route (CLAUDE.md: "the UI never redisplays a key") -- only
     ``agent.credential_ref`` (this row's id, a string) is ever returned to a
@@ -72,7 +72,7 @@ class Agent(Base):
     # Soft-delete: NULL = live, a timestamp = archived (hidden from lists, never hard-deleted
     # via the app role -- see migration c4f2a7e1b9d3). Purge is the superuser CLI's job.
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # B1.7: which profile to fall back to after N consecutive provider failures. No
+    # which profile to fall back to after N consecutive provider failures. No
     # inline ForeignKey -- self-referential FKs to the same table are fine to declare
     # inline in SQLAlchemy (no circular CREATE TABLE issue, unlike the cross-table cases
     # elsewhere in this phase), but the *migration* still adds it as a separate
@@ -95,7 +95,7 @@ class Persona(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False
     )
-    # Agents ARE principals (plan §12.4) -- this points at the principal row created
+    # Agents ARE principals -- this points at the principal row created
     # alongside the agent, so permission checks and audit actors never need a special case.
     principal_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("principal.id", ondelete="CASCADE"), nullable=False
@@ -112,19 +112,19 @@ class Persona(Base):
     agent_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent.id"), nullable=False
     )
-    # B1.7 (requirement 8): the column B1.3/B1.6 both found missing and deferred here --
+    # the column B1.3/B1.6 both found missing and deferred here --
     # the scheduler/eligibility work landing before this task had nothing to query.
     # Informational agents get no persona-persistence expectations (no requirement that
     # their "voice" stay consistent turn to turn the way a facilitator/participant's
     # would) -- a semantic distinction other modules (the future assembler, C1.2) read
     # this field to apply, not something this column enforces itself.
     persona_type: Mapped[str] = mapped_column(String(16), nullable=False, default="participant")
-    # D1.5 (plan §12.4): prose persona shown to the model as part of its own turn's
+    # prose persona shown to the model as part of its own turn's
     # context -- not yet wired into core.assembler.layout's rendering (the same
     # "not yet integrated into the runtime" boundary as C1.2-C1.7; the column is real
     # and editable today, the render-time wiring is a separate task).
     persona_md: Mapped[str] = mapped_column(String, nullable=False, default="")
-    # G4.8: a general per-agent settings bag (same shape as workspace.settings /
+    # a general per-agent settings bag (same shape as workspace.settings /
     # tenant.settings). First writer is the CCv3 importer, which must carry the card's
     # `extensions` payload verbatim -- data Pyrrhula does not interpret and must not give
     # a schema to. A general bag, not a card-shaped column: the next thing needing
@@ -156,13 +156,13 @@ class Persona(Base):
 
 
 class PersonaVersion(Base):
-    """F3.12: an append-only history log of ``agent.persona_md`` over time -- unlike
+    """an append-only history log of ``agent.persona_md`` over time -- unlike
     knowledge, ``persona_md`` itself stays a plain mutable column (no draft/published
     split exists for it), so this table is a log an edit writes *alongside* that column
     update, not the column's own source of truth. Written by
     ``core.agents.editing.apply_persona_edit_proposal`` on approval, and by nothing else
     -- a manual edit through ``update_persona`` does not currently log a version here (a
-    real, documented gap; see F3.12's scope note)."""
+    real, documented gap; see the scope note)."""
 
     __tablename__ = "persona_version"
 

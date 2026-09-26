@@ -1,14 +1,14 @@
-"""Generic pack loader (F3.7's own subtask, reused unmodified by F3.8/F3.13/F3.9): reads
+"""Generic pack loader (its own subtask, reused unmodified by F3.8/F3.13/F3.9): reads
 a shipped pack's on-disk JSON content and materializes it into a tenant through the
-*exact same* save/authoring functions manual authoring would use -- entity schemas
-(F3.1), rule systems (C1.5), tool definitions (C1.6), process definitions (B1.1), axis
-definitions (E2.3), and library-tenant knowledge seed content (A1.10).
+*exact same* save/authoring functions manual authoring would use -- entity schemas,
+rule systems, tool definitions, process definitions, axis
+definitions, and library-tenant knowledge seed content.
 
 **Zero pack-name literals, on purpose.** This module never references "rpg"/
 "enterprise"/"swdev" -- it walks whichever subdirectories exist under a given
 ``pack_dir`` (``schemas/``, ``rule_systems/*/``, ``tools/``, ``processes/``, ``axes/``,
 ``seed/``) with no per-pack special-casing. Adding a pack is adding a directory, not a
-branch here -- the whole point F3.9's data-driven matrix and core-side literal lint
+branch here -- the whole point the data-driven matrix and core-side literal lint
 depend on.
 
 **Packs are content, not code (rule 9).** Every file this module reads is JSON; the
@@ -132,7 +132,7 @@ def _entry_fields(entry: dict[str, object], default_class: str) -> EntryFields:
 
 
 async def _load_seed(pack_dir: pathlib.Path) -> list[str]:
-    """Library-tenant seed content (D13/A1.10) -- always the reserved library tenant,
+    """Library-tenant seed content -- always the reserved library tenant,
     never the caller's own ``tenant_id`` (seed content is shipped-once, forked-on-edit
     per consuming tenant, not per-tenant provisioned). Idempotent: skips a source key
     that already exists in the library tenant, so re-running a pack load against the

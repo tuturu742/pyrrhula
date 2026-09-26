@@ -1,4 +1,4 @@
-"""ORM models for ``audit_log``, ``usage_record``, and ``price_table`` — plan §12.8
+"""ORM models for ``audit_log``, ``usage_record``, and ``price_table`` —
 groups these three under "Audit, usage, reports" and this module mirrors that. Owned here
 rather than in ``core.tenancy.models`` because these are cross-cutting concerns, not
 tenancy tables — but they register on the same shared ``Base`` metadata so migrations
@@ -56,7 +56,7 @@ class AuditLogRow(Base):
 
 
 class PriceTableRow(Base):
-    """Versioned DATA, never code (plan §12.8). Not tenant-scoped — pricing is the
+    """Versioned DATA, never code. Not tenant-scoped — pricing is the
     platform's knowledge of what providers charge, not a tenant's data."""
 
     __tablename__ = "price_table"
@@ -72,9 +72,9 @@ class PriceTableRow(Base):
 
 
 class UsageRecordRow(Base):
-    """Written in the SAME transaction as the message it meters (plan §12.8) —
+    """Written in the SAME transaction as the message it meters  —
     metering that can drift from the thing it meters will drift, and then you cannot
-    bill or debug. T0.8's walking skeleton is the first, minimal call site; every
+    bill or debug. the walking skeleton is the first, minimal call site; every
     future model call (gate, rerank, embed, report, rewrite) writes one of these too."""
 
     __tablename__ = "usage_record"
@@ -87,7 +87,7 @@ class UsageRecordRow(Base):
     )
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    # D1.4: which reply this generation call's usage belongs to -- nullable (a tool-loop's
+    # which reply this generation call's usage belongs to -- nullable (a tool-loop's
     # intermediate provider calls and the final answer all share the one message they
     # together produced, set at commit time; non-generation purposes -- gate/rerank/embed
     # -- have no single owning message and leave this null). SET NULL, not CASCADE:
@@ -105,7 +105,7 @@ class UsageRecordRow(Base):
     model: Mapped[str] = mapped_column(String(255), nullable=False)
     phase: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # 'generation'|'gate'|'rerank'|'embed'|'report'|'rewrite' -- same taxonomy as the
-    # ModelProvider egress policy (D14), so cost attribution and egress share one
+    # ModelProvider egress policy, so cost attribution and egress share one
     # vocabulary rather than inventing a second.
     purpose: Mapped[str] = mapped_column(String(16), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

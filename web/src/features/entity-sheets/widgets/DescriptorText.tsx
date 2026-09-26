@@ -1,7 +1,7 @@
 import { useLabel } from "@/lib/vocabulary/useLabel";
 import type { TextFieldProps } from "./IdentityText";
 
-/** F3.4's `descriptor` tag -- free-text/enum flavour fields (a spell's school, a
+/** the `descriptor` tag -- free-text/enum flavour fields (a spell's school, a
  * ticket's priority) that are neither the thing's identity nor a bar/chip/meter. */
 export function DescriptorText({ labelKey, value }: TextFieldProps) {
   const t = useLabel();

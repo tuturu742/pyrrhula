@@ -1,6 +1,6 @@
-"""`.pyr` export (G4.5, plan §11.2/§11.4, req 23/24).
+"""`.pyr` export (G4.5/, req 23/24).
 
-**The one rule this module exists to keep** (§11.4): export runs through the *same*
+**The one rule this module exists to keep** : export runs through the *same*
 visibility resolution as context assembly. The first thing ``export_workspace`` does is
 call ``core.assembler.visibility.scopes_for(..., EXPORT, None)``; every selection after
 that is a membership test against the set it returned, or a query with that set pushed
@@ -13,7 +13,7 @@ the_resolver`` reads this file's source and fails if a visibility term appears a
 except the resolver call. INV-1's lint independently keeps ``core.knowledge.repo`` and
 ``core.secrets.repo`` out, so the read paths available here are the freely-importable
 sibling modules (``knowledge.authoring``, ``secrets.authoring``) -- the same pattern
-§5 of ``docs/phase-workflow.md`` documents.
+ of ``docs/phase-workflow.md`` documents.
 
 **Omissions are visible.** Every object the filter excluded is recorded in
 ``manifest.redactions[]`` as ``{type, id, reason}``. A recipient can always distinguish
@@ -63,7 +63,7 @@ from core.version import APP_VERSION
 from core.vocabulary.service import resolve_overlay_for_workspace
 
 ExportMode = Literal["participant", "full", "sanitised"]
-"""The three modes of §11.4, and the *only* three. Deliberately a closed Literal rather
+"""The three modes of, and the *only* three. Deliberately a closed Literal rather
 than a string: a fourth mode invented at a call site is how a "just this once" export
 path gets written that nobody reviews against the leak test.
 
@@ -186,7 +186,7 @@ async def export_workspace(
                 f"principal {viewer.id} may not run a full export of workspace "
                 f"{workspace_id}: it requires {_INSPECT_ACTION!r}"
             )
-        # As loud as inspecting a single secret (§11.4), on the same hash chain.
+        # As loud as inspecting a single secret, on the same hash chain.
         await (audit_service or AuditService()).append(
             tenant_id=tenant_id,
             actor_principal_id=viewer.id,
@@ -197,7 +197,7 @@ async def export_workspace(
         )
 
     # ── The one visibility decision in this module. Everything below filters against
-    #    `visible`; nothing below re-derives it. (§11.4)
+    #    `visible`; nothing below re-derives it.
     visible = frozenset(await scopes_for(tenant_id, viewer.id, workspace_id, EXPORT, None))
 
     async with tenant_scope(tenant_id) as session:
@@ -272,7 +272,7 @@ async def _add_knowledge(
     writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID, visible: frozenset[str]
 ) -> None:
     """Full version history per attached source (req 23), with entry bodies as `.md`
-    files so a bundle is git-diffable (§11.2). An entry whose ``scope_key`` is outside the
+    files so a bundle is git-diffable. An entry whose ``scope_key`` is outside the
     resolved set is not written and is redacted by id -- the *file* is absent, not blanked,
     because a blanked file is still a file whose name and size say something."""
     attachments = await list_workspace_attachments(tenant_id, workspace_id)
@@ -349,8 +349,8 @@ async def _add_chunks(
     visible: frozenset[str],
     prefix: str,
 ) -> None:
-    """Chunk texts, keyed by chunk id -- **not** in §11.2's illustrative layout, and added
-    deliberately (G4.5).
+    """Chunk texts, keyed by chunk id -- **not** in 's illustrative layout, and added
+    deliberately.
 
     A ``ContextManifest`` records which *chunks* a turn included, and a turn's rendered
     context is built from chunk bodies, not entry bodies (an entry may split into several
@@ -486,7 +486,7 @@ async def _add_entities(
 
 
 async def _add_agents(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> None:
-    """Agents and their behaviour-profile versions (§11.2). ``agent_id`` travels as
+    """Agents and their behaviour-profile versions. ``agent_id`` travels as
     a reference only -- a bundle never carries a provider credential, and
     ``agent.credential_ref`` points into a secret manager rather than holding a
     key, so there is nothing here for an export to accidentally leak."""
@@ -725,7 +725,7 @@ async def _add_secrets(
     mode: ExportMode,
     encryptor: Encryptor,
 ) -> None:
-    """The one place the three modes actually differ (§11.4).
+    """The one place the three modes actually differ.
 
     **Sanitised** writes no secret content at all -- not blanked, not empty-stringed:
     ``_secret_metadata`` is the only shape it can produce, so there is no branch in which a
@@ -733,7 +733,7 @@ async def _add_secrets(
     the shape of what was withheld.
 
     **Participant** includes a secret's content only when this principal is a *holder* of
-    it. Holder, not author: "my session log" means what I was told. E2.1's ``SecretView``
+    it. Holder, not author: "my session log" means what I was told. the ``SecretView``
     keys its plaintext on authorship, which answers a different question, so this reads
     ``secret_holder`` directly through ``list_holders`` (a freely-importable sibling, not
     ``secrets.repo`` -- INV-1) and re-decrypts only for the ones that pass.
@@ -830,7 +830,7 @@ async def count_guarded_secrets(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -
     Public because the API route needs the same answer *synchronously*: export itself runs
     in a worker, so a refusal raised here would reach the user as a failed job rather than
     a 422. The route calls this function rather than re-deriving the rule -- one
-    implementation, two call sites, which is the whole lesson of §11.4."""
+    implementation, two call sites, which is the whole lesson of."""
     async with tenant_scope(tenant_id) as session:
         return int(
             await session.scalar(
@@ -879,13 +879,13 @@ async def _add_vocabulary(
 async def _add_sessions(
     writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID
 ) -> None:
-    """``manifests.jsonl`` is what makes INV-10 work across the export boundary (§11.2):
+    """``manifests.jsonl`` is what makes INV-10 work across the export boundary:
     a turn's exact context is reconstructible from the bundle alone six months later.
     ``resolutions.jsonl`` carries seeds, records, and the hash chain, so an archived
     session can prove nobody edited its rolls.
 
     Session *content* is not scope-filtered here: a session transcript is shared by
-    construction (the same boundary G4.1's summariser documents -- ``message`` carries no
+    construction (the same boundary the summariser documents -- ``message`` carries no
     scope column, because every principal in the session saw every message live). What a
     given principal may see *about* a session is decided by the knowledge, entity, and
     secret filters above, which is where the per-principal data actually is."""
@@ -1010,7 +1010,7 @@ async def _add_sessions(
                     "tool_key": r.tool_key,
                     # actor_entity_id / rule_system_id / rule_citation_ids are not
                     # decoration: `compute_row_hash` takes them, so a chain the importer
-                    # can actually *verify* (G4.6) needs every field the hash was over.
+                    # can actually *verify*  needs every field the hash was over.
                     "actor_entity_id": str(r.actor_entity_id) if r.actor_entity_id else None,
                     "expression": r.expression,
                     "seed": r.seed,

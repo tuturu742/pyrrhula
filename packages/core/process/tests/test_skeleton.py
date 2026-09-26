@@ -84,7 +84,7 @@ async def test_full_round_trip_writes_message_event_and_usage(db_available: None
         )
         assert len(events) == 2
         assert [e.event_seq for e in events] == [0, 1]
-        # D1.3: each message event's payload carries the message's own id, so a
+        # each message event's payload carries the message's own id, so a
         # streamed session view can fetch that message's citations/resolutions.
         assert events[0].payload["id"] == str(messages[0].id)
         assert events[1].payload["id"] == str(messages[1].id)

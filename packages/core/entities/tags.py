@@ -1,11 +1,11 @@
-"""Semantic tag system (F3.4, plan §10.4 (D7)): how a generic engine renders an HP bar
+"""Semantic tag system: how a generic engine renders an HP bar
 without knowing what HP is. Fields carry tags from this **fixed, closed** vocabulary,
 and a tag->widget registry (data, not a switch statement) maps them to render
 behaviour. Tags, not field names, drive rendering -- ``hit_points [resource]``,
 ``budget_remaining [resource]``, and a work item's remaining estimate all resolve to
 the exact same widget, differing only in metadata values.
 
-**A closed set on purpose** (design decision, §10.4): an open vocabulary quietly
+**A closed set on purpose** (design decision): an open vocabulary quietly
 becomes field-name semantics again, and the renderer grows a switch per pack -- exactly
 what D7 forbids. These nine tags covered every schema across all three overlays in the
 plan's own analysis; a tenth is a deliberate *core* decision to propose, never pack

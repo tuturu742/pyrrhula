@@ -67,7 +67,7 @@ def test_packs_import_nothing_from_core() -> None:
 
 
 def test_pack_importing_core_fails_lint(tmp_path: pathlib.Path) -> None:
-    """F3.9's own acceptance criterion: guards the scanner against being silently
+    """its own acceptance criterion: guards the scanner against being silently
     vacuous, the same way ``test_vocabulary_lint.py``'s self-test does for its lint."""
     planted = tmp_path / "planted_tool.py"
     planted.write_text("from core.entities.mutation import mutate\n")

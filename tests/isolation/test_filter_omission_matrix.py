@@ -1,10 +1,10 @@
-"""Per-table filter-omission tests (T0.4) for the tables not already covered by T0.2's
+"""Per-table filter-omission tests for the tables not already covered by the
 ``test_tenant_scope_smoke.py`` (``principal``, ``workspace``). Each test runs a raw query
 with **no** ``WHERE tenant_id = ...`` clause at all, scoped to tenant A via
 ``tenant_scope()``, and asserts tenant B's rows are absent — proving RLS is doing the
 filtering, not the query.
 
-Library-tenant matrix (D13, §16.8) is ``test_library_matrix.py`` (A1.10), not here — a
+Library-tenant matrix is ``test_library_matrix.py``, not here — a
 different shape of test (three-way tenant/library visibility, not just two-tenant filter
 omission). This file's coverage grows as new tenant-scoped tables land — see
 ``test_coverage_guard.py``, which fails loudly if a table is added without a
@@ -272,7 +272,7 @@ async def test_await_state_filter_omission(two_tenants: tuple[uuid.UUID, uuid.UU
 
 
 async def test_scope_filter_omission(two_tenants: tuple[uuid.UUID, uuid.UUID]) -> None:
-    """``two_tenants`` already seeds both tenants via ``seed_dev_tenant``, which (C1.1)
+    """``two_tenants`` already seeds both tenants via ``seed_dev_tenant``, which
     seeds default scopes (``workspace_public``/``facilitator_only``) per workspace -- no
     extra setup needed here."""
     tenant_a, _tenant_b = two_tenants
@@ -602,7 +602,7 @@ async def test_entry_activation_state_filter_omission(
 async def test_persona_git_credential_filter_omission(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """G4.17's per-persona git-identity binding is tenant-scoped: a raw select with no
+    """the per-persona git-identity binding is tenant-scoped: a raw select with no
     tenant filter, run in tenant A, must not see tenant B's row. Seeded by raw INSERT to
     avoid depending on repo/persona FKs the negative test does not otherwise set up."""
     tenant_a, tenant_b = two_tenants

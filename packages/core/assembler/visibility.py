@@ -1,7 +1,7 @@
-"""VisibilityResolver (C1.1, plan §7.2, §11.4 requirement 13): the single component that
+"""VisibilityResolver (C1.1 requirement 13): the single component that
 answers "which scope keys may this principal read in this phase?" -- the mandatory,
 pushed-down filter (INV-4) for every retrieval call, and the one visibility
-implementation export (§11.4) and reporting (§11.5) must reuse rather than reimplement.
+implementation export and reporting must reuse rather than reimplement.
 
 **Role resolution.** Human/service principals hold a workspace role via
 ``WorkspaceMembership`` (facilitator|participant|overseer|viewer); agents hold one via

@@ -1,4 +1,4 @@
-"""Entry-level diff between two versions (plan §6.1, A1.8): a 3-way set (added / removed /
+"""Entry-level diff between two versions: a 3-way set (added / removed /
 changed) keyed by the stable ``entry_key``, so a diff survives entries being reordered or
 the version itself being re-derived — "changed" means the same key now has different
 content, not that its row identity changed (published-version entry rows are always brand

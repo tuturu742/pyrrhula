@@ -1,6 +1,6 @@
-"""F3.2's own isolation + acceptance tests: guarded FSM transitions, the append-only
+"""its own isolation + acceptance tests: guarded FSM transitions, the append-only
 grant on ``entity_state_change``, and static FSM validation (reachability, dangling
-transitions) hooked into F3.1's schema save path.
+transitions) hooked into the schema save path.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ async def _change_rows_for(
 
 async def _make_entity(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> uuid.UUID:
     """A real ``entity`` row -- ``entity_state_change.entity_id`` FKs to it (added by
-    F3.3's migration once the ``entity`` table existed to FK to)."""
+    the migration once the ``entity`` table existed to FK to)."""
     schema_row = await save_schema(
         tenant_id, workspace_id, f"fixture-{uuid.uuid4().hex[:8]}", 1, _MINIMAL_ENTITY_DEFINITION
     )
@@ -121,7 +121,7 @@ _PROGRESSION_MACHINE = StateMachineDef.model_validate(
                 "to": "veteran",
                 # "on_change:<derived field>" is a plain trigger-name convention, not a
                 # special interpreter feature -- whatever computes the new derived value
-                # (F3.5's mutation service) calls the exact same
+                # (the mutation service) calls the exact same
                 # evaluate_and_record_transition with this trigger string. No
                 # "progression engine" exists anywhere in this module.
                 "trigger": "on_change:level",

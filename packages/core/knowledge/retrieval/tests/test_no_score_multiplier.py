@@ -1,6 +1,6 @@
 """A1.6 acceptance criteria, encoded as an automated check rather than left as a manual
-review checklist item (matching this project's existing pattern, e.g. T0.5's INV-1 lint):
-"no class weighting applied to scores, anywhere in the retrieval package." D2 (plan §6.2)
+review checklist item (matching this project's existing pattern, e.g. the INV-1 lint):
+"no class weighting applied to scores, anywhere in the retrieval package." D2
 is the whole reason WRRF exists instead of a multiplier on similarity scores -- this test
 is what stops a future change from quietly reintroducing one.
 """

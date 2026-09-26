@@ -1,4 +1,4 @@
-"""`prompt_directive` binding: banded rendering (E2.4, plan §8.2). Models follow "you speak
+"""`prompt_directive` binding: banded rendering. Models follow "you speak
 rarely, and only when you have something substantive to add" far more reliably than
 "chattiness: 20/100" -- band the value, never inject the raw number. Band boundaries
 and template text are pack data (an axis definition's `bindings` JSONB), never code:
@@ -114,7 +114,7 @@ def render_directives_for_profile(
 ) -> str:
     """The one call site (`core.process.live_session`) uses: render every axis in the
     active profile that carries a `prompt_directive` binding, joined into the block that
-    enters the layout's *stable* region (C1.4) -- unchanging within a session unless the
+    enters the layout's *stable* region -- unchanging within a session unless the
     profile version itself changes, preserving the prompt-cache prefix."""
     rendered: list[str] = []
     for axis in axis_definitions:

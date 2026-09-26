@@ -1,4 +1,4 @@
-"""Rate limiting (T0.6). Implemented as a Redis fixed-window counter (``INCR`` +
+"""Rate limiting. Implemented as a Redis fixed-window counter (``INCR`` +
 ``EXPIRE``) — simpler than a true token bucket and sufficient for v1; noted here rather
 than overclaimed, since "token bucket" implies smoothing this doesn't do.
 

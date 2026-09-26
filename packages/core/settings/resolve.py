@@ -6,10 +6,10 @@ fact -- where the database is, what this host can reach -- or the system default
 bottom of this chain, which exists so a deployment works before any tenant has an
 opinion.
 
-    workspace.settings  ->  tenant.settings  ->  system default
+    workspace.settings ->  tenant.settings ->  system default
 
-The same shape the vocabulary overlay already uses (``core/vocabulary/service.py``,
-plan §12.2), and the same shape D14's egress policy reads out of ``tenant.settings``.
+The same shape the vocabulary overlay already uses (``core/vocabulary/service.py``), and
+the same shape the egress policy reads out of ``tenant.settings``.
 Resolution lives here once so no call site re-derives the chain and quietly disagrees
 with another about which layer wins.
 

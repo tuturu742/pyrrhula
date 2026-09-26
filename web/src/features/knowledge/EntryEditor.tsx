@@ -17,8 +17,8 @@ interface EntryEditorProps {
 }
 
 /**
- * D1.1: the entry editor — markdown body, title, class, scope, and every activation
- * field from plan §6.4 (keys/secondary_keys/logic/regex/constant/sticky/cooldown/delay/
+ * the entry editor — markdown body, title, class, scope, and every activation
+ * field (keys/secondary_keys/logic/regex/constant/sticky/cooldown/delay/
  * trigger_pct/inclusion_group/position), with inline help text under each. Handles both
  * create (no `existingEntry`) and edit (round-trips every field via EntryResponse, which
  * D1.1 extended server-side to actually carry them — see packages/api/routes/knowledge.py).

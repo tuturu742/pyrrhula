@@ -9,7 +9,7 @@ export interface SheetViewProps {
   entity: EntityView;
   /** `label_key` prefix for this entity's own fields, e.g. `"schema.character"` --
    * resolved through the vocabulary overlay like every other user-facing string
-   * (agent-guide §7); a pack decides the actual prefix, this component never
+   * (agent-guide ); a pack decides the actual prefix, this component never
    * hardcodes one. */
   labelKeyPrefix: string;
   showHistory?: boolean;

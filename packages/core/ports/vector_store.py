@@ -1,4 +1,4 @@
-"""VectorStore port (D8, D11, §6.3, INV-4). v1 is pgvector; Qdrant (§13.2) is a swap
+"""VectorStore port (INV-4). v1 is pgvector; Qdrant is a swap
 behind this port, triggered by scale/latency/recall evidence, not before.
 
 ``scope_keys`` and ``class_`` are required, defaultless parameters — INV-4: every vector

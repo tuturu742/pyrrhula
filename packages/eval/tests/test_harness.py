@@ -1,4 +1,4 @@
-"""E2.8's acceptance criteria for the pyrrhula-eval harness: the scenario suite loads and
+"""the acceptance criteria for the pyrrhula-eval harness: the scenario suite loads and
 declares expected bands, the three-arm matrix produces the full metric set per provider,
 a planted exclusion bypass is detected and fails the run, and the fidelity judge's inputs
 are blind to axis values and arm labels.

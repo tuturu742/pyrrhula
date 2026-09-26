@@ -140,7 +140,7 @@ def test_both_callers_dispatch_through_one_implementation() -> None:
 
 
 def test_a_turn_renders_entity_state_so_ids_survive_the_phase_boundary() -> None:
-    """F3.6's renderer was complete and unused: ``assemble()`` kept its no-op default
+    """the renderer was complete and unused: ``assemble()`` kept its no-op default
     because no caller ever passed the real one.
 
     The cost showed up as a delegation failure. A lead filed six work items in the plan

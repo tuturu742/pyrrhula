@@ -1,4 +1,4 @@
-"""The api composition root for ``Reranker`` selection (A1.7). ``reranker_enabled=False``
+"""The api composition root for ``Reranker`` selection. ``reranker_enabled=False``
 returns ``None`` — the one config knob for the "degraded mode for tiny deployments" this
 task's acceptance criteria calls for; callers pass whatever this returns straight into
 ``search_and_budget(reranker=...)``, which already treats ``None`` as "skip reranking."

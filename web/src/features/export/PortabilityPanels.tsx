@@ -5,7 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { apiClient } from "@/lib/api-client/client";
 import { Button } from "@/components/ui/button";
 
-/** The import half of portability (§16.6): upload a .pyr bundle (synchronous verdict —
+/** The import half of portability: upload a .pyr bundle (synchronous verdict —
  * it lands or is refused with the broken link named), then clear the quarantine queue
  * one entry at a time. Both endpoints existed with no screen. */
 type BundleItem = { key: string; name: string; collides: boolean };

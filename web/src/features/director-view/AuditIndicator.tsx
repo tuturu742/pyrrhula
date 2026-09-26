@@ -1,7 +1,7 @@
 import { useDirectorViewStore } from "@/stores/directorView";
 
 /**
- * Persistent, not dismissible (E2.11's own design decision) -- rendered once by
+ * Persistent, not dismissible (its own design decision) -- rendered once by
  * `DirectorViewLayout` so every route under the feature carries it, rather than each page
  * remembering to render its own copy.
  */

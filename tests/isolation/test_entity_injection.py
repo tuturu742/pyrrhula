@@ -1,4 +1,4 @@
-"""F3.6's own acceptance tests: private-field visibility and "injected, not retrieved"
+"""its own acceptance tests: private-field visibility and "injected, not retrieved"
 against a live ``assemble()`` call. INV-10 replay coverage lives in
 ``tests/replay/test_entity_injection_replay.py``.
 """
@@ -132,5 +132,5 @@ async def test_entity_state_is_injected_not_retrieved() -> None:
 
     assert manifest.entries == ()  # no knowledge chunks -- nothing to retrieve at all
     assert marker in manifest.rendered_context  # yet the entity's text is present
-    assert marker in manifest.stable_prefix  # injected into the stable section (F3.6)
+    assert marker in manifest.stable_prefix  # injected into the stable section
     assert manifest.entity_versions  # recorded on the manifest

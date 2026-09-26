@@ -1,15 +1,15 @@
-"""ModelProvider port (D9, D14, §13.6). v1 wraps LiteLLM. The egress policy check (D14)
+"""ModelProvider port. v1 wraps LiteLLM. The egress policy check
 lives *inside* this port, not at call sites, keyed on ``purpose`` — so "which purposes
 may reach a hosted provider" is enforced in exactly one place rather than becoming a
 per-agent convenience setting that has to be remembered at every call site.
 
-``ToolSpec``/``ToolCall`` (B1.7) added for the agent runtime's tool loop.
+``ToolSpec``/``ToolCall`` added for the agent runtime's tool loop.
 ``GenerationRequest.tools`` is empty by default (no behavioural change for existing
 callers that never pass any); ``Chunk.tool_calls`` is populated only on the terminal chunk
 of a tool-calling turn (streaming tool-call argument fragments are accumulated by the
 adapter, never surfaced to callers as partial/unparseable JSON).
 
-``GenerationRequest.cache_boundary_index`` (C1.4, plan §6.3 step 9/§16.1): the index into
+``GenerationRequest.cache_boundary_index`` : the index into
 ``messages`` up to and including which content is the *stable* prefix (system + persona +
 entity schema + constant knowledge + rule system -- unchanging within a session, per
 ``core.assembler.layout.LayoutSections``). ``None`` means "no known boundary, don't mark
@@ -34,7 +34,7 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 class EgressDeniedError(Exception):
     """Raised when a tenant's ``egress_policy`` forbids ``purpose`` from reaching the
-    requested model's provider kind (D14)."""
+    requested model's provider kind."""
 
 
 @dataclass(frozen=True)
@@ -76,10 +76,10 @@ class GenerationRequest:
     # content=None and a tool_calls list (OpenAI shape) -- hence object.
     messages: list[dict[str, object]]
     # 'generation'|'gate'|'rerank'|'embed'|'report'|'rewrite' — same taxonomy as
-    # usage_record.purpose (§12.8), so cost attribution and egress policy share one
+    # usage_record.purpose, so cost attribution and egress policy share one
     # vocabulary rather than inventing a second.
     purpose: str
-    # Missing purpose key => permissive default ("all purposes allowed", per plan §13.9).
+    # Missing purpose key => permissive default ("all purposes allowed").
     egress_policy: Mapping[str, Sequence[str]] = field(default_factory=dict)
     # Tenant ceilings on ONE generation (core.tenancy.generation_limits), carried the same
     # way egress policy is: loaded at construction, enforced inside the port. Unlike

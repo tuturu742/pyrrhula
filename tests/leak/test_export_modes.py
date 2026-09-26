@@ -1,4 +1,4 @@
-"""G4.7's CI-blocking leak test: the export-side counterpart of INV-8.
+"""the CI-blocking leak test: the export-side counterpart of INV-8.
 
 **The scan is of the artifact, not the code path.** What a customer relies on is a property
 of the bytes in the ZIP -- not of which function was called on the way there. Asserting it
@@ -6,7 +6,7 @@ at the artifact level catches every future serializer someone bolts on, every fi
 to a payload without thinking, and every "just this once" debug dump, none of which a
 code-path test would see.
 
-Three detectors, matching E2.7's own ladder (`core.secrets.leak_check`):
+Three detectors, matching its own ladder (`core.secrets.leak_check`):
 
 * **exact** -- the plaintext, or any long enough run of it, appears verbatim;
 * **fuzzy** -- enough distinctive words co-occur in one file to reconstruct the fact;
@@ -206,7 +206,7 @@ async def _seed_secrets(
         held.id,
         author.id,
         holder.id,
-        "told",  # holder_kind: author | discovered | told (E2.1)
+        "told",  # holder_kind: author | discovered | told
         permission_service=_PERMISSIONS,
     )
     return held.id, unheld.id
@@ -372,7 +372,7 @@ async def test_a_guarded_secret_blocks_an_unencrypted_full_export(db_available: 
     because a "full" bundle that quietly dropped some secrets would be lying.
 
     Scoped to *full* mode on purpose. Participant mode has always let a holder carry
-    their own held secrets out in the clear -- that is §11.4's "my session log", and
+    their own held secrets out in the clear -- that is 's "my session log", and
     publication does not touch it."""
     tenant_id, workspace_id, author, overseer = await _publishable_workspace()
     await create_secret(

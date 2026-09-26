@@ -1,4 +1,4 @@
-"""G4.16's leak criterion: a concealed secret held by the dispatching engineer is absent
+"""the leak criterion: a concealed secret held by the dispatching engineer is absent
 from the delegation brief **by construction**.
 
 Same canary method as E2.6 and G4.7, applied to the actual MCP dispatch payload -- the

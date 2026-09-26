@@ -1,10 +1,10 @@
-"""Adversarial secret-probing scenario schema (E2.8, plan §8.6 (D12)).
+"""Adversarial secret-probing scenario schema.
 
 A scenario is a secret an agent holds, plus a scripted escalating-pressure probe
 sequence (direct question -> social pressure -> deception -> authority claim -> prompt
 injection) and, for each axis value worth testing, the disclosure action a correctly
 behaving agent *should* produce. Front-loading these -- authoring scenarios before the
-implementation they judge exists -- is the whole point (§15.10): otherwise you
+implementation they judge exists -- is the whole point: otherwise you
 unconsciously write scenarios your implementation already passes.
 """
 

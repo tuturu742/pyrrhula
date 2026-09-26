@@ -1,4 +1,4 @@
-"""D1.6: vocabulary overlay listing/resolution/switching. The frontend fetches one
+"""vocabulary overlay listing/resolution/switching. The frontend fetches one
 resolved ``{key, labels}`` per workspace (the fallback-chain logic lives in
 ``core.vocabulary.service``, not duplicated client-side) and switches it live via the
 workspace/tenant-default PATCH endpoints below.

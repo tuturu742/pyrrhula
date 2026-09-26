@@ -1,4 +1,4 @@
-"""Minimal read-only workspace/agent listing (T0.9): the frontend's workspace-list and
+"""Minimal read-only workspace/agent listing: the frontend's workspace-list and
 agent-select flow needs something real to list against. Full workspace/agent management
 (create, edit, delete) is Phase 1 scope (D1.x) — this adds only the read side needed to
 make the login -> workspace list -> session flow genuinely functional rather than
@@ -238,7 +238,7 @@ async def list_personas(
     return [PersonaResponse(id=a.id, key=a.key, name=a.name) for a in rows]
 
 
-# ── G4.2: between-session state ─────────────────────────────────────────────────────
+# ── between-session state ─────────────────────────────────────────────────────
 
 
 class ClockResponse(BaseModel):
@@ -326,7 +326,7 @@ async def list_workspace_changes(
     """The between-sessions change feed: rows, never prose. Scoped through the same
     resolver everything else uses, at the ``EXPORT`` pseudo-phase — a workspace-level feed
     has no phase to narrow by, and ``EXPORT`` is precisely "everything in this workspace
-    this principal is entitled to" (C1.1)."""
+    this principal is entitled to" ."""
     scope_set = await scopes_for(ctx.tenant_id, ctx.principal_id, workspace_id, EXPORT, None)
     rows = await list_change_feed(
         ctx.tenant_id,

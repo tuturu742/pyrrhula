@@ -7,7 +7,7 @@ importing this module (and running the egress-denied path, which never reaches t
 doesn't pay their import cost and doesn't require them to be configured with any
 provider credentials.
 
-**Tool-call streaming accumulation (B1.7) is implemented against the standard OpenAI-
+**Tool-call streaming accumulation is implemented against the standard OpenAI-
 compatible streaming delta format LiteLLM normalises every provider to** -- each
 ``delta.tool_calls`` fragment carries an ``index`` grouping it with earlier fragments for
 the same logical call; ``id``/``function.name`` arrive once (the first fragment for that
@@ -18,7 +18,7 @@ been exercised against a live provider in this environment (no Ollama/API key av
 here) -- flagged honestly rather than silently assumed correct; ``EchoModelProvider``-style
 test doubles are what actually exercise the agent runtime's own test suite.
 
-**Prompt-cache boundary marking (C1.4)** follows Anthropic's ``cache_control`` convention,
+**Prompt-cache boundary marking ** follows Anthropic's ``cache_control`` convention,
 which LiteLLM passes through unmodified for Anthropic-family models: the message at
 ``req.cache_boundary_index`` gets its ``content`` rewritten from a plain string to a
 single-block list with ``cache_control: {"type": "ephemeral"}`` on that block, marking
@@ -627,7 +627,7 @@ class LiteLLMModelProvider:
             encoding = tiktoken.encoding_for_model(model)
         except KeyError:
             # Approximate for non-OpenAI models (Ollama/Anthropic/Gemini): tokenizer
-            # parity across providers is a real problem (plan §13.1) but cl100k_base is
+            # parity across providers is a real problem but cl100k_base is
             # a reasonable v1 budget-planning approximation, not a billing source of truth.
             encoding = tiktoken.get_encoding("cl100k_base")
         return len(encoding.encode(text))

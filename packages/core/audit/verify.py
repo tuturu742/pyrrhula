@@ -1,4 +1,4 @@
-"""Chain verifier (§7.4 layer 2): walks a tenant's audit log in order and checks two
+"""Chain verifier ( layer 2): walks a tenant's audit log in order and checks two
 things per row — its own hash is consistent with its recorded content and predecessor
 (catches a row edited in place), and its ``prev_hash`` matches the actual previous row's
 ``row_hash`` (catches a row deleted or inserted out of order). Either failure is a

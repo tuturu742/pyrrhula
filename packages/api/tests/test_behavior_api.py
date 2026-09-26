@@ -1,4 +1,4 @@
-"""E2.9's slider surface: reading a persona's disposition (axes + current values) and
+"""the slider surface: reading a persona's disposition (axes + current values) and
 appending a new validated profile version over HTTP."""
 
 from __future__ import annotations

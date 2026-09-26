@@ -1,4 +1,4 @@
-"""Session lifecycle actions (D1.3): fetch-by-id, pause, resume. Deliberately thin --
+"""Session lifecycle actions: fetch-by-id, pause, resume. Deliberately thin --
 pausing/resuming just marks intent on the session row (the same ``status`` values
 ``core.process.interpreter``/``core.process.awaits`` already write internally on
 fault/await), with no process-engine involvement of its own. A paused session's turn
@@ -238,7 +238,7 @@ async def pause_session(tenant_id: uuid.UUID, session_id: uuid.UUID) -> SessionR
 
 
 async def resume_session(tenant_id: uuid.UUID, session_id: uuid.UUID) -> SessionRow:
-    """B1.8: also clears any *failed* idempotency record for this session's current
+    """also clears any *failed* idempotency record for this session's current
     turn (``turn:{session_id}:{next_event_seq}``) before flipping status back to
     active -- a session paused by ``core.process.interpreter.advance_session`` after a
     transient provider failure (all retries + fallback exhausted inside a turn) would

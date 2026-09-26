@@ -1,4 +1,4 @@
-"""The first real protected route (T0.6) — demonstrates full RequestContext resolution
+"""The first real protected route  — demonstrates full RequestContext resolution
 and doubles as the route-inventory test's proof that the mechanism actually blocks
 unauthenticated access, not just that it compiles.
 """

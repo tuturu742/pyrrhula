@@ -10,7 +10,7 @@ interface SchemaVersionHistoryPanelProps {
 }
 
 /**
- * F3.11's version history, A1.8/D1.1's presentation pattern -- every version of this
+ * the version history, A1.8/the presentation pattern -- every version of this
  * key, newest first (`GET /entities/schemas/versions`, added alongside this panel since
  * `list_latest_schemas` deliberately can't serve this).
  */

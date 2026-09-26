@@ -1,4 +1,4 @@
-"""F3.14: extends F3.9's matrix to make the v1.2 INV-9 wording ("every shipped pack")
+"""extends the matrix to make the v1.2 INV-9 wording ("every shipped pack")
 operational for the swdev pack specifically -- the delegation-await interface G4.16 must
 later satisfy (suspend/resume, surviving a checkpoint/restore across the suspension), and
 the rendering genericity claim F3.13 makes (a `work_item` needs zero new widgets).
@@ -64,7 +64,7 @@ async def test_every_swdev_flow_can_run_without_a_human_at_the_keyboard(
     This replaces a test that pinned `implement`'s `await` as a delegation placeholder.
     Delegation is real now (G4.16 landed as the delegate endpoint and its worker jobs), so
     the placeholder was obsolete *and* was a second reason that phase parked. The
-    suspend/resume machinery it exercised is B1.6's own, covered by `test_awaits.py`.
+    suspend/resume machinery it exercised is its own, covered by `test_awaits.py`.
     """
     tenant_id, workspace_id, _principal_id = pack_tenant
     loaded = await load_pack(_PACK_DIR, tenant_id, workspace_id)

@@ -1,4 +1,4 @@
-"""F3.3's own isolation + acceptance tests: the generated-column/index generator, its
+"""its own isolation + acceptance tests: the generated-column/index generator, its
 reversibility, and the ``scope_key`` INV-4 discipline extended to entity queries.
 """
 

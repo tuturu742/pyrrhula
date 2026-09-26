@@ -1,14 +1,14 @@
-"""Dense (vector) retrieval (plan §6.3 step 3, INV-4, A1.4): pgvector HNSW cosine search
+"""Dense (vector) retrieval (INV-4): pgvector HNSW cosine search
 against ``knowledge_chunk`` with the tenant/scope/class filter pushed into the SQL
 ``WHERE`` — never fetched broadly and filtered in Python (``tests/`` asserts this via
 ``EXPLAIN``, proving the plan actually uses the filter, not just that the code has one).
 
-Doesn't reuse ``adapters.vector.pgvector.PgVectorStore``/the generic ``VectorStore`` port
-(T0.3), despite that adapter's own docstring once saying A1.4 would "point [it] at the
+Doesn't reuse ``adapters.vector.pgvector.PgVectorStore``/the generic ``VectorStore`` port,
+despite that adapter's own docstring once saying A1.4 would "point [it] at the
 real knowledge_chunk table". That port's ``VectorSearchResult(payload: dict)`` shape was
 built around a single JSONB payload column (``vector_store_item``); ``knowledge_chunk``'s
 useful fields are several real columns (``entry_id``, ``version_id``, ``source_id`` via a
-join), and WRRF (A1.6) needs ``rank`` — the 1-indexed position within *this* list, which
+join), and WRRF needs ``rank`` — the 1-indexed position within *this* list, which
 the generic port has no place for and which only makes sense computed here, at the point
 a single query's ordered result list exists. The port/adapter still stand for any future
 non-knowledge vector-store consumer; this is a dedicated, richer-shaped read path built
@@ -16,7 +16,7 @@ specifically for the knowledge retrieval pipeline.
 
 ``version_ids`` is required and pushed down for the same reason ``scope_keys`` is.
 ``knowledge_chunk`` holds every published version at once — publishing inserts new rows
-and leaves the old ones — so "which version does this workspace read" (A1.8's
+and leaves the old ones — so "which version does this workspace read" (the
 pin-vs-follow) has to be answered *before* the query rather than after it. Retrieval used
 to leave that to the caller and no caller ever applied it, which meant a corrected entry
 went on being citable in its original wording: the agent cites `k9`, `k9` says what it
@@ -25,7 +25,7 @@ with ``core.knowledge.retrieval.versions.effective_version_ids``.
 
 ``entry_key``/``token_count`` were added to ``RetrievalHit`` for A1.6: WRRF fusion and
 bucket-fill need ``token_count`` to know how much budget a hit costs and ``entry_key`` for
-the manifest row shape (plan §6.3 step 4/7) — cheaper to select them once here than to
+the manifest row shape  — cheaper to select them once here than to
 re-fetch per hit later.
 """
 
@@ -56,7 +56,7 @@ DENSE_SEARCH_SQL = (
     "AND c.class = :class_ "
     "AND c.version_id = ANY(:version_ids) "
     "AND c.embedding IS NOT NULL "
-    # G4.6: quarantined content is *absent* from retrieval, not merely flagged in it.
+    # quarantined content is *absent* from retrieval, not merely flagged in it.
     "AND NOT c.quarantined "
     "ORDER BY c.embedding <=> CAST(:qvec AS vector) "
     "LIMIT :k"

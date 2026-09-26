@@ -329,10 +329,10 @@ async def test_default_resolver_returns_empty_for_agent_tokens_without_injected_
 async def test_default_resolver_with_real_agent_resolver_mixes_human_and_agent_any_of(
     db_available: None,
 ) -> None:
-    """B1.8: a mixed any_of list (['human_participant', 'participant_agent']) exercised
+    """a mixed any_of list (['human_participant', 'participant_agent']) exercised
     through the *real* persona_candidate_resolver (core.agents.scheduling), not a stub --
     both a real workspace member and a real agent must show up together, since B1.3 and
-    B1.8's own resolvers were previously only ever tested independently."""
+    its own resolvers were previously only ever tested independently."""
     tenant_id, workspace_id, session_id = await _setup("sched-mixed-anyof")
     participant_agent_id = await seed_dev_agent(
         tenant_id, workspace_id, key="participant-agent", persona_type="participant"
@@ -371,13 +371,13 @@ async def test_default_resolver_with_real_agent_resolver_mixes_human_and_agent_a
     }
 
 
-# ── composes with B1.2's interpreter as designed ────────────────────────────────────
+# ── composes with the interpreter as designed ────────────────────────────────────
 
 
 async def test_scheduler_plugs_directly_into_advance_session_as_next_actor_fn(
     db_available: None,
 ) -> None:
-    """make_scheduler(...) is a real NextActorFn (B1.2's exact injection point) -- proves
+    """make_scheduler(...) is a real NextActorFn (the exact injection point) -- proves
     the two modules compose, not just that each independently passes its own tests."""
     tenant_id, _workspace_id, session_id = await _setup("sched-interp-compose")
     definition_row = await create_definition(tenant_id, "mvp", "MVP", MINIMAL_MVP_FLOW)

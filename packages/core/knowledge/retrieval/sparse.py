@@ -1,6 +1,6 @@
-"""Sparse (lexical) retrieval via ``tsvector``/``ts_rank_cd`` (plan §6.3 step 3, INV-4,
-A1.4) — identical filter signature to ``dense.py`` (tenant/scope/class pushed into the SQL
-``WHERE``) and identical result shape, so WRRF (A1.6) can fuse both lists symmetrically --
+"""Sparse (lexical) retrieval via ``tsvector``/``ts_rank_cd`` (INV-4) — identical filter
+signature to ``dense.py`` (tenant/scope/class pushed into the SQL
+``WHERE``) and identical result shape, so WRRF can fuse both lists symmetrically --
 ``version_ids`` included; see ``dense`` on why that one is not the caller's to skip.
 """
 
@@ -30,7 +30,7 @@ SPARSE_SEARCH_SQL = (
     "AND c.class = :class_ "
     "AND c.version_id = ANY(:version_ids) "
     "AND c.tsv @@ plainto_tsquery('english', :query_text) "
-    # G4.6: quarantined content is *absent* from retrieval, not merely flagged in it.
+    # quarantined content is *absent* from retrieval, not merely flagged in it.
     "AND NOT c.quarantined "
     "ORDER BY score DESC "
     "LIMIT :k"

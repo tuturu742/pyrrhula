@@ -1,5 +1,5 @@
-"""E2.10's own acceptance-criteria tests for `OverseerService` and the designated-overseer
-product rule (Q6/§16.7). INV-1's allowlist itself is covered generically by
+"""its own acceptance-criteria tests for `OverseerService` and the designated-overseer
+product rule (Q6/). INV-1's allowlist itself is covered generically by
 `tests/architecture/test_inv1_import_graph.py` -- this module only needs to prove the
 service's own atomicity, permission-gating, and chain-tamper-detection claims, plus the
 workspace-activation rule.

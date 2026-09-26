@@ -1,4 +1,4 @@
-"""`entity.read` / `entity.mutate` over MCP (G4.13, plan §9.1, §13.7).
+"""`entity.read` / `entity.mutate` over MCP.
 
 Both call the same services the HTTP routes call -- `core.entities.storage` /
 `core.entities.mutation` -- so the scope filter, the permission check, and the idempotency

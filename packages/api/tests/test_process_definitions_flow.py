@@ -1,4 +1,4 @@
-"""B1.1: process-definition CRUD + validate endpoints over real HTTP."""
+"""process-definition CRUD + validate endpoints over real HTTP."""
 
 from __future__ import annotations
 
@@ -144,11 +144,11 @@ async def test_templates_endpoint_serves_the_named_fixtures(
 async def test_standard_session_flow_template_publishes_unmodified(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """D1.2's acceptance criterion: "author the §5.2 Standard Session Flow entirely in
+    """the acceptance criterion: "author the Standard Session Flow entirely in
     the UI; the saved JSON validates and runs a session." The editor's template gallery
     hands the author this exact fixture (served by /process-definitions/templates,
     verbatim from fixtures.py) as the starting canvas; publishing it unmodified through
-    the same endpoint the "Publish" button calls proves that hand-off round-trips. B1.2's
+    the same endpoint the "Publish" button calls proves that hand-off round-trips. the
     own interpreter tests (test_interpreter.py, test_awaits.py) already prove this same
     fixture actually runs a session end to end -- this test closes the remaining gap:
     that what the UI serves an author is exactly what the publish endpoint accepts.

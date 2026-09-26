@@ -1,8 +1,8 @@
-"""The agent runtime (B1.7, plan §12.4, §13.6): executes one agent turn -- provider call,
+"""The agent runtime: executes one agent turn -- provider call,
 streaming, an internal tool loop, retries + fallback profile, usage metering. The final
 message, every usage_record from the turn (including tool-loop intermediate calls), and
 the durable session event all commit in one transaction -- all or nothing, matching
-T0.8's own "usage metering that drifts from the thing it meters will drift" principle,
+its own "usage metering that drifts from the thing it meters will drift" principle,
 now extended across a whole tool loop instead of one call.
 
 **Idempotency is scoped to tool dispatch, not the provider call itself.** Retrying a
@@ -10,8 +10,8 @@ now extended across a whole tool loop instead of one call.
 effect" to protect against there. A tool call that already *succeeded*, however, is a real
 side effect (later: randomizer calls, entity mutations, MCP calls) that must never run twice if
 the surrounding turn is retried/resumed after a crash -- so only ``_dispatch_tool``
-is wrapped in T0.7's ``@idempotent``, keyed on ``(idempotency_key, tool_call.id)``. This
-mirrors B1.2's own scoping decision (idempotency around the external call, not around
+is wrapped in the ``@idempotent``, keyed on ``(idempotency_key, tool_call.id)``. This
+mirrors its own scoping decision (idempotency around the external call, not around
 retryable infrastructure) one layer up.
 """
 
@@ -77,7 +77,7 @@ class EmptyGenerationError(Exception):
 
 
 def _extract_resolution_id(tool_result_content: str) -> str | None:
-    """D1.3: ``make_randomizer_handler`` (C1.6) reports its result as
+    """``make_randomizer_handler`` reports its result as
     ``{"resolution_id": ..., "total": ..., "outcome": ...}`` JSON -- the same shape any
     future resolve()-backed tool would emit, so this isn't specific to ``randomizer`` by
     name. A tool result that isn't that shape (a non-resolution tool, or a resolution
@@ -280,7 +280,7 @@ async def run_agent_turn(
     on_chunk: OnChunk | None = None,
     max_tool_loop: int = _DEFAULT_MAX_TOOL_LOOP,
     max_retries: int = _DEFAULT_MAX_RETRIES,
-    # C1.4: index into `messages` marking the prompt-cache stable/volatile boundary (see
+    # index into `messages` marking the prompt-cache stable/volatile boundary (see
     # core.assembler.layout.LayoutSections) -- a fixed position, valid across the whole
     # tool loop below, since tool-loop iterations only ever *append* to `conversation`.
     cache_boundary_index: int | None = None,
@@ -294,7 +294,7 @@ async def run_agent_turn(
     # benchmark runner). Recorded on the durable event so a transcript can say who
     # moved, the same way resolutions and disclosures carry their cause.
     triggered_by: str = "unknown",
-    # B1.8: when the interpreter is driving this turn, it -- not this function -- is the
+    # when the interpreter is driving this turn, it -- not this function -- is the
     # one that peeked the event_seq slot this turn must claim (its own idempotency key
     # is derived from that same peeked value). None (every pre-B1.8 call site) preserves
     # the original self-claim-from-session_row behaviour exactly.
@@ -543,9 +543,9 @@ async def _commit_turn(
 ) -> TurnResult:
     """One transaction: the message, every usage_record from the loop, the durable
     session_event, and -- when this turn's tool calls produced any ResolutionRecords
-    (C1.6) -- the contradiction scan (C1.7) against this same reply, all or nothing.
+     -- the contradiction scan against this same reply, all or nothing.
 
-    B1.8: ``event_seq`` -- when given (the interpreter driving this turn already peeked
+    ``event_seq`` -- when given (the interpreter driving this turn already peeked
     it) -- is used directly instead of reading ``session_row.next_event_seq``, but this
     function still performs the ``next_event_seq`` claim itself either way: whichever
     transaction actually persists the message is the one that owns the claim, so there

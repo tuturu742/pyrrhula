@@ -31,10 +31,10 @@ function uniquePhaseKey(phases: Record<string, PhaseSpec>): string {
 }
 
 /**
- * D1.2: the editor itself. Two entry modes -- "new" (?template=<key>, from the list
- * page's template gallery, per §16.5 discipline 2's "never an empty canvas") and "edit"
+ * the editor itself. Two entry modes -- "new" (?template=<key>, from the list
+ * page's template gallery discipline 2's "never an empty canvas") and "edit"
  * (:definitionId, loads that version's document as the working draft; publishing always
- * creates a new version, per B1.1's own "publish = new immutable version" convention --
+ * creates a new version, per its own "publish = new immutable version" convention --
  * there is no in-place update endpoint to call instead).
  */
 export function ProcessEditorPage() {
@@ -110,7 +110,7 @@ export function ProcessEditorPage() {
     }
   }, [isNew, templates, existing, definition, searchParams]);
 
-  // Live validation (B1.1's dry-run /validate), debounced so every keystroke doesn't
+  // Live validation (the dry-run /validate), debounced so every keystroke doesn't
   // fire a request -- surfaced as field-addressed errors on the canvas + inspector.
   useEffect(() => {
     if (!definition) return;

@@ -32,7 +32,7 @@ Each named workflow is a directory, and each of its subdirectories is one conten
 
 ```
 swdev/
-  workflow.json      the workflow's own manifest -- name, vocabulary, capabilities
+  workflow.json the workflow's own manifest -- name, vocabulary, capabilities
   schemas/           entity schemas (work_item, character, ...)
   processes/         flows: phases, actors, budgets, gates, prompts
   rule_systems/      how a roll is judged

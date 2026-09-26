@@ -1,13 +1,13 @@
-"""A git repository as knowledge (G4.15, D15, plan §14.5/§6.1/§16.6).
+"""A git repository as knowledge.
 
 **Pyrrhula holds no clone and no worktree.** A snapshot pinned to a commit SHA is ingested
-through the existing A1.x pipeline into KnowledgeSources, and that is all. D15's rejected
+through the existing A1.x pipeline into KnowledgeSources, and that is all. the rejected
 list exists to keep rule 10 unambiguous: the moment core holds a worktree, someone will run
 something in it. The coding agent reads the code natively; retrieval only needs to *brief*.
 
-**One `knowledge_source_version` per SHA.** A1.1's content-addressed version DAG maps onto
+**One `knowledge_source_version` per SHA.** the content-addressed version DAG maps onto
 the commit DAG without translation -- re-ingesting the same SHA is a no-op because the
-content hash is unchanged, and a new SHA is a new version whose diff (A1.8) shows only what
+content hash is unchanged, and a new SHA is a new version whose diff shows only what
 actually changed. That is not a coincidence worth engineering around; it is why the version
 model was built content-addressed.
 
@@ -16,13 +16,13 @@ model was built content-addressed.
 on the ingestion request, defaulted here, so a workspace can override it without a code
 change.
 
-**Docs-first chunking is a scoping decision with reasons** (§15.9): the A1.x pipeline
+**Docs-first chunking is a scoping decision with reasons** : the A1.x pipeline
 already does markdown well, the dogfood pilot's working set is entirely markdown, and
 code-aware chunking is a retrieval-research project with its own eval. Source files ingest
 into `misc` with `experimental: true` on the entry so a later evaluation can find exactly
 what was chunked naively.
 
-**Two scans at ingestion, both quarantining**: G4.6's injection scanner (a README is
+**Two scans at ingestion, both quarantining**: the injection scanner (a README is
 attacker-controlled text headed for a tool-calling agent's context) and the declarative
 committed-credential scan. The second is **posture, not INV-8** -- the assembler cannot
 exclude a secret nobody registered, and this module's docstring says so rather than letting
@@ -68,7 +68,7 @@ DEFAULT_CLASS_MAP: tuple[tuple[str, str], ...] = (
 )
 
 # Docs-first: these chunk through the normal path. Everything else is `misc` and
-# `experimental` (§15.9's named Phase-6 trigger).
+# `experimental` ('s named Phase-6 trigger).
 _DOC_SUFFIXES = frozenset({".md", ".markdown", ".txt", ".rst", ".adoc"})
 
 _MAX_FILE_BYTES = 512 * 1024
@@ -108,7 +108,7 @@ def is_document(path: str) -> bool:
 
 
 def read_tarball(data: bytes) -> list[RepoFile]:
-    """The upload path. A tarball decouples this task from G4.12's transport slippage and
+    """The upload path. A tarball decouples this task from the transport slippage and
     serves air-gapped tenants -- both reasons the task itself gives, and both still true.
 
     Refuses absolute and traversing paths outright. Nothing here writes to a filesystem, so
@@ -176,7 +176,7 @@ async def ingest_repo_snapshot(
         class_ = classify(repo_file.path, class_map)
         document = is_document(repo_file.path)
         if not document:
-            # Source code: plain chunking into `misc`, flagged so §15.9's code-aware-
+            # Source code: plain chunking into `misc`, flagged so 's code-aware-
             # chunking evaluation can find exactly what was treated naively.
             class_ = "misc"
             report.experimental.append(repo_file.path)
@@ -254,7 +254,7 @@ async def _version_for_sha(
 async def _chunk_published(
     tenant_id: uuid.UUID, source_id: uuid.UUID, version_id: uuid.UUID
 ) -> None:
-    """Chunking stays naive-by-design for source files (docs-first, §15.9: code-aware
+    """Chunking stays naive-by-design for source files (docs-first: code-aware
     chunking is a retrieval-research project with its own eval, and these entries carry
     `experimental: true` so that eval can find them). What is *not* a scoping decision is
     chunk **size** -- see `core.knowledge.publish_chunks`, which owns the bound.

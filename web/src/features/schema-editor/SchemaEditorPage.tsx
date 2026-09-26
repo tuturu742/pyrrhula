@@ -12,9 +12,9 @@ import { FsmEditor } from "./FsmEditor";
 import { SchemaVersionHistoryPanel } from "./SchemaVersionHistoryPanel";
 
 /**
- * F3.11's editor: two entry modes, matching `ProcessEditorPage`'s own split -- "new"
+ * the editor: two entry modes, matching `ProcessEditorPage`'s own split -- "new"
  * (`?template=<key>`, from `SchemaListPage`'s gallery, "never an empty schema" per
- * §16.5) and "edit" (`:schemaId`, loads that version's document as the working draft).
+ * ) and "edit" (`:schemaId`, loads that version's document as the working draft).
  * Saving always creates a new immutable version (`entity_schema` has no in-place
  * update); there is no "publish" step distinct from save, since an entity schema has no
  * draft/published split the way a process definition might.
@@ -66,7 +66,7 @@ export function SchemaEditorPage() {
         setDefKey(tpl.key);
       } else if (templates !== undefined) {
         // No ?template= at all means "start from blank" was chosen explicitly --
-        // still not an empty field list (§16.5).
+        // still not an empty field list.
         setDefinition(blankSchemaDefinition());
       } else {
         return;
@@ -81,7 +81,7 @@ export function SchemaEditorPage() {
     }
   }, [isNew, templates, existing, definition, searchParams]);
 
-  // Live validation, debounced -- F3.11's own acceptance criterion: an invalid CEL
+  // Live validation, debounced -- its own acceptance criterion: an invalid CEL
   // expression surfaces a live, expression-anchored error before save is even attempted.
   useEffect(() => {
     if (!definition) return;

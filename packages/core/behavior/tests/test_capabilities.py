@@ -1,4 +1,4 @@
-"""E2.9's core acceptance criteria: a high-stakes axis is rejected on a model the
+"""the core acceptance criteria: a high-stakes axis is rejected on a model the
 capability matrix marks incapable, and mutating the stored capability result flips that
 outcome without any code change.
 """
@@ -85,7 +85,7 @@ async def test_capabilities_reflect_latest_eval_results(db_available: None) -> N
 
 async def test_low_stakes_axis_is_never_rejected(db_available: None) -> None:
     """Only stakes:high axes are enforced -- a low-stakes axis degrading on an
-    incapable model is a quality signal (E2.8's behavioral_fidelity), not a blocker."""
+    incapable model is a quality signal (the behavioral_fidelity), not a blocker."""
     provider, model = "echo", "echo-lowstakes-1"
     tenant_id, persona_id = await _setup("cap-lowstakes", provider=provider, model=model)
     await create_axis_definition(tenant_id, AxisDefinitionSchema.model_validate(CHATTINESS))

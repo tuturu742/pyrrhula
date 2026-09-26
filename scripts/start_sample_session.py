@@ -39,7 +39,7 @@ async def _resolve(
 ) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, list[uuid.UUID], uuid.UUID, list[uuid.UUID]]:
     from sqlalchemy import select
 
-    import core.agents.models  # noqa: F401  -- registers `persona` for the session FK
+    import core.agents.models  # noqa: F401 -- registers `persona` for the session FK
     import core.repos.models  # noqa: F401
     from core.agents.models import Persona
     from core.process.models import ProcessDefinitionRow

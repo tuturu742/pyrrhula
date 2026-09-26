@@ -1,4 +1,4 @@
-"""V2/V3 card normalisation into one internal model (G4.8, plan §11.3).
+"""V2/V3 card normalisation into one internal model.
 
 Two spec versions, one shape. V3 added fields (`nickname`, `group_only_greetings`,
 `creation_date`, decorators inside lore entries) and moved the payload under a different
@@ -15,7 +15,7 @@ to it.
 
 **`extensions` is preserved verbatim, everywhere.** The CCv3 spec reserves it for arbitrary
 data and requires implementations not to destroy it. It is carried on the card, on every
-lore entry, and back out again by G4.9's export -- untouched, not merged, not normalised.
+lore entry, and back out again by the export -- untouched, not merged, not normalised.
 A field whose whole contract is "you don't understand this, don't break it" is one to copy
 byte-for-byte and leave alone.
 """
@@ -31,7 +31,7 @@ from typing import Any
 # mapping onto activation fields is near-mechanical rather than interpretive.
 _DECORATOR_RE = re.compile(r"^@@(?P<name>[a-z_]+)(?:[ \t]+(?P<value>.*))?$", re.IGNORECASE)
 
-# `knowledge_entry.position` is 'before_char' | 'after_char' | 'at_depth_N' (A1.5). A card
+# `knowledge_entry.position` is 'before_char' | 'after_char' | 'at_depth_N' . A card
 # is attacker-controlled input, so a decorator's value is *validated* against that grammar
 # rather than trusted: an unrecognised token means the card said something this system does
 # not model, and the entry's own `position` field is the honest fallback. Without this, a
@@ -44,7 +44,7 @@ _POSITION_RE = re.compile(r"^(?:before_char|after_char|at_depth_\d{1,4})$")
 class LoreEntry:
     """One `character_book.entries` item, normalised. Field names are Pyrrhula's
     (`keys`, `secondary_keys`, `constant`, `position`, `insertion_order`) because they map
-    1:1 onto A1.5's activation fields -- the near-mechanical mapping §11.3 predicted."""
+    1:1 onto the activation fields -- the near-mechanical mapping predicted."""
 
     entry_key: str
     title: str
@@ -137,7 +137,7 @@ def _normalise_lore_entry(index: int, raw: dict[str, Any]) -> LoreEntry:
         keys=keys,
         secondary_keys=[str(k) for k in raw.get("secondary_keys", []) if str(k).strip()],
         # The spec's `selective` means "secondary keys must also match" -- Pyrrhula spells
-        # the same thing as logic AND vs OR (A1.5).
+        # the same thing as logic AND vs OR.
         logic="AND" if raw.get("selective") else "OR",
         constant=bool(raw.get("constant", False)),
         position=position,

@@ -1,4 +1,4 @@
-"""Shared FastAPI dependencies for protected routes (T0.6). ``get_db_session`` is the
+"""Shared FastAPI dependencies for protected routes. ``get_db_session`` is the
 one way a route handler gets a session — always ``tenant_scope(ctx.tenant_id)``, never a
 raw session, so every future route inherits RLS enforcement without having to remember
 to call ``tenant_scope()`` itself.

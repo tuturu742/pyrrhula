@@ -1,4 +1,4 @@
-"""A1.6: activated entries -> chunk-level candidates, against a live Postgres."""
+"""activated entries -> chunk-level candidates, against a live Postgres."""
 
 from __future__ import annotations
 

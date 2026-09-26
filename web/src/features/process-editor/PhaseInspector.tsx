@@ -33,7 +33,7 @@ function issuesFor(fieldErrors: FieldError[], prefix: string): string[] {
 }
 
 /**
- * D1.2's phase inspector: every field `schema.py`'s `PhaseSpec` accepts, addressable by
+ * the phase inspector: every field `schema.py`'s `PhaseSpec` accepts, addressable by
  * exactly the `field_path` strings `validator.py` emits (`phases.<key>...`), so a save-
  * time validation failure highlights the specific control that caused it rather than just
  * the phase as a whole.

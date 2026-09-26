@@ -682,7 +682,7 @@ async def archive_repo_endpoint(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-# ── per-persona hosted-git identity (G4.17) ──────────────────────────────────────────
+# ── per-persona hosted-git identity  ──────────────────────────────────────────
 class PersonaCredentialOut(BaseModel):
     persona_id: uuid.UUID
     # Deliberately not the credential_ref, let alone the token: the only thing a caller

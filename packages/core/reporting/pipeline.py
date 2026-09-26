@@ -1,6 +1,6 @@
-"""The report pipeline (G4.10, plan §11.5, §12.8, req 25).
+"""The report pipeline (G4.10, req 25).
 
-Same two rules as G4.1's history summariser, at report scale -- and deliberately the *same
+Same two rules as the history summariser, at report scale -- and deliberately the *same
 implementation* of both, because a second copy is a second thing to get wrong:
 
 **Visibility first, never scrubbed after.** The event stream is filtered for
@@ -83,7 +83,7 @@ class _Narrative(BaseModel):
 
 
 class ReportRow(Base):
-    """§12.8's `report`. ``generated_for_principal_id`` and ``audience_mode`` are NOT NULL
+    """'s `report`. ``generated_for_principal_id`` and ``audience_mode`` are NOT NULL
     together: a report that could not say who it was for is a report whose visibility
     nobody can decide afterwards."""
 
@@ -150,7 +150,7 @@ def build_fact_frame(facts: tuple[MechanicalFact, ...], kinds: list[str]) -> Fac
 
 
 def render_redaction_stub(count: int) -> str:
-    """§11.5's own wording. One function so every renderer -- markdown here, PDF and EPUB
+    """'s own wording. One function so every renderer -- markdown here, PDF and EPUB
     in G4.11 -- emits the identical string, and a format that quietly dropped it would be
     visibly different rather than plausibly different."""
     noun = "event" if count == 1 else "events"
@@ -284,7 +284,7 @@ async def _summarise(
 ) -> str:
     """Map-reduce, with the template's own budgets. ``purpose='report'`` on every call, so
     a tenant whose egress policy pins reporting to local models gets that enforced inside
-    the ``ModelProvider`` port rather than remembered here (D14)."""
+    the ``ModelProvider`` port rather than remembered here."""
     model_string = f"{agent.provider}/{agent.model}"
     chunk_step = next((s for s in template.pipeline if s.kind == "chunk_summarise"), None)
     reduce_step = next((s for s in template.pipeline if s.kind == "reduce"), None)

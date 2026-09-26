@@ -1,9 +1,9 @@
-"""D1.6's "no literal RPG-overlay noun outside the overlay seed data" CI check (plan
-§12.2, Appendix A, requirement 32): core code speaks in domain-neutral `label_key`s;
+"""The "no literal RPG-overlay noun outside the overlay seed data" CI check: core code
+speaks in domain-neutral `label_key`s;
 `.tsx`/`.ts` UI code must resolve those through `useLabel()`/`label()`, never hardcode
 the RPG overlay's own display strings directly. A literal "Arbiter" in a `.tsx` file is
 exactly the kind of hardcoded noun that breaks switching a workspace to `enterprise_v1`
-(D1.6's own acceptance criterion) -- this catches it before merge, not after a user
+(its own acceptance criterion) -- this catches it before merge, not after a user
 notices the switcher didn't relabel something.
 
 Scans a curated list of the RPG overlay's own, unambiguous display strings (not common

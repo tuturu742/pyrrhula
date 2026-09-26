@@ -1,4 +1,4 @@
-"""The interrupt primitive (B1.6, plan §5.2 ``await``, §12.7): a phase suspends for human
+"""The interrupt primitive (B1.6 ``await``): a phase suspends for human
 input with a timeout transition -- the mechanism behind play-by-post pacing and, later,
 enterprise approval gates.
 
@@ -15,7 +15,7 @@ is the lock.
 from the phase's actor specs at the moment the await is created, for audit/UI purposes
 ("who was eligible when this await opened"); `satisfy_await` does not itself verify the
 calling principal is one of them. Enforcing that is the HTTP layer's job (checking
-workspace membership the same way B1.3's scheduler resolves eligible candidates) --
+workspace membership the same way the scheduler resolves eligible candidates) --
 `satisfy_await`'s own job is the atomic race resolution, not full authorization. Flagged
 explicitly rather than silently assumed solved.
 
@@ -62,14 +62,14 @@ async def create_await(
     *,
     reminder_after: str | None = None,
 ) -> AwaitStateRow:
-    """Called when the interpreter yields at an unsatisfied await (B1.2's
+    """Called when the interpreter yields at an unsatisfied await (the
     ``on_await`` hook -- see ``core.process.interpreter``). Persists the await and marks
     the session ``status='awaiting'`` in the same transaction. ``event_seq`` is peeked
     (not claimed) from the session's current ``next_event_seq`` -- creating an await
     doesn't itself consume a log slot, only its eventual resolution does (see
     ``satisfy_await``/``resolve_timeout``).
 
-    ``reminder_after`` (G4.3) is the already-resolved pacing duration -- resolved by the
+    ``reminder_after`` is the already-resolved pacing duration -- resolved by the
     caller through ``ProcessDefinitionDSL.reminder_duration_for(phase)``, because a
     ``PhaseSpec`` alone cannot see the definition-level ``pacing`` default it might
     inherit. ``None`` means no reminder is due, and the column stays NULL."""
@@ -108,11 +108,11 @@ async def create_await(
 
 
 def make_await_hook(definition: ProcessDefinitionDSL | None = None) -> OnAwaitHook:
-    """B1.2's ``OnAwaitHook`` seam, for real: pass this to
+    """the ``OnAwaitHook`` seam, for real: pass this to
     ``advance_session(on_await=...)`` to persist a real ``await_state`` row instead of
     the documented plain-status-flip default.
 
-    ``definition`` (G4.3) supplies the pacing defaults an individual ``PhaseSpec`` can't
+    ``definition`` supplies the pacing defaults an individual ``PhaseSpec`` can't
     see. It is optional so every pre-G4.3 caller keeps working unchanged -- an await
     created without it simply has no reminder, which is what those callers already got."""
 

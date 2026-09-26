@@ -11,7 +11,7 @@ const ROW_HEIGHT = 140;
 /**
  * Positions aren't part of the authored DSL document (schema.py's models are all
  * `extra="forbid"`, and layout is presentation, not process-definition content — nothing
- * in B1.2's interpreter cares where a phase node sits on screen). So layout is computed
+ * in the interpreter cares where a phase node sits on screen). So layout is computed
  * client-side and persisted separately in localStorage, keyed by workspace+key, rather
  * than smuggled into the document that gets published.
  */

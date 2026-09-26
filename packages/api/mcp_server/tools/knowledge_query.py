@@ -1,4 +1,4 @@
-"""`knowledge.query` over MCP (G4.13, plan §9.1, §13.7, INV-4).
+"""`knowledge.query` over MCP (INV-4).
 
 **INV-4 applies to MCP callers identically.** The scope set is resolved from the *token's*
 principal and pushed down as a SQL predicate by the same retrieval path a session turn

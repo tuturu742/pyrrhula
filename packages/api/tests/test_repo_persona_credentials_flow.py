@@ -1,4 +1,4 @@
-"""Per-persona hosted-git identity over HTTP (G4.17).
+"""Per-persona hosted-git identity over HTTP.
 
 The binding table and the resolver shipped without any write path, so every persona acted
 under the repo's single token -- which is what prevents a reviewer persona approving a

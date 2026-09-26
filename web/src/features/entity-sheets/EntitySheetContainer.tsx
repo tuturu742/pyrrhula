@@ -8,7 +8,7 @@ export interface EntitySheetContainerProps {
   workspaceId: string;
   entityId: string;
   labelKeyPrefix: string;
-  /** A live session's id, if this sheet is open during one -- live updates (F3.10)
+  /** A live session's id, if this sheet is open during one -- live updates
    * only apply when a session is in progress; a sheet viewed outside any session just
    * shows the entity's current state, refetched on demand. */
   sessionId?: string | null;
@@ -16,7 +16,7 @@ export interface EntitySheetContainerProps {
 }
 
 /**
- * F3.10's live-update wiring: an `entity_state_changed` SSE event for *this* entity
+ * the live-update wiring: an `entity_state_changed` SSE event for *this* entity
  * (emitted whenever a session mutates it -- the backend side of that emission is not
  * yet wired into any live turn loop, matching every other "seam built, not yet called"
  * gap in this codebase, e.g. `core.assembler.context_assembler`'s own `entity_state_

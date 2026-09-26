@@ -1,4 +1,4 @@
-"""Batched embedding for knowledge chunks (plan §13.3/§13.9, A1.3): finds chunks needing
+"""Batched embedding for knowledge chunks: finds chunks needing
 an embedding (new from ingestion, or stale after a model change), embeds them in batches
 through the injected ``EmbeddingProvider`` port, and writes ``embedding``/
 ``embedding_model`` back. Same ports-and-adapters rule as ``core.knowledge.ingestion``:
@@ -8,7 +8,7 @@ decided by the worker composition root (``worker.embedding_provider_factory``), 
 Embedding cache, keyed by ``content_hash``: before paying for inference, check whether
 *any* chunk (any entry, any source) already has an embedding for this exact text under
 this exact model — "unchanged entries... keep their chunks and vectors across
-re-ingestion/version publish" (A1.2) covers the common case (the same draft entry,
+re-ingestion/version publish" covers the common case (the same draft entry,
 re-ingested unchanged) automatically, since its chunk rows are literally untouched; this
 cache additionally covers distinct chunks that happen to share identical text (duplicate
 boilerplate across entries/sources), where no inference is needed either.
@@ -116,7 +116,7 @@ async def embed_chunks(
 ) -> EmbedStats:
     """``knowledge_source_id=None`` sweeps every chunk for the tenant (the re-embed job,
     triggered by a model change); given an id, scopes to one source (the job chained
-    after A1.2's ingestion)."""
+    after the ingestion)."""
     pending = await _find_pending_chunks(
         tenant_id, provider.model_name, knowledge_source_id=knowledge_source_id
     )

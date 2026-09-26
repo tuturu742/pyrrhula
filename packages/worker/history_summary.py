@@ -1,4 +1,4 @@
-"""History-summarisation job handler (G4.1) -- the worker-side wiring
+"""History-summarisation job handler -- the worker-side wiring
 ``core.sessions.history`` needs but can't import itself (composition root: which
 ``ModelProvider`` and which ``PermissionService`` adapter, the same rule
 ``worker.ingestion`` follows). Registered in ``worker.main``'s dispatch table under kind

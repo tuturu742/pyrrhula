@@ -1,4 +1,4 @@
-"""Entity view endpoints (F3.10): the already-visibility-filtered read path F3.10's
+"""Entity view endpoints: the already-visibility-filtered read path the
 React sheet renders from. Reuses ``core.assembler.visibility.scopes_for`` (the EXPORT
 pseudo-phase -- "everything this principal can see in this workspace", the right
 default for a standalone sheet view outside any specific process phase) and
@@ -6,7 +6,7 @@ default for a standalone sheet view outside any specific process phase) and
 F3.6 built for context assembly) -- one filtering rule, reused, never reimplemented for
 the API. A field the viewer can't see is absent from the response entirely, never
 present-with-a-blanked-value, so the client genuinely cannot tell "hidden" from
-"doesn't exist" (F3.10's own acceptance criterion).
+"doesn't exist" (its own acceptance criterion).
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ class EntityFieldView(BaseModel):
     tag_metadata: dict[str, object]
     # Server-computed for a `modifier_source`-tagged field (its `tag_metadata
     # .modifier_formula`, evaluated against the entity's own data -- same "the engine
-    # computes, never the client" discipline as F3.1's derived fields). `None` for every
+    # computes, never the client" discipline as the derived fields). `None` for every
     # other field.
     modifier: object | None = None
 
@@ -166,9 +166,9 @@ def _schema_response(row: EntitySchemaRow) -> SchemaResponse:
 # route documents).
 @router.post("/schemas/validate")
 async def validate_schema_endpoint(body: ValidateSchemaRequest) -> ValidateSchemaResponse:
-    """The schema editor's live-validate-on-keystroke call (F3.11) -- never persists
+    """The schema editor's live-validate-on-keystroke call -- never persists
     anything, so every CEL/tag/FSM issue (including an uncompilable expression) comes
-    back anchored to the exact field that produced it, the same shape B1.1's process
+    back anchored to the exact field that produced it, the same shape the process
     editor already established for `/process-definitions/validate`."""
     _definition, issues = validate_raw(body.definition)
     return ValidateSchemaResponse(
@@ -184,8 +184,8 @@ async def validate_schema_endpoint(body: ValidateSchemaRequest) -> ValidateSchem
 async def list_schema_templates_endpoint(
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[SchemaResponse]:
-    """F3.11's template gallery: pack-provided schemas (``workspace_id IS NULL``) --
-    "new schema" always lands here first (§16.5), never an empty field list."""
+    """the template gallery: pack-provided schemas (``workspace_id IS NULL``) --
+    "new schema" always lands here first, never an empty field list."""
     rows = await list_latest_schemas(ctx.tenant_id, None)
     return [_schema_response(r) for r in rows]
 
@@ -240,7 +240,7 @@ async def list_schema_versions_endpoint(
     workspace_id: uuid.UUID | None = None,
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[SchemaResponse]:
-    """F3.11's version history panel -- every version of one key, newest first (unlike
+    """the version history panel -- every version of one key, newest first (unlike
     ``/schemas``, which collapses to the latest per key)."""
     rows = await list_schema_versions(ctx.tenant_id, workspace_id, key)
     return [_schema_response(r) for r in rows]
@@ -276,7 +276,7 @@ async def propose_schema_edit_endpoint(
     body: ProposeSchemaEditRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> SchemaEditProposalResponse:
-    """F3.12: draft-and-approve for an EntitySchema -- runs the proposed definition
+    """draft-and-approve for an EntitySchema -- runs the proposed definition
     through the same ``validate_schema_definition`` pass the manual save path uses
     *before* it is ever returned, so an invalid proposal is never presented for
     approval. Approving is the separate ``POST .../apply-edit`` call below."""
@@ -487,7 +487,7 @@ async def get_entity_history_endpoint(
     field_path: str | None = None,
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[HistoryEntryResponse]:
-    """Per-field timeline for F3.10's history charts -- the progression chart is the
+    """Per-field timeline for the history charts -- the progression chart is the
     same component/endpoint as any other numeric field's, just a different
     ``field_path``."""
     async with tenant_scope(ctx.tenant_id) as session:

@@ -1,13 +1,13 @@
-"""The `.pyr` bundle format (G4.5, plan §11.2, req 23/24): a ZIP with a `manifest.json`,
+"""The `.pyr` bundle format (G4.5, req 23/24): a ZIP with a `manifest.json`,
 JSON for objects, JSONL for logs, Markdown for entry bodies, and a sha256 per file.
 
-Format decisions, all from §11.2 and all load-bearing:
+Format decisions, all from and all load-bearing:
 
 * **Entry bodies are separate `.md` files.** A bundle is then diffable in git, which is a
   real workflow for rules-authors and costs nothing.
 * **`pyr_format` is the *format* version, not the app version.** Compatibility is
   `pyr_format`-major; export always writes current, import supports N and N-1 through an
-  upcast chain (G4.6). An app version is recorded too, but only as provenance -- nothing
+  upcast chain. An app version is recorded too, but only as provenance -- nothing
   branches on it, because "which app wrote this" is a support question and "what shape is
   this" is a compatibility question, and conflating them is how format handling rots.
 * **Integrity is per file, plus the resolution hash chain on top.** The per-file hashes
@@ -19,7 +19,7 @@ Format decisions, all from §11.2 and all load-bearing:
   that difference is exactly what makes a sanitised bundle honest rather than merely quiet.
 
 This module is deliberately free of any policy: it writes and reads bytes. *What* goes in
-is ``export.py``'s decision, resolved through the one visibility resolver (§11.4).
+is ``export.py``'s decision, resolved through the one visibility resolver.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ class BundleReader:
 
 def open_bundle(data: bytes) -> BundleReader:
     """Reads a bundle *without* verifying it. Separate from ``verify_bundle`` on purpose:
-    G4.6's import needs to read the manifest (to learn `pyr_format`, to report *where* a
+    the import needs to read the manifest (to learn `pyr_format`, to report *where* a
     break is) even when verification has already failed, and a reader that refused to open
     a damaged bundle could only ever say "it's broken" with no detail."""
     with zipfile.ZipFile(io.BytesIO(data)) as archive:

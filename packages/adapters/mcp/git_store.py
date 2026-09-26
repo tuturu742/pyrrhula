@@ -1,4 +1,4 @@
-"""Server-side git store for delegated coding work (D15).
+"""Server-side git store for delegated coding work.
 
 The hosted-service model keeps *all* branching/editing/PRs on the service side -- never on a
 client's local checkout. This is that store: real git repositories under a volume-backed root

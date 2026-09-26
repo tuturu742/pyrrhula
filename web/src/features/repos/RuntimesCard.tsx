@@ -102,18 +102,20 @@ export function RuntimesCard() {
       {adding && (
         <div className="flex flex-col gap-2 rounded-md border border-dashed border-border p-3">
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-xs">
+            <label htmlFor="runtime-name" className="flex flex-col gap-1 text-xs">
               <span className="font-medium">Name</span>
               <Input
+                id="runtime-name"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
                 placeholder="rust"
                 autoComplete="off"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs">
+            <label htmlFor="runtime-image" className="flex flex-col gap-1 text-xs">
               <span className="font-medium">Image</span>
               <Input
+                id="runtime-image"
                 className="font-mono text-xs"
                 value={image}
                 onChange={(e) => setImage(e.target.value)}

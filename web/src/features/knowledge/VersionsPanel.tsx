@@ -7,9 +7,9 @@ interface VersionsPanelProps {
 }
 
 /**
- * D1.1: version history (newest first) + publish-draft-with-change-note + an
+ * version history (newest first) + publish-draft-with-change-note + an
  * entry-level diff view between any two versions (added/removed/changed, with text
- * diffs from A1.8's own diff endpoint — this component renders that response, it
+ * diffs from its own diff endpoint — this component renders that response, it
  * doesn't recompute anything).
  */
 export function VersionsPanel({ sourceId }: VersionsPanelProps) {

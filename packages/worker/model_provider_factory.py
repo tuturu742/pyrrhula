@@ -1,6 +1,6 @@
 """The worker's composition root for ``ModelProvider`` selection — mirrors
-``api.model_provider_factory`` (T0.8). ``core`` never imports ``adapters`` directly; this
-is where the concrete choice is made. The ingestion job (A1.2) only needs
+``api.model_provider_factory`` . ``core`` never imports ``adapters`` directly; this
+is where the concrete choice is made. The ingestion job only needs
 ``count_tokens``, which is local/offline (tiktoken) regardless of provider, but going
 through the same port keeps tokenizer selection consistent with generation/embedding.
 """

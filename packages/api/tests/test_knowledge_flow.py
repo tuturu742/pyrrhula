@@ -1,4 +1,4 @@
-"""A1.1: knowledge authoring over real HTTP — create a source, add entries, publish, and
+"""knowledge authoring over real HTTP — create a source, add entries, publish, and
 attach the same source to two workspaces with different settings."""
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ async def test_create_add_entry_publish_over_http(
 async def test_own_source_is_not_library_and_entry_activation_fields_round_trip(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """D1.1: SourceResponse.is_library and EntryResponse's activation fields are new --
+    """SourceResponse.is_library and EntryResponse's activation fields are new --
     both must actually round-trip what was written, not just accept it on write."""
     slug = f"kn-activation-{uuid.uuid4().hex[:8]}"
     await seed_dev_tenant(slug=slug)
@@ -186,7 +186,7 @@ async def test_attach_same_source_to_two_workspaces_over_http(
     assert list_b.json()[0]["scope_key"] == "faction_thieves"
     assert list_b.json()[0]["priority_weight"] == 0.25
 
-    # D1.1: the source detail page's own read direction -- which workspaces is *this
+    # the source detail page's own read direction -- which workspaces is *this
     # source* attached to (the other query direction from list_a/list_b above).
     by_source = client.get(f"/knowledge/sources/{source_id}/attachments", headers=headers)
     assert by_source.status_code == 200, by_source.text

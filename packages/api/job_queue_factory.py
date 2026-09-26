@@ -1,5 +1,5 @@
-"""The api composition root for ``JobQueue`` selection (A1.2) — v1 is always the
-Postgres SKIP LOCKED adapter (T0.3); Temporal (H5.9) is a swap behind the same port.
+"""The api composition root for ``JobQueue`` selection  — v1 is always the
+Postgres SKIP LOCKED adapter; Temporal is a swap behind the same port.
 """
 
 from __future__ import annotations

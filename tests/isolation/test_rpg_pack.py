@@ -1,4 +1,4 @@
-"""F3.7's own acceptance tests for the RPG pack, loaded through the generic
+"""its own acceptance tests for the RPG pack, loaded through the generic
 ``core.packs.loader`` -- no RPG-specific code anywhere outside ``packs/rpg/`` itself.
 """
 
@@ -206,7 +206,7 @@ async def test_rpg_pack_has_zero_core_imports() -> None:
 async def test_pack_seed_is_library_read_only_with_fork_on_edit(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    # D13's library tenant, exercised against a pack seed that actually ships. It used to
+    # the library tenant, exercised against a pack seed that actually ships. It used to
     # be the rpg pack's, which was a placeholder for licensed reference text whose own note
     # said it had never been legally reviewed; that seed is gone and the mechanism is not,
     # so the test moved to the one shipped seed left rather than disappearing with it.
@@ -226,7 +226,7 @@ async def test_pack_seed_is_library_read_only_with_fork_on_edit(
         ).scalar_one()
 
     # Tenant A (via load_pack above) can read the library source; a second,
-    # independent tenant that never touched it can too -- the read side of A1.10's
+    # independent tenant that never touched it can too -- the read side of the
     # disjunct, exercised against the pack's own real shipped content.
     tenant_a_read = await get_source(tenant_a, source_id)
     assert tenant_a_read is not None

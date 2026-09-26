@@ -1,4 +1,4 @@
-"""SSE stream endpoint support (T0.8). ``Last-Event-ID`` resume: on connect, replay
+"""SSE stream endpoint support. ``Last-Event-ID`` resume: on connect, replay
 every ``session_event`` with ``event_seq`` greater than the client's last-seen id
 straight from the database (durable — this is what makes reconnecting after a missed
 message work), *then* subscribe to the live Redis channel for anything new. A client

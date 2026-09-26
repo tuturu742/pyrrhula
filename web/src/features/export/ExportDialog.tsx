@@ -15,10 +15,10 @@ interface ModeOption {
 }
 
 /**
- * G4.7 (plan §11.4): the three export modes, with the choice made unmissable.
+ * the three export modes, with the choice made unmissable.
  *
  * `selected` starts as `null` and the submit button stays disabled until it isn't. That is
- * the whole design: §11.4 says "the UI must make the choice unmissable", and a
+ * the whole design:  says "the UI must make the choice unmissable", and a
  * pre-selected default is exactly how a choice stops being made — the user clicks Export,
  * gets whatever the default was, and never reads the row explaining what they just put in
  * a file. Nothing here is a preference to remember; each export is its own decision about
@@ -251,7 +251,7 @@ interface LossItem {
 }
 
 /**
- * G4.9 (plan §11.3): the loss report, shown *before* download.
+ * the loss report, shown *before* download.
  *
  * A card cannot carry a behaviour profile, a secret, or a process definition, and handing
  * someone a card is a moment where a person forms a belief about what they just shared.

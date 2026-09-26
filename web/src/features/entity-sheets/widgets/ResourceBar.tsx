@@ -7,9 +7,9 @@ export interface ResourceBarProps {
   lowThreshold: number | null;
 }
 
-/** F3.4's `resource` tag -> this one component, for an HP bar, a budget bar, or a
+/** the `resource` tag -> this one component, for an HP bar, a budget bar, or a
  * work item's remaining estimate alike -- the tag, not the field name, decides this
- * renders here (D7). */
+ * renders here. */
 export function ResourceBar({ labelKey, value, max, lowThreshold }: ResourceBarProps) {
   const t = useLabel();
   const pct = max && max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : null;

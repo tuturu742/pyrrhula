@@ -1,4 +1,4 @@
-"""The worker's composition root for ``EmbeddingProvider`` selection (A1.3). ``local/``
+"""The worker's composition root for ``EmbeddingProvider`` selection. ``local/``
 prefixed model names route to a directly-loaded self-hosted model (bge-m3 via
 sentence-transformers, or the deterministic test stub); anything else is a cloud model
 via LiteLLM. Asserts the selected adapter's declared dimension matches

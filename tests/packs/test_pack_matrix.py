@@ -1,4 +1,4 @@
-"""F3.9: the operational definition of "generic". For every shipped pack directory
+"""the operational definition of "generic". For every shipped pack directory
 under ``packs/`` -- discovered, never hardcoded by name (F3.14 adds a third pack by
 adding a directory, not editing this file) -- loads the pack through the generic
 ``core.packs.loader``, then runs the smoke script *that pack itself ships*
@@ -79,7 +79,7 @@ async def _run_smoke(
         data=smoke["entity_data"],
     )
 
-    # An entity mutation, through the single write path (F3.5).
+    # An entity mutation, through the single write path.
     mutation_changes = smoke.get("mutation_changes")
     if mutation_changes:
         await mutate(
@@ -94,7 +94,7 @@ async def _run_smoke(
             permission_service=_PERMISSIONS,
         )
 
-    # A deterministic tool call, through the unmodified ResolutionService (C1.5/C1.6).
+    # A deterministic tool call, through the unmodified ResolutionService.
     resolution = smoke.get("resolution")
     if resolution:
         rule_system_row = await get_rule_system(tenant_id, resolution["rule_system_key"])
@@ -120,7 +120,7 @@ async def _run_smoke(
         )
         assert record.outcome  # a real, persisted ResolutionRecord
 
-    # A state-machine (FSM) transition, through the single write path (F3.5).
+    # A state-machine (FSM) transition, through the single write path.
     transition_spec = smoke.get("transition")
     if transition_spec:
         pre_changes = transition_spec.get("pre_transition_changes")
@@ -162,7 +162,7 @@ def test_pack_matrix_is_not_empty() -> None:
     """A guard against the parametrize silently collecting zero test cases (e.g. if
     ``packs/`` were ever misconfigured) -- pytest would otherwise report 0 passed, 0
     failed and the whole point of this suite (INV-9 CI-blocking) would go quiet.
-    F3.14: tightened from >=2 to >=3 now that swdev has shipped -- a future regression
+    tightened from >=2 to >=3 now that swdev has shipped -- a future regression
     back down to two packs should fail loudly here, not slip by silently."""
     assert len(_SHIPPED_PACKS) >= 3, (
         f"expected at least the default/rpg/swdev packs, got {_SHIPPED_PACKS}"

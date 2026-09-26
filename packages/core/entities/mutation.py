@@ -1,6 +1,6 @@
-"""EntityMutationService (F3.5, plan §10.3/§5.6/§12.5): the single write path for entity
+"""EntityMutationService: the single write path for entity
 data and FSM transitions. Every caller -- tools, process effects, human edits, imports,
-and later G4.16's delegation outcomes -- goes through ``mutate()``/``transition()``, never
+and later the delegation outcomes -- goes through ``mutate()``/``transition()``, never
 touches ``core.entities.storage``/``core.entities.fsm`` directly for a write.
 
 **Concurrency.** ``SELECT ... FOR UPDATE`` on the entity row inside one transaction:
@@ -17,7 +17,7 @@ codebase uses (an atomic ``INSERT ... ON CONFLICT DO NOTHING`` before running th
 so two concurrent retries can't both pass a check-then-run race). The caller supplies
 the idempotency key directly (``(session_id, event_seq, attempt_target)``, per the task
 description) rather than this module deriving one -- callers with no session
-(G4.2's future out-of-session mutations) still need a stable key of their own choosing.
+(the future out-of-session mutations) still need a stable key of their own choosing.
 
 **Permission check precedes the lock.** ``PermissionService.check()`` runs before the
 row is ever touched (never inline role logic, rule 12) -- a denied caller never blocks
@@ -366,7 +366,7 @@ async def _transition_inner(
         current_state = entity_row.fsm_states.get(machine_key, machine.initial)
         field_types = _field_types(definition)
 
-        # Guard/effects evaluate over raw + derived fields (F3.1's constraint-check
+        # Guard/effects evaluate over raw + derived fields (the constraint-check
         # convention): a guard may legally reference a derived value.
         derived = compute_derived(definition, entity_row.data)
         combined_fields: dict[str, object] = {**entity_row.data, **derived}

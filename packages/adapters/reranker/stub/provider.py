@@ -1,5 +1,5 @@
-"""Deterministic stub Reranker (A1.7): word-overlap scoring, no model weights, no
-network — keeps CI fast, matching A1.3's stub-embedding rationale exactly. Unlike a
+"""Deterministic stub Reranker: word-overlap scoring, no model weights, no
+network — keeps CI fast, matching the stub-embedding rationale exactly. Unlike a
 pure hash-based stub, this one is meaningfully *query-sensitive* (a candidate sharing more
 words with the query scores higher), so tests can verify the reranker actually reordered
 candidates in a predictable direction without needing a real cross-encoder model.

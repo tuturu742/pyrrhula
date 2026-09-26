@@ -1,4 +1,4 @@
-"""Report rendering job (G4.11) -- the worker-side wiring `core.reporting.render` needs but
+"""Report rendering job -- the worker-side wiring `core.reporting.render` needs but
 can't import itself (composition root: which `BlobStore`). Registered in `worker.main`
 under kind `"render_report"`.
 

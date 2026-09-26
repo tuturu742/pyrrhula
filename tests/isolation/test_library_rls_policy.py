@@ -1,4 +1,4 @@
-"""A1.10 (D13): catalog-based proof that the library-tenant RLS exception is exactly what
+"""catalog-based proof that the library-tenant RLS exception is exactly what
 it claims to be -- one named disjunct, on exactly the four documented tables, nowhere
 else. Complements ``test_rls_catalog.py``'s "every tenant_id table has forced RLS" with
 "and this specific, narrow exception is the only place the library uuid appears."

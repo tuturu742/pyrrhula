@@ -178,7 +178,7 @@ async def test_at_most_one_manifest_per_session_event_seq(db_available: None) ->
     assert second.id == first.id
 
 
-# ── access control (D1.4's read path) ────────────────────────────────────────────────
+# ── access control (the read path) ────────────────────────────────────────────────
 
 
 async def test_exact_viewer_can_read_their_own_manifest(db_available: None) -> None:

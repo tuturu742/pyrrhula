@@ -1,6 +1,6 @@
 """The Glasshouse Affair -- the murder-mystery benchmark's authored case file.
 
-One fixed story, engineered for measurement (plan §8.6, arms comparison):
+One fixed story, engineered for measurement (arms comparison):
 
 - **Solvable by construction**: no single secret names the murderer, but the UNION of
   the four innocents' secrets does -- if the detective extracts enough honest

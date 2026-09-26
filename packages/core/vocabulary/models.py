@@ -1,11 +1,11 @@
-"""``vocabulary_overlay`` (D1.6, plan §12.2, Appendix A, requirement 32): the label-
+"""``vocabulary_overlay`` (D1.6, Appendix A, requirement 32): the label-
 resolution layer that lets the same domain-neutral engine present as an RPG tool
 (``rpg_v1``) or an enterprise tool (``enterprise_v1``) with zero code changes -- nothing
 in the schema is ever renamed, only how the UI *labels* it.
 
 ``tenant_id`` nullable: ``NULL`` is a system overlay (shipped, available to every
 tenant); a real UUID is a tenant-authored custom overlay (no authoring UI in Phase 1 --
-the column exists so F3.7/F3.8's overlay packs have somewhere to write to without a
+the column exists so F3.7/the overlay packs have somewhere to write to without a
 schema change). Two partial unique indexes, not one plain constraint, for the same
 reason ``ProcessDefinitionRow``'s migration documents: Postgres treats every NULL as
 distinct, so a bare ``UNIQUE(tenant_id, key)`` would let multiple system overlays share

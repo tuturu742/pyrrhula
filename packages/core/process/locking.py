@@ -1,6 +1,6 @@
-"""Session concurrency control (B1.5, plan §5.5): one advancing writer per session,
+"""Session concurrency control: one advancing writer per session,
 enforced by a real ``SELECT ... FOR UPDATE`` claim held only for brief critical sections
--- never across a slow external model call, per B1.5's own subtask ("model calls happen
+-- never across a slow external model call, per its own subtask ("model calls happen
 outside the row lock").
 
 **Claim, don't hold.** ``claim_session`` takes the row lock, checks/sets the watchdog
@@ -26,7 +26,7 @@ payload={..., 'queued': True})`` under its own brief claim/commit pair, safe und
 concurrent submission, without needing the caller to be the one currently advancing the
 session at all. **What actually *consumes* a queued input** (a scheduler recognising it as
 satisfying a `mode: free` human actor's turn) needs the real HTTP submission flow and
-agent runtime (B1.7) to exist before it can be wired end-to-end; this module's job is
+agent runtime to exist before it can be wired end-to-end; this module's job is
 making sure the input is never lost or corrupted under concurrent access, which is
 provable and tested today independent of that later wiring.
 """

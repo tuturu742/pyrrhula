@@ -1,4 +1,4 @@
-"""Elapsed-history repopulation for a resumed session (G4.1, plan §5.4, req 20).
+"""Elapsed-history repopulation for a resumed session (G4.1, req 20).
 
 A session that has been dormant for a month resumes with a checkpoint's ``state`` but an
 empty working context: the model has no idea what happened. This module builds the recap
@@ -12,7 +12,7 @@ merely convenient:
    the prose around them; it is never asked what a roll came up. A planted message that
    lies about a result cannot change the fact frame, because the fact frame never passed
    through the model at all. (This is INV-7's instinct -- "deterministic results render
-   from the record" -- applied to summarisation, and it is the same principle G4.10's
+   from the record" -- applied to summarisation, and it is the same principle the
    report pipeline scales up.)
 
 2. **The summary is per-viewer.** Facts are filtered through the *resuming context's*
@@ -32,7 +32,7 @@ merely convenient:
    actually is.
 
 3. **The budget is a reservation, not a truncation.** ``BudgetSpec.history_ratio``
-   (§5.2 DSL, G4.1) carves the history slice out of the phase budget *before* retrieval
+   ( DSL, G4.1) carves the history slice out of the phase budget *before* retrieval
    runs; ``summarise_history(max_tokens=...)`` then fits the summary to exactly that
    slice. Depth adapts: facts are kept first and narrative gets what remains, because a
    dropped fact is a lie of omission about something that provably happened while a
@@ -107,7 +107,7 @@ class MechanicalFact:
     hopeful."""
 
     kind: FactKind
-    # ``None`` for a between-sessions change (G4.2): it happened while no session was
+    # ``None`` for a between-sessions change: it happened while no session was
     # running, so there is no event_seq to place it at. Rendered as ``seq=-`` and sorted
     # ahead of everything in-session, which is where it actually belongs -- it is part of
     # what changed *before* the resumed turn.
@@ -195,7 +195,7 @@ async def _entity_change_facts(
     the join filters, the Python does not post-filter). An empty scope set yields nothing
     without a query at all -- ``IN ()`` is not a thing worth generating.
 
-    ``between_sessions_since`` (G4.2) widens the selection to the *out-of-session* changes
+    ``between_sessions_since`` widens the selection to the *out-of-session* changes
     -- schedule effects fired by a clock advance, a facilitator's direct edit -- that
     happened while nobody was in a session. They carry ``session_id IS NULL`` and no
     ``event_seq`` by construction, so no event-range predicate could ever have picked them
@@ -262,7 +262,7 @@ async def _disclosure_facts(
 ) -> list[MechanicalFact]:
     """A disclosure is in a viewer's recap only if that viewer was actually told
     (``disclosed_to.principal_ids``), or holds ``secret:inspect`` -- the same action the
-    overseer read path gates on (E2.10), not a second notion of "senior enough".
+    overseer read path gates on, not a second notion of "senior enough".
 
     The *fact* of a disclosure is all that lands here: which secret, in what mode, to how
     many principals. Never ``secret.content`` -- this module has no read path to it (INV-1
@@ -328,7 +328,7 @@ async def collect_visible_facts(
     (from G4.5) the exporter use. There is deliberately no "history visibility" of its own
     to drift out of step with it.
 
-    ``between_sessions_since`` (G4.2) additionally pulls in out-of-session entity changes
+    ``between_sessions_since`` additionally pulls in out-of-session entity changes
     -- schedule effects, direct edits -- made after that instant, under the same scope
     filter. Pass the previous session's end for the "what changed while you were away"
     half of a resume recap; leave it ``None`` to summarise a session's own span only."""
@@ -361,8 +361,8 @@ async def collect_prose_by_phase(
     tenant_id: uuid.UUID, session_id: uuid.UUID, *, from_event_seq: int, to_event_seq: int
 ) -> list[tuple[str, list[str]]]:
     """Walks the session log forward, tracking the current phase from ``phase_transition``
-    events and attributing each ``message`` event to it -- the log is the source of truth
-    (§5.4), so the chunk boundaries come from the log rather than from a phase column the
+    events and attributing each ``message`` event to it -- the log is the source of truth,
+    so the chunk boundaries come from the log rather than from a phase column the
     ``message`` table doesn't have. Returns ``[(phase_key, ["<speaker>: text", ...]), ...]``
     in chronological order, one entry per contiguous run of a phase.
 

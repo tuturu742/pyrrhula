@@ -1,8 +1,8 @@
-"""Document -> entries (plan §6.1, A1.2). Markdown splits on headings (a real content
+"""Document -> entries. Markdown splits on headings (a real content
 structure the author already chose); plain text and PDF have none, so both fall back to
 the same paragraph-grouping heuristic — "heuristic for txt/pdf" per the task spec. Split
 points are just entry boundaries, not stored separately: the author can freely re-split
-in the authoring UI later (D1.1) by editing the resulting entries, same as any other edit.
+in the authoring UI later by editing the resulting entries, same as any other edit.
 """
 
 from __future__ import annotations

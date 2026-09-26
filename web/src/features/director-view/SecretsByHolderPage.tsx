@@ -19,7 +19,7 @@ interface RevealedSecret {
 }
 
 /**
- * E2.11: the overseer console's landing page -- secrets grouped by holder, gist-level by
+ * the overseer console's landing page -- secrets grouped by holder, gist-level by
  * default. Plaintext is never fetched for a secret until its own "Reveal plaintext"
  * button is clicked: each click is exactly one `inspectSecret()` call, exactly one new
  * `audit_log` row, and exactly one increment of the session's own inspection counter

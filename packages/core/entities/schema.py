@@ -1,10 +1,10 @@
-"""EntitySchema (F3.1, plan §10.1/§10.2 (D7), §12.5): the generic Entity Schema shared by
+"""EntitySchema: the generic Entity Schema shared by
 every domain -- a fantasy character, a support ticket, and a software work item are the same
 object; nothing in core knows what HP is. Typed fields as a JSON Schema 2020-12 subset,
 derived fields and cross-field constraints as CEL (bounded, no I/O, safe for untrusted
 expressions in a shared process), versioned per workspace or pack-provided.
 
-**Explicitly rejected alternatives (§10.2):**
+**Explicitly rejected alternatives:**
 - **RestrictedPython** -- sandbox escapes are a well-known, recurring class of bug; "the
   sandbox is unbreakable" is not a boundary this project is willing to bet INV-8/tenancy
   on, and CLAUDE.md rule 10 forbids user-authored code categorically, not just "risky"
@@ -40,7 +40,7 @@ from core.entities.views import ViewDef
 from core.tenancy.models import Base
 
 # The JSON Schema 2020-12 subset this product accepts for a field's own type -- no
-# `$ref` recursion, no remote refs (§10.1): a closed, boring set of primitive shapes.
+# `$ref` recursion, no remote refs: a closed, boring set of primitive shapes.
 FieldType = Literal["string", "integer", "number", "boolean", "array"]
 
 _DUMMY_TYPE_FOR_CEL: dict[FieldType, str] = {
@@ -53,10 +53,10 @@ _DUMMY_TYPE_FOR_CEL: dict[FieldType, str] = {
 
 
 class FieldDef(BaseModel):
-    """One typed field. ``tags``/``tag_metadata`` are validated against F3.4's fixed
+    """One typed field. ``tags``/``tag_metadata`` are validated against the fixed
     vocabulary in that task's hookup (this model accepts any string tag structurally;
     F3.1 alone doesn't know the tag vocabulary yet). ``scope_key`` marks a field
-    ``private`` at the per-field grain (F3.4's ``private`` tag contract) -- ``None`` means
+    ``private`` at the per-field grain (the ``private`` tag contract) -- ``None`` means
     the field participates in the entity's own top-level visibility only."""
 
     model_config = ConfigDict(extra="forbid")
@@ -108,7 +108,7 @@ class ConstraintDef(BaseModel):
 
 
 class EntitySchemaDefinition(BaseModel):
-    """The authored document -- the composition object §10.1 describes. ``key``/
+    """The authored document -- the composition object describes. ``key``/
     ``version`` live on the ``entity_schema`` row, not here, mirroring
     ``ProcessDefinitionDSL``'s identical split between authored content and
     row/versioning metadata."""
@@ -136,7 +136,7 @@ class EntitySchemaDefinition(BaseModel):
 
     def field_types(self) -> dict[str, str]:
         """``fields.*`` dummy-activation types for CEL compile-checking: raw fields plus
-        derived fields, since a constraint may legally reference a derived value (§10.1's
+        derived fields, since a constraint may legally reference a derived value ('s
         own example: ``fields.dexterity >= 13 && fields.level >= 3``)."""
         types = {f.key: _DUMMY_TYPE_FOR_CEL[f.type] for f in self.fields}
         types.update({d.key: d.type for d in self.derived})
@@ -149,7 +149,7 @@ class EntitySchemaRow(Base):
     ``rule_system``'s tenant-wide, not-workspace-scoped shape) -- a pack schema still
     lives under a concrete tenant (the library tenant for shipped-pack seed content, or a
     consuming tenant that customised a copy), just not pinned to one workspace within it.
-    ``entity.schema_id`` (F3.3) FKs directly to a specific row here -- there is no separate
+    ``entity.schema_id`` FKs directly to a specific row here -- there is no separate
     "current version" catalog table; each save is a new row, and a caller pins whichever
     row id it means."""
 
@@ -176,8 +176,8 @@ class EntitySchemaRow(Base):
         JSONB, nullable=False, default=list
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    # F3.12: who saved this version (a human's own edit, or the human who approved an
-    # AI-drafted proposal -- `ai_assisted` distinguishes which). Both nullable: F3.1's
+    # who saved this version (a human's own edit, or the human who approved an
+    # AI-drafted proposal -- `ai_assisted` distinguishes which). Both nullable: the
     # own pack-loading path (`core.packs.loader`) saves schemas with neither, the same
     # "no human in the loop yet" shape `entity_state_change.session_id` already accepts.
     created_by: Mapped[uuid.UUID | None] = mapped_column(

@@ -1,4 +1,4 @@
-"""Persona + Agent management (D1.5, plan §12.4): create/edit agents (persona,
+"""Persona + Agent management: create/edit agents (persona,
 role, model profile), model profiles (provider/model/params/fallback), and provider
 credentials. The full CRUD ``core.agents.seed``'s docstring deferred to this task.
 """
@@ -47,7 +47,7 @@ async def store_provider_credential(
     ever leaves this function. No corresponding "read back the key" function exists at
     the API layer; decrypting for an actual provider call is a separate, later wiring
     concern (the same "not yet integrated into the runtime" boundary as everywhere else
-    this phase), not something D1.5's UI needs or gets access to."""
+    this phase), not something the UI needs or gets access to."""
     async with tenant_scope(tenant_id) as session:
         row = ProviderCredentialRow(tenant_id=tenant_id, ciphertext=encryptor.encrypt(api_key))
         session.add(row)
@@ -275,7 +275,7 @@ async def record_persona_version(
     created_by: uuid.UUID | None,
     ai_assisted: bool = False,
 ) -> Persona:
-    """F3.12: writes an ``persona_version`` history row and updates
+    """writes an ``persona_version`` history row and updates
     ``agent.persona_md`` in the same transaction. Unlike ``update_persona`` (a plain field
     edit with no history), this is the write path an approved edit proposal takes --
     the only thing that populates ``persona_version`` today."""

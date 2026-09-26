@@ -10,7 +10,7 @@ the key itself.
 Four layers, most specific first:
 
 ```
-the request  ->  the persona  ->  the connection  ->  the platform default
+the request ->  the persona ->  the connection ->  the platform default
 ```
 
 An explicit request field always wins. Below that, a persona's own params override its
@@ -43,9 +43,9 @@ three they trade each other's sentences verbatim, because they are one model rea
 transcript. Spread them:
 
 ```
-Referee    temperature 0.4                        cool, deterministic
-Suspect A  temperature 0.9  presence_penalty 0.4  blusters, won't repeat itself
-Suspect B  temperature 0.6  presence_penalty 0.5  tight-lipped, penalised hardest for echoes
+Referee temperature 0.4 cool, deterministic
+Suspect A temperature 0.9 presence_penalty 0.4 blusters, won't repeat itself
+Suspect B temperature 0.6 presence_penalty 0.5 tight-lipped, penalised hardest for echoes
 ```
 
 `presence_penalty` is doing the targeted work there — it directly punishes re-emitting

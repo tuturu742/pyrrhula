@@ -1,7 +1,7 @@
 """INV-1: no stored text reaches a model except through ``ContextAssembler.assemble()``.
 Enforced structurally: only ``core.assembler`` and ``core.overseer`` may import
 ``core.knowledge.repo`` or ``core.secrets.repo``. "This is the single highest-value test
-in the repository" (plan §4.2) — every leak bug in a system like this is "some new
+in the repository"  — every leak bug in a system like this is "some new
 feature read the knowledge table directly because it was convenient."
 
 Uses the AST rather than a regex/string search so `from core.knowledge import repo` and

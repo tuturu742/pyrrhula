@@ -17,7 +17,7 @@ function issuesFor(issues: SchemaValidationIssue[], path: string): string[] {
 }
 
 /**
- * F3.11's tag picker: checkboxes constrained to `core.entities.tags.SEMANTIC_TAGS` --
+ * the tag picker: checkboxes constrained to `core.entities.tags.SEMANTIC_TAGS` --
  * the same closed, fixed nine this repo's own render registry uses, imported rather
  * than re-declared a third time. A checked tag that carries a `tag_metadata` contract
  * (`resource`'s `max_ref`/`low_threshold`, `modifier_source`'s `modifier_formula`,

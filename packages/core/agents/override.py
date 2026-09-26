@@ -1,4 +1,4 @@
-"""Human-in-place-of-agent (G4.4, plan §5.2 ``generate_as``, §12.7, req 10).
+"""Human-in-place-of-agent (G4.4 ``generate_as``, req 10).
 
 The director speaking as the innkeeper and the manager stepping in for a stuck engineer
 agent are the same mechanism: a permitted human writes a turn that the session records as
@@ -18,10 +18,10 @@ default, chosen once here rather than left to each UI.
 takes effect, which it would not if the second call trusted the first.
 
 **Downstream integrity is unconditional.** An override goes through the same leak check
-(E2.7) as a generated reply: a human can leak a concealed secret's plaintext by accident
+ as a generated reply: a human can leak a concealed secret's plaintext by accident
 just as readily as a model can, and the tripwire does not care which one typed it.
 
-*But the response ladder differs, deliberately.* E2.7's generated-reply ladder is
+*But the response ladder differs, deliberately.* the generated-reply ladder is
 regenerate-once-then-fallback; there is nothing to regenerate here, because the words are
 a person's. A leaking override is **refused** -- the message is never written, the human is
 told, and the overseer is alerted. Substituting a bland fallback for what a human typed
@@ -90,7 +90,7 @@ class _RewrittenMessage(BaseModel):
 class OverrideDraft:
     """What a human is about to say as an agent, before they confirm it. Nothing here is
     persisted: a draft the human abandons leaves no trace, which is the same
-    draft-and-approve shape E2.2's secret drafting and F3.12's edit proposals use."""
+    draft-and-approve shape the secret drafting and the edit proposals use."""
 
     persona_id: uuid.UUID
     agent_principal_id: uuid.UUID

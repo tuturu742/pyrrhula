@@ -383,7 +383,7 @@ async def test_effectful_mcp_call_survives_restart_without_double_execution(
     assert len(rows) == 1, "a second action record was created for the same operation"
 
     # A crash *between* dispatch and completion leaves a pending record, and the next
-    # attempt refuses rather than re-dispatching -- reconciliation is G4.16's job, and
+    # attempt refuses rather than re-dispatching -- reconciliation is the job, and
     # guessing is nobody's.
     transport.raise_on = {"post_message"}
     with pytest.raises(McpTransportError):

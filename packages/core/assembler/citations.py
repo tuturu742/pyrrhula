@@ -1,5 +1,5 @@
-"""Citation validation (C1.8, plan §6.5/requirement 6): agents cite ``[k7]``-style
-knowledge ids from the manifest's envelope (C1.2's ``ManifestEntry.citation_id``); a
+"""Citation validation (C1.8/requirement 6): agents cite ``[k7]``-style
+knowledge ids from the manifest's envelope (the ``ManifestEntry.citation_id``); a
 cheap post-generation validator checks every cited id against the manifest that actually
 produced the context the reply was generated from, so a hallucinated citation -- an id
 the model made up, never actually present -- is caught and flagged rather than silently
@@ -98,11 +98,11 @@ def _citation_to_json(citation: Citation) -> dict[str, object]:
 async def apply_citation_validation(
     tenant_id: uuid.UUID, message_id: uuid.UUID, result: CitationValidationResult
 ) -> None:
-    """Persists the validated citation set on ``message.citations`` (plan §12.7) and any
+    """Persists the validated citation set on ``message.citations`` and any
     flags onto ``message.moderation_flags`` -- ``bad_citation`` (hallucinated ids) and/or
     ``missing_required_citation`` (a ruling-type reply, ``requires_citation`` phase flag
     set, with zero valid citations). Writing an empty ``citations`` list is a legitimate,
-    real outcome (a reply that cited nothing), unlike C1.7's ``flag_contradictions``,
+    real outcome (a reply that cited nothing), unlike the ``flag_contradictions``,
     which no-ops on nothing to flag -- there's always a citations list to record here,
     even if it's empty."""
     async with tenant_scope(tenant_id) as session:

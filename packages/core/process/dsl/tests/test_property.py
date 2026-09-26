@@ -1,13 +1,13 @@
 """B1.1 acceptance criterion: "A definition that validates cannot make the interpreter
 throw on structural grounds (fuzz/property test over generated valid definitions)."
 
-B1.2's interpreter doesn't exist yet, so this can't literally run one. What it proves
+the interpreter doesn't exist yet, so this can't literally run one. What it proves
 instead -- the thing that actually determines whether the interpreter can trust its
 input -- is that the validator's structural guarantees hold across a wide, randomly
 generated space of definitions, not just the two hand-written fixtures: every phase the
 graph can reach is declared, every transition target is a declared phase, the initial
 phase exists, and (for phases that have one) every budget's ratios sum to ~1. Those are
-exactly the properties B1.2's loop (``session.phases[current_phase]``, ``phase.gates[i]
+exactly the properties the loop (``session.phases[current_phase]``, ``phase.gates[i]
 .to``, ``split_budget(phase.budget.ratio, ...)``) would otherwise have to defensively
 re-check or risk a ``KeyError``/malformed-budget fault on a definition the validator
 already accepted.
@@ -112,7 +112,7 @@ def test_generated_valid_definitions_always_pass_validation(raw: dict[str, objec
 def test_every_transition_target_in_a_valid_definition_is_a_real_phase(
     raw: dict[str, object],
 ) -> None:
-    """The specific structural guarantee B1.2's loop leans on hardest: dereferencing a
+    """The specific structural guarantee the loop leans on hardest: dereferencing a
     gate's ``to`` or a phase's ``on_complete`` by key must never KeyError."""
     dsl = ProcessDefinitionDSL.model_validate(raw)
     assert validate_definition(dsl) == []

@@ -1,4 +1,4 @@
-"""MCP client runtime (G4.12, plan §13.7, §9.4 (D6), §16.6, req 12).
+"""MCP client runtime (G4.12, req 12).
 
 Four things happen here and nowhere else, which is the point -- each of them is a control,
 and a control that exists in two places is a control that will disagree with itself:
@@ -15,14 +15,14 @@ produced. That is the structural reason planted text inside a tool *response* ca
 authorise a further call: the response is not an input to the decision.
 
 **Every result is wrapped before it is context.** ``ENVELOPE`` marks returned content as
-data. External output is data, never instructions -- the same standing rule §6.5's citation
+data. External output is data, never instructions -- the same standing rule 's citation
 envelope encodes for knowledge, applied at the other door.
 
 **Effectful calls go through `EffectfulAction`.** Idempotency key first, external call
 second, outcome recorded third. A restart finds the record, not a mystery.
 
 Egress: MCP servers are external by definition, and the **allowlist is the egress control
-for tools**. D14's `egress_policy` is about `ModelProvider` calls and is deliberately not
+for tools**. the `egress_policy` is about `ModelProvider` calls and is deliberately not
 extended here (CLAUDE.md rule 11 says so explicitly). The registry records what each server
 may be reached at; what it may receive is decided by which tools are enabled and which
 phases may call them.
@@ -230,7 +230,7 @@ async def call_tool(
         if record.outcome is None:
             # Dispatched, never completed -- a crash mid-flight. Refuse rather than
             # re-dispatch: re-running is the one thing an effectful call must not do, and
-            # the caller (G4.16's resume path) reconciles by looking the outcome up
+            # the caller (the resume path) reconciles by looking the outcome up
             # externally.
             raise ActionAlreadyDispatchedError(record)
         replayed = McpToolResult(

@@ -324,7 +324,7 @@ async def test_usage_record_token_counts_match_provider_reported_usage(
     assert usage_row.completion_tokens == provider.count_tokens("four words in this reply", "x")
 
 
-# ── C1.4: cached_tokens threaded from the provider into usage_record ────────────────
+# ── cached_tokens threaded from the provider into usage_record ────────────────
 
 
 async def test_cached_tokens_reach_the_usage_record(db_available: None) -> None:

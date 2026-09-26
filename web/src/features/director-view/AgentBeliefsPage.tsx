@@ -3,7 +3,7 @@ import { BackLink } from "@/components/BackLink";
 import { useQuery } from "@tanstack/react-query";
 import { PermissionDeniedError, agentBeliefs } from "./api";
 
-/** E2.11: "what does agent X currently believe" -- the agent's holder set joined with
+/** "what does agent X currently believe" -- the agent's holder set joined with
  * each secret's own disclosure state. */
 export function AgentBeliefsPage() {
   const { workspaceId, agentPrincipalId } = useParams<{

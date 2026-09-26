@@ -1,19 +1,19 @@
-"""ResolutionService (C1.6, plan §9.1/§9.2 (D5)/§12.7, INV-7): the trust chain for
-mechanical results end to end -- request, validate (C1.5), seeded execute, immutable
+"""ResolutionService (INV-7): the trust chain for
+mechanical results end to end -- request, validate, seeded execute, immutable
 record, system-authored fact. The model never reports a result; the database does.
 
 ``resolve()`` is the whole chain as one function, deliberately NOT a class -- matches this
 project's established module-function style (``core.process.awaits``,
 ``core.assembler.visibility``, ...) over a service object with no state to hold.
 
-**Idempotency is layered, not singular.** B1.7's ``_dispatch_tool_idempotent`` already
+**Idempotency is layered, not singular.** the ``_dispatch_tool_idempotent`` already
 guarantees a retried tool call with the same idempotency key never re-runs the wrapped
 handler at all -- so when ``resolve()`` is reached through the real tool loop, a retry
 never even calls it a second time. ``resolve()`` carries its *own*, independent guarantee
 too (an advisory lock + an existing-row check keyed on ``(session_id, event_seq)``,
 returning the already-written record instead of writing a second one) -- defense in
 depth, and the only guarantee that exists at all for a caller that reaches ``resolve()``
-some other way (the future MCP façade, G4.13, won't go through B1.7's tool loop).
+some other way (the future MCP façade, G4.13, won't go through the tool loop).
 """
 
 from __future__ import annotations
@@ -150,7 +150,7 @@ async def resolve(
 
 
 def render_resolution_fact(record: ResolutionRecordRow, *, check_type: str) -> str:
-    """§9.2 step 5: the result enters context as a SYSTEM-AUTHORED FACT, not something
+    """: the result enters context as a SYSTEM-AUTHORED FACT, not something
     the model is asked to compute or restate. ``authoritative="true"`` plus the explicit
     "don't contradict or restate as a different number" instruction is what step 6 (the
     UI rendering from ``ResolutionRecord`` by id, never parsing prose -- INV-7) depends on
@@ -221,7 +221,7 @@ def make_randomizer_handler(
     legal_check_types: frozenset[str] | None,
     actor_fields_resolver: ActorFieldsResolver,
 ) -> ToolHandler:
-    """The real ``randomizer`` tool handler (§9.1's internal-function-calling path),
+    """The real ``randomizer`` tool handler ('s internal-function-calling path),
     wired into a ``core.agents.tools.ToolRegistry`` at the composition root. Trusted
     actor state comes from the injected ``actor_fields_resolver`` -- never from the tool
     call's own arguments, which the model controls and could lie in (that would just move

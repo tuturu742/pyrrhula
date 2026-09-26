@@ -1,4 +1,4 @@
-"""Capability matrix storage (E2.9, plan §8.6/§13.6): `model_capability` turns E2.8's
+"""Capability matrix storage: `model_capability` turns the
 per-provider eval results into an enforced capability surface. Global, not tenant-scoped
 -- like `price_table`, this is the platform's own knowledge of what a (provider, model)
 pair can actually do, not tenant data (`unscoped_session()`, no RLS).
@@ -125,7 +125,7 @@ async def list_capabilities_for_model(provider: str, model: str) -> list[ModelCa
 
 async def is_axis_capable(provider: str, model: str, axis_key: str) -> bool:
     """No stored row at all (never evaluated) is permissive, not fail-closed -- matching
-    D14's own "missing policy => permissive" convention: forcing every never-evaluated
+    its own "missing policy => permissive" convention: forcing every never-evaluated
     model to be blocked would make the system unusable before any eval ever ran. A
     *known* failure (a row that says `capable=False`) is what actually blocks."""
     capability = await get_capability(provider, model, axis_key)

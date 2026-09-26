@@ -14,7 +14,7 @@ import type { components } from "@/lib/api-client/schema";
 type EntryResponse = components["schemas"]["EntryResponse"];
 
 /**
- * D1.1: the authoring hub for one Knowledge Source — draft entries (create/edit with
+ * the authoring hub for one Knowledge Source — draft entries (create/edit with
  * full activation fields), upload/ingestion, version history + publish + diff, and
  * workspace attachments, all without leaving this page (the acceptance criterion's
  * "full authoring loop without touching the API directly").

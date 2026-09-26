@@ -1,7 +1,7 @@
-"""Disclosure decision + event persistence (E2.5/E2.6, plan §12.6). Split out of
+"""Disclosure decision + event persistence. Split out of
 `core.secrets.repo` (INV-1-restricted) because writing one of these rows never reads
 `secret.content` — only ids and already-computed gist-based judgments the caller already
-has in hand. Freely importable: `core.secrets.gate` (E2.5) persists its own output
+has in hand. Freely importable: `core.secrets.gate` persists its own output
 directly through this module, since it cannot import `core.secrets.repo` itself.
 """
 
@@ -33,7 +33,7 @@ async def record_gate_decision(
     latency_ms: int,
     workspace_id: uuid.UUID | None = None,
 ) -> DisclosureDecisionRow:
-    """The gate's rationale (E2.5) — evidence, not the record of what was actually said
+    """The gate's rationale  — evidence, not the record of what was actually said
     (that's `record_disclosure_event`, written separately once a decision is acted on).
     Writes the `DisclosureDecisionRow` and its `usage_record` (`purpose='gate'`) in the
     SAME transaction (CLAUDE.md rule 11) — a gate call that ran and cost money but whose
@@ -113,7 +113,7 @@ async def record_reveal(
     new_holder_principal_ids: Sequence[uuid.UUID],
     message_id: uuid.UUID | None = None,
 ) -> SecretDisclosureEventRow:
-    """E2.6's reveal path: the event and every new holder in ONE transaction (CLAUDE.md
+    """the reveal path: the event and every new holder in ONE transaction (CLAUDE.md
     rule 4's tenant_scope() already gives per-call atomicity; the point here is doing
     *both* writes inside that one call, not two separate ones) -- a forced failure
     partway (e.g. a holder id that doesn't exist) rolls back the event too, so the world

@@ -1,4 +1,4 @@
-"""A1.6: pure unit tests (no DB) for WRRF fusion."""
+"""pure unit tests (no DB) for WRRF fusion."""
 
 from __future__ import annotations
 

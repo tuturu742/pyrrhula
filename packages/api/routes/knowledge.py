@@ -1,4 +1,4 @@
-"""Knowledge authoring endpoints (A1.1): create sources, edit draft entries, publish
+"""Knowledge authoring endpoints: create sources, edit draft entries, publish
 immutable versions, attach sources to workspaces. Talks to
 ``core.knowledge.authoring`` — never ``core.knowledge.repo``, which INV-1 reserves for
 ``core.assembler``/``core.overseer`` (see that module's docstring for why authoring is
@@ -71,7 +71,7 @@ class SourceResponse(BaseModel):
     class_: str = Field(serialization_alias="class")
     visibility: str
     current_version_id: uuid.UUID | None
-    # D1.1: a library-tenant source (D13/A1.10) is visible under every tenant's scoped
+    # a library-tenant source is visible under every tenant's scoped
     # session via the RLS disjunct, but only the library tenant itself can ever write one
     # -- the UI badges it read-only and routes edits through fork-on-edit
     # (upsert_draft_entry_endpoint already does this server-side regardless of what the
@@ -153,7 +153,7 @@ class EntryResponse(BaseModel):
     class_: str = Field(serialization_alias="class")
     scope_key: str
     version_id: uuid.UUID | None
-    # D1.1: the activation fields (plan §6.4) -- EntryRequest already accepted these on
+    # the activation fields -- EntryRequest already accepted these on
     # write; the response was missing them, which made an entry editor unable to
     # round-trip an *existing* entry's activation state without a second, ad hoc read
     # path. Same field set, same defaults, symmetric with EntryRequest.
@@ -169,7 +169,7 @@ class EntryResponse(BaseModel):
     inclusion_group: str | None = None
     position: str = "before_char"
     insertion_order: int = 0
-    # A1.10: set only when this write was redirected into a fork-on-edit copy -- i.e.
+    # set only when this write was redirected into a fork-on-edit copy -- i.e.
     # ``source_id`` in the request path named a library source. The caller's next request
     # should address the fork, not the (untouched, still-library-owned) original.
     forked_source_id: uuid.UUID | None = None
@@ -326,7 +326,7 @@ async def propose_entry_edit_endpoint(
     body: ProposeEntryEditRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> KnowledgeEditProposalResponse:
-    """F3.12: draft-and-approve for a knowledge entry's body -- this endpoint only ever
+    """draft-and-approve for a knowledge entry's body -- this endpoint only ever
     proposes. Approving is the separate ``POST .../apply-edit`` call below, which is what
     actually publishes a new version."""
     agent = await get_agent(ctx.tenant_id, body.agent_id)
@@ -376,7 +376,7 @@ async def apply_entry_edit_endpoint(
 async def list_versions_endpoint(
     source_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> list[VersionResponse]:
-    """D1.1's version history panel -- newest first (``list_versions``'s own ordering)."""
+    """the version history panel -- newest first (``list_versions``'s own ordering)."""
     versions = await list_versions(ctx.tenant_id, source_id)
     return [_version_response(v) for v in versions]
 
@@ -444,7 +444,7 @@ async def list_workspace_attachments_endpoint(
 async def list_source_attachments_endpoint(
     source_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> list[AttachmentResponse]:
-    """D1.1's source detail page: which workspaces is *this* source attached to."""
+    """the source detail page: which workspaces is *this* source attached to."""
     attachments = await list_source_attachments(ctx.tenant_id, source_id)
     return [_attachment_response(a) for a in attachments]
 
@@ -509,7 +509,7 @@ async def get_ingest_job_endpoint(
 async def reembed_stale_endpoint(
     ctx: RequestContext = Depends(get_request_context),
 ) -> IngestJobResponse:
-    """A1.3: sweep every chunk for this tenant whose ``embedding_model`` doesn't match
+    """sweep every chunk for this tenant whose ``embedding_model`` doesn't match
     the currently configured one (an operator changed the embedding model/tag) and
     re-embed it, reusing cached vectors by content_hash where possible."""
     job_id = await get_job_queue().enqueue(

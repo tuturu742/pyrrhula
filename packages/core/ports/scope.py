@@ -1,4 +1,4 @@
-"""``ScopeSet`` (C1.1, plan §7.2, INV-4): the branded return type of
+"""``ScopeSet`` (INV-4): the branded return type of
 ``core.assembler.visibility.scopes_for``. Retrieval call sites type their scope argument
 as ``ScopeSet`` rather than a plain ``frozenset[str]`` so a hand-built set that never went
 through the resolver doesn't typecheck -- "forgetting to resolve visibility first" becomes

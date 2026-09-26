@@ -1,4 +1,4 @@
-"""D1.5: agent + model-profile management -- persona, model profile, role type, provider
+"""agent + model-profile management -- persona, model profile, role type, provider
 credentials. The UI never redisplays a key: ``AgentResponse`` only ever carries
 ``credential_ref`` (an opaque id), never ciphertext or plaintext, and there is no route
 anywhere in this module that reads a stored credential back out.
@@ -115,7 +115,7 @@ async def get_capabilities(
     provider: str, model: str, _ctx: RequestContext = Depends(get_request_context)
 ) -> CapabilitiesResponse:
     """Registered before `/model-profiles/{agent_id}` for the same literal-vs-
-    path-param routing reason D1.2's `/templates` endpoint documents."""
+    path-param routing reason the `/templates` endpoint documents."""
     caps = get_model_provider(provider).capabilities(model)
     return CapabilitiesResponse(
         supports_tools=caps.supports_tools,
@@ -138,7 +138,7 @@ async def get_axis_capabilities(
     pack_id: str,
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[AxisCapabilityResponse]:
-    """E2.9: the UI's "unavailable on this model" state for a behavior-profile axis
+    """the UI's "unavailable on this model" state for a behavior-profile axis
     control -- one row per axis in `pack_id`, with the machine-readable reason code a
     disabled control needs (never just a disabled boolean with no explanation)."""
     axes = await list_axis_definitions(ctx.tenant_id, pack_id)
@@ -401,7 +401,7 @@ async def _run_connection_test(
     provider = get_model_provider(provider_kind)
     model_string = f"{provider_kind}/{model}"
     # A connection-test probe is operator diagnostics, not tenant content -- egress
-    # policy (D14) does not apply; nothing tenant-authored is in the payload.
+    # policy does not apply; nothing tenant-authored is in the payload.
     req = GenerationRequest(
         model=model_string,
         messages=[{"role": "user", "content": "Reply with the single word OK."}],
@@ -677,7 +677,7 @@ async def update_persona_endpoint(
     return _agent_response(agent)
 
 
-# ── behavior profile (E2.9's user surface: the sliders) ──────────────────────────────
+# ── behavior profile (the user surface: the sliders) ──────────────────────────────
 class AxisOut(BaseModel):
     key: str
     label_key: str
@@ -836,7 +836,7 @@ async def propose_persona_edit_endpoint(
     body: ProposePersonaEditRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> PersonaEditProposalResponse:
-    """F3.12: draft-and-approve for an agent's persona -- this endpoint only ever
+    """draft-and-approve for an agent's persona -- this endpoint only ever
     proposes. Approving is the separate ``POST .../apply-persona-edit`` call below."""
     agent = await get_agent(ctx.tenant_id, body.agent_id)
     if agent is None:
@@ -871,7 +871,7 @@ async def apply_persona_edit_endpoint(
 ) -> PersonaResponse:
     """The only write path an *approved* proposal takes -- the human calling this
     endpoint is the approval; there is no separate "are you sure" step server-side, the
-    same discipline E2.2's ``PATCH /secrets/{id}`` accept flow already established."""
+    same discipline the ``PATCH /secrets/{id}`` accept flow already established."""
     try:
         agent = await apply_persona_edit_proposal(
             ctx.tenant_id, persona_id, body.proposed_persona_md, approved_by=ctx.principal_id

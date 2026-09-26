@@ -8,7 +8,7 @@ interface VocabularyState {
 }
 
 /**
- * D1.6: the currently active vocabulary overlay, live-swappable. Not persisted --
+ * the currently active vocabulary overlay, live-swappable. Not persisted --
  * re-resolved per workspace on load via `useWorkspaceVocabulary` (`GET /workspaces/{id}/
  * vocabulary-overlay`), same as any other server-owned data. Every component calling
  * `useLabel()` subscribes to this store, so `setOverlay` (called by

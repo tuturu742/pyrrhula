@@ -1,5 +1,5 @@
 """The knowledge repository — the only way stored Knowledge Source/entry/chunk data is
-read or written (§6.1). **INV-1: only `core.assembler` and `core.overseer` may import
+read or written. **INV-1: only `core.assembler` and `core.overseer` may import
 this module** — enforced by `tests/architecture/test_inv1_import_graph.py`.
 
 A1.1 adds the basic, tenant-scoped "what does a source's current published version
@@ -36,7 +36,7 @@ async def list_published_entries(
     tenant_id: uuid.UUID, version_id: uuid.UUID
 ) -> list[KnowledgeEntry]:
     """Entries as they stood at a specific, immutable published version — the read the
-    assembler (C1.2) will filter by scope_key/class and budget once it exists."""
+    assembler will filter by scope_key/class and budget once it exists."""
     async with tenant_scope(tenant_id) as session:
         rows = (
             await session.execute(
@@ -49,7 +49,7 @@ async def list_published_entries(
 async def get_source_names(
     tenant_id: uuid.UUID, source_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
-    """C1.2's citation envelope (§6.5) needs the human-readable ``source="..."`` label for
+    """the citation envelope needs the human-readable ``source="..."`` label for
     each of a small, already-budgeted set of chunks -- a lookup by id set, not a full scan."""
     if not source_ids:
         return {}
@@ -87,7 +87,7 @@ async def get_entry_by_key_and_version(
     entry_key: str,
     version_id: uuid.UUID | None,
 ) -> KnowledgeEntry | None:
-    """C1.8's citation resolution (§6.5): a citation records its entry's *pinned*
+    """the citation resolution: a citation records its entry's *pinned*
     version_id at generation time (from the manifest entry that produced it), so
     resolving it later means fetching exactly that immutable published row -- never the
     draft, never whatever the source's ``current_version_id`` has since become, even

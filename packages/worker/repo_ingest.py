@@ -1,4 +1,4 @@
-"""Repo-snapshot ingestion job (G4.15) -- registered in `worker.main` under
+"""Repo-snapshot ingestion job -- registered in `worker.main` under
 `"ingest_repo_snapshot"`.
 
 A worker job because a repository is large and the pipeline embeds: the API stores the

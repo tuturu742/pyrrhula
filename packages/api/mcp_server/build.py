@@ -1,4 +1,4 @@
-"""Composition of the MCP surface (G4.13).
+"""Composition of the MCP surface.
 
 Split from `server.py` so the dispatch machinery has no opinion about which tools exist,
 and from the tool modules so none of them knows about the others. The result is that
@@ -25,9 +25,9 @@ from api.permission_service_factory import get_permission_service
 
 
 async def _overseer_query(claims: McpTokenClaims, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Adapts E2.12's handler, which takes a raw token, to the dispatcher's
+    """Adapts the handler, which takes a raw token, to the dispatcher's
     already-verified claims. Re-issuing rather than changing that function's signature
-    keeps E2.12's own tests meaningful and its boundary lint pointed at the same file."""
+    keeps its own tests meaningful and its boundary lint pointed at the same file."""
     token = issue_mcp_token(
         tenant_id=claims.tenant_id,
         workspace_id=claims.workspace_id,

@@ -1,7 +1,7 @@
 """B1.1 acceptance criterion: "Each validation rule has a failing fixture (missing
 visibility, unreachable phase, bad CEL, dangling transition) with a precise, field-
 addressed error." Built by mutating the known-valid MINIMAL_MVP_FLOW fixture one field at
-a time -- each test proves exactly one rule fires, with the exact field path a UI (D1.2)
+a time -- each test proves exactly one rule fires, with the exact field path a UI
 would need to highlight the offending part of the document.
 """
 

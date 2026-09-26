@@ -1,4 +1,4 @@
-"""E2.4's acceptance criteria: banded rendering is total and boundary-exact, no raw axis
+"""the acceptance criteria: banded rendering is total and boundary-exact, no raw axis
 number ever appears in a rendered directive, and the rendered directive block is stable
 across turns for the same profile version (cache-prefix stability, C1.4)."""
 

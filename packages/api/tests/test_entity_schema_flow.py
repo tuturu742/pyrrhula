@@ -1,4 +1,4 @@
-"""F3.11's acceptance criteria over real HTTP: the template gallery, live CEL
+"""the acceptance criteria over real HTTP: the template gallery, live CEL
 validation (never persisting), and creating a schema from a template.
 """
 
@@ -71,7 +71,7 @@ async def test_template_first_flow_produces_renderable_schema(
         assert created["definition"]["fields"] == character_template["definition"]["fields"]
 
         # Immediately renderable -- fetching it back yields the same, valid definition
-        # F3.10's SheetView can render without further edits.
+        # the SheetView can render without further edits.
         get_resp = client.get(f"/entities/schemas/{created['id']}", headers=headers)
         assert get_resp.status_code == 200, get_resp.text
         assert get_resp.json()["definition"]["fields"] == character_template["definition"]["fields"]

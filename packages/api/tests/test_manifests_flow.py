@@ -1,5 +1,5 @@
-"""D1.4: per-message ContextManifest is visible over real HTTP, permission-checked
-exactly as C1.3's get_manifest_for_message specifies -- the exact viewer always may;
+"""per-message ContextManifest is visible over real HTTP, permission-checked
+exactly as the get_manifest_for_message specifies -- the exact viewer always may;
 anyone else needs read_any_manifest (facilitator/overseer) on the workspace.
 """
 
@@ -170,7 +170,7 @@ async def test_a_facilitator_may_read_any_manifest_in_the_workspace(
 async def test_manifest_entries_round_trip_class_bucket_rank_score_why_over_http(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """D1.4's own inspector needs the entry's class/bucket/rank/score/why -- proven via a
+    """its own inspector needs the entry's class/bucket/rank/score/why -- proven via a
     real assemble() output (not a hand-built empty manifest, unlike the other tests
     here), through the actual HTTP response shape."""
     slug = f"manifests-entries-{uuid.uuid4().hex[:8]}"
@@ -194,7 +194,7 @@ async def test_manifest_entries_round_trip_class_bucket_rank_score_why_over_http
     async with tenant_scope(tenant_id) as session:
         viewer = await session.get(Principal, principal_id)
         assert viewer is not None
-        # scopes_for() (C1.1) resolves visibility off workspace *role*, not tenant
+        # scopes_for() resolves visibility off workspace *role*, not tenant
         # membership -- /auth/register only grants a tenant-level "viewer" role, so
         # assemble() would see zero scopes (and thus zero entries) without this.
         session.add(

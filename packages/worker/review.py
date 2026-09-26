@@ -178,7 +178,7 @@ async def _post_remote_review(
     approve: bool,
     body: str,
 ) -> None:
-    """Mirror the verdict onto the remote PR/MR under the REVIEWER'S OWN identity (G4.17).
+    """Mirror the verdict onto the remote PR/MR under the REVIEWER'S OWN identity.
 
     Resolves the reviewer persona's bound git credential (falling back to the repo's
     default) and files a FORMAL review — approve / request_changes — so the host's merge
@@ -236,7 +236,7 @@ async def _automerge_allowed(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> b
 async def _merge_remote(
     tenant_id: uuid.UUID, repo_id: str | None, merger_persona_id: uuid.UUID, pr: dict[str, Any]
 ) -> bool:
-    """Merge the hosted PR under the merger persona's own identity (G4.17). False when the
+    """Merge the hosted PR under the merger persona's own identity. False when the
     repo has no remote, no credential resolves, or the host's gate refuses (e.g. a required
     review has not landed) -- the caller reports that, it is not an error."""
     if not repo_id or not pr.get("html_url"):

@@ -1,4 +1,4 @@
-"""T0.9: list workspaces/agents so the frontend has something real to show."""
+"""list workspaces/agents so the frontend has something real to show."""
 
 from __future__ import annotations
 

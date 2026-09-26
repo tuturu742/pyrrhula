@@ -1,15 +1,15 @@
-"""Three-arm comparison matrix (E2.8, plan §8.6): assembles already-run `Trial` results
+"""Three-arm comparison matrix: assembles already-run `Trial` results
 into a per-(provider, arm) matrix and computes the metric set for each cell. Arm 2
 ("directive + gate deliberation, no exclusion" -- the research brief's proposal) exists
 to falsify the alternative: if arm 3 does not beat arm 2 decisively on
-`unauthorized_disclosure_rate`, §8 is wrong and this is a stop-and-redesign signal, not
+`unauthorized_disclosure_rate` is wrong and this is a stop-and-redesign signal, not
 something to explain away in a report footnote.
 
 Building the matrix from already-run trials (rather than running scenarios itself) keeps
 this module free of live model-calling concerns except the fidelity judge, the one
 metric that inherently needs one -- and even that is behind an injected callback
 (`eval.metrics.fidelity.JudgeFn`), matching this codebase's established "inject the seam
-that needs a live call, defer the real wiring" pattern (E2.5's gate, E2.7's regenerate).
+that needs a live call, defer the real wiring" pattern (the gate, the regenerate).
 """
 
 from __future__ import annotations

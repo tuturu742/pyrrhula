@@ -1,5 +1,5 @@
 """G4.14 acceptance criteria for the moderation layer: the authoring scan reads a secret's
-content whatever its disclosure state, the generation hook follows E2.7's
+content whatever its disclosure state, the generation hook follows the
 regenerate-then-fallback ladder, per-tenant policy produces different outcomes on identical
 text, and a multi-human workspace may satisfy Q6 with moderation instead of an overseer.
 """
@@ -95,7 +95,7 @@ async def test_authoring_scan_reads_secret_content_regardless_of_disclosure_stat
 
     # `undisclosed` is the default, and is exactly the state that would blind a scanner
     # which respected disclosure -- nothing has been said to anyone, so a
-    # disclosure-respecting scan would see nothing. §16.7's point is that this one does not.
+    # disclosure-respecting scan would see nothing. 's point is that this one does not.
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SecretRow, secret.id)
         assert row is not None

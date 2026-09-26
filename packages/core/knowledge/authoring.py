@@ -1,6 +1,6 @@
 """Knowledge authoring: create sources, edit draft entries, publish immutable versions,
-attach sources to workspaces (plan §6.1). This is the module ``api/routes/knowledge.py``
-imports — never ``core.knowledge.repo``, which INV-1 (T0.5's import-graph lint) reserves
+attach sources to workspaces. This is the module ``api/routes/knowledge.py``
+imports — never ``core.knowledge.repo``, which INV-1 (the import-graph lint) reserves
 for ``core.assembler``/``core.overseer``. Authoring reads/writes are a human editing their
 own tenant's content through the UI, not stored text reaching a model; INV-1 protects the
 latter path, not the former, so this module talks to the tables directly rather than
@@ -209,7 +209,7 @@ async def list_version_entries(tenant_id: uuid.UUID, version_id: uuid.UUID) -> l
 async def list_versions(
     tenant_id: uuid.UUID, knowledge_source_id: uuid.UUID
 ) -> list[KnowledgeSourceVersion]:
-    """D1.1's version history panel: every published version of a source, newest first.
+    """the version history panel: every published version of a source, newest first.
     ``knowledge_source_version`` has no companion "list all" read anywhere in A1.8 --
     that task's own endpoints only ever needed one version at a time (a specific id, or
     the pair a diff compares) -- so this is new, not a duplicate of something else."""
@@ -258,7 +258,7 @@ async def publish_version(
     updated later, since the app role has no UPDATE grant on ``knowledge_source_version``
     (CLAUDE.md rule 5).
 
-    ``parent_version_override`` (A1.8): normally a new version's parent is whatever this
+    ``parent_version_override`` : normally a new version's parent is whatever this
     source's own ``current_version_id`` already was — but a freshly forked source has no
     prior version of its own yet, and its first publish needs to record provenance
     pointing at the *origin* source's version it was forked from instead. See
@@ -395,7 +395,7 @@ async def list_workspace_attachments(
 async def list_source_attachments(
     tenant_id: uuid.UUID, knowledge_source_id: uuid.UUID
 ) -> list[WorkspaceKnowledgeAttachment]:
-    """The other half of ``list_workspace_attachments``' query direction -- D1.1's source
+    """The other half of ``list_workspace_attachments``' query direction -- the source
     detail page needs "which workspaces is *this source* attached to," not "which sources
     does *this workspace* have," and neither read is a filtered view of the other's
     result set (both are real, independent queries against the same join table)."""

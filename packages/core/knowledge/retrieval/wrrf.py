@@ -1,11 +1,11 @@
-"""Weighted Reciprocal Rank Fusion (plan §6.2 D2, §6.3 step 4, A1.6): fuses per-class
+"""Weighted Reciprocal Rank Fusion: fuses per-class
 dense/sparse/keyed candidate lists on **ranks**, never scores. This is the entire point of
 D2 — sparse (BM25-ish) and dense (cosine) scores live in different, incommensurable
 distributions, and multiplying either by a class-priority weight produces a number with no
 interpretation. RRF sidesteps the normalisation problem by never looking at a raw score at
 all, only at each candidate's rank position within its own originating list.
 
-Fuse-before-rerank (this module runs before A1.7's reranker, not after) is the
+Fuse-before-rerank (this module runs before the reranker, not after) is the
 empirically better order per the plan's citation of TREC iKAT 2025 and the standard
 two-stage cascade pattern.
 """

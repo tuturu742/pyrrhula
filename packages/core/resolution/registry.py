@@ -1,5 +1,5 @@
-"""``ToolDefinition`` (C1.6, plan §9.1): register once, expose twice -- the same registry
-entry backs both internal function-calling (B1.7's tool loop, today) and the MCP façade
+"""``ToolDefinition`` : register once, expose twice -- the same registry
+entry backs both internal function-calling (the tool loop, today) and the MCP façade
 (G4.13, later); this table is the *declarative metadata* half of that, not the dispatch
 mechanism itself. Actual dispatch stays exactly where B1.7 put it: a
 ``core.agents.tools.ToolRegistry`` mapping a tool key to a real Python handler, wired at
@@ -142,7 +142,7 @@ async def ensure_tool_definition(
 
 
 async def list_tool_definitions(tenant_id: uuid.UUID) -> list[ToolDefinitionRow]:
-    """Every registered tool definition for a tenant, by key. G4.13's MCP surface is
+    """Every registered tool definition for a tenant, by key. the MCP surface is
     registry-driven -- a pack that registers a new deterministic tool gets it exposed
     without a code change -- and that requires a way to ask what is registered, which
     C1.6 never needed (it only ever resolved one tool by key at a time)."""

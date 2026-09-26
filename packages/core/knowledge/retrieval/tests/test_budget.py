@@ -1,4 +1,4 @@
-"""A1.6: pure unit tests (no DB) for budget split and bucket fill."""
+"""pure unit tests (no DB) for budget split and bucket fill."""
 
 from __future__ import annotations
 

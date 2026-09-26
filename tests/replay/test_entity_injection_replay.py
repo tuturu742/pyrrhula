@@ -95,7 +95,7 @@ async def test_entity_injection_replays_identically_from_pinned_versions(
     assert replayed.content_hash == manifest_row.rendered_hash
     assert replayed.entity_versions == original.entity_versions
 
-    # Turn 1: mutate the entity (a real version bump through F3.5's mutation service),
+    # Turn 1: mutate the entity (a real version bump through the mutation service),
     # then assemble+replay again -- the hash changes (real state changed) but each
     # turn's own manifest+immediate-replay still matches, and entity_versions reflects
     # the new version.

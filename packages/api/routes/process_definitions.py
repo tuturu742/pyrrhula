@@ -1,6 +1,6 @@
-"""ProcessDefinition authoring endpoints (B1.1): create (= publish a new immutable
+"""ProcessDefinition authoring endpoints: create (= publish a new immutable
 version), list, get, and a dry-run ``/validate`` that never persists anything -- the
-live-feedback path D1.2's editor calls on every keystroke/save-attempt.
+live-feedback path the editor calls on every keystroke/save-attempt.
 """
 
 from __future__ import annotations
@@ -126,8 +126,8 @@ class TemplateResponse(BaseModel):
 # against definition_id.
 @router.get("/templates")
 async def list_templates_endpoint() -> list[TemplateResponse]:
-    """D1.2's template gallery: "never from an empty canvas" (§16.5 discipline 2). Serves
-    B1.1's own fixtures rather than duplicating this JSON in the frontend, so the gallery
+    """the template gallery: "never from an empty canvas" ( discipline 2). Serves
+    its own fixtures rather than duplicating this JSON in the frontend, so the gallery
     can never drift from what the interpreter's own golden tests exercise."""
     return [
         TemplateResponse(

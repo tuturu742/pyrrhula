@@ -1,4 +1,4 @@
-"""E2.12's own acceptance-criteria tests for the `overseer.query` MCP tool: it must write
+"""its own acceptance-criteria tests for the `overseer.query` MCP tool: it must write
 the same audit-row shape as the HTTP surface (same underlying `OverseerService.inspect()`
 call, so one audit path, not two that could drift), and a token whose principal lacks
 `secret:inspect` must be rejected before any read.

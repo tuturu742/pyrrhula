@@ -15,8 +15,8 @@ interface PhaseTransitionPayload {
 }
 
 /**
- * D1.3: current phase + session status, folded live from `phase_transition` events on
- * top of the session's snapshot at mount (`GET /sessions/{id}`, D1.3's own addition --
+ * current phase + session status, folded live from `phase_transition` events on
+ * top of the session's snapshot at mount (`GET /sessions/{id}`, its own addition --
  * the SSE stream only ever replays/streams *events*, it never hands a caller the
  * already-current state on connect). Pause/resume act on the same snapshot.
  */

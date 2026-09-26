@@ -9,8 +9,8 @@ interface EditProposalPanelProps {
 }
 
 /**
- * F3.12: chat-based editing for one knowledge entry -- draft-and-approve, the same
- * discipline E2.2's secret `DraftAssist` established (propose, never autopilot).
+ * chat-based editing for one knowledge entry -- draft-and-approve, the same
+ * discipline the secret `DraftAssist` established (propose, never autopilot).
  * Declining is simply never calling apply -- the version DAG stays untouched, so there's
  * no "cancel" request to make, just local state to clear.
  */

@@ -1,5 +1,5 @@
 """Shared seeding helper for dense/sparse retrieval tests: inserts a published entry +
-chunk directly (raw SQL, mirroring how A1.2's ingestion pipeline actually writes
+chunk directly (raw SQL, mirroring how the ingestion pipeline actually writes
 chunks) with fully controllable embedding/text/scope/class, rather than going through
 the real ingestion+embedding pipeline -- these tests are about the *retrieval query*,
 not ingestion, and need to control exactly which vector or text lands where.

@@ -1,4 +1,4 @@
-"""Worker jobs for delegated coding work (D15).
+"""Worker jobs for delegated coding work.
 
 ``handle_delegate_work_item`` runs the full ``core.actions.delegation.delegate_work_item`` path
 (authorise -> assemble brief -> claim -> reconcile-not-re-execute -> dispatch over the git MCP

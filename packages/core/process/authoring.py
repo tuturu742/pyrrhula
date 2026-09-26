@@ -1,7 +1,7 @@
-"""ProcessDefinition authoring (B1.1): create (= publish) a new immutable version, list,
+"""ProcessDefinition authoring: create (= publish) a new immutable version, list,
 and fetch. A definition that fails validation is **never persisted** -- ``create_definition``
 raises before touching the database, so every row that does exist in ``process_definition``
-is one the interpreter (B1.2) can trust by construction; there is no draft/invalid state to
+is one the interpreter can trust by construction; there is no draft/invalid state to
 accidentally read. Dry-run validation (for an editor giving live feedback, D1.2) is
 ``validate_document``, which never persists anything at all.
 """
@@ -89,7 +89,7 @@ async def list_definitions(
     include_archived: bool = False,
 ) -> list[ProcessDefinitionRow]:
     """All versions, ordered by key then version -- a caller wanting "the latest" for a
-    given key picks the highest-version row for it; B1.2's interpreter always resolves a
+    given key picks the highest-version row for it; the interpreter always resolves a
     specific pinned (id, version), never "latest", so no such helper is needed here."""
     async with tenant_scope(tenant_id) as session:
         stmt = select(ProcessDefinitionRow).where(ProcessDefinitionRow.tenant_id == tenant_id)

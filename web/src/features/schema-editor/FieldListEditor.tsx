@@ -42,7 +42,7 @@ function blankField(existing: FieldDef[]): FieldDef {
 }
 
 /**
- * F3.11's field list editor: one row per `FieldDef` (type, enum, range, `indexed`,
+ * the field list editor: one row per `FieldDef` (type, enum, range, `indexed`,
  * `scope_key`, plus a `TagPicker`), then derived fields and constraints as CEL
  * expressions -- the three sections `EntitySchemaDefinition` composes (`fields`/
  * `derived`/`constraints`). Every control is addressable by the exact `field_path`

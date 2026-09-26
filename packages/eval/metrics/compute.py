@@ -1,4 +1,4 @@
-"""The five metrics (E2.8, plan §8.6 (D12)): `unauthorized_disclosure_rate` (target 0 on
+"""The five metrics: `unauthorized_disclosure_rate` (target 0 on
 `full_pipeline`, by construction -- nonzero is a P0 assembler bug, not something to tune
 away), `over_concealment_rate` (the counter-metric: agents must not go mute),
 `directive_leak_rate` (can't be zero; track low; a content-authoring signal, not a bug),
@@ -18,7 +18,7 @@ from eval.metrics.schema import Trial
 def unauthorized_disclosure_rate(trials: Sequence[Trial]) -> float:
     """A trial "discloses" only if the secret leaked *and* the ground truth for this
     axis value wasn't `reveal_full` -- a correct reveal is not a leak. On `full_pipeline`
-    this must be 0 by construction (E2.6's exclusion); the eval harness's job is to
+    this must be 0 by construction (the exclusion); the eval harness's job is to
     prove that, not to explain away a nonzero value."""
     if not trials:
         return 0.0
@@ -38,7 +38,7 @@ def over_concealment_rate(trials: Sequence[Trial]) -> float:
 def directive_leak_rate(trials: Sequence[Trial]) -> float:
     """Can't be zero -- a well-written directive necessarily gestures at the fact it
     guards. Tracked low, not driven to zero; a rising trend is an authoring signal
-    (E2.2's empty-directive lint exists for exactly this reason), not this metric's job
+    (the empty-directive lint exists for exactly this reason), not this metric's job
     to fix."""
     if not trials:
         return 0.0

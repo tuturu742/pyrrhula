@@ -1,8 +1,8 @@
-"""F3.12: chat-based editing for knowledge entries (req 22, plan §15.6) -- a chat turn
+"""chat-based editing for knowledge entries (req 22) -- a chat turn
 produces a **structured edit proposal** (a full replacement body for one entry, never a
 freeform overwrite of the source), diffed against the current draft, and applied only on
 human approval as a newly published version carrying an ``ai_assisted`` provenance
-marker. Generalizes E2.2's ``core.secrets.drafting`` draft-and-approve pattern: the model
+marker. Generalizes the ``core.secrets.drafting`` draft-and-approve pattern: the model
 proposes, this module never writes content on its own, and the plaintext-leak guardrail
 (``core.secrets.drafting.contains_plaintext_leak``) is reused rather than reimplemented
 for the "proposals touching secrets" guardrail subtask.

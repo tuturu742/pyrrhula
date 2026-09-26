@@ -3,12 +3,12 @@ import { useLabel } from "@/lib/vocabulary/useLabel";
 export interface AttributeBlockProps {
   labelKey: string;
   value: number | string;
-  /** Server-computed (F3.1's `modifier_source` contract, never evaluated client-side) --
+  /** Server-computed (the `modifier_source` contract, never evaluated client-side) --
    * `null` for an `attribute` field that isn't also tagged `modifier_source`. */
   modifier: number | null;
 }
 
-/** F3.4's `attribute`(+`modifier_source`) tags -- a strength score and its computed
+/** the `attribute`(+`modifier_source`) tags -- a strength score and its computed
  * modifier, or any other domain's "attribute with a derived adjustment", share this
  * one block. */
 export function AttributeBlock({ labelKey, value, modifier }: AttributeBlockProps) {

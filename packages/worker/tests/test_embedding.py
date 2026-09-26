@@ -1,4 +1,4 @@
-"""A1.3: the worker-side embedding job handlers, including the D14 egress check reading
+"""the worker-side embedding job handlers, including the D14 egress check reading
 a real tenant's ``settings.egress_policy`` -- exercised against a live Postgres.
 """
 
@@ -44,7 +44,7 @@ async def _setup_with_ingested_chunk(slug_prefix: str) -> tuple[uuid.UUID, uuid.
 def _use_stub_embedding_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """Route the worker's factory to the fast, offline stub model for these tests --
     they exercise job-handler wiring and egress policy, not a real model. Dimension stays
-    at the default 1024: knowledge_chunk.embedding is a fixed vector(1024) column (A1.1),
+    at the default 1024: knowledge_chunk.embedding is a fixed vector(1024) column,
     so the stub must match it here (unlike the adapter's own isolated unit tests, which
     never touch that table)."""
     monkeypatch.setattr(embedding_provider_factory.get_settings(), "embedding_model", "local/stub")

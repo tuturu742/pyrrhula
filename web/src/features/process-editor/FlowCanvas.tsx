@@ -12,10 +12,10 @@ import {
 import "@xyflow/react/dist/style.css";
 
 /**
- * The generic React Flow shell (D1.2): background/controls/minimap chrome, node/edge
+ * The generic React Flow shell: background/controls/minimap chrome, node/edge
  * rendering, drag-position tracking, click-to-select -- everything about "a graph of
  * labelled nodes with directed, labelled edges" that has nothing to do with process
- * phases specifically. `ProcessCanvas` (phases/gates) and `FsmEditor` (F3.11's states/
+ * phases specifically. `ProcessCanvas` (phases/gates) and `FsmEditor` (the states/
  * transitions) both render *through* this one module rather than each standing up their
  * own `<ReactFlow>` tree, so the two graph editors this codebase has stay visually and
  * behaviourally identical by construction, not by convention.

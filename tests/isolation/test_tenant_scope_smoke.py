@@ -1,4 +1,4 @@
-"""tenant_scope() smoke test (T0.2). See conftest.py for what T0.4 adds on top: the full
+"""tenant_scope() smoke test. See conftest.py for what T0.4 adds on top: the full
 per-table matrix, the pooler-leak test, and the library-tenant matrix.
 """
 

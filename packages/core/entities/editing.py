@@ -1,7 +1,7 @@
-"""F3.12: chat-based editing for EntitySchemas (req 22, plan §15.6) -- a chat turn
+"""chat-based editing for EntitySchemas (req 22) -- a chat turn
 proposes a full replacement ``EntitySchemaDefinition``, diffed at the field/derived/
 constraint/state-machine-key grain against the current latest version, and validated
-through the *exact same* ``validate_schema_definition`` pass F3.1's manual save path
+through the *exact same* ``validate_schema_definition`` pass the manual save path
 runs -- **before** it is ever shown for approval (this task's own "a proposal that fails
 schema validation is never presented" acceptance criterion). Approval writes a new
 immutable schema version (``core.entities.repo.save_schema``) attributed to the human
@@ -95,7 +95,7 @@ async def propose_schema_edit(
     provider: ModelProvider,
 ) -> SchemaEditProposal:
     """Calls the model, meters the call (``usage_record``, ``purpose='rewrite'``)
-    regardless of outcome, then runs the proposed definition through F3.1's own
+    regardless of outcome, then runs the proposed definition through its own
     ``validate_schema_definition`` -- a CEL compile failure, dangling FSM transition, or
     unknown tag makes ``valid=False`` with the exact same field-anchored issues the
     manual schema editor would show, before any diff is ever presented."""

@@ -375,5 +375,5 @@ async def test_card_injection_content_quarantined(
     assert by_key["the-ledger"] is True
     assert by_key["the-vault-door"] is False, "the scan quarantined an innocent entry"
     # Chunks carry the flag too -- retrieval reads chunks, so an entry-only flag would be
-    # a quarantine in name only (the same reasoning G4.6's importer follows).
+    # a quarantine in name only (the same reasoning the importer follows).
     assert {row[0]: row[1] for row in chunk_flags}.get("the-ledger") is True

@@ -1,9 +1,9 @@
-"""Fixture ProcessDefinitions (B1.1 subtask): the plan's §5.2 "Standard Session Flow"
+"""Fixture ProcessDefinitions (B1.1 subtask):  "Standard Session Flow"
 example, translated into this module's concrete JSON shape (see ``schema.py``'s docstring
 for why -- the plan's own YAML snippet uses informal ``-> target`` shorthand that isn't
 valid, re-parseable syntax), and a minimal 3-phase MVP definition using core-neutral keys
 (RPG labels arrive only through ``vocabulary_overlay`` label resolution, never hardcoded
-here) that B1.2's golden interpreter test runs end to end.
+here) that the golden interpreter test runs end to end.
 
 Both are plain ``dict``s (not ``ProcessDefinitionDSL`` instances) so a caller exercises the
 exact same ``validate_raw()`` entrypoint real authored JSON would go through.
@@ -103,7 +103,7 @@ STANDARD_SESSION_FLOW: dict[str, object] = {
             "on_complete": "open_discussion",
         },
     },
-    # G4.3: definition-level pacing. The feedback loop's await declares no reminder of its
+    # definition-level pacing. The feedback loop's await declares no reminder of its
     # own, so it inherits this one -- 24h into a 72h window, which is the shape the task's
     # own example names ("each actor has 48h, reminder at 24h") applied to this flow.
     "pacing": {"reminder_at": "24h"},

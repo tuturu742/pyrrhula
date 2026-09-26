@@ -1,4 +1,4 @@
-"""Redis pub/sub fan-out for session streams (T0.8). One channel per session:
+"""Redis pub/sub fan-out for session streams. One channel per session:
 ``session:{id}``. Two message shapes on the same channel: ephemeral ``chunk`` (live
 token deltas — only ever delivered live, never durable, never resumable) and durable
 ``event`` (mirrors a ``session_event`` row — delivered live here *and* replayable from

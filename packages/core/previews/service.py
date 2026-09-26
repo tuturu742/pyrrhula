@@ -29,7 +29,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 _PATH_PRELUDE = (
     '_pyr_path="$PATH"; '
-    'if [ -r /etc/profile ]; then . /etc/profile >/dev/null 2>&1 || true; fi; '
+    'if [ -r /etc/profile ]; then. /etc/profile >/dev/null 2>&1 || true; fi; '
     'PATH="$_pyr_path${PATH:+:$PATH}"; export PATH; unset _pyr_path; '
 )
 

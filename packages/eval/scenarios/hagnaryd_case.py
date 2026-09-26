@@ -12,14 +12,14 @@ oracle only.
 Design mapping onto Pyrrhula primitives -- the point of the case machinery being that a
 new case is content, not code:
 
-- public setting   -> a 'lore' knowledge handbook every agent retrieves.
+- public setting -> a 'lore' knowledge handbook every agent retrieves.
 - evidence dossier -> carried in the investigator's own brief (investigator-only by
                       construction: suspects have no path to it).
 - character briefs -> a persona (public background as persona_md) plus that character's
                       private truths as SECRETS they hold, so the disclosure gate governs
                       what surfaces under questioning rather than the prompt asking nicely.
-- dispositions     -> axis_values (malice / secret_disclosure_propensity / deception).
-- the lab menu     -> the `evidence_check` tool, answered from REFEREE_LAB_RESULTS.
+- dispositions -> axis_values (malice / secret_disclosure_propensity / deception).
+- the lab menu -> the `evidence_check` tool, answered from REFEREE_LAB_RESULTS.
 
 What makes this case a good showcase specifically: two people planned to kill Ingeborg
 that evening and only one of them did it. The dossier convicts nobody on its own -- six

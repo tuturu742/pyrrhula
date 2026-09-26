@@ -11,7 +11,7 @@ interface AttachmentsPanelProps {
 }
 
 /**
- * D1.1: attach this source to a workspace with its own scope/priority/pin-vs-follow --
+ * attach this source to a workspace with its own scope/priority/pin-vs-follow --
  * the acceptance criterion's "attach to a second workspace with a different priority"
  * without ever leaving this page.
  */

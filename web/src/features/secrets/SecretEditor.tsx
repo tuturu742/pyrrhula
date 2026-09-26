@@ -10,7 +10,7 @@ type SecretResponse = components["schemas"]["SecretResponse"];
 const SUBJECT_KINDS = ["entity", "agent", "workspace", "knowledge_entry"] as const;
 
 /**
- * E2.2: the editor for the four faces of a secret (`content`/`gist`/`hint_text`/
+ * the editor for the four faces of a secret (`content`/`gist`/`hint_text`/
  * `behavioral_directive`), subject + scope pickers, holder management, and AI-assisted
  * drafting of the directive/hint (draft-and-approve, never autopilot -- the proposal
  * only ever writes on explicit "Accept & save", a separate `PATCH` call this component
@@ -20,7 +20,7 @@ const SUBJECT_KINDS = ["entity", "agent", "workspace", "knowledge_entry"] as con
  * Content/hint/directive are only ever populated by the backend for a principal passing
  * `secret:author` -- a non-author viewing this component would see blank fields with no
  * way to tell "empty" from "hidden from me", which is a real gap for a shared UI, but
- * this editor is reachable only from the authoring surface (E2.2's stated scope), never
+ * this editor is reachable only from the authoring surface (the stated scope), never
  * offered to a non-author.
  */
 export function SecretEditor({

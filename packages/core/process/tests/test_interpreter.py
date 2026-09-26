@@ -41,10 +41,10 @@ async def _setup(slug_prefix: str) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uui
 
 
 class _ScriptedScheduler:
-    """Test double for B1.3's real scheduler: gives each phase visit exactly
+    """Test double for the real scheduler: gives each phase visit exactly
     ``max(actor.max_turns or 1)`` turns, resetting the moment the interpreter has moved
     to a different phase key -- so a cyclic flow's repeat visits each get their own
-    allocation, matching what a real per-visit cursor (B1.3) would do."""
+    allocation, matching what a real per-visit cursor would do."""
 
     def __init__(self, principal_id: uuid.UUID) -> None:
         self._principal_id = principal_id
@@ -291,7 +291,7 @@ async def test_interpreter_fault_pauses_the_session_with_a_diagnostic_event(
     assert "not_a_declared_phase" in events[-1].payload["message"]
 
 
-# ── resume without duplicate side effects (T0.7 idempotency, plan §5.6) ────────────────
+# ── resume without duplicate side effects (T0.7 idempotency) ────────────────
 
 
 async def test_resumed_turn_with_the_same_peeked_event_seq_does_not_reexecute_the_side_effect(
@@ -387,7 +387,7 @@ async def test_run_actor_turn_resumes_after_the_side_effect_but_before_the_final
     assert row.next_event_seq == 1
 
 
-# ── B1.8: HumanTurnPendingError / already_persisted / on_event ─────────────────────────
+# ── HumanTurnPendingError / already_persisted / on_event ─────────────────────────
 
 
 async def test_human_turn_pending_error_yields_awaiting_human_without_pausing(

@@ -1,5 +1,5 @@
 """v1 ModerationProvider: allow everything. Per-tenant policy and real scanning
-(authoring-time and generation-time hooks, §16.7) land at G4.14."""
+(authoring-time and generation-time hooks) land at G4.14."""
 
 from __future__ import annotations
 

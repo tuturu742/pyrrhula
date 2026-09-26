@@ -5,7 +5,7 @@ import { AuditIndicator } from "./AuditIndicator";
 import { useDirectorViewAccess } from "./useDirectorViewAccess";
 
 /**
- * E2.11: the shared shell for every director-view route. `AuditIndicator` renders here,
+ * the shared shell for every director-view route. `AuditIndicator` renders here,
  * unconditionally, so no route nested under this layout can ever mount without it. The
  * access check gates the `Outlet` itself -- each individual page's own query is *also*
  * permission-checked server-side and renders its own denial message, so a stale or

@@ -6,7 +6,7 @@ interface DirectorViewState {
 }
 
 /**
- * E2.11: backs the persistent "inspections are logged" indicator. Counts this browser
+ * backs the persistent "inspections are logged" indicator. Counts this browser
  * session's own plaintext expansions (`OverseerService.inspect()` calls) -- deliberately
  * not persisted across reloads, since it's a running total for the current visit to the
  * feature, not a lifetime count (the durable record of every inspection is `audit_log`

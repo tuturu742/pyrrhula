@@ -1,4 +1,4 @@
-"""The disclosure gate (E2.5, plan §8.4 (D4), §8.5, §12.6): the structured pre-decision
+"""The disclosure gate: the structured pre-decision
 that chooses conceal/hint/reveal_full per secret before generation. Sees gists only,
 never `secret.content` -- a security boundary, not an optimisation, since it's what lets
 this run on a small/cheap/possibly-cloud model under D14 without the secret leaving the
@@ -78,7 +78,7 @@ class _DecisionSchema(BaseModel):
 
 
 class GateResponseSchema(BaseModel):
-    """The strict JSON schema the gate call must produce (§8.5) -- on a local model this
+    """The strict JSON schema the gate call must produce -- on a local model this
     is what grammar-constrained decoding (Ollama JSON-schema format / GBNF) targets;
     Q5's all-modes decision makes that mandatory, not a nice-to-have, though the actual
     grammar wiring is an adapter-level concern (`core.ports.model_provider
@@ -105,7 +105,7 @@ def compute_fired_secrets(
     phase_flags: frozenset[str],
     tau: float,
 ) -> tuple[CandidateSecret, ...]:
-    """§8.5's prefilter, no model call: fires per-candidate iff `"mechanical" not in
+    """'s prefilter, no model call: fires per-candidate iff `"mechanical" not in
     phase_flags` and `cos_sim(recent_turns_embedding, candidate.gist_embedding) > tau`.
     `candidates` is assumed already filtered to "agent's held secrets ∩ active scope" by
     the caller -- that intersection needs `core.secrets.repo`/holder reads this module
@@ -144,7 +144,7 @@ def _build_gate_request(
 ) -> GenerationRequest:
     """The request payload contains `{secret_id, gist}` pairs and nothing else about each
     secret -- structurally, since `CandidateSecret` has no `content` field for this
-    function to even reach for. `purpose='gate'` (D14): may be cloud-permitted even in
+    function to even reach for. `purpose='gate'` : may be cloud-permitted even in
     hybrid mode because it sees gists only, never plaintext."""
     system = (
         "You are the disclosure gate for a narrative agent. For each listed secret "

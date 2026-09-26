@@ -1,9 +1,9 @@
-"""Pooler-leak test (T0.4): borrow a connection, set the tenant GUC, return it to the
+"""Pooler-leak test: borrow a connection, set the tenant GUC, return it to the
 pool, borrow it again, and assert the GUC did not survive.
 
 Uses a dedicated single-connection engine (``pool_size=1, max_overflow=0``) so the second
 ``engine.connect()`` is *guaranteed* to reuse the exact same physical connection as the
-first — this is what actually reproduces the transaction-pooling scenario T0.2's
+first — this is what actually reproduces the transaction-pooling scenario the
 ``tenant_scope()`` docstring warns about, rather than hoping the default pool happens to
 reuse a connection.
 """
