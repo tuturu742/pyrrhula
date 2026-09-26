@@ -434,7 +434,7 @@ async def test_delegation_usage_metered_in_transaction(
     assert len(delegation_rows) == 1
     assert delegation_rows[0].agent_id == profile_id
     assert delegation_rows[0].workspace_id == workspace_id
-    # v1.2's taxonomy addition, and no other value invented alongside it.
+    # The delegation purpose, and no other value invented alongside it.
     assert {r.purpose for r in rows} <= {
         "generation",
         "gate",

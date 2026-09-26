@@ -31,7 +31,7 @@ absent.
 context only inside the injection envelope; they never influence tool authorisation,
 and the FSM transition is driven by the outcome *record*, never by what the summary claims.
 
-Metering: one `usage_record` with ``purpose='delegation'`` (the v1.2 taxonomy addition),
+Metering: one `usage_record` with ``purpose='delegation'``,
 written in the action's completion transaction (rule 11). The MCP **allowlist** is the
 egress control here; the egress policy is not extended -- its scope is `ModelProvider` calls, and
 widening it would blur the one distinction that makes both controls legible.

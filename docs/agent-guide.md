@@ -90,8 +90,8 @@ contradicting narration gets a **badge, not a rewrite**.
 | INV-5 | Overseer secret reads write an audit row in the same transaction | single read path in `OverseerService` |
 | INV-6 | Audit log append-only, tamper-evident | no UPDATE/DELETE grant + `prev_hash` chain + verifier job |
 | INV-7 | Mechanical results shown to users come from `ResolutionRecord`, never model prose | UI reads record by id |
-| INV-8 | Concealed secret plaintext absent from generation context | assembler step 6 + leak-eval harness |
-| INV-9 | Every shipped pack (`rpg`, `enterprise`, `swdev`) loads with zero core changes | all-packs CI smoke test (reworded in v1.2 from "two packs" — generalised, not changed) |
+| INV-8 | Concealed secret plaintext absent from generation context | assembler exclusion step + leak-eval harness |
+| INV-9 | Every shipped pack (`rpg`, `enterprise`, `swdev`) loads with zero core changes | all-packs CI smoke test |
 | INV-10 | Any turn replays identically from its `ContextManifest` + `ResolutionRecord`s | replay test |
 
 ## 4. Glossary (core term → RPG / enterprise / swdev overlay)
@@ -115,8 +115,8 @@ Core code and schemas use the left column and emit `label_key`s; UIs resolve lab
 | Context Manifest / Checkpoint / Report / Pack | What the Arbiter Knew / Save Point / Recap / Game System Pack | Evidence Basis / Snapshot / Minutes / Domain Pack | Briefing Basis / Snapshot / Status Report / Practice Pack |
 
 **Forbidden words in core code, schemas, table names, and API paths:** `game_master`, `gm`,
-`dice`, `campaign`, `character`, `player`, `spell`, `npc`, and any other RPG term — plus,
-since v1.2, swdev terms: `sprint`, `standup`, `engineer`, `pull_request`. They exist only
+`dice`, `campaign`, `character`, `player`, `spell`, `npc`, and any other RPG term — plus
+swdev terms: `sprint`, `standup`, `engineer`, `pull_request`. They exist only
 in workflow-plugin content (`.plugins/`, pinned in `deploy/plugins.json`) and overlay label
 data. ("Sprint Planning"/"Standup"/"Triage" are process-template names shipped by the swdev
 pack; `pull_request` and `build` are pack entity *schemas*, not core nouns. "Embargoed

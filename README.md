@@ -14,8 +14,8 @@ free-form chat.
 The first target use case is **AI-managed tabletop RPG campaigns**. The core engine is
 domain-neutral, so two further use cases run on the same engine with different vocabulary
 overlays and content packs: **structured enterprise multi-agent workflows** (multi-perspective
-strategy discussions and planning simulations, sequential review/approval loops) and — since
-plan v1.2  — **multi-agent software development**, where a facilitator agent acts as an
+strategy discussions and planning simulations, sequential review/approval loops) and
+**multi-agent software development**, where a facilitator agent acts as an
 engineering manager proposing tasks and participant agents act as engineers on a shared
 repository, with implementation delegated to external coding agents over MCP. The stated end
 state of the third use case is dogfooding: Pyrrhula's own backlog worked by a team of agents
