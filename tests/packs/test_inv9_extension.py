@@ -1,9 +1,9 @@
-"""extends the matrix to make the v1.2 INV-9 wording ("every shipped pack")
-operational for the swdev pack specifically -- the delegation-await interface G4.16 must
-later satisfy (suspend/resume, surviving a checkpoint/restore across the suspension), and
-the rendering genericity claim F3.13 makes (a `work_item` needs zero new widgets).
+"""Extends the pack matrix to make the INV-9 wording ("every shipped pack") operational
+for the swdev pack specifically -- the delegation-await interface (suspend/resume,
+surviving a checkpoint/restore across the suspension), and the rendering genericity
+claim that a `work_item` needs zero new widgets.
 
-``test_all_shipped_packs_boot_and_run_smoke_sessions`` (F3.9, ``test_pack_matrix.py``)
+``test_all_shipped_packs_boot_and_run_smoke_sessions`` (``test_pack_matrix.py``)
 already covers "all three packs boot and complete smoke sessions" generically -- adding
 `packs/swdev/` made it parametrize a third case with no harness changes, which is this
 task's own first acceptance criterion. The two tests below are the ones that needed new,
@@ -62,7 +62,7 @@ async def test_every_swdev_flow_can_run_without_a_human_at_the_keyboard(
     shipped pack" wording exists to catch, and no assertion here was looking at it.
 
     This replaces a test that pinned `implement`'s `await` as a delegation placeholder.
-    Delegation is real now (G4.16 landed as the delegate endpoint and its worker jobs), so
+    Delegation is real (the delegate endpoint and its worker jobs), so
     the placeholder was obsolete *and* was a second reason that phase parked. The
     suspend/resume machinery it exercised is its own, covered by `test_awaits.py`.
     """
@@ -150,8 +150,8 @@ async def test_swdev_pack_adds_zero_widgets_to_the_registry(
     pack_tenant: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
 ) -> None:
     """The tag->widget registry is byte-identical before and after swdev pack load, and
-    every tagged field on its three schemas resolves through a widget id F3.10 already
-    shipped for the RPG/default packs -- the genericity claim F3.13 makes, checked
+    every tagged field on its three schemas resolves through a widget id already
+    shipped for the RPG/default packs -- the genericity claim, checked
     mechanically rather than by inspection."""
     tenant_id, workspace_id, _principal_id = pack_tenant
     before = dict(TAG_WIDGET_REGISTRY)
@@ -180,5 +180,5 @@ async def test_swdev_pack_adds_zero_widgets_to_the_registry(
             for tag in field.tags:
                 assert widget_for(tag) in pre_shipped_widget_ids, (
                     f"{schema_key}.{field.key} tag {tag!r} resolves to a widget id "
-                    f"not already shipped by F3.10 -- swdev needed a new widget"
+                    f"not already shipped for the other packs -- swdev needed a new widget"
                 )

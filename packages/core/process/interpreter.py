@@ -6,20 +6,21 @@ this task's own file scope (``packages/core/process/interpreter.py``) touches th
 surface. Wiring a live endpoint to this interpreter needs a real agent runtime to
 supply ``execute_turn`` and a real scheduler to supply ``next_actor_fn`` -- until
 then this module is complete, tested, and callable, but not yet load-bearing for any HTTP
-route. This mirrors how A1.6 built ``search_and_budget`` fully before C1.2 ever calls it.
+route, the same way ``search_and_budget`` was built fully before anything called it.
 
 **Actor resolution is entirely injected, not implemented here.** Two reasons: (1) the
-``agent`` table doesn't have an ``persona_type`` column yet -- that lands with B1.7 -- so
-this module cannot query "which agents have role X" even if it wanted to; (2) turn
+``persona_type`` lives on the persona table and this module must not query it directly,
+so it cannot ask "which personas have role X" even if it wanted to; (2) turn
 ordering (declared/initiative/free, cursor persistence across resume) is the whole job,
 not something to half-build inline here just because it runs first in the dependency
-order. ``next_actor_fn``/``execute_turn`` are the seam B1.3/B1.7 slot real implementations
-into later, matching the ``model_provider_factory``/``on_chunk`` injection pattern T0.8
-already established for the same reason (core must not import a specific adapter, and here
-additionally: core must not depend on schema that doesn't exist yet).
+order. ``next_actor_fn``/``execute_turn`` are the seam the scheduler and the agent
+runtime slot their implementations into, matching the ``model_provider_factory``/
+``on_chunk`` injection pattern established for the same reason (core must not import a
+specific adapter, and here additionally: core must not depend on schema that doesn't
+exist yet).
 
-**Checkpointing is a no-op hook, not implemented here either** -- B1.4 owns the real
-``checkpoint`` table and write. ``checkpoint_hook`` is called at every transition if
+**Checkpointing is a hook, not implemented here** -- the checkpoint module owns the
+real ``checkpoint`` table and write. ``checkpoint_hook`` is called at every transition if
 provided; ``None`` (the default) is a legitimate, documented no-op for now, not a stub
 pretending to be complete.
 
@@ -99,7 +100,7 @@ class ActorTurnResult:
     # commit (core.agents.runtime.run_agent_turn's _commit_turn writes the message,
     # usage records, resolution correlation, and contradiction scan all in one
     # transaction) -- _run_actor_turn must not write a second, poorer MessageRow for the
-    # same turn in that case. False (every pre-B1.8 execute_turn) preserves the
+    # same turn in that case. False (the original execute_turn contract) preserves the
     # original "the interpreter writes the message" behaviour exactly.
     already_persisted: bool = False
     message_id: uuid.UUID | None = None
@@ -533,8 +534,8 @@ async def _run_actor_turn(
     execute_turn: ActorTurnExecutor,
     on_event: OnEvent | None = None,
 ) -> None:
-    """External calls (a real model call, later, via B1.7) must not run inside a DB
-    transaction/lock (its own principle: "model calls happen outside the row lock").
+    """External calls (a real model call) must not run inside a DB transaction/lock
+    (the standing principle: "model calls happen outside the row lock").
     That forces this into (at least) two transactions bracketing the external call --
     which creates exactly the idempotency-key trap warns about if the two
     transactions don't share a *stable* key. An earlier version of this function claimed
@@ -553,7 +554,7 @@ async def _run_actor_turn(
     The defensive re-check before the final claim (below) is a documented, deliberate
     limitation, not a hidden one: true concurrent-writer safety is the job (full
     ``SELECT ... FOR UPDATE`` session locking); this function assumes a single advancing
-    caller, matching every other B1.2 subtask's explicit "full locking in B1.5" carve-out.
+    caller; the session lock itself lives in ``core.process.locking``.
     """
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SessionRow, session_id)
@@ -587,7 +588,7 @@ async def _run_actor_turn(
                 raise InterpreterFaultError(
                     f"session {session_id} next_event_seq advanced from {event_seq} to "
                     f"{row.next_event_seq} between peek and claim -- concurrent advance "
-                    f"without B1.5's single-writer lock"
+                    f"without the single-writer session lock"
                 )
             row.next_event_seq = event_seq + 1
             message = MessageRow(
@@ -729,7 +730,7 @@ async def advance_session(
 ) -> AdvanceResult:
     """The interpreter loop. Runs until: a phase's actors are exhausted and
     it has an unsatisfied ``await`` (returns 'awaiting'); a free-mode human actor is next
-    but hasn't submitted yet (returns 'awaiting_human', B1.8 -- see
+    but hasn't submitted yet (returns 'awaiting_human' -- see
     ``HumanTurnPendingError``); a transition has no target (returns 'terminal');
     ``max_steps`` is hit (a runaway-loop guard -- callers should treat repeatedly hitting
     this as a bug in the definition or the injected scheduler, not call it in a tight

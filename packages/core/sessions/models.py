@@ -1,7 +1,7 @@
 """Minimal ``session``/``session_event``/``message`` for the walking
-skeleton: a hardcoded 2-phase process (``prompt`` -> ``respond``). The real interpreter,
-full phase engine, checkpoints, and await/resume machinery land at B1.2-B1.6; this schema
-is the forward-compatible subset those tasks extend in place, not a throwaway.
+skeleton: a hardcoded 2-phase process (``prompt`` -> ``respond``). The interpreter,
+phase engine, checkpoints and await/resume machinery all extend this schema in place; it
+is the forward-compatible subset, not a throwaway.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ class SessionRow(Base):
     )
     # the hardcoded two-phase process used 'prompt'/'respond' (fit in 16 chars); the
     # real interpreter runs an arbitrary DSL phase graph, so this is widened to match
-    # process_definition phase-key lengths (B1.2 migration 9a4e7c2f1b63).
+    # process_definition phase-key lengths.
     current_phase: Mapped[str] = mapped_column(String(63), nullable=False, default="prompt")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     # What the last advance said this session is waiting for: "human" when the next actor
@@ -84,7 +84,7 @@ class SessionRow(Base):
     # the hardcoded skeleton sessions never touch this and keep working unmodified.
     state: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     # Which definition (and immutable version of it) this session is running -- pinned at
-    # session start, nullable because T0.8-skeleton sessions have none.
+    # session start, nullable because skeleton sessions have none.
     process_definition_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("process_definition.id", ondelete="SET NULL"), nullable=True
     )
@@ -98,7 +98,7 @@ class SessionRow(Base):
     # other (a checkpoint FKs to its session; the session's fork-origin pointer FKs to a
     # checkpoint) -- use_alter (in __table_args__ below) defers this one to a separate
     # ALTER TABLE instead of an unresolvable circular CREATE TABLE dependency, the same
-    # fix A1.1 used for knowledge_source/knowledge_source_version's identical shape.
+    # fix knowledge_source/knowledge_source_version uses for its identical shape.
     forked_from_checkpoint_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
@@ -169,7 +169,7 @@ class SessionEventRow(Base):
         UUID(as_uuid=True), ForeignKey("session.id", ondelete="CASCADE"), nullable=False
     )
     event_seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    # Subset of the full kind enum: message|phase_transition for T0.8.
+    # Event kind: message, phase_transition, phase_requirement, error, ...
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     actor_principal_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
@@ -192,11 +192,10 @@ class MessageRow(Base):
     )
     event_seq: Mapped[int] = mapped_column(Integer, nullable=False)
     author_principal_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    # Simplified role in place of the full phase model that lands with C1.2.
+    # The message role as the model saw it.
     role: Mapped[str] = mapped_column(String(16), nullable=False)  # 'user'|'assistant'
     content_md: Mapped[str] = mapped_column(String, nullable=False)
-    # B1.7 added the plain column ("no context_manifest table yet"); C1.3 completes the
-    # FK now that core.assembler.models.ContextManifestRow exists. ondelete=SET NULL: a
+    # FK to core.assembler.models.ContextManifestRow. ondelete=SET NULL: a
     # manifest is append-only in practice (no UPDATE/DELETE grant) so this practically
     # never fires, but a message should never become unreadable if it somehow did.
     context_manifest_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -206,8 +205,7 @@ class MessageRow(Base):
     )
     # {"contradiction": ["<resolution_record id>", ...]} when the contradiction
     # scanner flags this reply against one or more of its turn's resolution records --
-    # empty dict otherwise. Plan also reserves this column for future moderation
-    # signals (content-filter flags etc); C1.7 is the first real writer.
+    # empty dict otherwise. Also carries moderation signals (content-filter flags etc.).
     moderation_flags: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     # the validated citation set -- [{citation_id, entry_key, source_id,
     # version_id}, ...], version-pinned at generation time. Populated
@@ -247,7 +245,7 @@ class CheckpointRow(Base):
     ``knowledge_source_version``/``audit_log``.
 
     ``entity_versions`` is always ``{}`` today: there is no ``entity``/``entity_schema``
-    table anywhere in Phase 1's task list (a gap B1.3 already found and documented) --
+    table when this schema was first written --
     the column exists so a later phase's entity work extends this schema in place rather
     than adding a new one.
     """
@@ -278,8 +276,8 @@ class CheckpointRow(Base):
 
 
 class AwaitStateRow(Base):
-    """The interrupt primitive ( ``await``, B1.6). ``tenant_id`` is added
-    beyond the plan's literal (gap-y) schema snippet -- see the migration's docstring for
+    """The interrupt primitive (``await``). ``tenant_id`` is added beyond the original
+    schema sketch -- see the migration's docstring for
     why. ``outcome`` is ``NULL`` while pending, ``'satisfied'`` or ``'timed_out'`` once
     resolved -- exactly one of ``core.process.awaits.satisfy_await``/``resolve_timeout``
     can ever win the atomic ``UPDATE ... WHERE outcome IS NULL`` that sets it.
@@ -308,7 +306,7 @@ class AwaitStateRow(Base):
     satisfied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # when this await's one nudge is due, resolved at creation from the phase's own
     # ``reminder_at`` or the definition's ``pacing.reminder_at``. NULL = no reminder was
-    # configured (the default for every await created before G4.3, and for every process
+    # configured (the default for awaits that predate reminders, and for every process
     # whose author never asked for one).
     reminder_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

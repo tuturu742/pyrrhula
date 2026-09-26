@@ -1,6 +1,7 @@
-"""``agent`` and ``agent`` . T0.8 built the minimal subset needed to
-call a model through the ``ModelProvider`` port; B1.7 (the full agent runtime -- tool loop,
-retries, fallback profile) extends this schema in place rather than replacing it, adding
+"""``agent`` (a model connection) and ``persona`` (a seat at the table). The minimal subset
+needed to call a model through the ``ModelProvider`` port came first; the full agent
+runtime (tool loop, retries, fallback profile) extended it in place rather than replacing
+it, adding
 ``agent.persona_type`` and ``agent.fallback_agent_id``.
 """
 
@@ -28,7 +29,7 @@ from core.tenancy.models import Base
 
 class ProviderCredentialRow(Base):
     """tenant-scoped storage for a provider API key, encrypted at rest through the
-    injected ``Encryptor`` port (v1: identity -- real KMS/BYOK is H5.7). Never read back
+    injected ``Encryptor`` port. Never read back
     through any API route (CLAUDE.md: "the UI never redisplays a key") -- only
     ``agent.credential_ref`` (this row's id, a string) is ever returned to a
     caller. Mutable, not append-only: rotating a key updates the row in place rather than
@@ -112,16 +113,15 @@ class Persona(Base):
     agent_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent.id"), nullable=False
     )
-    # the column B1.3/B1.6 both found missing and deferred here --
-    # the scheduler/eligibility work landing before this task had nothing to query.
+    # Read by the scheduler and the eligibility checks.
     # Informational agents get no persona-persistence expectations (no requirement that
     # their "voice" stay consistent turn to turn the way a facilitator/participant's
-    # would) -- a semantic distinction other modules (the future assembler, C1.2) read
-    # this field to apply, not something this column enforces itself.
+    # would) -- a semantic distinction the assembler reads this field to apply, not
+    # something this column enforces itself.
     persona_type: Mapped[str] = mapped_column(String(16), nullable=False, default="participant")
     # prose persona shown to the model as part of its own turn's
     # context -- not yet wired into core.assembler.layout's rendering (the same
-    # "not yet integrated into the runtime" boundary as C1.2-C1.7; the column is real
+    # "not yet integrated into the runtime" boundary; the column is real
     # and editable today, the render-time wiring is a separate task).
     persona_md: Mapped[str] = mapped_column(String, nullable=False, default="")
     # a general per-agent settings bag (same shape as workspace.settings /
@@ -130,10 +130,8 @@ class Persona(Base):
     # a schema to. A general bag, not a card-shaped column: the next thing needing
     # per-agent config shouldn't need another migration.
     settings: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
-    # Optional link to the agent's Entity (character sheet). No FK: there is no
-    # entity/entity_schema table anywhere in Phase 1 (a gap B1.3/B1.4 already found and
-    # documented) -- same no-FK-yet shape as ResolutionRecordRow.actor_entity_id, ready
-    # for F3.6 (Phase 3) to give this a real target.
+    # Optional link to the persona's entity (character sheet). No FK, the same shape as
+    # ResolutionRecordRow.actor_entity_id.
     entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     # Per-actor internet-search switch: this persona's generate turns get the `web_search`
     # tool only when true AND the workspace's `web_search` MCP server (the egress control)
