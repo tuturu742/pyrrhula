@@ -1,13 +1,11 @@
 # Operating a deployment
 
 Everything an operator does that is not a request: deleting a tenant for real, resetting
-a password nobody can email, re-sealing credentials after a key change, seeding and
-verifying a rebuilt stack. These are command-line tasks run inside a running container,
+a password nobody can email, re-sealing credentials after a key change, checking a
+rebuilt stack. These are command-line tasks run inside a running container,
 plus a small admin console for the things that are safe over HTTP.
 
-If you are looking for the daily rebuild loop, that is
-[`docs/runbook-daily.md`](runbook-daily.md). If you are looking for what content a
-deployment loads and from where, that is
+If you are looking for what content a deployment loads and from where, that is
 [`docs/packs-and-samples.md`](packs-and-samples.md).
 
 > **Two different things are called "purge."** The installer's `--purge` destroys the
@@ -270,22 +268,10 @@ podman exec pyrrhula_worker_2 python -c \
 | Command | What it does |
 |---|---|
 | `python scripts/fetch_plugins.py` | clone the pinned workflow packs into `.plugins/`. Run before an image build; `PYRRHULA_PLUGINS_STRICT=1` makes a stale pack a failure rather than a warning |
-| `python scripts/seed_samples.py --secrets-dir … --samples-dir … --samples …` | create the model connections, import each sample's `.pyr`, bind personas by role, register its repositories and MCP servers, load its pack |
-| `python scripts/start_sample_session.py --tenant … --flow … ` | start a session in a seeded tenant, resolved by slug, flow key and persona name |
-| `python scripts/build_samples.py <out_dir>` | rebuild the shippable `.pyr` bundles from their specs |
 | `python scripts/check_env_docs.py` | fail if any environment variable the code reads has no row in `docs/configuration.md` |
-| `python scripts/verify_deploy.py exec [rpg swe]` | drive the standing post-redeploy scenarios against the live stack and assert concrete outcomes; exits non-zero on the first failure, so a rebuild loop can gate on it |
 
-`verify_deploy.py` is stdlib-only and runs from the host, reaching the stack through
-podman by default. Point it at Kubernetes with environment variables rather than editing
-it:
-
-```bash
-export PYRRHULA_VERIFY_API="http://pyrrhula.localhost/api"
-export PYRRHULA_VERIFY_PG_EXEC="kubectl -n pyrrhula exec -i statefulset/postgres --"
-export PYRRHULA_VERIFY_API_EXEC="kubectl -n pyrrhula exec -i deploy/pyrrhula-api --"
-python scripts/verify_deploy.py exec
-```
+Setting a sample up is a sequence of steps in the product, described by each sample's
+README; there is no seeding script.
 
 ## The admin console
 
@@ -405,7 +391,6 @@ select split_part(slug,'-',1) as prefix, count(*) from tenant group by 1 order b
 
 ## See also
 
-- [`docs/runbook-daily.md`](runbook-daily.md) — purging and rebuilding whole deployments
 - [`docs/packs-and-samples.md`](packs-and-samples.md) — where a deployment's content comes from
 - [`docs/configuration.md`](configuration.md) — every environment variable
 - [`docs/install.md`](install.md) — standing a deployment up in the first place

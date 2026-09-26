@@ -82,7 +82,6 @@ an address, not a model.
 | `PYRRHULA_PLUGINS_TOKEN` / `GH_TOKEN` | unset | Token for fetching plugin repos that are private. A clean install must never need one. |
 | `PYRRHULA_PLUGINS_STRICT` | `0` | `1` makes a failed plugin fetch a build failure. Without it the build falls back to whatever is cached on disk and the install reports success with the previous pack inside it. What CI should use. |
 | `PYRRHULA_COMPOSE_DNS` | unset | A nameserver for the compose containers, e.g. `1.1.1.1`. Needed on a host whose only resolver is `systemd-resolved` at `127.0.0.53` — a loopback address that means nothing inside a container namespace, so every outbound lookup fails and the symptom is an apparent Hugging Face outage. |
-| `PYRRHULA_OLLAMA_BASE` | unset | Base URL for a local Ollama, for a deployment that seats personas on one. No sample does. |
 
 ## Observability
 
@@ -128,6 +127,8 @@ to set them. Defaults are the supported configuration.
 - `PYRRHULA_OLLAMA_NUM_CTX` → an adapter constant (16384); a connection's own `num_ctx`
   param overrides it, which is the per-hardware lever that mattered.
 - `PYRRHULA_AUTH_PROVIDER`, `PYRRHULA_ISOLATION_MODE` → deleted; read by nothing.
+- `PYRRHULA_OLLAMA_BASE` → deleted with the seeding script that was its only reader; a
+  connection's API base is a field on the connection.
 - `PYRRHULA_ADMIN_TOKEN`, `PYRRHULA_ADMIN_PORT` → deleted with the legacy token console
   and its separate container. One way in: a platform admin's own login.
 - `PYRRHULA_JWT_EXPIRY_SECONDS` → the organization's **session lifetime** (Organization

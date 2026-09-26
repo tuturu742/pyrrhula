@@ -40,12 +40,10 @@ needs a recipe.
 
 Three layers decide, most specific first:
 
-1. **Repo settings** — the fields on the repo, editable in the UI. An operator override,
-   so a broken recipe is fixable without a commit and a rebuild. These can also be set
-   when the repo is *registered*, which is how a sample ships a working preview: the same
-   four fields in its `repos.json` (see
-   [`docs/packs-and-samples.md`](packs-and-samples.md)). Use that when the repository
-   belongs to somebody else and adding a manifest to it would mean a commit.
+1. **Repo settings** — the *Preview recipe* fields on the repo form (**Repos**), at
+   registration or afterwards. An operator override, so a broken recipe is fixable without
+   a commit and a rebuild, and how a sample whose repository belongs to somebody else ships
+   a working preview: its `repos.json` lists the same four fields for you to type in.
 2. **`pyrrhula-preview.json` in the repo**, at the ref being previewed — the recipe living
    with the code it describes, versioned alongside it.
 3. **The platform default** — the static server. A repo that ships no manifest and sets no

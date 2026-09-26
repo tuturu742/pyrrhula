@@ -79,12 +79,6 @@ While that repository is private, the fetch needs credentials — either an SSH 
 can already read, or a token in `PYRRHULA_PLUGINS_TOKEN`. Without them those two suites
 stop at collection and say so; the rest of the suite is unaffected.
 
-### Known-red gate
-
-`uv run mypy` currently reports errors that predate any individual change. Do not treat it
-as a signal that you broke something, and please do not add to it — new code should type
-cleanly even while the backlog is being worked down.
-
 ## 4. Commit messages
 
 Say what changed and **why it is right**, not what the diff already shows. The reasoning

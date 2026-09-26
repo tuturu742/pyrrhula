@@ -7,7 +7,7 @@ where the content lives, how it reaches a deployment, and how it reaches a tenan
 | Repository | What it holds | Reaches a deployment by |
 |---|---|---|
 | [`pyrrhula-workflows`](https://github.com/tuturu742/pyrrhula-workflows) | flows, entity schemas, rule systems, tool declarations, behaviour axes, vocabulary overlays | being **pinned and baked into the image**, then synced on boot |
-| [`pyrrhula-samples`](https://github.com/tuturu742/pyrrhula-samples) | `.pyr` bundles (a cast, its briefs, its knowledge), per-sample `repos.json` / `mcp.json`, and a README per sample | being **imported into a tenant**, by `scripts/seed_samples.py` or by hand |
+| [`pyrrhula-samples`](https://github.com/tuturu742/pyrrhula-samples) | `.pyr` bundles (a cast, its briefs, its knowledge), per-sample `repos.json` / `mcp.json`, and a README per sample | being **imported into a workspace** through the UI, following each sample's README |
 
 Neither repository contains code that Pyrrhula runs. A pack is JSON validated against
 declarative manifests, and a `.pyr` is content; rules 9 and 10 are why, and why a pack can
@@ -114,108 +114,65 @@ from core.packs.loader import load_pack
 await load_pack(pathlib.Path("/app/packs/swdev"), tenant_id, workspace_id)
 ```
 
-`scripts/seed_samples.py` does this for each seeded tenant (`rpg` for a tabletop sample,
-`swdev` for a software one), which is why a sample tenant has flows the bundle itself
-never carried.
+Choosing a workflow for an organization (**Workflows** in the UI, or the admin console's
+workflow setting for a tenant) does this, which is why a workspace has flows the bundle it
+imported never carried.
 
 Loading is **versioned, not idempotent**: loading the same pack twice leaves v1 and v2 of
-every flow active, both in the picker and indistinguishable by name. The seeder archives
-every superseded version afterwards, keeping the newest of each key. If you call
+every flow active, both in the picker and indistinguishable by name. Applying a workflow
+archives every superseded version afterwards, keeping the newest of each key. If you call
 `load_pack` yourself in a loop, do the same — an in-flight session resolves its phases
 against the definition row it started on, so archive rather than delete.
 
 ## Setting up sample tenants
 
 Each sample in `pyrrhula-samples` is a directory holding a `.pyr` bundle and a README that
-walks a person through setting it up by hand. Some also carry:
+walks a person through setting it up **in the product** — every step is something you do in
+the UI, and no sample asks you to run a script. Some also carry:
 
-| File | What it declares |
+| File | What it is |
 |---|---|
-| `repos.json` | repositories to register: source url, build runtime and image, test and build commands, artifact name, and the preview recipe (`preview_image`, `preview_cmd`, `preview_port`, `preview_env`) |
-| `mcp.json` | external MCP servers the sample's case depends on — url, allowed tools, per-session budget |
-| a server and its manifests | the tool itself, when the sample needs one running (the hagnaryd forensic lab) |
+| `repos.json` | the repository registration the README walks you through, as data: source url, build runtime and image, test and build commands, artifact name, and the preview recipe. Read it; the fields map one-to-one onto the **Repos** form |
+| `mcp.json` | the external MCP servers the README has you register on the workspace — url, allowed tools, per-session budget, options |
+| a server and its manifests | the tool itself, when the sample needs one running (the hagnaryd forensic lab). Standing that up is the one step outside the product |
 
 A bundle has never carried a credential or a repository registration: a `.pyr` is content,
 and both of those are half configuration and half secret. That is why every sample README
 has a step telling you to add your own key.
 
-### The scripted path
+### Setting one up
 
-```bash
-python scripts/seed_samples.py \
-  --secrets-dir /path/to/secrets \
-  --samples-dir ~/code/pyrrhula-samples \
-  --samples hagnaryd-mystery,mice-invaders,loxia=pyrrhula
-```
+The READMEs are authoritative, and each is specific about its own sample. The shape is the
+same every time:
 
-Per tenant this creates the model connections, imports the bundle, binds every persona to
-the connection its **role** calls for, seats them in the workspace, registers whatever
-`repos.json` and `mcp.json` declare, clones each repository into the hosted store, queues
-the **repo knowledge-graph analysis** for them, and loads the pack. It is the scripted form of the
-README, not a second path: a rebuild that takes forty clicks does not happen daily.
+1. Sign up, which makes you the organization's steward.
+2. **Workflows**: choose the workflow the sample was authored under, *before* importing —
+   it brings the vocabulary and the personality axes the cast uses.
+3. **Personas → Model profiles**: add a connection per provider the sample expects, with
+   your own key.
+4. On the workspace, **Export / import**: upload the `.pyr`, read the inspection verdict,
+   import it.
+5. **Personas**: open each imported persona and set its connection.
+6. If the sample has a `repos.json`: register its build runtime under **Repos → Build
+   runtimes**, then the repository itself with its token, test and build commands, and
+   the preview recipe — the same fields, in the same names.
+7. If the sample has an `mcp.json`: start the server it names, then register it under the
+   workspace's **MCP servers** with the key, url, tools, budget and options it lists.
+8. Start a session from the roster and agenda the README gives.
 
-`slug=sample` names the tenant differently from the sample it borrows: `loxia=pyrrhula`
-seeds a tenant called `loxia` from the `pyrrhula` bundle's bench. When the samples
-directory has a folder named after the **slug**, its `repos.json` and `mcp.json` are read
-from there rather than from beside the bundle — which is how `loxia` brings its own
-repository while borrowing someone else's cast.
-
-The script needs the same environment the API has (`PYRRHULA_APP_DATABASE_URL`, the
-encryption key), so run it inside the api container or with that environment exported.
-
-**The repo graph is a job, not a side effect of registration.** Normally somebody presses
-*Analyze* on the repo-graph page; a purge takes the graph with everything else, so the
-scripted path queues it too. Without it the deployment looks complete and two things are
-quietly empty: the planning phases retrieve nothing about the code, and the workspace
-assistant cannot answer a question about the repository. Neither reports an error,
-because an empty graph is a valid empty graph. Check it landed:
-
-```sql
-select status, result->>'node_count', result->>'edge_count' from job
- where kind = 'analyze_workspace_repos' order by created_at desc limit 1;
-```
-
-`done` with a non-zero `node_count` is the only green. A `done` with zero nodes means the
-job ran against an empty hosted store — the repository row exists and the code was never
-cloned into it.
-
-### Starting a session in a seeded tenant
-
-`scripts/start_sample_session.py` does what the New Session form does, resolved by name:
-
-```bash
-python scripts/start_sample_session.py \
-  --tenant loxia --flow investigate_plan_implement_review_merge \
-  --supervisor Architect \
-  --participants "Staff Dev,Senior Dev,Middle Dev,Junior Dev,QA" \
-  --repos loxia --name "Loxia docs" --agenda-file agenda.txt
-```
-
-Every purge renumbers every id, so it takes a tenant *slug*, a flow *key* and persona
-*names*, and it picks the newest unarchived version of the flow — starting on a
-superseded version is how a pack fix that shipped never reaches a session. Binding a
-repository also registers its git MCP server, which is what makes `delegate_work_item`
-exist for a phase that allows it; a phase that allows the tool with no server registered
-simply never sees it.
-
-### The manual path
-
-The READMEs are authoritative for doing it by hand, and each is specific about its own
-sample. The shape is the same every time:
-
-1. Sign up, which makes you the tenant's steward.
-2. **Settings → Model connections**: add a connection per provider the sample expects.
-3. **Settings → Import**: upload the `.pyr`, review what it declares, import it.
-4. Bind each persona to a connection (**Agents**).
-5. If the sample has a `repos.json`: register its build runtime under **Repos → Build
-   runtimes**, then the repository itself with its token, test/build commands and preview
-   recipe.
-6. If the sample has an `mcp.json`: start the server it names, then register it under
-   **Settings → MCP servers**.
-
-Step 4 is the one worth checking twice. An imported persona with no connection produces a
+Step 5 is the one worth checking twice. An imported persona with no connection produces a
 session that starts and then fails on its first turn, which reads as a broken flow rather
 than an unfinished setup.
+
+**The order of steps 2 and 4 matters** for anything a pack and a bundle both define. Both
+register by key; whichever loads second wins. Choosing the workflow first and importing
+second leaves the bundle's version standing — which is what a sample wants: karsh-vale
+ships a `randomizer` tool bound to its own Basic Fantasy rule system, and the `rpg` pack
+ships the same key bound to the generic d20 system. Import first and apply the workflow
+afterwards, and every roll silently resolves under the wrong rules — the tool still works
+and still writes an honest hash-chained record. If you change a workspace's workflow later,
+import the bundle again; a resident key is skipped, so only what the pack replaced is
+restored.
 
 ### Running a sample a second time
 
@@ -228,15 +185,10 @@ the second campaign opens with the first one's characters already in context, an
 players will read them and decline to roll new ones.
 
 Archiving the first session does not help — archiving hides a session, it does not remove
-what the session made. For a clean re-run, purge and reseed the tenant:
-
-```bash
-python -m core.tenancy.purge --tenant karsh-vale          # dry run first
-python -m core.tenancy.purge --tenant karsh-vale --yes
-python scripts/seed_samples.py --secrets-dir … --samples-dir … --samples karsh-vale
-```
-
-See [`docs/operations.md`](operations.md) for what that purge does and where to run it.
+what the session made. For a clean re-run, **archive the workspace and import the bundle
+into a fresh one**: the app role holds no DELETE grant on the tables that carry history, so
+the product offers archiving, not erasure. Deleting a tenant outright is the operator's
+`core.tenancy.purge` CLI, described in [`docs/operations.md`](operations.md).
 
 ## Where to fix what
 
@@ -246,36 +198,11 @@ See [`docs/operations.md`](operations.md) for what that purge does and where to 
 | a sample's content, its setup steps, its repository or MCP declarations | `pyrrhula-samples` |
 | the platform: the loader, the installers, the API, the UI | this repository |
 
-Never fix content by editing rows in a running deployment. The daily rebuild
-(`docs/runbook-daily.md`) deletes that deployment, and a fix that lived only there goes
-with it.
-
-### When a pack and a bundle both define the same thing
-
-A pack ships generic content; a sample ships specific content. Both register by **key**,
-and the scripted seed loads the pack *after* importing the bundle — so for anything they
-both define, the pack's version is the one left standing.
-
-That is usually harmless and once was not. The `rpg` pack ships a `randomizer` tool bound
-to the generic d20 ruleset; karsh-vale ships the same key bound to its own Basic Fantasy
-system. The pack load replaced the sample's binding, and nothing said so: the tool still
-worked, still wrote an honest hash-chained record, and resolved every roll under the wrong
-rules. A 3d6 ability score came back as 19 because the generic system resolves an ability
-modifier for the check type.
-
-`seed_samples.py` records each tool's binding after the import and restores it after the
-pack load, naming what it put back:
-
-```
-[karsh-vale] tool bindings restored after pack load: ['randomizer: generic_d20 -> basic_fantasy']
-```
-
-Worth knowing when you author either side: if a sample needs its own ruleset, it must bind
-the tool to it, and that binding has to survive whatever the pack does afterwards.
+Never fix content by editing rows in a running deployment: the next rebuild replaces that
+deployment, and a fix that lived only there goes with it.
 
 ## See also
 
-- `docs/runbook-daily.md` — the purge-and-rebuild loop these two repositories feed
 - `docs/portability.md` — what a `.pyr` carries and what it deliberately does not
 - `docs/entities-and-state-machines.md` — the schemas a pack ships under `schemas/`, and the
   state machines on them
