@@ -54,11 +54,13 @@ from core.entities.schema import EntitySchemaDefinition
 from core.entities.storage import EntityRow, create_entity
 from core.knowledge.models import KnowledgeEntry, KnowledgeSource, KnowledgeSourceVersion
 from core.portability.bundle import BundleIntegrityError, open_bundle, verify_bundle
+from core.portability.compat import compare_app_versions
 from core.portability.injection_scan import quarantine_reason, scan_text
 from core.portability.upcast import upcast_to_current
 from core.resolution.records import resolution_payload
 from core.sessions.models import CheckpointRow, SessionEventRow, SessionRow
 from core.tenancy.scope import tenant_scope
+from core.version import APP_VERSION
 
 
 class ResolutionChainBrokenError(Exception):
@@ -91,6 +93,9 @@ class ImportReport:
     # persona/connection import (the half the importer used to drop)
     imported: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    # Things worth telling the operator that did not stop the import -- today, a bundle
+    # from a newer or unknown platform version.
+    warnings: list[str] = field(default_factory=list)
     # bundle persona ref -> the principal id its imported persona now acts as. Secrets
     # need it: a holder travels as a persona, but is held by that persona's principal.
     persona_principals: dict[str, uuid.UUID] = field(default_factory=dict)
@@ -316,6 +321,9 @@ async def import_bundle(
         verify_resolution_chain(records, tenant_ref, session_ref)
 
     report = ImportReport()
+    compat = compare_app_versions(str(manifest.get("app_version") or ""), APP_VERSION)
+    if compat.note:
+        report.warnings.append(compat.note)
     await _adopt_workspace_settings(tenant_id, workspace_id, files, report)
     if _do("knowledge"):
         await _import_knowledge(files, tenant_id, workspace_id, report, bundle_ref=bundle_ref)

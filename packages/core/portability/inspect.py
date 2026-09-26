@@ -24,9 +24,11 @@ from sqlalchemy import select
 
 from core.knowledge.models import KnowledgeSource
 from core.portability.bundle import BundleIntegrityError, open_bundle, verify_bundle
+from core.portability.compat import compare_app_versions
 from core.portability.upcast import upcast_to_current
 from core.ports.encryptor import Encryptor
 from core.tenancy.scope import tenant_scope
+from core.version import APP_VERSION
 
 # The sections an importer can be asked for, in the order import_bundle runs them. Names
 # are the vocabulary the API and the UI speak, so they are stable and domain-neutral.
@@ -62,6 +64,10 @@ class BundleInspection:
     app_version: str = ""
     exported_at: str = ""
     encrypted: bool = False
+    # Against the running platform: same | older | newer | unknown, and the sentence
+    # to show when it is not simply fine. See core.portability.compat.
+    compatibility: str = "same"
+    compatibility_note: str = ""
     sections: dict[str, list[BundleItem]] = field(default_factory=dict)
 
     @property
@@ -172,6 +178,9 @@ async def inspect_bundle(
         exported_at=str(manifest.get("exported_at") or ""),
         encrypted=was_encrypted,
     )
+    compat = compare_app_versions(inspection.app_version, APP_VERSION)
+    inspection.compatibility = compat.verdict
+    inspection.compatibility_note = compat.note
     for section in SECTIONS:
         items = found.get(section) or []
         taken = resident.get(section, set())

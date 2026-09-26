@@ -814,3 +814,56 @@ async def test_a_bundle_carries_the_mechanics_its_flow_resolves_against(
     # Upserted, not forked: a `-imported` rule system is one no validation_ref can reach,
     # which would validate against whatever else holds the original name.
     assert await get_rule_system(tenant_b, f"{system_key}-imported") is None
+
+
+def _with_app_version(data: bytes, app_version: str | None) -> bytes:
+    """The same bundle, claiming to come from a different platform version -- or from
+    none at all, which is every bundle written before the stamp existed."""
+    reader = open_bundle(data)
+    manifest = dict(reader.manifest)
+    if app_version is None:
+        manifest.pop("app_version", None)
+    else:
+        manifest["app_version"] = app_version
+    return _rebuild_zip(manifest, dict(reader.files))
+
+
+async def test_a_bundle_from_a_newer_platform_warns_and_imports(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The file format is the axis that refuses; the platform version only warns. A bundle
+    is data and the importing operator is the one who knows their deployment."""
+    from core.portability.inspect import inspect_bundle
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a = await _workspace_of(tenant_a)
+    await seed_default_scopes(tenant_a, workspace_a)
+    exporter = await _facilitator(tenant_a, workspace_a)
+    await _seed_source(
+        tenant_a,
+        workspace_a,
+        key=f"src-{uuid.uuid4().hex[:8]}",
+        bodies={"gate": "The gate stands open."},
+    )
+    result = await export_workspace(
+        exporter, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+
+    newer = _with_app_version(result.data, "99.0.0")
+    seen = await inspect_bundle(newer, tenant_b)
+    assert seen.compatibility == "newer"
+    assert "99.0.0" in seen.compatibility_note and "cannot be verified" in seen.compatibility_note
+
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    report = await import_bundle(newer, tenant_b, workspace_b, bundle_ref="from-the-future")
+    assert report.knowledge_sources == 1, "the import went ahead"
+    assert any("99.0.0" in w for w in report.warnings), report.warnings
+
+    unstamped = _with_app_version(result.data, None)
+    seen = await inspect_bundle(unstamped, tenant_b)
+    assert seen.compatibility == "unknown"
+    assert "does not record" in seen.compatibility_note
+
+    current = await inspect_bundle(result.data, tenant_b)
+    assert current.compatibility == "same" and current.compatibility_note == ""

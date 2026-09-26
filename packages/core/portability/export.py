@@ -59,9 +59,8 @@ from core.secrets.models import SecretRow
 from core.sessions.models import CheckpointRow, SessionEventRow, SessionRow
 from core.tenancy.models import Principal, Workspace
 from core.tenancy.scope import tenant_scope
+from core.version import APP_VERSION
 from core.vocabulary.service import resolve_overlay_for_workspace
-
-APP_VERSION = "0.1.0"
 
 ExportMode = Literal["participant", "full", "sanitised"]
 """The three modes of §11.4, and the *only* three. Deliberately a closed Literal rather

@@ -196,6 +196,7 @@ class ImportResponse(BaseModel):
     # the failure this reports its way out of.
     imported: list[str] = []
     skipped: list[str] = []
+    warnings: list[str] = []
 
 
 class QuarantinedEntryResponse(BaseModel):
@@ -221,6 +222,8 @@ class BundleInspectionResponse(BaseModel):
     exported_at: str
     encrypted: bool
     collisions: int
+    compatibility: str
+    compatibility_note: str
     sections: dict[str, list[BundleItemResponse]]
 
 
@@ -254,6 +257,8 @@ async def inspect_bundle_endpoint(
         exported_at=found.exported_at,
         encrypted=found.encrypted,
         collisions=found.collisions,
+        compatibility=found.compatibility,
+        compatibility_note=found.compatibility_note,
         sections={
             name: [BundleItemResponse(key=i.key, name=i.name, collides=i.collides) for i in items]
             for name, items in found.sections.items()
@@ -342,6 +347,7 @@ async def import_bundle_endpoint(
         forked_keys=[{"from": a, "to": b} for a, b in report.forked_keys],
         imported=report.imported,
         skipped=report.skipped,
+        warnings=report.warnings,
     )
 
 

@@ -16,6 +16,8 @@ type Inspection = {
   exported_at: string;
   encrypted: boolean;
   collisions: number;
+  compatibility: string;
+  compatibility_note: string;
   sections: Record<string, BundleItem[]>;
 };
 
@@ -173,6 +175,18 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
 
       {inspection && (
         <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+          {inspection.compatibility_note && (
+            <p
+              className={
+                inspection.compatibility === "newer"
+                  ? "text-xs text-amber-700 dark:text-amber-400"
+                  : "text-xs text-muted-foreground"
+              }
+              role={inspection.compatibility === "newer" ? "alert" : undefined}
+            >
+              {inspection.compatibility_note}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
             From <code>{inspection.tenant_ref.slice(0, 8)}</code>
             {inspection.workflow_key ? ` · ${inspection.workflow_key}` : ""} · exported{" "}

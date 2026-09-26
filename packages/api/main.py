@@ -42,6 +42,7 @@ from api.routes import (
 from core.observability.otel import configure_tracing
 from core.tenancy.scope import dispose_engine
 from core.usage_limits import UsageLimitExceededError
+from core.version import APP_VERSION
 
 log = structlog.get_logger()
 
@@ -85,7 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("api.shutdown")
 
 
-app = FastAPI(title="Pyrrhula API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Pyrrhula API", version=APP_VERSION, lifespan=lifespan)
 FastAPIInstrumentor.instrument_app(app)
 
 
