@@ -15,7 +15,9 @@ const btnPrimary =
 export function AdminTenantsPage() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [expandedSection, setExpandedSection] = useState<"users" | "mcp" | "egress">("users");
+  const [expandedSection, setExpandedSection] = useState<"users" | "mcp" | "egress" | "joining">(
+    "users",
+  );
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,6 +195,16 @@ export function AdminTenantsPage() {
                     <button
                       type="button"
                       className={btn}
+                      onClick={() => {
+                        setExpandedSection("joining");
+                        setExpanded(expanded === t.id && expandedSection === "joining" ? null : t.id);
+                      }}
+                    >
+                      Joining
+                    </button>{" "}
+                    <button
+                      type="button"
+                      className={btn}
                       onClick={() => verifyAudit.mutate(t.id)}
                       disabled={verifyAudit.isPending}
                     >
@@ -216,6 +228,8 @@ export function AdminTenantsPage() {
                         <TenantUsers tenantId={t.id} onError={setError} />
                       ) : expandedSection === "mcp" ? (
                         <TenantMcp tenantId={t.id} onError={setError} />
+                      ) : expandedSection === "joining" ? (
+                        <TenantJoining tenantId={t.id} onError={setError} />
                       ) : (
                         <TenantEgress tenantId={t.id} onError={setError} />
                       )}
@@ -672,5 +686,153 @@ function SignupSwitch({ onError }: { onError: (message: string) => void }) {
         </span>
       </span>
     </label>
+  );
+}
+
+/** Who may join an existing organization (POST /auth/register): closed, by request, or
+ * open. Under "request", applications queue here for a decision; approving picks the
+ * role, rejecting discards the password hash the application held. */
+function TenantJoining({
+  tenantId,
+  onError,
+}: {
+  tenantId: string;
+  onError: (message: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [roles, setRoles] = useState<Record<string, string>>({});
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["admin", "tenants", tenantId, "joining"] });
+
+  const policy = useQuery({
+    queryKey: ["admin", "tenants", tenantId, "joining", "policy"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/admin/tenants/{tenant_id}/registration-policy", {
+        params: { path: { tenant_id: tenantId } },
+      });
+      if (error) throw error;
+      return data as { policy: string; deployment_default: string; choices: string[] };
+    },
+  });
+  const requests = useQuery({
+    queryKey: ["admin", "tenants", tenantId, "joining", "requests"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/admin/tenants/{tenant_id}/registration-requests", {
+        params: { path: { tenant_id: tenantId } },
+      });
+      if (error) throw error;
+      return data as { id: string; email: string; display_name: string; requested_at?: string }[];
+    },
+  });
+  const setPolicy = useMutation({
+    mutationFn: async (value: string) => {
+      const { error } = await apiClient.PUT("/admin/tenants/{tenant_id}/registration-policy", {
+        params: { path: { tenant_id: tenantId } },
+        body: { policy: value },
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (e) => onError(String((e as { detail?: string })?.detail ?? e)),
+  });
+  const approve = useMutation({
+    mutationFn: async (requestId: string) => {
+      const { error } = await apiClient.POST(
+        "/admin/tenants/{tenant_id}/registration-requests/{request_id}/approve",
+        {
+          params: {
+            path: { tenant_id: tenantId, request_id: requestId },
+            query: { role: roles[requestId] ?? "viewer" },
+          },
+        },
+      );
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (e) => onError(String((e as { detail?: string })?.detail ?? e)),
+  });
+  const reject = useMutation({
+    mutationFn: async (requestId: string) => {
+      const { error } = await apiClient.POST(
+        "/admin/tenants/{tenant_id}/registration-requests/{request_id}/reject",
+        { params: { path: { tenant_id: tenantId, request_id: requestId } } },
+      );
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (e) => onError(String((e as { detail?: string })?.detail ?? e)),
+  });
+
+  const explain: Record<string, string> = {
+    closed: "nobody self-registers; you create every account",
+    request: "anyone may apply; you approve or reject each one here",
+    open: "anyone who knows the organization name gets a viewer account at once",
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="font-medium">Who may join</span>
+        <select
+          className={input}
+          value={policy.data?.policy ?? "closed"}
+          disabled={!policy.data || setPolicy.isPending}
+          onChange={(e) => setPolicy.mutate(e.target.value)}
+        >
+          {(policy.data?.choices ?? ["closed", "open", "request"]).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted-foreground">
+          — {explain[policy.data?.policy ?? "closed"]}. Unchosen organizations are{" "}
+          {policy.data?.deployment_default ?? "closed"}.
+        </span>
+      </div>
+      <div className="text-sm">
+        <div className="font-medium">Pending applications</div>
+        {requests.isLoading && <p className="text-muted-foreground">Loading…</p>}
+        {requests.isSuccess && requests.data.length === 0 && (
+          <p className="text-muted-foreground">None.</p>
+        )}
+        <ul className="mt-1 flex flex-col gap-1">
+          {(requests.data ?? []).map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-2">
+              <span>
+                {r.display_name}{" "}
+                <span className="text-xs text-muted-foreground">{r.email}</span>
+              </span>
+              <select
+                className={input}
+                value={roles[r.id] ?? "viewer"}
+                onChange={(e) => setRoles({ ...roles, [r.id]: e.target.value })}
+              >
+                {["viewer", "participant", "editor", "admin", "owner"].map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={btn}
+                disabled={approve.isPending}
+                onClick={() => approve.mutate(r.id)}
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                className={btn}
+                disabled={reject.isPending}
+                onClick={() => reject.mutate(r.id)}
+              >
+                Reject
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }

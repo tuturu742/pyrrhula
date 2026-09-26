@@ -16,6 +16,8 @@ export function AdminPluginReposPage() {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [ref, setRef] = useState("");
+  const [uploadName, setUploadName] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const repos = useQuery({
@@ -58,6 +60,35 @@ export function AdminPluginReposPage() {
     onSuccess: invalidate,
     onError: (e) => setError(String((e as { detail?: string })?.detail ?? e)),
   });
+
+  // The no-git path: an archive whose root holds plugin.json (a single wrapping
+  // directory, as GitHub's "Download ZIP" produces, is unwrapped server-side). Same
+  // multipart call the Models page makes for a cache archive; the generated client
+  // does not type multipart bodies.
+  async function upload(file: File) {
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("name", uploadName.trim() || file.name.replace(/\.(zip|tar\.gz|tgz)$/i, ""));
+      body.append("file", file);
+      const resp = await fetch("/api/admin/plugin-repositories/upload", {
+        method: "POST",
+        body,
+        credentials: "include",
+      });
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => null);
+        throw new Error(detail?.detail ?? `upload failed (${resp.status})`);
+      }
+      setUploadName("");
+      setError(null);
+      invalidate();
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const remove = useMutation({
     mutationFn: async (repositoryId: string) => {
@@ -110,6 +141,35 @@ export function AdminPluginReposPage() {
         </button>
       </form>
 
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-4">
+        <label className="flex flex-col gap-1 text-sm">
+          Upload a pack (.zip or .tar.gz with plugin.json at its root)
+          <input
+            className={input}
+            value={uploadName}
+            onChange={(e) => setUploadName(e.target.value)}
+            placeholder="name (defaults to the file name)"
+          />
+        </label>
+        <label className={`${btn} cursor-pointer ${uploading ? "opacity-50" : ""}`}>
+          {uploading ? "Uploading…" : "Choose archive"}
+          <input
+            type="file"
+            accept=".zip,.tar.gz,.tgz"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void upload(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <span className="text-xs text-muted-foreground">
+          For a deployment that cannot reach a git host. No credentials, no restart.
+        </span>
+      </div>
+
       <div className="flex flex-col gap-4">
         {repos.isLoading && <p className="text-muted-foreground">Loading…</p>}
         {repos.isSuccess && (repos.data ?? []).length === 0 && (
@@ -143,7 +203,7 @@ export function AdminPluginReposPage() {
                 >
                   Re-sync
                 </button>
-                {r.source === "git" && (
+                {(r.source === "git" || r.source === "upload") && (
                   <button
                     type="button"
                     className={btn}
