@@ -1,7 +1,7 @@
 """EmbeddingProvider port. Self-hosted embedding (bge-m3, CPU/GPU) is
 the default; a cloud adapter exists behind the same port for tenants who opt in, gated by
-the D14 egress policy on ``purpose='embed'`` — full-local is a supported deployment mode;
-embedding through a paid API must never be *required* .
+the egress policy on ``purpose='embed'`` — full-local is a supported deployment mode;
+embedding through a paid API must never be *required*.
 
 Model names use a ``local/`` prefix for self-hosted adapters (``provider_kind`` in
 ``core.ports.model_provider`` treats that the same as generation's ``ollama/`` prefix) and
@@ -9,7 +9,7 @@ a bare provider-qualified name (e.g. ``openai/text-embedding-3-large``) for clou
 LiteLLM.
 
 ``dimension`` is a hard property, not inferred after the fact: a chunk row records which
-model produced its vector (``knowledge_chunk.embedding_model``, A1.3), and a caller mixing
+model produced its vector (``knowledge_chunk.embedding_model``), and a caller mixing
 vectors from two different dimensions must fail loudly at the point of use, not silently
 return zero recall.
 """

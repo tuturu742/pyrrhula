@@ -125,15 +125,15 @@ class ModelProvider(Protocol):
 def provider_kind(model: str) -> str:
     """'local' if the model string routes to a local runtime -- Ollama via LiteLLM's
     ``ollama/`` prefix, or a directly-loaded self-hosted model via the ``local/`` prefix
-    (A1.3: embedding models, which don't go through LiteLLM at all) -- else 'cloud'.
+    (embedding models, which don't go through LiteLLM at all) -- else 'cloud'.
     Shared by ``GenerationRequest`` and ``EmbedRequest`` so egress policy uses one
     classifier regardless of purpose."""
     return "local" if model.startswith(("ollama/", "local/")) else "cloud"
 
 
 def check_egress(purpose: str, model: str, egress_policy: Mapping[str, Sequence[str]]) -> None:
-    """D14. An absent ``purpose`` key is permissive by default — the plan is explicit
-    that the default policy allows everything; egress becomes restrictive only once a
+    """An absent ``purpose`` key is permissive by default — the default policy allows
+    everything; egress becomes restrictive only once a
     tenant states a policy."""
     allowed = egress_policy.get(purpose)
     if allowed is None:

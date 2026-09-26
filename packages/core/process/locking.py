@@ -5,7 +5,7 @@ outside the row lock").
 
 **Claim, don't hold.** ``claim_session`` takes the row lock, checks/sets the watchdog
 marker (``claimed_at``/``claimed_by``), and commits immediately -- releasing the lock.
-The caller then does the slow work (a real model call, later, via B1.7) with *no* DB lock
+The caller then does the slow work (a real model call) with *no* DB lock
 held at all. ``commit_advance`` re-acquires a fresh, equally brief lock, verifies
 ``version`` hasn't moved since the claim (optimistic check -- ``SessionConflictError`` if
 it has), bumps it, and clears the claim marker. A crash during the slow middle section
@@ -233,7 +233,7 @@ async def advance_session_locked(
     max_steps: int = _MAX_STEPS_PER_ADVANCE,
 ) -> AdvanceResult:
     """The real, concurrency-safe entrypoint: claim -> run the interpreter (whose own
-    internal transactions are already short-lived, B1.2 -- the model call inside
+    internal transactions are already short-lived -- the model call inside
     ``execute_turn`` happens with no DB lock held, satisfying "model calls happen outside
     the row lock" without this function needing to release/reacquire around every
     internal step) -> commit (bump version, clear claim) on success, or release (without

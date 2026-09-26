@@ -1,4 +1,4 @@
-"""B1.2 acceptance criteria for the process interpreter, against a live Postgres."""
+"""Acceptance criteria for the process interpreter, against a live Postgres."""
 
 from __future__ import annotations
 
@@ -291,7 +291,7 @@ async def test_interpreter_fault_pauses_the_session_with_a_diagnostic_event(
     assert "not_a_declared_phase" in events[-1].payload["message"]
 
 
-# ── resume without duplicate side effects (T0.7 idempotency) ────────────────
+# ── resume without duplicate side effects (idempotency) ─────────────────────
 
 
 async def test_resumed_turn_with_the_same_peeked_event_seq_does_not_reexecute_the_side_effect(

@@ -169,8 +169,8 @@ async def reconstruct_state(
 class PinnedDefinitionMissingError(Exception):
     """The session's pinned ``process_definition_id`` no longer resolves. Resume refuses
     rather than falling back to "the newest version of that key" -- silently running a
-    dormant session against an edited definition is precisely the failure G4.1 exists to
-    make impossible."""
+    dormant session against an edited definition is precisely the failure this resume path
+    exists to make impossible."""
 
 
 @dataclass(frozen=True)
@@ -196,7 +196,7 @@ async def restore_session_from_checkpoint(
     tenant_id: uuid.UUID, session_id: uuid.UUID
 ) -> RestoredSession:
     """The hardened resume path for a session that has been dormant long enough for the
-    world around it to have moved (G4.1, req 20).
+    world around it to have moved.
 
     Three things it does that a naive "read the session row" resume does not:
 

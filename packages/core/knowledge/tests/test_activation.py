@@ -1,4 +1,4 @@
-"""A1.5 acceptance criteria: table-driven tests for keyword activation. Pure unit tests
+"""Acceptance criteria: table-driven tests for keyword activation. Pure unit tests
 (no DB) — ``activate_entries`` is a pure function over already-fetched entries.
 """
 
@@ -262,7 +262,7 @@ def test_state_round_trips_as_plain_dataclasses_across_calls() -> None:
 
 
 def test_replaying_the_same_turn_sequence_reproduces_identical_outcomes() -> None:
-    """INV-10 at the granularity A1.5 owns: given the same inputs at every step
+    """INV-10 at the granularity activation owns: given the same inputs at every step
     (including the rng_seed), replaying a sequence of activate_entries calls must
     reproduce identical activation outcomes at every turn."""
     entry = FakeEntry("maybe", keys=["gem"], trigger_pct=50, sticky=1, cooldown=1)

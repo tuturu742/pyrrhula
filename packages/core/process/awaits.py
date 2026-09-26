@@ -1,4 +1,4 @@
-"""The interrupt primitive (B1.6 ``await``): a phase suspends for human
+"""The interrupt primitive (``await``): a phase suspends for human
 input with a timeout transition -- the mechanism behind play-by-post pacing and, later,
 enterprise approval gates.
 
@@ -113,7 +113,7 @@ def make_await_hook(definition: ProcessDefinitionDSL | None = None) -> OnAwaitHo
     the documented plain-status-flip default.
 
     ``definition`` supplies the pacing defaults an individual ``PhaseSpec`` can't
-    see. It is optional so every pre-G4.3 caller keeps working unchanged -- an await
+    see. It is optional so a caller that predates reminders keeps working -- an await
     created without it simply has no reminder, which is what those callers already got."""
 
     async def hook(ctx: InterpreterContext) -> None:

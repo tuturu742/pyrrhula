@@ -1,7 +1,7 @@
-"""Repo registry (D15 follow-on): repos as first-class tenant resources.
+"""Repo registry: repos as first-class tenant resources.
 
-"Repo" in core follows the precedent ``core/knowledge/repo_ingestion.py`` set once D15 made
-delegated coding work a platform concern (v1.2's ``purpose='delegation'``): the repository is
+"Repo" in core follows the precedent ``core/knowledge/repo_ingestion.py`` set once
+delegated coding work became a platform concern (``purpose='delegation'``): the repository is
 infrastructure the platform hosts, not pack-domain vocabulary. A row names a repo in the
 server-side git store (its ``key`` is the store's directory), an optional import source, an
 optional encrypted access credential (``credential_ref`` -> ``provider_credential`` row --

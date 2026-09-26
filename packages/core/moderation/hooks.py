@@ -1,4 +1,4 @@
-"""The two moderation scans names (G4.14, req 31).
+"""The two moderation scans.
 
 **Authoring** (`scan_authored`) -- secrets, knowledge entries, and personas at write time.
 It reads a secret's `content` regardless of `disclosure_state`, deliberately: concealment
@@ -85,7 +85,7 @@ async def scan_generated(
 
     ``regenerate`` is called **at most once**, whatever happens. An agent that keeps
     producing blocked content gets the fallback and an alert, never a third attempt --
-    exactly as E2.7 reasons about a concealed agent that keeps leaking."""
+    exactly as the leak check reasons about a concealed agent that keeps leaking."""
     resolved = policy or await get_policy(tenant_id)
     if not resolved.enabled:
         return reply_text, ScanOutcome(allowed=True, action_taken="skipped")

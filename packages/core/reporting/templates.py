@@ -1,4 +1,4 @@
-"""`ReportTemplate` -- pack content, not code (G4.10, CLAUDE.md rule 9).
+"""`ReportTemplate` -- pack content, not code (CLAUDE.md rule 9).
 
 A template says *what kind of report* to produce: who it is for, what steps the pipeline
 runs, and what formats it renders to. It is declarative JSON validated by Pydantic, exactly
@@ -86,7 +86,7 @@ class ReportTemplate(BaseModel):
         if "fact_frame" not in kinds:
             raise ValueError(
                 "every report pipeline must include a `fact_frame` step -- structured facts "
-                "come from records, never from summarised prose (§11.5), and a pipeline "
+                "come from records, never from summarised prose, and a pipeline "
                 "without one is a pipeline that can only paraphrase"
             )
         if kinds.index("fact_frame") != 0:

@@ -1,4 +1,4 @@
-"""B1.3 acceptance criteria for the turn scheduler, against a live Postgres: table-driven
+"""Acceptance criteria for the turn scheduler, against a live Postgres: table-driven
 per-mode behavior (declared/initiative/free), initiative ties, mid-phase actor removal,
 and cursor persistence surviving kill/resume mid-rotation.
 """
@@ -331,8 +331,8 @@ async def test_default_resolver_with_real_agent_resolver_mixes_human_and_agent_a
 ) -> None:
     """a mixed any_of list (['human_participant', 'participant_agent']) exercised
     through the *real* persona_candidate_resolver (core.agents.scheduling), not a stub --
-    both a real workspace member and a real agent must show up together, since B1.3 and
-    its own resolvers were previously only ever tested independently."""
+    both a real workspace member and a real agent must show up together, since the
+    scheduler and its resolvers were previously only ever tested independently."""
     tenant_id, workspace_id, session_id = await _setup("sched-mixed-anyof")
     participant_agent_id = await seed_dev_agent(
         tenant_id, workspace_id, key="participant-agent", persona_type="participant"

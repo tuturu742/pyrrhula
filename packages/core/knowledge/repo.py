@@ -2,9 +2,9 @@
 read or written. **INV-1: only `core.assembler` and `core.overseer` may import
 this module** — enforced by `tests/architecture/test_inv1_import_graph.py`.
 
-A1.1 adds the basic, tenant-scoped "what does a source's current published version
-look like" reads — the shape the future assembler needs. The hard part (A1.4: hybrid
-vector+lexical+keyword retrieval, scoped and budgeted) is still to come; this is
+The basic, tenant-scoped "what does a source's current published version look like"
+reads — the shape the assembler needs. The hard part (hybrid vector+lexical+keyword
+retrieval, scoped and budgeted) lives in ``core.knowledge.retrieval``; this is
 deliberately just enough real content that the lint protects a module something actually
 calls, rather than an empty stub forever.
 

@@ -209,9 +209,9 @@ async def list_version_entries(tenant_id: uuid.UUID, version_id: uuid.UUID) -> l
 async def list_versions(
     tenant_id: uuid.UUID, knowledge_source_id: uuid.UUID
 ) -> list[KnowledgeSourceVersion]:
-    """the version history panel: every published version of a source, newest first.
-    ``knowledge_source_version`` has no companion "list all" read anywhere in A1.8 --
-    that task's own endpoints only ever needed one version at a time (a specific id, or
+    """The version history panel: every published version of a source, newest first.
+    ``knowledge_source_version`` had no companion "list all" read before this --
+    the other endpoints only ever needed one version at a time (a specific id, or
     the pair a diff compares) -- so this is new, not a duplicate of something else."""
     async with tenant_scope(tenant_id) as session:
         rows = (
@@ -227,7 +227,7 @@ async def list_versions(
 async def delete_draft_entry(
     tenant_id: uuid.UUID, knowledge_source_id: uuid.UUID, entry_key: str
 ) -> None:
-    """Removes an entry from the draft (A1.8: this is what makes "removed" a reachable
+    """Removes an entry from the draft (this is what makes "removed" a reachable
     diff outcome — publishing simply never sees a deleted draft row again). Only the
     draft; a published entry is an immutable historical snapshot and is never deleted —
     ``knowledge_entry`` isn't append-only at the grant level (only

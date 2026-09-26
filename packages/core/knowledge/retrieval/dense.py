@@ -4,7 +4,7 @@ against ``knowledge_chunk`` with the tenant/scope/class filter pushed into the S
 ``EXPLAIN``, proving the plan actually uses the filter, not just that the code has one).
 
 Doesn't reuse ``adapters.vector.pgvector.PgVectorStore``/the generic ``VectorStore`` port,
-despite that adapter's own docstring once saying A1.4 would "point [it] at the
+despite that adapter's own docstring once saying retrieval would "point [it] at the
 real knowledge_chunk table". That port's ``VectorSearchResult(payload: dict)`` shape was
 built around a single JSONB payload column (``vector_store_item``); ``knowledge_chunk``'s
 useful fields are several real columns (``entry_id``, ``version_id``, ``source_id`` via a
@@ -23,7 +23,7 @@ went on being citable in its original wording: the agent cites `k9`, `k9` says w
 says, and nothing in the trace mentions that the text is a version old. Resolve the set
 with ``core.knowledge.retrieval.versions.effective_version_ids``.
 
-``entry_key``/``token_count`` were added to ``RetrievalHit`` for A1.6: WRRF fusion and
+``entry_key``/``token_count`` are on ``RetrievalHit`` for fusion: WRRF fusion and
 bucket-fill need ``token_count`` to know how much budget a hit costs and ``entry_key`` for
 the manifest row shape  — cheaper to select them once here than to
 re-fetch per hit later.

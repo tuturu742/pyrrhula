@@ -1,4 +1,4 @@
-"""The report pipeline (G4.10, req 25).
+"""The report pipeline.
 
 Same two rules as the history summariser, at report scale -- and deliberately the *same
 implementation* of both, because a second copy is a second thing to get wrong:
@@ -150,8 +150,8 @@ def build_fact_frame(facts: tuple[MechanicalFact, ...], kinds: list[str]) -> Fac
 
 
 def render_redaction_stub(count: int) -> str:
-    """'s own wording. One function so every renderer -- markdown here, PDF and EPUB
-    in G4.11 -- emits the identical string, and a format that quietly dropped it would be
+    """The draft notice's wording. One function so every renderer -- markdown here, PDF
+    and EPUB elsewhere -- emits the identical string, and a format that quietly dropped it would be
     visibly different rather than plausibly different."""
     noun = "event" if count == 1 else "events"
     return f"> _[{count} {noun} not visible to you]_"

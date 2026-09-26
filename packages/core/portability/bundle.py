@@ -1,4 +1,4 @@
-"""The `.pyr` bundle format (G4.5, req 23/24): a ZIP with a `manifest.json`,
+"""The `.pyr` bundle format: a ZIP with a `manifest.json`,
 JSON for objects, JSONL for logs, Markdown for entry bodies, and a sha256 per file.
 
 Format decisions, all from and all load-bearing:
@@ -11,7 +11,7 @@ Format decisions, all from and all load-bearing:
   branches on it, because "which app wrote this" is a support question and "what shape is
   this" is a compatibility question, and conflating them is how format handling rots.
 * **Integrity is per file, plus the resolution hash chain on top.** The per-file hashes
-  catch a tampered bundle; the chain (verified at import, G4.6) catches a tampered *resolution
+  catch a tampered bundle; the chain (verified at import) catches a tampered *resolution
   history* specifically, so an archived session can prove nobody edited the rolls.
 * **Omissions are stubs, not silence.** Everything the exporter's visibility excluded lands
   in `manifest.redactions[]` as `{type, id, reason}`. A recipient can always tell the

@@ -1,4 +1,4 @@
-"""`.pyr` export (G4.5/, req 23/24).
+"""`.pyr` export.
 
 **The one rule this module exists to keep** : export runs through the *same*
 visibility resolution as context assembly. The first thing ``export_workspace`` does is
@@ -75,7 +75,7 @@ path gets written that nobody reviews against the leak test.
 
 Note participant is *holder*-scoped, not author-scoped: "my session log" means what I was
 told, and an author who happens not to hold their own secret still authored it. The two
-questions are different and G4.7 is where they stop being conflated."""
+questions are different and the export modes are where they stop being conflated."""
 
 _INSPECT_ACTION = "secret:inspect"
 _FULL_EXPORT_AUDIT_ACTION = "export:full"

@@ -1,4 +1,4 @@
-"""Fixture ProcessDefinitions (B1.1 subtask):  "Standard Session Flow"
+"""Fixture ProcessDefinitions: the "Standard Session Flow"
 example, translated into this module's concrete JSON shape (see ``schema.py``'s docstring
 for why -- the plan's own YAML snippet uses informal ``-> target`` shorthand that isn't
 valid, re-parseable syntax), and a minimal 3-phase MVP definition using core-neutral keys
@@ -173,7 +173,7 @@ MINIMAL_MVP_FLOW: dict[str, object] = {
 #   * directed (turn_policy='directed'): the conduct-gated scheduler
 #     (core.process.live_session) parks at ``discussion`` (flagged ``conductable``) instead
 #     of auto-running participants -- a human overseer conducts each turn (a directed model
-#     generation, or answering *as* a persona via the G4.4 override), then ends it, which
+#     generation, or answering *as* a persona via the override), then ends it, which
 #     sets ``conductor_wrap_up`` and lets the discussion phase's first gate jump straight to
 #     synthesis. ``regroup``/``max_rounds`` are an auto-mode concern the human paces manually.
 #
