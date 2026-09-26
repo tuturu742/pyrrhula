@@ -33,7 +33,6 @@ patches:
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)
 #   APP_DB_PASSWORD=$(openssl rand -hex 24)
 #   JWT_SECRET=$(openssl rand -base64 48)
-#   ADMIN_TOKEN=$(openssl rand -hex 24)
 #   ENCRYPTION_KEY=$(openssl rand -base64 32)
 #   DATABASE_URL=postgresql+asyncpg://pyrrhula:<POSTGRES_PASSWORD>@postgres:5432/pyrrhula
 #   APP_DATABASE_URL=postgresql+asyncpg://pyrrhula_app:<APP_DB_PASSWORD>@postgres:5432/pyrrhula

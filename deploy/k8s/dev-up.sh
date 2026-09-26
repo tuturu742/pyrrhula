@@ -55,7 +55,6 @@ if [ ! -f "$SECRETS" ]; then
 POSTGRES_PASSWORD=$PG
 APP_DB_PASSWORD=$APPPW
 JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
-ADMIN_TOKEN=$(openssl rand -hex 24)
 ENCRYPTION_KEY=$(openssl rand -base64 32)
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=$(openssl rand -hex 12)
@@ -120,7 +119,7 @@ stamp_image() { # stamp_image <deployment> <local image ref>
   kubectl -n pyrrhula patch deploy "$1" -p "$_patch" >/dev/null
 }
 echo "== roll deployments whose image changed"
-for _d in pyrrhula-api pyrrhula-worker pyrrhula-admin; do
+for _d in pyrrhula-api pyrrhula-worker; do
   stamp_image "$_d" localhost/pyrrhula:dev
 done
 stamp_image pyrrhula-web localhost/pyrrhula-web:dev
@@ -227,6 +226,3 @@ echo
 echo "  Generated on first run and stored in $SECRETS."
 echo "  Change the password IN THE APP after first login -- the account is created once"
 echo "  and editing the file afterwards does not rotate it."
-echo "  Legacy token console (deprecated):"
-echo "    kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100"
-echo "    token: grep ADMIN_TOKEN $SECRETS"

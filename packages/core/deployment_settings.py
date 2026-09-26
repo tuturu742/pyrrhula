@@ -128,6 +128,42 @@ async def set_retrieval_models(values: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+SIGNUP_KEY = "signup"
+
+
+async def signup_allowed() -> bool:
+    """Whether strangers may create an organization (``POST /auth/signup``).
+
+    A runtime policy the platform admin flips in the console, so it is stored here; the
+    environment (``PYRRHULA_ALLOW_TENANT_SIGNUP``) only says what a fresh deployment
+    starts with, which exists so an operator installing a closed instance has it closed
+    before the first boot rather than after the first click."""
+    from core.config import get_settings
+
+    default = bool(get_settings().allow_tenant_signup)
+    try:
+        async with unscoped_session() as session:
+            row = await session.scalar(
+                text("SELECT value FROM deployment_setting WHERE key = :k").bindparams(k=SIGNUP_KEY)
+            )
+    except Exception:  # noqa: BLE001 -- before the migration runs there is no table yet
+        return default
+    if isinstance(row, dict) and "allowed" in row:
+        return bool(row["allowed"])
+    return default
+
+
+async def set_signup_allowed(allowed: bool) -> bool:
+    async with unscoped_session() as session:
+        await session.execute(
+            text(
+                "INSERT INTO deployment_setting (key, value) VALUES (:k, CAST(:v AS jsonb)) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()"
+            ).bindparams(k=SIGNUP_KEY, v=__import__("json").dumps({"allowed": bool(allowed)})),
+        )
+    return bool(allowed)
+
+
 async def embedded_chunk_count() -> int:
     """How many chunks already carry a vector.
 

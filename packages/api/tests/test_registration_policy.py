@@ -154,22 +154,18 @@ async def test_one_organizations_policy_does_not_travel_to_another(
     assert _register(client, shut_slug, f"{uuid.uuid4().hex}@example.com").status_code == 403
 
 
-_ADMIN_TOKEN = "registration-policy-test-token"
+_ADMIN_HEADERS: dict[str, str] = {}
 
 
 @pytest.fixture(autouse=True)
-def _admin_token() -> Iterator[None]:
-    from core.config import get_settings
-
-    settings = get_settings()
-    original = settings.admin_token
-    settings.admin_token = _ADMIN_TOKEN
+def _admin_login(platform_admin_headers: dict[str, str]) -> Iterator[None]:
+    _ADMIN_HEADERS.update(platform_admin_headers)
     yield
-    settings.admin_token = original
+    _ADMIN_HEADERS.clear()
 
 
 def _admin(client: TestClient) -> dict[str, str]:
-    return {"Authorization": f"Bearer {_ADMIN_TOKEN}"}
+    return dict(_ADMIN_HEADERS)
 
 
 async def test_approving_an_application_makes_a_working_account(

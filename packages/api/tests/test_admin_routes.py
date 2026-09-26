@@ -1,5 +1,5 @@
-"""Phase B admin console: token gate, tenant/user creation, and that deactivation actually
-blocks the main app -- all over real HTTP against both apps sharing one database."""
+"""The platform-admin API: who may call it, tenant/user creation, and that deactivation
+actually blocks the app -- all over real HTTP."""
 
 from __future__ import annotations
 
@@ -10,12 +10,10 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 
-from api.admin.app import app as admin_app
 from api.main import app as main_app
 from api.redis_client import get_redis
-from core.config import get_settings
 
-_ADMIN_TOKEN = "test-admin-token"
+_TOKEN = ""
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -24,17 +22,16 @@ async def _reset_ip_rate_limit(redis_available: None) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _admin_token() -> Iterator[None]:
-    settings = get_settings()
-    original = settings.admin_token
-    settings.admin_token = _ADMIN_TOKEN
+def _admin_login(platform_admin_headers: dict[str, str]) -> Iterator[None]:
+    global _TOKEN
+    _TOKEN = platform_admin_headers["Authorization"].removeprefix("Bearer ")
     yield
-    settings.admin_token = original
+    _TOKEN = ""
 
 
 @pytest.fixture
 def admin() -> Iterator[TestClient]:
-    with TestClient(admin_app) as c:
+    with TestClient(main_app) as c:
         yield c
 
 
@@ -44,11 +41,11 @@ def api() -> Iterator[TestClient]:
         yield c
 
 
-def _auth(token: str = _ADMIN_TOKEN) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+def _auth(token: str | None = None) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token or _TOKEN}"}
 
 
-def test_admin_requires_token(admin: TestClient, db_available: None) -> None:
+def test_admin_requires_a_platform_admin(admin: TestClient, db_available: None) -> None:
     assert admin.get("/admin/tenants").status_code == 401
     assert admin.get("/admin/tenants", headers=_auth("nope")).status_code == 401
     assert admin.get("/admin/tenants", headers=_auth()).status_code == 200

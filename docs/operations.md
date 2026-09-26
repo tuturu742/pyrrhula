@@ -122,8 +122,9 @@ actually means. Reach for the CLI only when the rows themselves must go.
 
 Two different questions, and they were not equally guarded:
 
-* **Creating a new organization** — `POST /auth/signup`, gated by
-  `PYRRHULA_ALLOW_TENANT_SIGNUP`. It cannot be used to reach an existing organization: a
+* **Creating a new organization** — `POST /auth/signup`, gated by the **Self-serve
+  signup** switch in the admin console (`PYRRHULA_ALLOW_TENANT_SIGNUP` is only what a
+  fresh deployment starts with). It cannot be used to reach an existing organization: a
   slug collision allocates a new suffix rather than joining the one that is there.
 * **Joining an existing organization** — `POST /auth/register`, which names its
   organization in the `X-Pyrrhula-Tenant` header. This one checked nothing but the per-IP
@@ -151,13 +152,14 @@ chose, so approving mints the account without asking them to choose again. Appro
 where you pick their role. Rejecting discards the hash.
 
 ```bash
-# from a script, with the ops token
+# from a script, as a platform admin ($TOKEN from POST /auth/login with
+# X-Pyrrhula-Tenant: admin)
 curl -X PUT "$API/admin/tenants/$TENANT/registration-policy" \
-  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN" \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' -d '{"policy": "request"}'
 
 curl "$API/admin/tenants/$TENANT/registration-requests" \
-  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN"
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Seeded sample tenants have no human accounts at all — seeding creates personas, which are
@@ -287,16 +289,17 @@ python scripts/verify_deploy.py exec
 
 ## The admin console
 
-A separate app from the tenant-facing one, for the platform operator rather than any
-tenant. It is authenticated by JWT as a platform admin; `PYRRHULA_ADMIN_TOKEN` is a
-header-based fallback for the standalone deployment shape.
+The platform operator's pages in the same UI, reached by signing in with organization
+`admin` (or, on a single-organization deployment, as that organization's owner). There
+is no separate app and no shared token: every admin call carries a platform admin's own
+login.
 
 | Page | What it answers |
 |---|---|
-| **Tenants** | who exists on this deployment, how many members and agents each has; create one, deactivate or reactivate it, pin its workflow and vocabulary overlay, manage its users, grant MCP servers, set its egress policy, verify its audit chain |
+| **Tenants** | who exists on this deployment, how many members and agents each has; create one, deactivate or reactivate it, pin its workflow and vocabulary overlay, manage its users, grant MCP servers, set its egress policy, verify its audit chain; and the deployment-wide **Self-serve signup** switch |
 | **Plugin repositories** | which workflow-content repositories this deployment trusts and at which commit; register one at a pinned ref, upload an archive for an air-gapped install, re-sync, remove |
 | **Retrieval models** | which embedding and rerank models are installed; download one, upload one, choose which is active. A freshly purged deployment has none, and **every session fails at context assembly until one finishes** |
-| **Assistant model** | the deployment-level default model for the workspace assistant |
+| **Assistant model** | the connection the admin assistant itself runs on |
 
 What it deliberately cannot do: delete a tenant (see above), read any tenant's session
 content, or change a tenant's own data. Deactivation is the reversible, audited stand-in

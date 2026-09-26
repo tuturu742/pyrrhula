@@ -119,8 +119,7 @@ and prints the URL.
   password when it finishes**; they are also in `.env`
   (`PYRRHULA_ADMIN_EMAIL`/`PYRRHULA_ADMIN_PASSWORD`). Change the password in the app
   after first login — the account is created once, so editing `.env` afterwards does not
-  rotate it. More admins can be added from the console. The legacy token console on
-  http://localhost:8100 still works (token: `grep ADMIN_TOKEN .env`) but is deprecated.
+  rotate it. More admins can be added from the console.
 - **Rootless podman**: enable the socket first —
   `systemctl --user enable --now podman.socket` (the installer warns if missing;
   without it delegation falls back to no-environment mode).
@@ -162,7 +161,7 @@ the kustomize overlay, runs the migration Job, and flips the pods to offline
 embedding mode once the model cache is warm.
 
 - **UI** http://pyrrhula.localhost (k3s traefik; `*.localhost` needs no DNS setup).
-- **Admin console** `kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100`.
+- **Platform admin** in the same UI: sign in with organization `admin`.
 - Delegated coding agents run as Jobs in `pyrrhula-envs`, restricted by
   NetworkPolicy to DNS + the api's git endpoint + the internet.
 - **First boot** downloads the 2.2 GB embedding model into the cache volume — the
@@ -219,8 +218,9 @@ whose root holds `plugin.json`. An archive with a single wrapping directory (Git
 with no redeploy:
 
 ```bash
+# $TOKEN: a platform admin's login (POST /auth/login with X-Pyrrhula-Tenant: admin)
 curl -sS -X POST http://localhost:8000/admin/plugin-repositories/upload \
-  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN" \
+  -H "Authorization: Bearer $TOKEN" \
   -F name=my-workflows -F file=@my-workflows.zip
 ```
 

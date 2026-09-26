@@ -93,6 +93,7 @@ export function AdminTenantsPage() {
           {creating ? "Cancel" : "New tenant"}
         </button>
       </div>
+      <SignupSwitch onError={setError} />
       {error && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
@@ -629,5 +630,47 @@ function TenantEgress({
         </button>
       </div>
     </div>
+  );
+}
+
+/** Whether strangers may create their own organization (POST /auth/signup). A runtime
+ * policy, so it lives here and not in the deployment's environment; the environment
+ * only says what a fresh install starts with. */
+function SignupSwitch({ onError }: { onError: (message: string) => void }) {
+  const queryClient = useQueryClient();
+  const signup = useQuery({
+    queryKey: ["admin-signup"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/admin/signup");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const save = useMutation({
+    mutationFn: async (allowed: boolean) => {
+      const { error } = await apiClient.PUT("/admin/signup", { body: { allowed } });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin-signup"] }),
+    onError: (e) => onError(String((e as { detail?: string })?.detail ?? e)),
+  });
+  if (!signup.data) return null;
+  return (
+    <label className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+      <input
+        type="checkbox"
+        checked={signup.data.allowed}
+        disabled={save.isPending}
+        onChange={(e) => save.mutate(e.target.checked)}
+      />
+      <span>
+        <span className="font-medium">Self-serve signup</span>{" "}
+        <span className="text-muted-foreground">
+          — strangers may create their own organization. Currently{" "}
+          {signup.data.allowed ? "on" : "off"}; this deployment started{" "}
+          {signup.data.environment_default ? "on" : "off"}.
+        </span>
+      </span>
+    </label>
   );
 }

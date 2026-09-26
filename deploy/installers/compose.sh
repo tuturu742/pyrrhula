@@ -100,7 +100,6 @@ if [ ! -f .env ]; then
 PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)
 PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)
 PYRRHULA_JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
-PYRRHULA_ADMIN_TOKEN=$(openssl rand -hex 24)
 PYRRHULA_ENCRYPTION_KEY=$(openssl rand -base64 32)
 PYRRHULA_ADMIN_EMAIL=admin@example.com
 PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)
@@ -339,5 +338,4 @@ else
   echo "  Next   Admin -> Models: choose and download the retrieval models (needed"
   echo "         for semantic search), then add a model connection on Connections."
 fi
-echo "  Legacy token console (deprecated): http://localhost:$(envval .env PYRRHULA_ADMIN_PORT 8100)  (token: grep ADMIN_TOKEN .env)"
 echo "  Docs   docs/install.md (post-install, TLS, upgrades, troubleshooting)"

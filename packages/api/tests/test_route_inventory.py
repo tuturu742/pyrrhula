@@ -36,8 +36,8 @@ _EXEMPT_PATHS = {"/health", "/openapi.json", "/docs", "/redoc", "/docs/oauth2-re
 _EXEMPT_PREFIXES = ("/auth", "/git/", "/p/")
 
 # Routes gated by an authenticator other than get_request_context. require_platform_admin
-# accepts the ops token OR resolves a normal admin-tenant JWT (calling
-# get_request_context itself, outside the Depends graph).
+# resolves a normal admin-tenant JWT (calling get_request_context itself, outside the
+# Depends graph).
 _ALTERNATE_AUTHENTICATORS = {require_platform_admin}
 
 

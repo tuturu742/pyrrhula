@@ -19,6 +19,7 @@ from api.auth.tokens import issue_token
 from api.middleware.rate_limit import rate_limit_by_ip
 from api.middleware.tenant import resolve_tenant_for_auth
 from core.config import get_settings
+from core.deployment_settings import signup_allowed
 from core.tenancy.models import Identity, Membership, Principal, Tenant
 from core.tenancy.preferences import session_lifetime_seconds
 from core.tenancy.scope import tenant_scope, unscoped_session
@@ -118,7 +119,7 @@ async def public_config() -> PublicConfigResponse:
     org_count = await _organization_count()
     return PublicConfigResponse(
         single_tenant=settings.single_tenant_ui and org_count <= 1,
-        allow_signup=settings.allow_tenant_signup,
+        allow_signup=await signup_allowed(),
         has_organization=org_count > 0,
     )
 
@@ -248,7 +249,6 @@ async def signup(body: SignupRequest, response: Response) -> SignupResponse:
     default workspace + scopes, owner principal/membership, login identity, and the
     owner's overseer workspace membership (session conducting/inspection is gated on a
     workspace role, which tenant ownership alone does not grant)."""
-    from core.config import get_settings
     from core.tenancy.models import WorkspaceMembership
     from core.tenancy.provisioning import (
         TenantExistsError,
@@ -257,7 +257,7 @@ async def signup(body: SignupRequest, response: Response) -> SignupResponse:
         delete_principal,
     )
 
-    if not get_settings().allow_tenant_signup:
+    if not await signup_allowed():
         raise HTTPException(status_code=403, detail="signup is disabled on this deployment")
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="password must be at least 8 characters")

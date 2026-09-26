@@ -13,7 +13,7 @@ spec:
       labels:
         app: pyrrhula-migrate
     spec:
-      # Service env-var injection (PYRRHULA_ADMIN_PORT=tcp://...) collides with
+      # Service env-var injection (PYRRHULA_API_PORT=tcp://...) collides with
       # pydantic-settings' PYRRHULA_ prefix -- observed live as a worker crashloop.
       enableServiceLinks: false
       restartPolicy: Never

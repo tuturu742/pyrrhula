@@ -12,7 +12,6 @@ resources:
   - api.yaml
   - worker.yaml
   - web.yaml
-  - admin.yaml
   - migrate-job.yaml
   - searxng.yaml
   # No ollama and no MCP sidecars here on purpose. Both used to ship in the base with a

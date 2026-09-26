@@ -60,13 +60,6 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
 
-    # Legacy ops shortcut into the platform-admin API: a shared bearer token, entirely
-    # separate from the per-tenant JWTs above. Empty does NOT stop anything from starting
-    # (nothing checks it at startup) -- it disables the shortcut, and every admin request
-    # then has to authenticate as an owner/admin of the reserved admin tenant through the
-    # normal JWT path (api/routes/admin.py: `if expected and ...`). That is the supported
-    # route now; the standalone console it serves is marked deprecated.
-    admin_token: str = ""
     # Bootstrap login for the reserved admin tenant (organization "admin" on the normal
     # login form): when both are set, api startup idempotently ensures this owner account
     # exists. Rotating the password here does NOT update an existing account.
@@ -97,8 +90,10 @@ class Settings(BaseSettings):
     # The image previews run. Needs a Python interpreter and nothing else: the serving
     # command is dependency-free stdlib (see core/previews/service.py).
     preview_image: str = "docker.io/library/python:3.12-slim"
-    # Self-serve organization signup (POST /auth/signup). Disable on deployments where
-    # only the platform admin creates tenants.
+    # What a fresh deployment starts with for self-serve organization signup
+    # (POST /auth/signup). The admin console's switch (core.deployment_settings) wins
+    # once set; this exists so an operator installing a closed instance has it closed
+    # before the first boot rather than after the first click.
     allow_tenant_signup: bool = True
     # Per-principal budget must absorb a normal SPA session: the session view alone
     # polls ~5 queries every 10s, and a second tab doubles that. 60/min starved real

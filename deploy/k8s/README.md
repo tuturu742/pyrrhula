@@ -6,7 +6,7 @@ Two independent things live here:
    (compose/podman) and let delegated coding agents execute as one-shot **Jobs** in a
    cluster namespace.
 2. **The whole app on k8s** (`base/` + `overlays/dev/` + `dev-up.sh`) — api, worker,
-   web, admin, postgres (pgvector), redis, migration Job, ingress.
+   web, postgres (pgvector), redis, migration Job, ingress.
 
 Both were built against a single-node [k3s](https://k3s.io) on a dev machine; anything
 conformant works with the caveats below.
@@ -87,7 +87,7 @@ Details worth knowing:
   port 8000, and the internet (k3s enforces NetworkPolicy). Adjust the `except` CIDRs
   if your cluster uses non-default pod/service ranges.
 - **Nothing host-specific in `base/`**: a clean install brings up postgres, redis, api,
-  worker, web and admin — and nothing else. A host-local model provider and host-local
+  worker and web — and nothing else. A host-local model provider and host-local
   MCP servers used to ship in the base with one developer's LAN address baked in; both
   are opt-in now.
 
@@ -120,9 +120,7 @@ Details worth knowing:
   they live in `overlays/dev/secrets.env` as `ADMIN_EMAIL`/`ADMIN_PASSWORD`. Change the
   password in the app after first login — the bootstrap creates the account once and
   never updates it, so editing the file afterwards does not rotate anything. Existing
-  deployments without these keys get them appended on the next run. The legacy token
-  console remains reachable via
-  `kubectl -n pyrrhula port-forward deploy/pyrrhula-admin 8100:8100` (deprecated).
+  deployments without these keys get them appended on the next run.
 - **Images, by default**: `dev-up.sh` builds them and imports them straight into k3s's
   containerd (`k3s ctr images import`), and `overlays/dev` uses those names
   (`localhost/pyrrhula:dev`) with pull policy `IfNotPresent`. A fresh machine needs
@@ -245,8 +243,9 @@ as produced by GitHub's "Download ZIP", is unwrapped for you). The content lands
 blobs PVC, so it survives restarts and is shared by the api and worker. Or from a shell:
 
 ```bash
+# $TOKEN: a platform admin's login (POST /auth/login with X-Pyrrhula-Tenant: admin)
 curl -sS -X POST http://<host>/admin/plugin-repositories/upload \
-  -H "Authorization: Bearer $PYRRHULA_ADMIN_TOKEN" \
+  -H "Authorization: Bearer $TOKEN" \
   -F name=my-workflows -F file=@my-workflows.zip
 ```
 

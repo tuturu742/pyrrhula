@@ -1,14 +1,10 @@
 """Platform-admin routes, mounted on the MAIN api under ``/admin``.
 
-Two ways in, checked in this order by ``require_platform_admin``:
-
-1. the legacy shared bearer token (``PYRRHULA_ADMIN_TOKEN``) -- kept for scripts, CI
-   and bootstrap, and for the deprecated standalone admin app (which now just mounts
-   this same router);
-2. a normal user JWT belonging to a platform admin -- an owner/admin of the reserved
-   admin tenant (the "log in with organization 'admin'" path), or, on a single-tenant
-   deployment, the sole organization's own owner. ``api.auth.platform_admin`` is the
-   single place that decides, so the gate and what ``/me`` reports cannot disagree.
+One way in, checked by ``require_platform_admin``: a normal user JWT belonging to a
+platform admin -- an owner/admin of the reserved admin tenant (the "log in with
+organization 'admin'" path), or, on a single-tenant deployment, the sole organization's
+own owner. ``api.auth.platform_admin`` is the single place that decides, so the gate and
+what ``/me`` reports cannot disagree. There is no shared token and no separate console.
 
 Deactivation is a soft UPDATE; truly deleting a tenant stays the ``core.tenancy.purge``
 CLI's job, never a button here.
@@ -59,17 +55,12 @@ async def require_platform_admin(
     authorization: str | None = Header(default=None),
     pyrrhula_session: str | None = Cookie(default=None),
 ) -> None:
-    """Admit the legacy ops token OR a platform admin.
+    """Admit a platform admin -- their own login, nothing shared.
 
     "Platform admin" is not always an admin-tenant membership: on a single-tenant
     deployment the sole organization's owner is one, because there is no one else it
     could be. See ``api.auth.platform_admin``."""
-    expected = get_settings().admin_token
-    scheme, _, value = (authorization or "").partition(" ")
-    if expected and scheme.lower() == "bearer" and value == expected:
-        return
-
-    # Not the ops token -> the normal JWT path (raises 401 when no token at all).
+    # The normal JWT path (raises 401 when no token at all).
     ctx = await get_request_context(authorization, pyrrhula_session, None)
     if not await is_platform_admin(ctx.tenant_id, ctx.principal_id):
         raise HTTPException(status_code=403, detail="platform admin required")
@@ -86,9 +77,9 @@ async def _audit_admin(
     tenant_id: uuid.UUID, action: str, resource_type: str, detail: dict[str, object]
 ) -> None:
     """Platform-admin changes to a tenant's configuration are auditable events in THAT
-    tenant's chain (it is their record of what was changed on their behalf). The acting
-    principal is the admin tenant's own principal when a JWT was used; the shared ops
-    token has no principal, so those rows attribute to the admin tenant id itself."""
+    tenant's chain (it is their record of what was changed on their behalf). The rows
+    attribute to the admin tenant itself as the actor: the platform admin is not a
+    principal of the tenant being changed."""
     try:
         from core.audit.service import AuditService
 
@@ -298,6 +289,41 @@ async def get_retrieval_models_endpoint() -> RetrievalModelsResponse:
 
     effective = await get_retrieval_models()
     return RetrievalModelsResponse(**effective, embedded_chunks=await embedded_chunk_count())
+
+
+class AdminSignupBody(BaseModel):
+    allowed: bool
+
+
+class AdminSignupResponse(BaseModel):
+    allowed: bool
+    # What the deployment started with (PYRRHULA_ALLOW_TENANT_SIGNUP). Shown so an
+    # operator can tell a console choice from the install's own default.
+    environment_default: bool
+
+
+@router.get("/signup")
+async def get_signup_endpoint() -> AdminSignupResponse:
+    """Whether strangers may create their own organization on this deployment."""
+    from core.deployment_settings import signup_allowed
+
+    return AdminSignupResponse(
+        allowed=await signup_allowed(),
+        environment_default=bool(get_settings().allow_tenant_signup),
+    )
+
+
+@router.put("/signup")
+async def set_signup_endpoint(body: AdminSignupBody) -> AdminSignupResponse:
+    """Flip self-serve signup at runtime -- a policy, so a console switch and not a
+    redeploy."""
+    from core.deployment_settings import set_signup_allowed
+
+    allowed = await set_signup_allowed(body.allowed)
+    await _audit_admin(ADMIN_TENANT_ID, "deployment.signup", "deployment", {"allowed": allowed})
+    return AdminSignupResponse(
+        allowed=allowed, environment_default=bool(get_settings().allow_tenant_signup)
+    )
 
 
 class AdminAssistantModelBody(BaseModel):

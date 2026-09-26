@@ -3529,6 +3529,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signup Endpoint
+         * @description Whether strangers may create their own organization on this deployment.
+         */
+        get: operations["get_signup_endpoint_admin_signup_get"];
+        /**
+         * Set Signup Endpoint
+         * @description Flip self-serve signup at runtime -- a policy, so a console switch and not a
+         *     redeploy.
+         */
+        put: operations["set_signup_endpoint_admin_signup_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/assistant/model": {
         parameters: {
             query?: never;
@@ -4062,6 +4087,18 @@ export interface components {
             api_base?: string | null;
             /** Api Key */
             api_key?: string | null;
+        };
+        /** AdminSignupBody */
+        AdminSignupBody: {
+            /** Allowed */
+            allowed: boolean;
+        };
+        /** AdminSignupResponse */
+        AdminSignupResponse: {
+            /** Allowed */
+            allowed: boolean;
+            /** Environment Default */
+            environment_default: boolean;
         };
         /** AdvanceClockRequest */
         AdvanceClockRequest: {
@@ -15192,6 +15229,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetrievalModelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signup_endpoint_admin_signup_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSignupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_signup_endpoint_admin_signup_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSignupBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSignupResponse"];
                 };
             };
             /** @description Validation Error */

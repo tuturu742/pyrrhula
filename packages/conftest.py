@@ -49,6 +49,38 @@ async def redis_available() -> AsyncIterator[None]:
     await close_redis()
 
 
+@pytest_asyncio.fixture
+async def platform_admin_headers(db_available: None, redis_available: None) -> dict[str, str]:
+    """A fresh platform-admin login: an owner in the reserved admin tenant, signed in
+    through the API exactly as an operator is. The bearer this returns is the only thing
+    ``require_platform_admin`` accepts -- there is no shared ops token any more."""
+    import uuid
+
+    from fastapi.testclient import TestClient
+
+    from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider
+    from api.main import app
+    from api.redis_client import get_redis
+    from core.tenancy.admin import ADMIN_TENANT_ID
+    from core.tenancy.provisioning import create_tenant_user
+
+    email = f"admin-{uuid.uuid4().hex[:10]}@example.com"
+    password = "correct horse battery"
+    principal_id = await create_tenant_user(ADMIN_TENANT_ID, "Platform Admin", "owner")
+    await LocalArgon2IdentityProvider().register_local(
+        ADMIN_TENANT_ID, principal_id, email, password
+    )
+    await get_redis().delete("ratelimit:ip:testclient")
+    with TestClient(app) as client:
+        login = client.post(
+            "/auth/login",
+            json={"email": email, "password": password},
+            headers={"X-Pyrrhula-Tenant": "admin"},
+        )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def purge_tenants_this_run_created() -> AsyncIterator[None]:
     """See ``core.tenancy.tenant_cleanup``."""

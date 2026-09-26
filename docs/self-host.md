@@ -33,8 +33,7 @@ present, so a manual quickstart that leaves them blank comes up with no platform
 no way to become one. (`./install.sh` generates and prints them for you; this hand-rolled
 path does not — that is the difference between the two routes above.)
 Change the password in the app after first login; the account is bootstrapped once and
-editing `.env` later does not rotate it. The legacy token console on
-http://localhost:8100 (gated by `PYRRHULA_ADMIN_TOKEN`) is deprecated.
+editing `.env` later does not rotate it.
 
 First start downloads the embedding model (~2 GB) into the `pyrrhula-hf` volume; set
 `PYRRHULA_HF_OFFLINE=1` afterwards for offline restarts.

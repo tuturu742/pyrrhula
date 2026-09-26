@@ -54,7 +54,6 @@ services:
       PYRRHULA_APP_DB_PASSWORD: ${PYRRHULA_APP_DB_PASSWORD:?set in .env}
       PYRRHULA_REDIS_URL: redis://redis:6379/0
       PYRRHULA_JWT_SECRET: ${PYRRHULA_JWT_SECRET:?set in .env (openssl rand -base64 48)}
-      PYRRHULA_ADMIN_TOKEN: ${PYRRHULA_ADMIN_TOKEN:?set in .env}
       # Optional: bootstrap a platform-admin login (organization "admin" on the normal
       # sign-in form). Idempotent; the admin console can add more admins afterwards.
       PYRRHULA_ADMIN_EMAIL: ${PYRRHULA_ADMIN_EMAIL:-}
@@ -154,26 +153,6 @@ services:
       - "${PYRRHULA_WEB_PORT:-5173}:80"
     depends_on:
       - api
-
-  # Platform-admin console (list/create tenants + users). Gated by PYRRHULA_ADMIN_TOKEN.
-  admin:
-    container_name: pyrrhula_admin
-    image: pyrrhula:latest
-    restart: always
-    command: ["admin"]
-    environment: *app_env
-    volumes:
-      - pyrrhula-blobs:/app/data/blobs
-      # Uploads land in the blobs volume; hand-placed packs are read from here. The admin
-      # app runs the same boot-time plugin sync the api does.
-      - ./plugins-local:/app/plugins-local:ro
-    ports:
-      - "${PYRRHULA_ADMIN_PORT:-8100}:8100"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
   # Agent web search (persona "web search" toggle). Not exposed on the host; agents
   # reach it in-network. The settings file enables the JSON API the platform queries;

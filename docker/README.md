@@ -18,7 +18,7 @@ manual walkthrough for operators who want to assemble it themselves.
 
 What the stack runs: `postgres` (pgvector), `redis`, `migrate` (one-shot, exits 0),
 `api` (:8000, `PYRRHULA_API_PORT` to override), `worker`, `web` (nginx serving the
-built UI on :5173, proxying `/api/*`), `admin` (platform console on :8100), and
+built UI on :5173, proxying `/api/*`), and
 `searxng` (web search for agents that enable it).
 
 Tear down:
