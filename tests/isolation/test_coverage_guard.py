@@ -1,7 +1,7 @@
 """Coverage guard: every tenant_id-bearing table must have an explicit
 filter-omission test, not just an RLS policy. ``test_rls_catalog.py`` proves the policy
 exists; this proves *someone actually exercised it* — the two failure modes are
-different (a policy can exist and still be wrong, e.g. the NULLIF gotcha found in T0.2).
+different (a policy can exist and still be wrong, e.g. the NULLIF gotcha).
 
 When this fails after adding a table, the fix is almost always: add a row-seeding helper
 and a filter-omission test for the new table in ``test_filter_omission_matrix.py``, then
@@ -16,7 +16,7 @@ from core.tenancy.scope import unscoped_session
 from tests.isolation.test_rls_catalog import _DOCUMENTED_NO_RLS_EXCEPTION
 
 # Tables with an explicit filter-omission test: test_filter_omission_matrix.py, or
-# test_tenant_scope_smoke.py (`principal`/`workspace`, T0.2), or
+# test_tenant_scope_smoke.py (`principal`/`workspace`), or
 # test_walking_skeleton_filter_omission.py, or
 # test_knowledge_filter_omission.py, or test_secret_tables.py, or
 # test_behavior_profile.py, or test_entity_schema.py, or

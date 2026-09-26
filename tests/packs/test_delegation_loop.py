@@ -168,7 +168,7 @@ async def _setup_pilot(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> _Pilot:
                 content="Vocabulary is domain-neutral. Add the widget only behind a flag.",
             ),
             RepoFile(
-                path="tasks/phase-4/G4.17-dogfood-pilot.md",
+                path="tasks/wire-the-pilot-loop.md",
                 content="Add the widget: wire the pilot loop end to end.",
             ),
         ],
@@ -314,7 +314,7 @@ async def test_pilot_work_item_lifecycle_is_record_driven(
                 )
             ).all()
         }
-    assert entry_key_for("tasks/phase-4/G4.17-dogfood-pilot.md") in backlog
+    assert entry_key_for("tasks/wire-the-pilot-loop.md") in backlog
     assert entry_key_for("CLAUDE.md") in backlog
 
     states = [

@@ -24,7 +24,7 @@ _SECRET_CONTENT = "the missing heir is actually the innkeeper in disguise all al
 
 class _FixedVectorEmbeddingProvider:
     """Maps specific texts to specific vectors under full test control -- a hash-based
-    stub (`StubEmbeddingProvider`, A1.3) can't reliably produce "this text is
+    stub (`StubEmbeddingProvider`) can't reliably produce "this text is
     semantically close to that one" on demand, which is exactly what these tests need."""
 
     def __init__(self, vectors: dict[str, list[float]], default: list[float]) -> None:
@@ -133,7 +133,7 @@ async def test_revealed_secrets_are_not_flagged_by_the_leak_check(db_available: 
     )
     # The reply states the fact verbatim -- if this secret were still in the concealed
     # set, it would trigger immediately. It is deliberately *not* passed to
-    # concealed_secrets at all (the caller's job, per E2.6, is to only ever include
+    # concealed_secrets at all (the caller's job is to only ever include
     # secrets whose disposition this turn is conceal/hint -- a revealed or public
     # secret is never a candidate here in the first place, structurally, not by a
     # runtime "is this revealed?" check this module would otherwise need).

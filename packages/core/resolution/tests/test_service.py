@@ -1,4 +1,4 @@
-"""C1.6 acceptance criteria for the resolution trust chain, against a live Postgres."""
+"""Acceptance criteria for the resolution trust chain, against a live Postgres."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ async def _setup(slug_prefix: str) -> tuple[uuid.UUID, uuid.UUID, RuleSystemDefi
 
 
 # ── the anti-hallucination property itself (also covered at the validate() level in
-# C1.5; here it's proven end to end through resolve(), including "no record written") ──
+# the validator; here it's proven end to end through resolve(), including "no record written") ──
 
 
 async def test_invalid_resolution_raises_and_writes_no_record(db_available: None) -> None:

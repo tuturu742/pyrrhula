@@ -1,8 +1,8 @@
 """Embedding job handlers  — the worker-side wiring ``core.knowledge.embedding``
 needs but can't import itself: which ``EmbeddingProvider`` adapter
-(``worker.embedding_provider_factory``), and the tenant's D14 egress policy
+(``worker.embedding_provider_factory``), and the tenant's egress policy
 (``Tenant.settings["egress_policy"]``). Registered in ``worker.main``'s job dispatch
-table under kinds ``"embed_chunks"`` (chained after ``knowledge_ingest``, A1.2) and
+table under kinds ``"embed_chunks"`` (chained after ``knowledge_ingest``) and
 ``"reembed_stale"`` (a tenant-wide sweep, triggered when the configured embedding model
 changes).
 """

@@ -10,11 +10,11 @@ interface VersionHistoryPanelProps {
 }
 
 /**
- * D1.2 subtask: "definitions are versioned; publishing from the editor creates a new
+ * "Definitions are versioned; publishing from the editor creates a new
  * version; read-only view of prior versions." There's no dedicated list-versions-of-a-key
  * endpoint (its own acceptance criteria never needed one -- `list_definitions` returns
  * every version of every key in a workspace/tenant-template scope); this panel fetches
- * that and filters client-side by key, same trade-off D1.1 made before adding a real
+ * that and filters client-side by key, the same trade-off knowledge made before adding a real
  * versions endpoint for knowledge sources turned out to be worth it there. Here the list
  * is already small (one row per publish), so client-side filtering is enough -- no
  * backend change needed.

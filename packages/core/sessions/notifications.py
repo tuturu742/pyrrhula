@@ -1,4 +1,4 @@
-"""Async / play-by-post notification pipeline (G4.3/, req 21).
+"""Async / play-by-post notification pipeline.
 
 A play-by-post game and a week-long enterprise review cycle are the same mechanism: an
 ``await_state`` with a long timeout and humans who need to be told it is their turn. This
@@ -12,7 +12,7 @@ duplicate rather than raising: a second sweep tick discovering it has nothing to
 system working, not an error. The adapter is called only for a row this process actually
 won, so at-least-once job delivery becomes exactly-once notification.
 
-**A digest is a small report, so the report rule applies** (G4.10, and G4.1 before it):
+**A digest is a small report, so the report rule applies**:
 its event selection runs through the *recipient's* visibility before anything is rendered,
 by reusing ``core.sessions.history.collect_visible_facts`` rather than re-deriving what a
 principal may see. A digest that scrubbed after selecting would be one more surface where

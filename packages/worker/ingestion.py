@@ -16,9 +16,10 @@ from worker.blob_store_factory import get_blob_store
 from worker.job_queue_factory import get_job_queue
 from worker.model_provider_factory import get_model_provider
 
-# A generic, always-available model string for tokenizer selection only (A1.3 decides
-# the real embedding model; A1.2 just needs a stable, reasonable token-count estimate for
-# chunk sizing). tiktoken's cl100k_base fallback applies for anything not literally an
+# A generic, always-available model string for tokenizer selection only (the embedding
+# job decides the real embedding model; ingestion just needs a stable, reasonable
+# token-count estimate for chunk sizing). tiktoken's cl100k_base fallback applies for
+# anything not literally an
 # OpenAI model name — see LiteLLMModelProvider.count_tokens.
 _TOKENIZER_MODEL = "gpt-4"
 

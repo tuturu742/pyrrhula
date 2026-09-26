@@ -1,9 +1,9 @@
-"""G4.9 acceptance criteria for CCv3 export: a round-trip restores everything the
+"""Acceptance criteria for CCv3 export: a round-trip restores everything the
 extension carries and the loss report names exactly what didn't survive, and the exported
 PNG carries both spec-valid chunks.
 
 The no-secret-content criterion is a leak test and lives in ``tests/leak/test_card_export
-.py``, scanning the produced bytes -- same method as G4.7, same reason.
+.py``, scanning the produced bytes -- same method as the bundle leak test, same reason.
 """
 
 from __future__ import annotations

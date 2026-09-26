@@ -1,4 +1,4 @@
-"""G4.14 acceptance criteria for the moderation layer: the authoring scan reads a secret's
+"""Acceptance criteria for the moderation layer: the authoring scan reads a secret's
 content whatever its disclosure state, the generation hook follows the
 regenerate-then-fallback ladder, per-tenant policy produces different outcomes on identical
 text, and a multi-human workspace may satisfy Q6 with moderation instead of an overseer.
@@ -288,7 +288,7 @@ async def test_multi_human_workspace_accepts_moderation_in_lieu_of_overseer(
     await _member(tenant_id, workspace_id, "facilitator")
     await _member(tenant_id, workspace_id, "participant")
 
-    # Q6's first arm, unchanged from E2.10: multi-human with no overseer is refused.
+    # The requirement's first arm: multi-human with no overseer is refused.
     with pytest.raises(OverseerRequiredError, match="overseer"):
         await validate_overseer_requirement(tenant_id, workspace_id)
 

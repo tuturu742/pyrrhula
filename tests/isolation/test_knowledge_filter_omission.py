@@ -4,13 +4,13 @@
 a raw query with no ``WHERE tenant_id = ...`` clause, scoped to tenant A, must never
 surface tenant B's rows.
 
-Since A1.10, the first three of those five tables have one *documented* exception to
+The first three of those five tables have one *documented* exception to
 "only my own tenant_id comes back": the library tenant's rows are visible to every
 tenant's scoped session by design (see ``core.knowledge.library``,
 ``tests/isolation/test_library_matrix.py``). Those tests below assert the still-true,
 still-load-bearing half of the guarantee (tenant B's rows never leak) plus the narrower
 "nothing outside {mine, the library} ever appears" rather than a strict single-tenant
-equality, which A1.10 makes provably false by design, not by accident.
+equality, which the library tenant makes provably false by design, not by accident.
 """
 
 from __future__ import annotations

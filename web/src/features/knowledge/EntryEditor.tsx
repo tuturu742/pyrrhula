@@ -21,7 +21,7 @@ interface EntryEditorProps {
  * field (keys/secondary_keys/logic/regex/constant/sticky/cooldown/delay/
  * trigger_pct/inclusion_group/position), with inline help text under each. Handles both
  * create (no `existingEntry`) and edit (round-trips every field via EntryResponse, which
- * D1.1 extended server-side to actually carry them — see packages/api/routes/knowledge.py).
+ * the server extends to actually carry them — see packages/api/routes/knowledge.py).
  *
  * A fork-on-edit response (`forked_source_id` set) means this write landed in the
  * caller's own copy of a library source, not the library original — `onSaved` receives
@@ -161,7 +161,7 @@ export function EntryEditor({ sourceId, existingEntry, onSaved, onCancel }: Entr
 
       <fieldset className="flex flex-col gap-3 rounded-md border border-dashed border-border p-3">
         <legend className="px-1 text-sm font-medium text-muted-foreground">
-          Activation (plan §6.4)
+          Activation
         </legend>
 
         <div className="grid grid-cols-2 gap-3">

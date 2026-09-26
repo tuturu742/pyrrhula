@@ -1,9 +1,9 @@
-"""G4.4 acceptance criteria (req 10): a human replies in place of an agent, the override
+"""Acceptance criteria: a human replies in place of an agent, the override
 is recorded and surfaced, a voice rewrite posts only after confirmation and preserves the
 original, and the leak check still runs on what a human typed.
 
-Under ``tests/isolation/`` for the ``two_tenants`` fixture; no new RLS table here (G4.4
-adds columns to `message`, which already has its own filter-omission coverage).
+Under ``tests/isolation/`` for the ``two_tenants`` fixture; no new RLS table here (the
+override adds columns to `message`, which already has its own filter-omission coverage).
 """
 
 from __future__ import annotations

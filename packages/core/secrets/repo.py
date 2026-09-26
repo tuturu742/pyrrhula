@@ -9,7 +9,7 @@ mirroring `core.knowledge.authoring`'s exemption from the identical lint for
 `core.knowledge.repo` (see that module's docstring). A human author editing their own
 tenant's secret is not "stored text reaching a model" (INV-1's actual target); the one
 call in `core.secrets.drafting` that *does* reach a model is a distinct, sanctioned
-purpose (`'rewrite'`, D14), scoped to content the author already possesses and consented
+purpose (`'rewrite'`), scoped to content the author already possesses and consented
 to send, not the disclosure/exclusion path this module's allowlist protects.
 
 Persisting a `DisclosureDecision`/`SecretDisclosureEvent` lives in
@@ -42,7 +42,7 @@ async def get_secret_plaintext(
 ) -> str | None:
     """The one path that ever sees `content_ciphertext` decrypted for the in-session/
     overseer surface. Reserved for the overseer's audited reads (INV-5: the audit row for
-    a plaintext read is written in the *same transaction* as the read, D3) — the
+    a plaintext read is written in the *same transaction* as the read) — the
     disclosure gate never calls this; it only ever sees `gist`."""
     row = await get_secret(tenant_id, secret_id)
     if row is None:

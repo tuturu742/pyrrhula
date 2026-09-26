@@ -1,6 +1,6 @@
 """its own acceptance tests for the enterprise pack -- the pack that exists to
-falsify the genericity bet. Loaded through the exact same generic ``core.packs.loader``
-F3.7 built; no enterprise-specific code anywhere outside ``packs/enterprise/`` itself.
+falsify the genericity bet. Loaded through the exact same generic ``core.packs.loader``;
+no enterprise-specific code anywhere outside ``packs/enterprise/`` itself.
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ async def _workspace_id(tenant_id: uuid.UUID) -> uuid.UUID:
 async def test_enterprise_process_smoke_session_runs_with_zero_core_diffs(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """The process fixture this task provides (F3.9 builds the generic multi-pack
-    harness on top): the pack's own process definition validates through the
+    """The process fixture this pack provides (the generic multi-pack harness builds on
+    top): the pack's own process definition validates through the
     unmodified ``validate_raw``, a real session pins to it, and the declared
     brainstorm->critique->revise->decide->(await)->brainstorm phase graph is fully
     traversable via the unmodified interpreter's own gate/on_complete resolution --

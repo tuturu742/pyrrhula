@@ -1,4 +1,4 @@
-"""``resolution_record`` (C1.6-4/, INV-7/INV-10): the immutable,
+"""``resolution_record`` (INV-7/INV-10): the immutable,
 hash-chained trail of every mechanical result. Everything downstream -- the resolution widget,
 citations, replay -- reads this table by id, never a model's prose (INV-7).
 
@@ -37,7 +37,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 # ResolutionRecordRow FKs to session.id and rule_system.id by string reference --
 # SQLAlchemy only resolves those at mapper-configuration time, which requires both
 # referenced tables' ORM modules to have been imported by *someone* first (the same
-# registration-order fix B1.2/C1.3 needed). Importing them here guarantees that
+# registration-order fix other modules needed). Importing them here guarantees that
 # regardless of what a caller of this module imports.
 import core.resolution.rule_system  # noqa: E402, F401
 import core.sessions.models  # noqa: E402, F401

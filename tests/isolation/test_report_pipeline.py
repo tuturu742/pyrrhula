@@ -1,9 +1,9 @@
-"""G4.10 acceptance criteria for the report pipeline: a participant recap carries no trace
+"""Acceptance criteria for the report pipeline: a participant recap carries no trace
 of a concealed secret, a planted prose lie cannot reach the fact frame, redactions render
 as visible stubs, and the recorded provenance regenerates an identical frame.
 
 The leak-scan half of criterion 1 lives in ``tests/leak/test_report_artifact.py`` -- same
-artifact-level method as G4.7, same reason.
+artifact-level method as the bundle leak test, same reason.
 """
 
 from __future__ import annotations

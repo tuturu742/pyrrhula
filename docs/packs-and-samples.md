@@ -10,7 +10,7 @@ where the content lives, how it reaches a deployment, and how it reaches a tenan
 | [`pyrrhula-samples`](https://github.com/tuturu742/pyrrhula-samples) | `.pyr` bundles (a cast, its briefs, its knowledge), per-sample `repos.json` / `mcp.json`, and a README per sample | being **imported into a tenant**, by `scripts/seed_samples.py` or by hand |
 
 Neither repository contains code that Pyrrhula runs. A pack is JSON validated against
-declarative manifests, and a `.pyr` is content; rule 9 and D7 are why, and why a pack can
+declarative manifests, and a `.pyr` is content; rules 9 and 10 are why, and why a pack can
 be pinned to a commit and trusted the way a configuration file is.
 
 ## Registering workflows
