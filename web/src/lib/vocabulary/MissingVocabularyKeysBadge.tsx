@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getMissingKeysReport } from "./labels";
 
 /**
- * the "missing-key detection in dev mode" subtask: a badge (dev builds only) showing how
+ * Missing-key detection in dev mode: a badge (dev builds only) showing how
  * many `label_key`s resolved with no entry in the active overlay (or `DEFAULT_LABELS`) since
  * the page loaded — click to log the full report to the console. Renders NOTHING while the
  * report is empty (polled quietly), so a clean surface carries no dev chrome at all.

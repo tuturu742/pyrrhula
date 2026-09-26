@@ -1,6 +1,6 @@
-"""RPG axis-pack fixtures (its own subtask): the examples (chattiness,
-cooperativeness, secret_disclosure_propensity, deception_propensity), used by this task's
-validation fixtures and by the disclosure gate tests. The enterprise and swdev axis
+"""RPG axis-pack fixtures: the examples (chattiness, cooperativeness,
+secret_disclosure_propensity, deception_propensity), used by the validation fixtures
+and by the disclosure gate tests. The enterprise and swdev axis
 packs (`review_strictness`, `escalation_propensity`, `risk_tolerance` with `stakes:
 high`) ship in the plugin repository -- this module is the machinery's own proof it
 works, not a claim about pack completeness.

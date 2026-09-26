@@ -28,7 +28,7 @@ def test_scenarios_load_and_declare_expected_bands() -> None:
     )
 
     swdev_scenarios = [s for s in scenarios if s.overlay == "swdev_v1"]
-    assert len(swdev_scenarios) >= 5, "swdev family (~5, per this task's own subtask)"
+    assert len(swdev_scenarios) >= 5, "swdev family (~5)"
 
     for scenario in scenarios:
         assert scenario.expected_bands, f"{scenario.key} declares no expected bands at all"
@@ -96,8 +96,8 @@ def test_planted_exclusion_bypass_is_detected_and_fails_the_run() -> None:
     assert not clean_run.failures
 
     # Planted bypass: one full_pipeline trial for a conceal-expected scenario actually
-    # disclosed -- exactly the "assembler leak bypassing exclusion" this task's own
-    # acceptance criterion names. The harness must catch it, not average it away.
+    # disclosed -- exactly the "assembler leak bypassing exclusion" case. The harness
+    # must catch it, not average it away.
     bypassed_cell = MatrixCell(
         provider_label="provider-a",
         arm="full_pipeline",

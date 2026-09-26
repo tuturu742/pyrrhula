@@ -1,6 +1,5 @@
 """Deterministic stub EmbeddingProvider: fast, no model weights, no network — keeps
-CI/tests fast, per this task's own acceptance criteria ("test with a stub ... model to
-keep CI fast"). Same text always maps to the same vector (hash-based), so cache/reuse/
+CI/tests fast. Same text always maps to the same vector (hash-based), so cache/reuse/
 re-embed tests are meaningful without needing a real model.
 
 Default ``dimension=8`` is only safe for the adapter's own isolated unit tests, which

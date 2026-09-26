@@ -1,6 +1,6 @@
 """Persona + Agent management: create/edit agents (persona,
 role, model profile), model profiles (provider/model/params/fallback), and provider
-credentials. The full CRUD ``core.agents.seed``'s docstring deferred to this task.
+credentials -- the full CRUD that ``core.agents.seed`` only sketches.
 """
 
 from __future__ import annotations

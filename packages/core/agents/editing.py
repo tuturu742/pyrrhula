@@ -1,5 +1,5 @@
-"""chat-based editing for an agent's persona (req 22) -- the third of
-this task's three proposal targets. Same draft-and-approve shape as
+"""Chat-based editing for an agent's persona -- the third of the three proposal
+targets. Same draft-and-approve shape as
 ``core.knowledge.editing``/``core.entities.editing``: propose a full replacement
 ``persona_md``, diff it against the current text, meter the call regardless of outcome,
 and only write (through ``core.agents.authoring.record_persona_version``) once a human

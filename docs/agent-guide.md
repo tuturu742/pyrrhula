@@ -1,10 +1,7 @@
 # Pyrrhula — Implementer's Guide for Coding Agents
 
 The definitions, rules, and conventions an implementing agent needs. Together with
-`CLAUDE.md`'s hard rules, this is the reference — it began as a condensation of a longer
-development plan, which was a working document and is no longer in the repository. Section
-references (§) and D-numbers scattered through the code point back into that plan; they mark
-decisions that are settled, not documents to go and find.
+`CLAUDE.md`'s hard rules, this is the reference.
 
 ---
 
@@ -197,7 +194,7 @@ regenerate once, then safe fallback + overseer alert).
 
 ## 6. Data model quick reference
 
-Tenant-scoped tables carry `tenant_id` + RLS (`†` in the plan); append-only tables (`‡`) have
+Tenant-scoped tables carry `tenant_id` + RLS; append-only tables (marked `‡` below) have
 no UPDATE/DELETE grant.
 
 ### What a session carries, and what the workspace keeps

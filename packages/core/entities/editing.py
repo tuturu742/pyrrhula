@@ -1,9 +1,9 @@
-"""chat-based editing for EntitySchemas (req 22) -- a chat turn
+"""Chat-based editing for EntitySchemas -- a chat turn
 proposes a full replacement ``EntitySchemaDefinition``, diffed at the field/derived/
 constraint/state-machine-key grain against the current latest version, and validated
 through the *exact same* ``validate_schema_definition`` pass the manual save path
-runs -- **before** it is ever shown for approval (this task's own "a proposal that fails
-schema validation is never presented" acceptance criterion). Approval writes a new
+runs -- **before** it is ever shown for approval (a proposal that fails schema
+validation is never presented). Approval writes a new
 immutable schema version (``core.entities.repo.save_schema``) attributed to the human
 approver with an ``ai_assisted`` marker; decline never calls ``apply_schema_edit_
 proposal``, so nothing is written.

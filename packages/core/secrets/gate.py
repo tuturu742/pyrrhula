@@ -36,7 +36,7 @@ class GateValidationError(Exception):
     """A gate response failed strict schema/business-rule validation -- a hallucinated
     secret_id, an unknown action, an out-of-range confidence, or a missing/extra decision
     relative to the fired set. Always results in fail-closed-to-conceal; never escapes to
-    the turn loop as an unhandled exception (this task's own acceptance criterion)."""
+    the turn loop as an unhandled exception."""
 
 
 @dataclass(frozen=True)

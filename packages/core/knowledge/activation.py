@@ -193,7 +193,7 @@ def activate_entries(
         candidates.append((entry, "keyword"))
 
     # inclusion_group exclusivity: only the lowest insertion_order member of a group
-    # activates -- "highest rank wins" per the plan, and insertion_order (author-set
+    # activates -- "highest rank wins", and insertion_order (author-set
     # priority) is the only ranking signal available at this stage (WRRF's real rank
     # comes later, after retrieval is fused in).
     best_in_group: dict[str, ActivatableEntry] = {}

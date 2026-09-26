@@ -7,7 +7,7 @@ scope is a caller-chosen answer to the one question that must never be caller-ch
 
 This deliberately does not import `core.knowledge.repo` -- INV-1 reserves that for the
 assembler and the overseer, and the retrieval modules (`core.knowledge.retrieval.*`) are
-the sanctioned path the plan names for exactly this tool.
+the sanctioned path for exactly this tool.
 """
 
 from __future__ import annotations

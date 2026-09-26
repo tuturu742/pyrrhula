@@ -72,8 +72,8 @@ async def test_verify_chain_detects_tampering(db_available: None) -> None:
     # Simulate an attacker with elevated DB access: pyrrhula_app (what unscoped_session()
     # and tenant_scope() connect as) is granted no UPDATE on audit_log at all -- see the
     # grant restriction and test_app_role_cannot_update_or_delete_audit_log below -- so
-    # reaching this row requires the admin/migrator role directly, matching the plan's
-    # honest caveat that layers 1-2 are tamper-evident, not tamper-proof, against exactly
+    # reaching this row requires the admin/migrator role directly, matching the documented
+    # caveat that layers 1-2 are tamper-evident, not tamper-proof, against exactly
     # this threat (a DB superuser).
     admin_engine = create_async_engine(get_settings().database_url)
     try:

@@ -12,7 +12,7 @@ module's own output, not redacted out of a buffer that once held it.
 `core.assembler.context_assembler` is this module's sole caller; it already holds INV-1's
 secrets-repo import right (fetches `SecretRow`, decrypts `content` on reveal) and hands
 this module fully-resolved plain data -- this module never imports `core.secrets.repo`
-itself and doesn't need to (this task doesn't touch the allowlist).
+itself and doesn't need to.
 """
 
 from __future__ import annotations

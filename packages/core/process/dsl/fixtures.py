@@ -1,7 +1,7 @@
 """Fixture ProcessDefinitions: the "Standard Session Flow"
 example, translated into this module's concrete JSON shape (see ``schema.py``'s docstring
-for why -- the plan's own YAML snippet uses informal ``-> target`` shorthand that isn't
-valid, re-parseable syntax), and a minimal 3-phase MVP definition using core-neutral keys
+for why -- an informal ``-> target`` shorthand isn't valid, re-parseable syntax), and a
+minimal 3-phase MVP definition using core-neutral keys
 (RPG labels arrive only through ``vocabulary_overlay`` label resolution, never hardcoded
 here) that the golden interpreter test runs end to end.
 
@@ -73,8 +73,7 @@ STANDARD_SESSION_FLOW: dict[str, object] = {
         "resolution": {
             "label_key": "phase.resolution",
             "actors": [{"persona_type": "supervisor", "mode": "generate"}],
-            # Not shown in the plan's illustrative snippet (visibility is mandatory --
-            # every real phase needs one; the example just elides it for brevity).
+            # Visibility is mandatory -- every real phase needs one.
             "visibility": {
                 "knowledge_classes": ["rules"],
                 "scopes": ["workspace_public"],

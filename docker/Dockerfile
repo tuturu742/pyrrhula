@@ -23,7 +23,7 @@ RUN uv sync --frozen --no-dev --no-editable --extra pdf \
 
 FROM python:3.12-slim AS runtime
 
-# git: the server-side VCS store for delegated coding work (D15) runs real branch/commit/PR
+# git: the server-side VCS store for delegated coding work runs real branch/commit/PR
 # operations against volume-backed repos via `git` (packages/adapters/mcp/git_store.py). The
 # hosted-service model keeps all branching/editing server-side -- never on a client checkout.
 # git: the server-side VCS store (above). The pango/cairo/gobject trio is WeasyPrint's

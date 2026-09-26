@@ -6,8 +6,7 @@ interpretation. RRF sidesteps the normalisation problem by never looking at a ra
 all, only at each candidate's rank position within its own originating list.
 
 Fuse-before-rerank (this module runs before the reranker, not after) is the
-empirically better order per the plan's citation of TREC iKAT 2025 and the standard
-two-stage cascade pattern.
+empirically better order (TREC iKAT 2025 and the standard two-stage cascade pattern).
 """
 
 from __future__ import annotations
@@ -40,9 +39,9 @@ def fuse(
     k: int = DEFAULT_WRRF_K,
     list_weights: dict[str, float] | None = None,
 ) -> list[FusedHit]:
-    """Same inputs always produce the same output (a property this task's acceptance
-    criteria requires): no randomness anywhere, and ties are broken on ``chunk_id`` string
-    order so the final ordering never depends on dict/set iteration order."""
+    """Same inputs always produce the same output: no randomness anywhere, and ties are
+    broken on ``chunk_id`` string order so the final ordering never depends on dict/set
+    iteration order."""
     weights = list_weights if list_weights is not None else DEFAULT_LIST_WEIGHTS
 
     scores: dict[uuid.UUID, float] = {}

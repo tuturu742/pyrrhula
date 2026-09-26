@@ -160,7 +160,7 @@ class PersonaVersion(Base):
     update, not the column's own source of truth. Written by
     ``core.agents.editing.apply_persona_edit_proposal`` on approval, and by nothing else
     -- a manual edit through ``update_persona`` does not currently log a version here (a
-    real, documented gap; see the scope note)."""
+    real, documented gap)."""
 
     __tablename__ = "persona_version"
 

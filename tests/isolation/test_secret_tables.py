@@ -9,7 +9,7 @@ pair, and an UPDATE/DELETE against an append-only table is rejected *in practice
 just absent from the grant catalog.
 
 The library-tenant matrix does not apply here: unlike knowledge sources,
-secrets have no cross-tenant "shared library" concept in the plan -- every secret belongs
+secrets have no cross-tenant "shared library" concept -- every secret belongs
 to exactly one tenant's one workspace, so there is nothing for a library-matrix test to
 exercise.
 """

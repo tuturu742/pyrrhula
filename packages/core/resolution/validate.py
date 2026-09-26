@@ -6,7 +6,7 @@ whatever the expression's own literal modifier says.
 
 The same code path (``validate()``) accepts any ``RuleSystemDefinition`` -- a d20 system,
 a banded system, a coin flip -- with no branching on which one it is. That's
-the real test this task exists to pass (mirrors INV-9's pack-independence property one
+the real test this module exists to pass (mirrors INV-9's pack-independence property one
 level down, at the rule-system level rather than the whole-pack level).
 """
 

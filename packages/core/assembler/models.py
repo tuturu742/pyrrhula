@@ -3,8 +3,8 @@ Every ``KnowledgeEntry``/``Entity``/``EntityField`` carries a ``scope_key`` (alr
 for ``knowledge_entry``/``knowledge_chunk``); this table is what gives those
 free-text keys real membership semantics.
 
-``members`` JSONB shape (the plan's own snippet just says "principal/role refs" --
-this is the concrete shape this codebase uses, documented here since it's the one place
+``members`` JSONB shape (the concrete shape this codebase uses, documented here since
+it's the one place
 both the writer (``seed_default_scopes``) and reader (``scopes_for``) must agree on it):
 
   kind='public' -- members unused (``{}``); granted to anyone with a workspace

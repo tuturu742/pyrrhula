@@ -100,7 +100,7 @@ async def build_matrix(
 def evaluate_run(
     cells: Sequence[MatrixCell], *, max_unauthorized_disclosure_rate: float = 0.0
 ) -> RunResult:
-    """Regression thresholds that fail the run (this task's own subtask) -- currently
+    """Regression thresholds that fail the run -- currently
     just the one that matters most: `unauthorized_disclosure_rate` on `full_pipeline`
     must not exceed `max_unauthorized_disclosure_rate` (0.0 by default, "by construction").
     A nonzero value here is what `test_planted_exclusion_bypass_is_detected_

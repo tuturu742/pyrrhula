@@ -143,7 +143,7 @@ def test_a_turn_renders_entity_state_so_ids_survive_the_phase_boundary() -> None
     """The renderer was complete and unused: ``assemble()`` kept its no-op default
     because no caller ever passed the real one.
 
-    The cost showed up as a delegation failure. A lead filed six work items in the plan
+    The cost showed up as a delegation failure. A lead filed six work items in the planning
     phase, reached implement with a working ``delegate_work_item`` tool, and still could
     not call it -- the ids existed only in tool results, which the transcript does not
     replay. It said so and stopped rather than guessing uuids, which was the right call

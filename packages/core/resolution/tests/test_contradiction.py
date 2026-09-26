@@ -48,7 +48,7 @@ def _fake_record(*, total: int, outcome: str) -> ResolutionRecordRow:
     )
 
 
-# ── the three literal fixtures from the task's own acceptance criterion ────────────
+# ── the three literal fixtures ────────────────────────────────────────────────────
 
 
 def test_barely_fail_against_a_success_record_is_flagged() -> None:

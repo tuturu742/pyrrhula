@@ -3,7 +3,7 @@ per-provider eval results into an enforced capability surface. Global, not tenan
 -- like `price_table`, this is the platform's own knowledge of what a (provider, model)
 pair can actually do, not tenant data (`unscoped_session()`, no RLS).
 
-**Data-driven, not code-driven** (this task's own acceptance criterion): mutating a
+**Data-driven, not code-driven**: mutating a
 stored row flips what `is_axis_capable`/`get_capability` report without touching a line
 of code -- the eval harness's job is to keep these rows current, not to encode
 capability logic here.

@@ -90,7 +90,7 @@ CONNECTIONS: tuple[Connection, ...] = (
     # what happened this week unless it looked.
     #
     # Chosen for one property above all: it does not think. `qwen3:30b-a3b` sat here
-    # first and is the better writer, but it is a reasoning model, and on this task its
+    # first and is the better writer, but it is a reasoning model, and on this job its
     # reasoning did not terminate -- turns of 22, 58 and 79 minutes that emitted no copy
     # at all, because hidden reasoning streams as `reasoning_content` and so trips
     # neither an output cap nor a job lease. Every lever was tried: a budget (the

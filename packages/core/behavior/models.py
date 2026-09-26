@@ -68,7 +68,7 @@ class BehaviorProfileRow(Base):
     new version, never an edit -- the migration REVOKEs UPDATE/DELETE from the app role
     on this table, the same control every other append-only table in this codebase uses.
     Every `ContextManifest` records the version in effect at generation time (the
-    `behavior_profile_version` column, wired in this task)."""
+    `behavior_profile_version` column)."""
 
     __tablename__ = "behavior_profile"
 

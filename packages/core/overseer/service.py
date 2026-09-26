@@ -1,7 +1,7 @@
 """OverseerService (INV-1, INV-5): the only other secret-plaintext
 read path besides `ContextAssembler.assemble()`. `inspect()` is one transaction --
 permission check, read, and audit append, or none of it. A forced failure between the
-read and the append must leave neither visible (this task's own acceptance criterion) --
+read and the append must leave neither visible --
 there is no helper anywhere in this module that reads without auditing in the same
 transaction.
 
@@ -257,8 +257,7 @@ class OverseerService:
         workspace_id: uuid.UUID,
         agent_principal_id: uuid.UUID,
     ) -> list[AgentBelief]:
-        """ "What does agent X currently hold/believe" -- holders ∩ disclosure state, per
-        this task's own subtask."""
+        """ "What does agent X currently hold/believe" -- holders ∩ disclosure state."""
         await self._require_inspect(tenant_id, principal_id, workspace_id)
         async with tenant_scope(tenant_id) as session:
             rows = (

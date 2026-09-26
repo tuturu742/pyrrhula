@@ -116,7 +116,7 @@ async def seed_library_source(
     class_: str,
     entries: list[tuple[str, EntryFields]],
 ) -> KnowledgeSource:
-    """Provisioning path (subtask): embeds a pack's content into the library tenant once.
+    """Provisioning path: embeds a pack's content into the library tenant once.
     A consuming tenant's provisioning never copies this content -- it calls
     ``core.knowledge.authoring.attach_source_to_workspace`` with the resulting source's id,
     which already works unmodified for a library source (the RLS disjunct is what makes

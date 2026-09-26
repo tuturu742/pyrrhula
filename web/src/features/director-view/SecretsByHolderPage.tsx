@@ -23,7 +23,7 @@ interface RevealedSecret {
  * default. Plaintext is never fetched for a secret until its own "Reveal plaintext"
  * button is clicked: each click is exactly one `inspectSecret()` call, exactly one new
  * `audit_log` row, and exactly one increment of the session's own inspection counter
- * (the design decision this task is built around -- a page that pre-loads every
+ * (the design decision this page is built around -- a page that pre-loads every
  * plaintext would turn the audit log into noise).
  */
 export function SecretsByHolderPage() {

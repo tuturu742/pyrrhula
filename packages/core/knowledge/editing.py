@@ -1,11 +1,11 @@
-"""chat-based editing for knowledge entries (req 22) -- a chat turn
+"""Chat-based editing for knowledge entries -- a chat turn
 produces a **structured edit proposal** (a full replacement body for one entry, never a
 freeform overwrite of the source), diffed against the current draft, and applied only on
 human approval as a newly published version carrying an ``ai_assisted`` provenance
 marker. Generalizes the ``core.secrets.drafting`` draft-and-approve pattern: the model
 proposes, this module never writes content on its own, and the plaintext-leak guardrail
 (``core.secrets.drafting.contains_plaintext_leak``) is reused rather than reimplemented
-for the "proposals touching secrets" guardrail subtask.
+for the "proposals touching secrets" guardrail.
 
 Declining a proposal is simply never calling ``apply_knowledge_edit_proposal`` --
 ``propose_knowledge_edit`` never touches the draft or publishes anything, so a declined
@@ -101,7 +101,7 @@ async def propose_knowledge_edit(
     regardless of outcome -- same discipline as ``draft_directive_and_hint`` -- then
     validates the result *before* it is ever shown for approval. "Validation" here means:
     non-empty, and not a verbatim echo of any secret plaintext this entry's own content
-    might itself contain (the guardrail subtask); there is no CEL/schema-shaped
+    might itself contain (the guardrail); there is no CEL/schema-shaped
     validation for prose knowledge content the way entity schemas have."""
     current = await _current_draft_entry(tenant_id, knowledge_source_id, entry_key)
 
@@ -156,7 +156,7 @@ async def propose_knowledge_edit(
         # A proposal that is *only* a verbatim echo of the current text is not an edit
         # at all -- distinct from the secrets guardrail's "leaks a different, private
         # source's plaintext" concern, but the same "don't present a no-op as an edit"
-        # discipline this task's validation-before-presentation subtask calls for.
+        # discipline validation-before-presentation calls for.
         issues.append("proposed body is unchanged from the current body")
 
     return KnowledgeEditProposal(

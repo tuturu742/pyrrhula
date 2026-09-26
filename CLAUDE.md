@@ -8,16 +8,11 @@ your first implementation task.
 ## Source-of-truth order
 
 1. **This file.** The hard rules below are not style preferences — violating one fails
-   review, and several encode decisions (D-numbers in the text) that are settled. Do not
-   re-litigate them; do not "improve" on them.
+   review, and several encode decisions that are settled. Do not re-litigate them; do not
+   "improve" on them.
 2. `docs/agent-guide.md` — conventions, definitions, and the vocabulary glossary.
 3. The code and its tests. Where a comment and the code disagree, the code is what runs —
    but treat the disagreement as a bug in one of them, not as licence to ignore the comment.
-
-The project was built against a longer development plan and requirements brief. Those were
-working documents, not deliverables, and they are no longer in the repository; what they
-settled lives here and in `docs/`. A D-number in a comment is a reference to one of those
-decisions and still means it is settled.
 
 ## Hard rules (violating any of these fails review)
 

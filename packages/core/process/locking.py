@@ -1,7 +1,7 @@
 """Session concurrency control: one advancing writer per session,
 enforced by a real ``SELECT ... FOR UPDATE`` claim held only for brief critical sections
--- never across a slow external model call, per its own subtask ("model calls happen
-outside the row lock").
+-- never across a slow external model call ("model calls happen outside the row
+lock").
 
 **Claim, don't hold.** ``claim_session`` takes the row lock, checks/sets the watchdog
 marker (``claimed_at``/``claimed_by``), and commits immediately -- releasing the lock.
@@ -12,7 +12,7 @@ it has), bumps it, and clears the claim marker. A crash during the slow middle s
 holds no lock (Postgres already released it after the claim transaction committed) --
 only the marker, which ``claim_session``'s own timeout check treats as abandoned once
 ``_CLAIM_TIMEOUT_SECONDS`` has passed. This is the watchdog: a timeout on the *claim*, not
-on the DB lock, exactly as the subtask specifies.
+on the DB lock.
 
 ``advance_session_locked`` wraps ``core.process.interpreter.advance_session`` with this
 claim/commit pair, making concurrent callers on the *same* session_id safe: exactly one

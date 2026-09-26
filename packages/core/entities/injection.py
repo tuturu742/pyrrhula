@@ -19,7 +19,7 @@ the wire).
 model, so they're always rendered (computed from the entity's full, unfiltered data --
 otherwise a derived expression referencing a field the viewer can't see would raise,
 since ``compute_derived`` evaluates for real, not against dummy values). A derived value
-that happens to reveal something about a private input is a gap this task doesn't close;
+that happens to reveal something about a private input is a gap this module doesn't close;
 tightening it (tagging derived fields too) is additive, not a redesign, if a real pack
 needs it.
 

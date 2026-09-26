@@ -19,8 +19,8 @@ Two deliberate deviations sketch, both required to reconcile
   Publishing copies the current draft entries into new rows stamped with the new
   ``version_id``, leaving the original draft rows in place as the next round's staging
   area. See ``core.knowledge.authoring.publish_version``.
-- ``KnowledgeEntry.knowledge_source_id`` is added (the plan's sketch reaches the source
-  only via ``version_id``) because draft entries, by definition, don't have one.
+- ``KnowledgeEntry.knowledge_source_id`` exists alongside ``version_id`` because draft
+  entries, by definition, don't have a version yet.
 """
 
 from __future__ import annotations

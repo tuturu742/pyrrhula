@@ -28,7 +28,7 @@ const WORKED_EXAMPLES = [
 /**
  * the authoring hub for a workspace's secrets -- list, create, and select-to-edit,
  * all without leaving this page. Worked examples appear only when the workspace has no
- * secrets yet (one per overlay, per the task's own brief) so an author sees what a good
+ * secrets yet (one per overlay) so an author sees what a good
  * gist/directive pair looks like before writing their first one.
  */
 export function SecretListPage() {

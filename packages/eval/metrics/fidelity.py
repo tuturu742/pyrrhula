@@ -52,7 +52,7 @@ def build_judge_request(
         ],
         # 'report': CLAUDE.md rule 11's purpose taxonomy has no 'judge' entry, and this
         # call scores quality for the eval *report*, not a disclosure decision -- the
-        # closest existing fit, not a new taxonomy value invented for this task.
+        # closest existing fit, not a new taxonomy value invented for the harness.
         purpose="report",
         max_tokens=150,
     )

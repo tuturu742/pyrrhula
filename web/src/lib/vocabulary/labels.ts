@@ -71,7 +71,7 @@ export const DEFAULT_LABELS: Record<string, string> = {
   "sheet.default_group": "Other",
 };
 
-/** Collected in dev mode only -- the "missing-key report" subtask. Read via
+/** Collected in dev mode only -- the missing-key report. Read via
  * `getMissingKeysReport()`, e.g. from `MissingVocabularyKeysBadge` in `AppShell`. */
 const _missingKeys = new Set<string>();
 

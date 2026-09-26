@@ -1,7 +1,7 @@
 """INV-10, CI-blocking: any turn's rendered context must be reproducible from the
-same recorded inputs. ``context_manifest`` doesn't store query text/embeddings (the plan's
-own schema has no such column -- only the *result* of assembly: entries, redactions,
-token_counts, and the hash of what was rendered), so replay here means the property
+same recorded inputs. ``context_manifest`` doesn't store query text/embeddings (only
+the *result* of assembly: entries, redactions, token_counts, and the hash of what was
+rendered), so replay here means the property
 INV-10 actually needs: re-running ``assemble()`` with the same inputs that produced a
 persisted manifest reproduces ``rendered_hash`` exactly, proven turn-by-turn across a full
 20-turn scripted session with real sticky/cooldown keyword-activation state evolving

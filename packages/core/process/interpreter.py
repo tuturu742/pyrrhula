@@ -1,12 +1,9 @@
 """The process interpreter: the loop that executes a validated
-ProcessDefinition against a session. Replaces the hardcoded 2-phase
-``core.process.skeleton`` as the *real* engine -- but does not delete or rewire it yet.
-``core.process.skeleton`` still powers the existing ``/sessions`` HTTP flow; nothing in
-this task's own file scope (``packages/core/process/interpreter.py``) touches that
-surface. Wiring a live endpoint to this interpreter needs a real agent runtime to
-supply ``execute_turn`` and a real scheduler to supply ``next_actor_fn`` -- until
-then this module is complete, tested, and callable, but not yet load-bearing for any HTTP
-route, the same way ``search_and_budget`` was built fully before anything called it.
+ProcessDefinition against a session. It is the real engine behind every roster session;
+the hardcoded 2-phase ``core.process.skeleton`` remains only for the legacy single-persona
+``/sessions`` path, and nothing in this module touches that surface. The agent runtime
+supplies ``execute_turn`` and the scheduler supplies ``next_actor_fn``; this module owns
+neither.
 
 **Actor resolution is entirely injected, not implemented here.** Two reasons: (1) the
 ``persona_type`` lives on the persona table and this module must not query it directly,
@@ -736,7 +733,7 @@ async def advance_session(
     this as a bug in the definition or the injected scheduler, not call it in a tight
     retry loop, so this returns 'active' rather than raising); or a fault occurs, in
     which case the session is paused (status='paused') via a *separate* clean
-    transaction and 'paused' is returned -- never a stuck lock, per the subtask.
+    transaction and 'paused' is returned -- never a stuck lock.
     """
     with _tracer.start_as_current_span("interpreter.advance_session") as span:
         span.set_attribute("pyrrhula.session_id", str(session_id))

@@ -108,8 +108,8 @@ def is_document(path: str) -> bool:
 
 
 def read_tarball(data: bytes) -> list[RepoFile]:
-    """The upload path. A tarball decouples this task from the transport slippage and
-    serves air-gapped tenants -- both reasons the task itself gives, and both still true.
+    """The upload path. A tarball decouples ingestion from any one transport and serves
+    air-gapped tenants.
 
     Refuses absolute and traversing paths outright. Nothing here writes to a filesystem, so
     a traversal cannot escape anywhere; the refusal is because a member named `../../etc/

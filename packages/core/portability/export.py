@@ -271,7 +271,7 @@ async def export_workspace(
 async def _add_knowledge(
     writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID, visible: frozenset[str]
 ) -> None:
-    """Full version history per attached source (req 23), with entry bodies as `.md`
+    """Full version history per attached source, with entry bodies as `.md`
     files so a bundle is git-diffable. An entry whose ``scope_key`` is outside the
     resolved set is not written and is redacted by id -- the *file* is absent, not blanked,
     because a blanked file is still a file whose name and size say something."""

@@ -396,7 +396,7 @@ class PhaseCompletionSpec(BaseModel):
 
 class PhaseSpec(BaseModel):
     """One phase of a ProcessDefinition. ``budget`` is optional -- a pure-await phase like
-    the plan's ``feedback_loop`` example generates no agent turn and needs no context
+    a ``feedback_loop`` phase generates no agent turn and needs no context
     budget. ``on_complete`` and ``gates`` are both optional transition mechanisms: a phase
     with no ``gates`` and a set ``on_complete`` transitions there unconditionally once
     actors are exhausted; a phase with ``gates`` evaluates them in order instead. Having

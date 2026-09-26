@@ -4,7 +4,7 @@ a short TTL cache so the per-turn call paths don't pay a query per model call.
 
 The policy's ENFORCEMENT lives inside the ModelProvider port (``check_egress``); this
 module only fetches the dict every ``GenerationRequest`` construction site attaches.
-An absent key stays permissive by design (the plan's explicit default)."""
+An absent key stays permissive by design."""
 
 from __future__ import annotations
 

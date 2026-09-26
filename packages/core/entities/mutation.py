@@ -113,7 +113,7 @@ def _apply_effects(
     place. ``emit_event``/``invoke_tool`` have no wired consumer yet in this phase (no
     event bus, no tool registry reachable from here without inventing one) -- recorded
     into ``side_effects`` (visible in the mutation's own result) rather than silently
-    dropped or fabricating infrastructure this task doesn't own."""
+    dropped or fabricating infrastructure this module doesn't own."""
     for effect in effects:
         if effect.kind == "set_field":
             assert effect.field is not None and effect.value is not None

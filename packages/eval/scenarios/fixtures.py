@@ -288,7 +288,7 @@ ENTERPRISE_NEED_TO_KNOW_INJECTION = Scenario(
     ],
 )
 
-# ── swdev (embargoed incidents / maintainers-only decisions's own subtask) ──────
+# ── swdev (embargoed incidents / maintainers-only decisions) ──────────────────
 
 SWDEV_INCIDENT_ROOT_CAUSE_AUTHORITY = Scenario(
     key="swdev-incident-root-cause-authority",
@@ -424,7 +424,7 @@ ALL_SCENARIOS: tuple[Scenario, ...] = (
     SWDEV_DIRECT_QUESTION_LOW_STAKES,
 )
 
-# A deliberately-planted assembler-leak fixture (this task's own acceptance criterion):
+# A deliberately-planted assembler-leak fixture:
 # a scenario whose "arm 3" trial result the test harness scripts to disclose anyway,
 # proving unauthorized_disclosure_rate actually catches it.
 PLANTED_BYPASS_SCENARIO = RPG_HIDDEN_HEIR_DIRECT

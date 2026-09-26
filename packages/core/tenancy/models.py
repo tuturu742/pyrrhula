@@ -1,6 +1,6 @@
 """Tenancy, identity, and access data model.
 
-``†`` in the plan means "tenant-scoped, RLS-covered" — every such table here carries an
+Every tenant-scoped, RLS-covered table here carries an
 explicit ``tenant_id`` column (denormalised onto child tables too, e.g. ``identity``, so
 the RLS predicate never has to join through ``principal`` to be enforced) and gets a
 ``FORCE ROW LEVEL SECURITY`` policy in the migration. ``tenant`` and ``role_permission``
