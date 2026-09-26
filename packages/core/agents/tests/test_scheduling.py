@@ -1,5 +1,5 @@
 """the real persona_type-based candidate resolver -- the scheduler injection seam
-core.process.scheduler.make_default_candidate_resolver has had since B1.3.
+core.process.scheduler.make_default_candidate_resolver has always had.
 """
 
 from __future__ import annotations

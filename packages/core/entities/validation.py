@@ -1,4 +1,4 @@
-"""Validation for EntitySchema (save-time) and entity data (write-time) -- F3.1.
+"""Validation for EntitySchema (save-time) and entity data (write-time).
 
 Two distinct passes, mirroring ``core.process.dsl.validator``'s split:
 

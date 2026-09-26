@@ -1,4 +1,4 @@
-"""C1.3 acceptance criteria for manifest persistence + read access control, against a
+"""Acceptance criteria for manifest persistence + read access control, against a
 live Postgres.
 """
 

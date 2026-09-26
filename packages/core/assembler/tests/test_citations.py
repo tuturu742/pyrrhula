@@ -1,4 +1,4 @@
-"""C1.8 acceptance criteria for citation validation."""
+"""Acceptance criteria for citation validation."""
 
 from __future__ import annotations
 

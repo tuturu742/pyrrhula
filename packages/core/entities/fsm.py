@@ -267,9 +267,8 @@ def guard_passes(transition: TransitionDef, fields: Mapping[str, object]) -> boo
 
 class EntityStateChangeRow(Base):
     """Append-only (CLAUDE.md rule 5): every state change -- FSM-driven or a plain field
-    edit (the ``mutate()``) -- lands here. ``entity_id`` has no FK yet: the ``entity``
-    table doesn't exist until F3.3, which ALTERs this table to add the constraint once
-    its target exists (the same incremental-schema-growth pattern
+    edit (the ``mutate()``) -- lands here. ``entity_id``'s FK was added by a later
+    migration once the ``entity`` table existed (the same incremental-schema-growth pattern
     ``core.tenancy.models.Workspace.vocabulary_overlay_id`` documents for an identical
     forward-reference reason). ``session_id``/``event_seq`` are nullable -- the future
     out-of-session mutations have neither."""

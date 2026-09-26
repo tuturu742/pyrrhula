@@ -1,4 +1,4 @@
-"""C1.4 acceptance criteria for the rough cost/cache-hit dashboard aggregation."""
+"""Acceptance criteria for the rough cost/cache-hit dashboard aggregation."""
 
 from __future__ import annotations
 

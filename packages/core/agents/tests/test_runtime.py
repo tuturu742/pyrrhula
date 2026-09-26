@@ -1,4 +1,4 @@
-"""B1.7 acceptance criteria for the agent runtime, against a live Postgres."""
+"""Acceptance criteria for the agent runtime, against a live Postgres."""
 
 from __future__ import annotations
 

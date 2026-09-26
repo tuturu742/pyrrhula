@@ -82,5 +82,5 @@ def validate_axis_definition(definition: AxisDefinitionSchema) -> None:
     if definition.stakes == "high" and "gate" not in binding_kinds:
         raise AxisValidationError(
             f"axis {definition.key!r} is stakes:high but declares no gate binding -- a "
-            "high-stakes axis must be enforced by a gate, not prompt adherence alone (§8.3)"
+            "high-stakes axis must be enforced by a gate, not prompt adherence alone"
         )

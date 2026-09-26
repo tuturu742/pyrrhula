@@ -1,4 +1,4 @@
-"""S4/D14: run_agent_turn attaches the TENANT's egress policy to every generation
+"""run_agent_turn attaches the TENANT's egress policy to every generation
 request -- the enforcement lives inside the real provider adapter (check_egress), so
 what the runtime must guarantee is that the policy actually arrives on the request."""
 

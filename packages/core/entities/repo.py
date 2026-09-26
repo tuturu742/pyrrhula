@@ -1,6 +1,6 @@
 """EntitySchema repository. Not INV-1-restricted -- entity schemas/data are not
 knowledge or secrets; nothing about them is "stored text that reaches a model" in the
-sense INV-1 protects (they're deterministically injected, F3.6, not retrieved). Freely
+sense INV-1 protects (they're deterministically injected, not retrieved). Freely
 importable, unlike ``core.secrets.repo``/``core.knowledge.repo``.
 """
 

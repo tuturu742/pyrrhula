@@ -1,6 +1,6 @@
 """ViewDef: layout (grouping, ordering, tabs) referencing fields by
 key. Making a sheet *feel* native is a ``ViewDef`` **content** problem -- pack authoring,
-F3.7/F3.8/its own job -- not an engine problem: the engine only resolves field keys
+the pack's own job -- not an engine problem: the engine only resolves field keys
 to widgets (``core.entities.tags``) and lays out groups/tabs in the declared order.
 the React components read a ``ViewDef`` at render time; a field the ``ViewDef``
 doesn't mention still renders (the "falls into a default group, never disappears"),

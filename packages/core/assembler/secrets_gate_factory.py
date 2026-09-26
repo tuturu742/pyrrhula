@@ -6,7 +6,7 @@ overseer) to import ``core.secrets.repo``, so candidate loading and reveal-path
 decryption happen here, and ``core/process/live_session`` receives only opaque
 ``ResolvedSecretDecision`` / ``ConcealedSecret`` values it cannot misuse.
 
-Flow per turn (E2.5 + E2.6/):
+Flow per turn:
 
 1. phase ``visibility.secrets != "held_by_actor"`` -> nothing (the outer switch).
 2. Load the acting principal's HELD secrets (gists + embeddings only) for this

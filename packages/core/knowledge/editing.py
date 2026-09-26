@@ -102,7 +102,7 @@ async def propose_knowledge_edit(
     validates the result *before* it is ever shown for approval. "Validation" here means:
     non-empty, and not a verbatim echo of any secret plaintext this entry's own content
     might itself contain (the guardrail subtask); there is no CEL/schema-shaped
-    validation for prose knowledge content the way F3.1 has for entity schemas."""
+    validation for prose knowledge content the way entity schemas have."""
     current = await _current_draft_entry(tenant_id, knowledge_source_id, entry_key)
 
     model_string = f"{agent.provider}/{agent.model}"

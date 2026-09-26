@@ -4,8 +4,8 @@ content-addressed) -> Entry (unit of authorship) -> Chunk (unit of retrieval, de
 ``knowledge_chunk`` isn't mapped here. Like ``vector_store_item``, it needs the
 ``vector`` column type, which isn't wired into the SQLAlchemy type system — it's created
 via raw SQL in the migration and excluded from autogenerate via ``migrations/env.py``'s
-``_RAW_SQL_TABLES``. Nothing in A1.1 needs to read or write it (that starts at A1.2/A1.3),
-so there's no ORM model to keep in sync with a schema no code touches yet.
+``_RAW_SQL_TABLES``. The code that touches it (ingestion, retrieval) does so through SQL
+directly, so there is no ORM model to keep in sync.
 
 Two deliberate deviations sketch, both required to reconcile
 "entries are added to a draft before publish" with CLAUDE.md's append-only rule for

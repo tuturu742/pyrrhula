@@ -1,5 +1,5 @@
-"""Search + fuse + (optionally rerank) + budget, tied together (-6,
-A1.6/A1.7) — the slice of the future ``ContextAssembler`` that makes rule-vs-lore
+"""Search + fuse + (optionally rerank) + budget, tied together — the slice of the
+``ContextAssembler`` that makes rule-vs-lore
 priority real: per-class dense+sparse+keyed retrieval, WRRF fusion, class-blind rerank,
 then bucketed budget fill. Deliberately *not* the full assembler: no
 ``VisibilityResolver``, no entity-state rendering, no secrets gate, no prompt

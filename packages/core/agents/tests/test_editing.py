@@ -1,4 +1,4 @@
-"""F3.12 acceptance criteria for chat-based agent-persona editing, against a live
+"""Acceptance criteria for chat-based agent-persona editing, against a live
 Postgres and a scripted `ModelProvider` double (mirroring `core.secrets.tests.
 test_drafting`'s pattern) -- the third of the three proposal targets."""
 

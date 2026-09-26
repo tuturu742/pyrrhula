@@ -22,7 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 # UsageRecordRow.message_id FKs to message.id by string reference -- SQLAlchemy only
 # resolves that at mapper-configuration time, which requires MessageRow's module to have
-# been imported by *someone* first (the same registration-order fix B1.2/C1.3/C1.6 all
+# been imported by *someone* first (the same registration-order fix several modules
 # needed). Importing it here guarantees that regardless of what a caller of this module
 # imports.
 import core.sessions.models  # noqa: E402, F401

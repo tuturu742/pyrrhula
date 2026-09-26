@@ -1,7 +1,6 @@
 """Dev seed helper: a demo agent + model profile in a workspace. Not a runtime path —
 used by the walking-skeleton tests and by manual/live demos so there's something to
-create a session against without building full agent-management CRUD (that's D1.5,
-Phase 1).
+create a session against without going through the full agent-management CRUD.
 """
 
 from __future__ import annotations

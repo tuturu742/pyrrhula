@@ -1,6 +1,6 @@
 """Canonical JSON serialisation: stable key order, compact separators, no float drift.
 Shared by the audit hash chain and any future content-hash user (e.g.
-``knowledge_source_version.content_hash``, A1.1) — one canonicalisation rule, not one per
+``knowledge_source_version.content_hash``) — one canonicalisation rule, not one per
 caller that quietly drift apart.
 
 Floats are the classic hash-instability source (``json.dumps`` repr can vary by platform/

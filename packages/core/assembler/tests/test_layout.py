@@ -1,4 +1,4 @@
-"""C1.4 unit tests for the typed stable/volatile layout contract itself."""
+"""Unit tests for the typed stable/volatile layout contract itself."""
 
 from __future__ import annotations
 

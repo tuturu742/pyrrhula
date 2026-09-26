@@ -170,7 +170,7 @@ async def apply_schema_edit_proposal(
     approved_by: uuid.UUID,
 ) -> EntitySchemaRow:
     """Writes the approved proposal as a new schema version, attributed to the human
-    approver and marked ``ai_assisted``. ``save_schema`` re-validates independently (F3.1
+    approver and marked ``ai_assisted``. ``save_schema`` re-validates independently (the
     discipline: every write path validates, never trusts an upstream check alone) --
     this is defense in depth, not a duplicate of ``propose_schema_edit``'s own check."""
     version = await next_version(tenant_id, workspace_id, key)

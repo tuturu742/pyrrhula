@@ -10,7 +10,7 @@ chunk's hash are) — computed here, on the fly, by reusing the same
 "changed" means exactly what the version's own content-addressing means: identical
 content, differently keyed, always hashes the same either place.
 
-This is an authoring/UI concern (D1.1: "version history + diff view"), not a "stored text
+This is an authoring/UI concern ("version history + diff view"), not a "stored text
 reaching a model" one — lives alongside ``core.knowledge.authoring``, not behind INV-1's
 restricted ``core.knowledge.repo``.
 """

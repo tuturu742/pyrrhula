@@ -53,7 +53,7 @@ _PG_TYPE_BY_FIELD_TYPE: dict[str, str] = {
 
 class EntityRow(Base):
     """One entity instance, any schema. ``fsm_states`` is the render-time projection
-    F3.6 injects (``{"health": "bloodied", "quest": "active"}``); ``data`` holds raw
+    the assembler injects (``{"health": "bloodied", "quest": "active"}``); ``data`` holds raw
     field values only -- derived values are never stored (the design decision).
     Row-lock semantics for concurrent writes are the job, not this module's -- this
     task owns shape, not mutation policy."""

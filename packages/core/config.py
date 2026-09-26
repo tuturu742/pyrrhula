@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     # server when a persona's search switch is first enabled. Empty = the preset's
     # unreachable placeholder (structure without egress).
     web_search_url: str = ""
-    # Model-backed moderation (S3/G4.14): full "provider/model" string; empty = the
+    # Model-backed moderation: full "provider/model" string; empty = the
     # allow-all provider (moderation effectively off beyond per-tenant keyword policy).
     # Deployment-wide DEFAULT gate model, for tenants that have not chosen one of their
     # own connections (core.secrets.gate_config holds that choice, and it wins). Read via

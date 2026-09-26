@@ -265,7 +265,7 @@ async def _chunk_published(
 async def _apply_quarantine(
     tenant_id: uuid.UUID, source_id: uuid.UUID, reasons: dict[str, str]
 ) -> None:
-    """Same mechanism as G4.6 and G4.8: flag the published entry and its chunks together,
+    """Same mechanism as bundle import: flag the published entry and its chunks together,
     after publish, because publish copies drafts into version rows and retrieval reads the
     published copy."""
     if not reasons:
