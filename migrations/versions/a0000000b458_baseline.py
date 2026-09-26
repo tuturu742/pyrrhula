@@ -1,23 +1,24 @@
 """Baseline: the whole schema as one migration.
 
-Eighty incremental migrations were squashed into this one (seventy-eight before the
-first release; then axis_definition.default_value and persona_git_credential were folded
-in the same way — the repo is private with no downstream consumers, so collapsing them
-into the baseline is safe and keeps the migration count at one). Nothing of them is lost
--- their reasoning lives in git history and in the model docstrings -- but nobody
-installing from zero should replay months of back-and-forth to reach the present.
+Every incremental migration that ever existed was squashed into this one before the
+first release. There are no downstream deployments to carry forward -- an install
+starts from zero and should not replay months of back-and-forth to reach the present.
+Nothing of those migrations is lost: their reasoning lives in git history and in the
+model docstrings.
 
-The schema itself is ``baseline.sql`` beside this file: a ``pg_dump`` of a database
-built by the full original chain, not a hand-reassembly. That distinction is the whole
-safety argument -- the squash was verified by diffing full dumps of a database built
-the old way against one built by this file: identical except 19 CHECK constraints
-whose array-cast expressions Postgres re-deparses equivalently on round-trip, and the
-three system vocabulary overlays, deliberately removed afterwards: plugin sync owns
-those (it replaces their labels from pack files on every boot, so a baked copy was
-not a fallback but a second source of truth that lost).
-RLS policies (with FORCE), the append-only REVOKEs,
-extension creation, and the seed rows (role_permission, system vocabulary overlays, the
-library and admin tenants) are all in the dump because they were all in the database.
+The schema itself is ``baseline.sql`` beside this file: a ``pg_dump`` (``--no-owner
+--inserts --exclude-table=alembic_version``) of a database built by the full original
+chain, not a hand-reassembly. That distinction is the whole safety argument -- the
+squash was verified by diffing a dump of a database built the old way against one built
+by this file alone: identical except for one CHECK constraint whose array-cast expression
+Postgres re-deparses equivalently on round-trip. The psql-only ``\restrict`` lines newer
+``pg_dump`` versions emit are stripped, because asyncpg runs the script, not psql.
+
+RLS policies (with FORCE), the append-only REVOKEs, extension creation, and the seed rows
+(``role_permission``, ``price_table``, the system ``workflow`` templates, the library and
+admin tenants) are all in the dump because they were all in the database. The system
+vocabulary overlays are not: plugin sync owns those and replaces their labels from pack
+files on every boot, so a baked copy would be a second source of truth.
 
 The one thing a dump cannot carry is the login role: roles are cluster-level, so
 ``pyrrhula_app`` is created here first, exactly as the original tenancy baseline did --
@@ -28,7 +29,7 @@ There is no downgrade below the baseline: restoring a backup IS the rollback
 
 Revision ID: a0000000b458
 Revises:
-Create Date: 2026-09-09
+Create Date: 2026-09-26
 """
 
 from __future__ import annotations

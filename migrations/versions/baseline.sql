@@ -279,7 +279,8 @@ CREATE TABLE public.entity (
     data jsonb DEFAULT '{}'::jsonb NOT NULL,
     fsm_states jsonb DEFAULT '{}'::jsonb NOT NULL,
     version integer DEFAULT 1 NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    origin_session_id uuid
 );
 
 ALTER TABLE ONLY public.entity FORCE ROW LEVEL SECURITY;
@@ -534,6 +535,26 @@ ALTER TABLE ONLY public.knowledge_source_version FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: mcp_call_record; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mcp_call_record (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    server_key character varying(63) NOT NULL,
+    tool_name character varying(255) NOT NULL,
+    event_seq integer NOT NULL,
+    effectful boolean DEFAULT false NOT NULL,
+    outcome character varying(16) NOT NULL,
+    detail jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.mcp_call_record FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: mcp_server; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -548,7 +569,11 @@ CREATE TABLE public.mcp_server (
     effectful_tools jsonb DEFAULT '[]'::jsonb NOT NULL,
     require_confirmation boolean DEFAULT true NOT NULL,
     enabled boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    max_calls_per_session integer,
+    timeout_seconds integer,
+    max_result_chars integer,
+    options jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 ALTER TABLE ONLY public.mcp_server FORCE ROW LEVEL SECURITY;
@@ -654,6 +679,7 @@ CREATE TABLE public.persona (
     settings jsonb DEFAULT '{}'::jsonb NOT NULL,
     archived_at timestamp with time zone,
     web_search boolean DEFAULT false NOT NULL,
+    params jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT ck_persona_persona_type CHECK (((persona_type)::text = ANY (ARRAY[('supervisor'::character varying)::text, ('participant'::character varying)::text, ('informational'::character varying)::text])))
 );
 
@@ -733,7 +759,8 @@ CREATE TABLE public.preview_environment (
     expires_at timestamp with time zone,
     last_error text DEFAULT ''::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    git_ref character varying(255) DEFAULT ''::character varying NOT NULL
 );
 
 ALTER TABLE ONLY public.preview_environment FORCE ROW LEVEL SECURITY;
@@ -807,6 +834,27 @@ ALTER TABLE ONLY public.provider_credential FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: registration_request; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.registration_request (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    email character varying(320) NOT NULL,
+    display_name character varying(255) NOT NULL,
+    password_hash text NOT NULL,
+    status character varying(16) DEFAULT 'pending'::character varying NOT NULL,
+    note text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    decided_at timestamp with time zone,
+    decided_by_principal_id uuid,
+    CONSTRAINT ck_registration_request_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.registration_request FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: repo; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -828,7 +876,12 @@ CREATE TABLE public.repo (
     runtime_image character varying(255),
     registry_credential_ref uuid,
     build_cmd character varying(511),
-    artifact_name character varying(255)
+    artifact_name character varying(255),
+    preview_image character varying(255),
+    preview_cmd character varying(2000),
+    preview_port integer,
+    preview_env jsonb DEFAULT '{}'::jsonb NOT NULL,
+    default_branch character varying(255) DEFAULT 'main'::character varying NOT NULL
 );
 
 ALTER TABLE ONLY public.repo FORCE ROW LEVEL SECURITY;
@@ -910,7 +963,7 @@ CREATE TABLE public.rule_system (
     tenant_id uuid NOT NULL,
     key character varying(63) NOT NULL,
     name character varying(255) NOT NULL,
-    dice_grammar jsonb NOT NULL,
+    expression_grammar jsonb NOT NULL,
     check_types jsonb NOT NULL,
     outcome_bands jsonb DEFAULT '[]'::jsonb NOT NULL,
     modifier_resolver jsonb NOT NULL,
@@ -1033,7 +1086,8 @@ CREATE TABLE public.session (
     archived_at timestamp with time zone,
     agenda_md text,
     turn_policy character varying(16) DEFAULT 'auto'::character varying NOT NULL,
-    name character varying(255)
+    name character varying(255),
+    awaiting character varying(16)
 );
 
 ALTER TABLE ONLY public.session FORCE ROW LEVEL SECURITY;
@@ -1424,6 +1478,12 @@ ALTER TABLE ONLY public.workspace_membership FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Data for Name: mcp_call_record; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+
+
+--
 -- Data for Name: mcp_server; Type: TABLE DATA; Schema: public; Owner: -
 --
 
@@ -1506,6 +1566,12 @@ INSERT INTO public.price_table VALUES ('39e22cec-76fe-436a-8990-d53a318612a8', '
 
 --
 -- Data for Name: provider_credential; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+
+
+--
+-- Data for Name: registration_request; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 
@@ -1920,6 +1986,14 @@ ALTER TABLE ONLY public.knowledge_source_version
 
 
 --
+-- Name: mcp_call_record mcp_call_record_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mcp_call_record
+    ADD CONSTRAINT mcp_call_record_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: mcp_server mcp_server_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2021,6 +2095,14 @@ ALTER TABLE ONLY public.process_definition
 
 ALTER TABLE ONLY public.provider_credential
     ADD CONSTRAINT provider_credential_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: registration_request registration_request_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registration_request
+    ADD CONSTRAINT registration_request_pkey PRIMARY KEY (id);
 
 
 --
@@ -2240,11 +2322,11 @@ ALTER TABLE ONLY public.exec_environment
 
 
 --
--- Name: identity uq_identity_provider_ext; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: identity uq_identity_tenant_provider_ext; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.identity
-    ADD CONSTRAINT uq_identity_provider_ext UNIQUE (provider, external_id);
+    ADD CONSTRAINT uq_identity_tenant_provider_ext UNIQUE (tenant_id, provider, external_id);
 
 
 --
@@ -2529,6 +2611,13 @@ CREATE INDEX ix_context_manifest_session ON public.context_manifest USING btree 
 
 
 --
+-- Name: ix_entity_origin_session; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_entity_origin_session ON public.entity USING btree (tenant_id, origin_session_id);
+
+
+--
 -- Name: ix_entity_schedule_workspace; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2585,6 +2674,13 @@ CREATE INDEX ix_knowledge_entry_quarantined ON public.knowledge_entry USING btre
 
 
 --
+-- Name: ix_mcp_call_record_session_server; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_mcp_call_record_session_server ON public.mcp_call_record USING btree (session_id, server_key);
+
+
+--
 -- Name: ix_mcp_server_workspace; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2624,6 +2720,13 @@ CREATE INDEX ix_preview_environment_expiry ON public.preview_environment USING b
 --
 
 CREATE INDEX ix_provider_credential_tenant ON public.provider_credential USING btree (tenant_id);
+
+
+--
+-- Name: ix_registration_request_tenant_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_registration_request_tenant_status ON public.registration_request USING btree (tenant_id, status);
 
 
 --
@@ -2729,6 +2832,13 @@ CREATE UNIQUE INDEX uq_process_definition_tenant_template_key_version ON public.
 --
 
 CREATE UNIQUE INDEX uq_process_definition_workspace_key_version ON public.process_definition USING btree (workspace_id, key, version) WHERE (workspace_id IS NOT NULL);
+
+
+--
+-- Name: uq_registration_request_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_registration_request_pending ON public.registration_request USING btree (tenant_id, lower((email)::text)) WHERE ((status)::text = 'pending'::text);
 
 
 --
@@ -2964,6 +3074,14 @@ ALTER TABLE ONLY public.disclosure_decision
 
 ALTER TABLE ONLY public.disclosure_decision
     ADD CONSTRAINT disclosure_decision_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
+
+
+--
+-- Name: entity entity_origin_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.entity
+    ADD CONSTRAINT entity_origin_session_id_fkey FOREIGN KEY (origin_session_id) REFERENCES public.session(id) ON DELETE SET NULL;
 
 
 --
@@ -3303,6 +3421,22 @@ ALTER TABLE ONLY public.knowledge_source_version
 
 
 --
+-- Name: mcp_call_record mcp_call_record_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mcp_call_record
+    ADD CONSTRAINT mcp_call_record_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.session(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mcp_call_record mcp_call_record_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mcp_call_record
+    ADD CONSTRAINT mcp_call_record_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
+
+
+--
 -- Name: mcp_server mcp_server_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3468,6 +3602,14 @@ ALTER TABLE ONLY public.process_definition
 
 ALTER TABLE ONLY public.provider_credential
     ADD CONSTRAINT provider_credential_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
+
+
+--
+-- Name: registration_request registration_request_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registration_request
+    ADD CONSTRAINT registration_request_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
 
 
 --
@@ -3965,6 +4107,12 @@ ALTER TABLE public.knowledge_source ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.knowledge_source_version ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: mcp_call_record; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.mcp_call_record ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: mcp_server; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4029,6 +4177,12 @@ ALTER TABLE public.process_definition ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.provider_credential ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: registration_request; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.registration_request ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: repo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -4250,6 +4404,13 @@ CREATE POLICY tenant_isolation ON public.knowledge_source_version USING (((tenan
 
 
 --
+-- Name: mcp_call_record tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_isolation ON public.mcp_call_record USING ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)) WITH CHECK ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid));
+
+
+--
 -- Name: mcp_server tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -4324,6 +4485,13 @@ CREATE POLICY tenant_isolation ON public.process_definition USING ((tenant_id = 
 --
 
 CREATE POLICY tenant_isolation ON public.provider_credential USING ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)) WITH CHECK ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid));
+
+
+--
+-- Name: registration_request tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_isolation ON public.registration_request USING ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)) WITH CHECK ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid));
 
 
 --
@@ -4696,6 +4864,13 @@ GRANT SELECT,INSERT ON TABLE public.knowledge_source_version TO pyrrhula_app;
 
 
 --
+-- Name: TABLE mcp_call_record; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT ON TABLE public.mcp_call_record TO pyrrhula_app;
+
+
+--
 -- Name: TABLE mcp_server; Type: ACL; Schema: public; Owner: -
 --
 
@@ -4791,6 +4966,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.process_definition TO pyrrhula
 --
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.provider_credential TO pyrrhula_app;
+
+
+--
+-- Name: TABLE registration_request; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.registration_request TO pyrrhula_app;
 
 
 --
