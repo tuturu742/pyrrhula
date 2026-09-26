@@ -112,11 +112,12 @@ anything narrower.
 The allowlist is enforced on the call path, not suggested to the model. Adding a server
 with three tools grants three tools, even if the server later advertises thirty.
 
-## Web search is bundled, and is not an MCP server you attach
+## Web search is a persona toggle, not an MCP server you attach
 
-Agent web search is a persona toggle, served by a SearXNG instance that ships with the
-deployment — compose runs one, and Kubernetes runs one from `base/searxng.yaml`. You do not attach it as an MCP server; `web_search`
-is a reserved key served by its own transport.
+Agent web search is served by a SearXNG instance the installers run beside the api —
+the compose file and `base/searxng.yaml` pull the public `searxng/searxng` image and
+`PYRRHULA_WEB_SEARCH_URL` points at it. You do not attach it as an MCP server;
+`web_search` is a reserved key served by its own transport.
 
 Nothing reaches it unless a persona has the toggle on, and it is never exposed outside
 the deployment's own network.
@@ -132,9 +133,8 @@ which stock SearXNG refuses with `403` until the JSON format is enabled — see
 
 ## No model is configured by default
 
-Related, and a frequent first surprise: a clean install ships **no assistant model**.
-Earlier builds defaulted to a specific local ollama tag, so every fresh deployment
-pointed at a host and a model that were not there. Now you choose:
+Related, and a frequent first surprise: a clean install ships **no assistant model**. You
+choose:
 
 - In the UI, set a model on the **Assistant model** profile, and attach the provider key.
   There is no deploy-time variable for it: a deployment does not know what models its

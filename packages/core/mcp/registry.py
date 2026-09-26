@@ -2,8 +2,8 @@
 
 **Allowlist, not blocklist.** `enabled_tools` is the complete set of tools that exist as
 far as this workspace is concerned. A tool the server offers and the workspace has not
-listed is never discovered, never described to a model, and never callable. and
-`docs/agent-guide.md` say plainly that user-authored lore reaches tool-calling agents;
+listed is never discovered, never described to a model, and never callable. User-authored
+lore reaches tool-calling agents;
 a blocklist's failure mode under that threat model is a tool nobody thought to block, which
 is precisely the tool an attacker looks for.
 

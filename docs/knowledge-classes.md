@@ -33,7 +33,7 @@ A useful test when filing a source: *if the model contradicts this text, is that
   superstitions, proverbs, what the innkeeper always says. A small budget slice, but it
   is where a table stops sounding generic.
 
-### General / enterprise (`default` — labels: Policy Document / Domain Context / Reference Material)
+### Default (`default` — labels: Policy Document / Domain Context / Reference Material)
 
 - **rules** — policies and constraints the discussion must respect: brand voice rules,
   confidentiality policy, approval thresholds, "we never promise dates in public copy."

@@ -13,8 +13,7 @@ assignment. There is nothing to sign and no account to create.
 
 ## 2. Read the invariants before touching the core
 
-`docs/agent-guide.md` lists them, each with a CI test that enforces it. The ones that
-bite hardest:
+`CLAUDE.md` lists them, each with a CI test that enforces it. The ones that bite hardest:
 
 - **Vocabulary.** Nothing under `packages/core/` may contain a domain word — no
   `campaign`, `dice`, `sprint`, `pull_request`. Core is domain-neutral and emits
@@ -76,9 +75,8 @@ repository pinned in `deploy/plugins.json`:
 python scripts/fetch_plugins.py
 ```
 
-While that repository is private, the fetch needs credentials — either an SSH remote you
-can already read, or a token in `PYRRHULA_PLUGINS_TOKEN`. Without them those two suites
-stop at collection and say so; the rest of the suite is unaffected.
+Without the packs those two suites stop at collection and say so; the rest of the suite
+is unaffected.
 
 ## 4. Commit messages
 

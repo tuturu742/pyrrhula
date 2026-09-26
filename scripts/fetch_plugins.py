@@ -54,28 +54,6 @@ def _run(*args: str, cwd: pathlib.Path | None = None) -> None:
     )
 
 
-def _authenticated(url: str) -> str:
-    """Add a token to an https GitHub URL when one is configured.
-
-    A pinned plugin repo may be private -- CI has no interactive credentials, and an
-    unauthenticated clone of a private repo fails with a message about a missing username
-    that says nothing about the real cause. ``PYRRHULA_PLUGINS_TOKEN`` (or ``GH_TOKEN``)
-    is used if present; without one, behaviour is unchanged."""
-    token = os.environ.get("PYRRHULA_PLUGINS_TOKEN") or os.environ.get("GH_TOKEN") or ""
-    if not token or not url.startswith("https://github.com/"):
-        return url
-    return url.replace("https://", f"https://x-access-token:{token}@", 1)
-
-
-def _redact(text: str) -> str:
-    """Never let a token reach a log. git echoes the URL it was given on failure, and
-    that URL may carry the credential."""
-    for token in (os.environ.get("PYRRHULA_PLUGINS_TOKEN"), os.environ.get("GH_TOKEN")):
-        if token:
-            text = text.replace(token, "***")
-    return text
-
-
 def _clone_into(url: str, ref: str, dest: pathlib.Path) -> None:
     """Clone to a sibling temp directory, then swap it in.
 
@@ -87,7 +65,7 @@ def _clone_into(url: str, ref: str, dest: pathlib.Path) -> None:
     if staging.exists():
         shutil.rmtree(staging)
     try:
-        _run("git", "clone", "--quiet", _authenticated(url), str(staging))
+        _run("git", "clone", "--quiet", url, str(staging))
         _run("git", "checkout", "--quiet", ref, cwd=staging)
         shutil.rmtree(staging / ".git")
         if dest.exists():
@@ -125,7 +103,7 @@ def fetch(force: bool = False) -> list[str]:
             # install has a working "Default" workflow before any plugin repository
             # exists, and the image copies it. An unreachable plugin repo should cost
             # the extra workflows, not the whole install.
-            reason = _redact(str(exc)).splitlines()[0][:160]
+            reason = str(exc).splitlines()[0][:160]
             # Absent and STALE are different failures and only one of them is harmless.
             # A directory left from an earlier ref keeps building into the image, so the
             # deploy ships content the pin does not name and reports success either way.
@@ -153,8 +131,7 @@ if __name__ == "__main__":
             f"         pinned : {wanted}\n"
             f"         fetch failed: {reason}\n"
             f"         The build will use what is on disk, so pack changes you have\n"
-            f"         committed will not be in this image. Set PYRRHULA_PLUGINS_TOKEN\n"
-            f"         (or GH_TOKEN) for a private repo, or PYRRHULA_PLUGINS_STRICT=1\n"
+            f"         committed will not be in this image. Set PYRRHULA_PLUGINS_STRICT=1\n"
             f"         to make this a build failure instead of a warning.",
             file=sys.stderr,
         )

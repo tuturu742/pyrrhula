@@ -8,10 +8,8 @@ No, and this is the whole project. Prompt engineering *asks* a model to keep a s
 Pyrrhula *removes the secret from the model's context*. A concealed fact cannot leak
 because the model generating the turn does not have it — the agent acts on an
 author-written directive instead ("deflect questions about the evening"), never on the
-fact. The claim is testable and we published a test:
-[an unedited transcript](https://github.com/tuturu742/pyrrhula-samples/blob/main/hagnaryd-mystery/TRANSCRIPT.md)
-where the murderer survives a police interview because the model playing her was never
-told she did it. The per-turn conceal/hint/reveal decisions are database records you can
+fact. The claim is testable: run the murder-mystery sample and the murderer survives a
+police interview because the model playing her was never told she did it. The per-turn conceal/hint/reveal decisions are database records you can
 read back, not vibes.
 
 ## What decides when a secret may surface?

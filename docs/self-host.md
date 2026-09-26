@@ -38,11 +38,12 @@ editing `.env` later does not rotate it.
 Nothing is downloaded at first start: fetch the retrieval models under **Admin → Models**
 (they land in the `pyrrhula-hf` volume). `PYRRHULA_HF_OFFLINE` defaults to `1`.
 
-**Models**: agents need at least one model connection (**Personas → Model profiles**): a cloud key
-(OpenAI / Anthropic / Gemini / any OpenAI-compatible endpoint) or a local Ollama
-(uncomment the `ollama` service, `podman exec ollama ollama pull qwen3:8b`). AMD iGPU
-(e.g. Strix Halo): use the `:rocm` image with `devices: [/dev/kfd, /dev/dri]` and
-`OLLAMA_IGPU_ENABLE=1`.
+**Models**: agents need at least one model connection (**Personas → Model profiles**): a
+cloud key (OpenAI / Anthropic / Gemini / any OpenAI-compatible endpoint) or a local
+Ollama. For the latter, uncomment the `ollama` service and the `pyrrhula-ollama` volume
+at the bottom of `docker/compose.selfhost.yml`, `compose up -d ollama`, pull a model
+(`podman exec ollama ollama pull <model>`), and point the connection at
+`http://ollama:11434`.
 
 **Usage limits**: organization owners can set daily hard caps on model tokens —
 per organization, per connection, per persona, per user — on the Organization page → "Daily

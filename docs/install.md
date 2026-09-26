@@ -9,6 +9,35 @@ Two supported deployment targets, one entry point:
 
 Add `--check` to any target to verify prerequisites without changing anything.
 
+## Prerequisites
+
+Both installers build the images from source inside containers, so the host needs no
+Python or Node toolchain — the image builds bring their own (`uv`, Node 22, `pnpm`).
+
+**compose**
+
+- Docker 24+ with the Compose plugin, or Podman 4+ with `podman-compose`. For delegated
+  coding agents, the engine's API socket: rootless Podman needs
+  `systemctl --user enable --now podman.socket`; Docker needs `/var/run/docker.sock`
+  readable by the user running the installer.
+- `git` and `openssl` (the installer generates the secrets with it).
+- About 4 GB of RAM for the stack, plus 2–3 GB per retrieval model you download, and
+  10 GB of disk for images, the database and the model cache. A local model server
+  (Ollama) is extra, and optional.
+
+**k8s**
+
+- `kubectl` with access to a cluster that has a default storage class and an ingress
+  controller. Built and tested against k3s, where one `curl` provides both.
+- Docker or Podman on the machine running the installer, to build the images, and either
+  `sudo` (the images are imported into k3s's containerd) or a registry the cluster can
+  pull from (`PYRRHULA_K8S_REGISTRY`, see `deploy/k8s/README.md`).
+- `helm`, only for the optional `--with-dashboard` (Headlamp).
+
+**To develop on the code** rather than run it: Python 3.12 and [`uv`](https://docs.astral.sh/uv/),
+Node 22 with `pnpm`, and a PostgreSQL 16 with pgvector plus a Redis 7 for the test suite.
+`CONTRIBUTING.md` has the commands.
+
 ## Single-tenant or multi-tenant
 
 Installs **single-tenant** unless you say otherwise:
@@ -44,7 +73,7 @@ or pin one with `PYRRHULA_DEFAULT_TENANT_SLUG`.
 | | compose | k8s |
 |---|---|---|
 | Good for | trying it out, small self-host | dev/test on a cluster, k8s shops |
-| Prereqs | docker or podman (+compose) | kubectl + a cluster (k3s: one curl) |
+| Prereqs | see below | see below |
 | Agents' code runs in | sibling containers (engine socket) | one-shot **Jobs** (isolated namespace) |
 | Cost | your machine | your machine/cluster |
 | Time to first login | ~5 min (image build) | ~10 min |
@@ -195,18 +224,11 @@ The specialised workflows (Tabletop RPG, Software Development) are content, and 
 the repository pinned by `deploy/plugins.json`. The installers fetch it; the image bakes
 the result in.
 
-If that repository is not reachable from where you are installing — it is private, or you
-are offline — the install still completes and the deployment falls back to the built-in
-`Default` workflow. You will see a note saying so.
-
-**The install never prompts for git credentials.** An unreachable pin fails fast rather
-than asking for a GitHub username, so an unattended or scripted install cannot hang on a
-prompt. If you do have access to a private pin, hand it over non-interactively:
-
-```bash
-export PYRRHULA_PLUGINS_TOKEN=<a token that can read the pinned repository>
-./install.sh compose
-```
+If that repository is not reachable from where you are installing — you are offline —
+the install still completes and the deployment falls back to the built-in `Default`
+workflow. You will see a note saying so, and the install never prompts for git
+credentials: an unreachable pin fails fast rather than hanging an unattended install on a
+username prompt.
 
 ### Adding packs without git
 

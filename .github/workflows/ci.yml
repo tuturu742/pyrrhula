@@ -76,9 +76,6 @@ jobs:
           PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
       - run: uv run pytest --cov --cov-report=term-missing
         env:
-          # The pinned plugin repo may be private; without this the pack-dependent
-          # suites cannot fetch it. Unset is fine for a public pin.
-          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
           PYRRHULA_APP_DATABASE_URL: >-
             postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
           PYRRHULA_REDIS_URL: redis://localhost:6379/0
@@ -116,7 +113,6 @@ jobs:
       - name: Cross-tenant isolation negative tests
         run: ./scripts/ci/run-blocking-suite.sh tests/isolation
         env:
-          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
           PYRRHULA_APP_DATABASE_URL: >-
             postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
 
@@ -215,7 +211,6 @@ jobs:
       - name: All-shipped-packs genericity smoke test — INV-9
         run: ./scripts/ci/run-blocking-suite.sh tests/packs
         env:
-          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
           PYRRHULA_APP_DATABASE_URL: >-
             postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
 
@@ -247,8 +242,6 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Fetch workflow packs (COPY'd into the image)
         run: python3 scripts/fetch_plugins.py
-        env:
-          PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
       - name: Build image (api/worker/migrate entrypoint)
         uses: docker/build-push-action@v6
         with:

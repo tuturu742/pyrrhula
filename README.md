@@ -29,8 +29,7 @@ managed by Pyrrhula. One product, one codebase.
 > bundles, and two verified install paths (compose, k8s). Seven runnable
 > sample workspaces live in
 > [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples) — start with the
-> murder mystery, or [read a finished session first](https://github.com/tuturu742/pyrrhula-samples/blob/main/hagnaryd-mystery/TRANSCRIPT.md)
-> to see the disclosure gate working before you install anything.
+> murder mystery.
 
 ## Install
 
@@ -57,8 +56,10 @@ developer is the only tenant. Nobody has built the intersection. Pyrrhula's defe
 - **The GM can know things you don't — enforceably.** Visibility is scoped per role and per
   phase, at retrieval time, in the database.
 - **An NPC can hold a secret it *structurally cannot* blurt out.** A concealed secret's text
-  is removed from the model's context entirely; the agent acts on an author-written
-  behavioral directive instead. A leak isn't unlikely — it's impossible by construction.
+  is never in the model's context — exclusion, not an instruction to keep quiet. The holder
+  acts on an author-written behavioral directive instead (and, when the gate allows, a
+  bounded hint). Nobody else's context ever contains it; only a workspace that chooses
+  *trust* mode hands a holder its own plaintext, and that choice is recorded on every turn.
 - **Dice never lie.** Rolls are seeded, code-executed, validated against the actual character
   sheet, hash-chained, and rendered in the UI from the database record — never from model
   prose.
@@ -71,7 +72,7 @@ developer is the only tenant. Nobody has built the intersection. Pyrrhula's defe
 The schema uses domain-neutral vocabulary; the UI relabels it through a per-workspace
 **vocabulary overlay**:
 
-| Core term | RPG overlay | Enterprise overlay | swdev overlay |
+| Core term | RPG overlay | Default overlay | swdev overlay |
 |---|---|---|---|
 | Workspace | World / Campaign | Workspace | Project |
 | Process Definition | Session Flow / Turn Structure | Workflow | Engineering Workflow |
@@ -130,26 +131,22 @@ Three deployment modes are supported: **full local** (Ollama only, no API keys),
 cloud**, and **hybrid** with a per-tenant egress policy deciding which purposes
 (generation, gate, rerank, embed, report, rewrite) may reach hosted providers.
 
-### The bundled models
+### The retrieval models
 
-Two models are fetched from Hugging Face when the platform admin chooses them under
-**Admin → Models**, and run in-process. Pyrrhula does **not** redistribute them — your deployment fetches them, so their licences bind you
-directly rather than through us.
+You supply two models, which run in-process: one that embeds text for search and one that
+reranks the results. The platform admin chooses and downloads them under **Admin →
+Models**; any sentence-transformers model works in either slot, and the reranker can be
+disabled outright. Pyrrhula does not redistribute a model — your deployment fetches the
+one you pick, so its licence binds you directly. Our suggested defaults:
 
 | Purpose | Model | Licence |
 |---|---|---|
 | Embeddings | [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3) | MIT |
 | Reranking | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) | Apache-2.0 |
 
-Both are permissive and carry no field-of-use restriction, so a commercial deployment
-needs no additional grant. Nothing else is fetched from Hugging Face at runtime.
-
-**Both are swappable.** They are configuration, not architecture — retrieval reaches them
-through the `EmbeddingProvider` and `Reranker` ports, and the platform admin picks them
-under **Admin → Models** (any sentence-transformers model; the reranker can be disabled
-outright, which leaves WRRF order untouched). The declared vector width is asserted
-against the loaded model at startup, so a mismatched swap fails loudly on boot instead
-of quietly returning nothing at query time.
+Both are multilingual, permissive with no field-of-use restriction, and acceptable on a
+CPU. The declared vector width is asserted against the loaded model at startup, so a
+mismatched choice fails loudly on boot instead of quietly returning nothing at query time.
 
 Two things to know before changing the embedding model. Existing vectors are **not**
 re-embedded: a swap orphans every stored chunk embedding, so re-index or start clean.
@@ -170,7 +167,6 @@ What comes next is in [ROADMAP.md](ROADMAP.md).
 |---|---|
 | `README.md` | This overview |
 | `CLAUDE.md` | Ground rules for coding agents working in this repo |
-| `docs/agent-guide.md` | Detailed definitions, conventions, and architecture reference for implementers |
 | `CHANGELOG.md` | What changed, release by release |
 
 Running one:

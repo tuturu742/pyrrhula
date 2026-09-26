@@ -114,8 +114,9 @@ tool's `validation_ref` names would silently break that tool. Otherwise:
   chosen**: a bundle can bring the mode its case needs, and an explicit choice you already
   made survives the import untouched.
 
-`pyr_format` is the *format* version, not the app version. Import supports the current
-format and the one before it through an upcast chain. The app version is never a gate —
+The manifest records two versions. `pyr_format` is the *file format*: import supports
+the current format and the one before it through an upcast chain, and a newer format is
+refused outright. `app_version` is the platform that wrote the bundle: it is never a gate —
 it refuses nothing — but it is compared against the deployment: a bundle from a newer
 platform, or with no usable stamp, gets a warning in the inspection verdict and the import
 report, because "which app wrote this" is a support question and "what shape is this" is

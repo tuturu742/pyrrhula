@@ -167,8 +167,8 @@ services:
     volumes:
       - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
 
-  # Optional local model provider. Uncomment for a fully-local deployment (AMD iGPU
-  # users: see docs/self-host.md for the ROCm image + device flags).
+  # Optional local model provider. Uncomment this service and the pyrrhula-ollama volume
+  # below for a fully-local deployment; connections then use http://ollama:11434.
   # ollama:
   #   container_name: ollama
   #   image: docker.io/ollama/ollama:latest

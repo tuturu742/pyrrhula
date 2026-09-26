@@ -2,16 +2,14 @@
 
 Pyrrhula is a multi-tenant, multi-agent orchestration platform (tabletop-RPG-first,
 enterprise-second, software-development-third) built around one claim: **who-knows-what
-is enforced by the system, not requested of the model.** Read `docs/agent-guide.md` before
-your first implementation task.
+is enforced by the system, not requested of the model.**
 
 ## Source-of-truth order
 
 1. **This file.** The hard rules below are not style preferences — violating one fails
    review, and several encode decisions that are settled. Do not re-litigate them; do not
    "improve" on them.
-2. `docs/agent-guide.md` — conventions, definitions, and the vocabulary glossary.
-3. The code and its tests. Where a comment and the code disagree, the code is what runs —
+2. The code and its tests. Where a comment and the code disagree, the code is what runs —
    but treat the disagreement as a bug in one of them, not as licence to ignore the comment.
 
 ## Hard rules (violating any of these fails review)
@@ -20,8 +18,8 @@ your first implementation task.
    `player`, any RPG word — or any software-development word (`sprint`, `standup`, `engineer`,
    `pull_request`, `commit`, `branch`, …) — in a schema, table name, API path, or module under
    `packages/core/` — stop. Core code uses domain-neutral terms and emits `label_key`s; domain
-   words live only in workflow-plugin pack content (`.plugins/`, see `deploy/plugins.json`) and `vocabulary_overlay` data. See the glossary in
-   `docs/agent-guide.md`.
+   words live only in workflow-plugin pack content (`.plugins/`, see `deploy/plugins.json`) and `vocabulary_overlay` data. The glossary
+   is the overlay table in `README.md`.
 2. **INV-1.** No module outside `core/assembler/` and `core/overseer/` may import
    `core/knowledge/repo` or `core/secrets/repo`. The import-graph lint enforces this; never
    weaken or bypass the lint, never add an exemption.

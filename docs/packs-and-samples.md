@@ -1,8 +1,9 @@
 # Workflow packs and sample tenants
 
-Pyrrhula's content lives in two repositories that are not this one, and a deployment is
-not finished until both have been pulled in. This document is the whole path for each:
-where the content lives, how it reaches a deployment, and how it reaches a tenant.
+Pyrrhula's content lives in two repositories that are not this one: the workflow packs a
+deployment builds in, and the samples — redistributable example workspaces you may import
+or ignore. This document is the whole path for each: where the content lives, how it
+reaches a deployment, and how it reaches a workspace.
 
 | Repository | What it holds | Reaches a deployment by |
 |---|---|---|
@@ -63,15 +64,14 @@ is that all of it is data: the pack loader only ever reads JSON.
 you.
 
 **A pack change is not shipped when it is committed.** It is shipped when the pin names it
-*and* the fetch succeeded. For a private repository the fetch needs a token:
+*and* the fetch succeeded:
 
 ```bash
-export PYRRHULA_PLUGINS_TOKEN="$(tr -d '\n' < /path/to/secrets/gh_tuturu)"
 export PYRRHULA_PLUGINS_STRICT=1     # stale pack -> build failure instead of a warning
 python scripts/fetch_plugins.py
 ```
 
-Without the token the fetch fails, the build uses whatever is cached on disk, and the
+When the fetch fails, the build uses whatever is cached on disk, and the
 install reports success with the previous pack inside it. The script prints a WARNING
 naming both refs when that happens; `PYRRHULA_PLUGINS_STRICT=1` turns it into an error,
 which is what a CI build should use.
@@ -181,8 +181,7 @@ content forks.
 
 A workspace keeps what its sessions made. Characters, work items, and every other entity
 are workspace-scoped, and so is a persona's binding to one — only the transcript belongs
-to the session (see "What a session carries" in
-[`docs/agent-guide.md`](agent-guide.md)). That is the right default for a table that meets
+to the session. That is the right default for a table that meets
 again, and it means **re-running a sample from the top is not what a second session does**:
 the second campaign opens with the first one's characters already in context, and its
 players will read them and decline to roll new ones.
@@ -200,9 +199,6 @@ the product offers archiving, not erasure. Deleting a tenant outright is the ope
 | a flow, schema, rule system, tool, axis, or overlay | `pyrrhula-workflows` — then bump `deploy/plugins.json` and rebuild |
 | a sample's content, its setup steps, its repository or MCP declarations | `pyrrhula-samples` |
 | the platform: the loader, the installers, the API, the UI | this repository |
-
-Never fix content by editing rows in a running deployment: the next rebuild replaces that
-deployment, and a fix that lived only there goes with it.
 
 ## See also
 

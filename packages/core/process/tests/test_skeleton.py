@@ -119,7 +119,7 @@ async def test_create_session_rejects_agent_from_different_tenant(db_available: 
 
     # tenant_b's agent is invisible under tenant_a's RLS scope -- session.get() returns
     # None, which create_session must treat as "not found", not silently succeed via the
-    # FK constraint (which would bypass RLS -- see docs/agent-guide.md Sec8).
+    # FK constraint (which would bypass RLS: FK checks run with internal privileges).
     with pytest.raises(ValueError, match="not found"):
         await create_session(tenant_a, workspace_a, agent_b)
 

@@ -19,7 +19,7 @@ def get_redis() -> Redis:
     there is exactly one loop for the process's lifetime, so this never fires; it matters
     in tests that mix direct async calls (pytest-asyncio's loop) with ``TestClient``
     requests (its own, separate internal loop) — an async Redis connection created on one
-    loop cannot be used from another. See docs/agent-guide.md for the general pattern.
+    loop cannot be used from another. ``core.tenancy.scope`` rebinds its engine the same way.
     """
     global _redis, _redis_loop
     current_loop = asyncio.get_running_loop()

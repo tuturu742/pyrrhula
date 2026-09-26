@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PATTERN = r"(PYRRHULA_[A-Z_0-9]+|PYR_ARTIFACT_[A-Z]+|GH_TOKEN|DEEPSEEK_KEY)"
+PATTERN = r"(PYRRHULA_[A-Z_0-9]+|PYR_ARTIFACT_[A-Z]+)"
 # Not environment variables: a module constant and a truncated grep match.
 NOT_ENV = {"PYRRHULA_EXTENSION_KEY", "PYRRHULA_PLUGINS_LOCAL_"}
 

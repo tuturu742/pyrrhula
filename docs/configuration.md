@@ -1,15 +1,9 @@
 # Configuration reference
 
-Every environment variable Pyrrhula reads, what it is for, and — where it matters — why
-it is an environment variable rather than something you set in the product.
-
-**The rule this list is audited against:** an environment variable is for *deployment
-facts* — where the database is, which socket the engine listens on, what this host can
-reach. It is **not** for policy about how a workspace plays. Policy belongs where the
-person making the decision is already looking: a field on a form, a setting on a
-workspace, a number in a flow. A limit that a user has to discover as an env var is a
-limit they will never set. (This is why the sample forensic lab keeps no budget of its
-own: see `max_calls_per_session` below.)
+Every environment variable Pyrrhula reads, and what it is for. Environment variables are
+for *deployment facts* — where the database is, which socket the engine listens on, what
+this host can reach. Anything about how an organization or a workspace works is a setting
+in the product; the last section lists those.
 
 `.env` is read by Docker Compose, for the variables `docker/compose.selfhost.yml`
 interpolates; the processes themselves read only their environment, so a variable the
@@ -47,21 +41,11 @@ directly where they are used.
 | `PYRRHULA_RATE_LIMIT_TENANT_REQUESTS` | `1200` | Per-tenant ceiling per window. |
 | `PYRRHULA_RATE_LIMIT_WINDOW_SECONDS` | `60` | The window both ceilings apply to. |
 
-## Models and retrieval
-
-No environment variable names a model. Which model runs the disclosure gate, moderation
-or the workspace assistant is a tenant's choice in the UI; which models embed and rerank
-is the platform admin's, under **Admin → Models** (see below). The one variable here is
-an address, not a model.
-
-| Variable | Default | What it does |
-|---|---|---|
-| `PYRRHULA_WEB_SEARCH_URL` | unset | SearXNG endpoint backing the `web_search` MCP preset. A workspace that wants its own instance edits the `web_search` server's URL in its MCP registry instead. |
-
 ## Execution, previews and repos
 
 | Variable | Default | What it does |
 |---|---|---|
+| `PYRRHULA_WEB_SEARCH_URL` | unset | SearXNG endpoint backing the `web_search` tool. The installers run one beside the api and point this at it; a workspace that wants its own instance edits the `web_search` server's URL in its MCP registry instead. |
 | `PYRRHULA_EXEC_ENGINES` | unset | Registry of execution engines (podman socket, k8s, and the experimental `aws-ecs`) available for delegated work. |
 | `PYRRHULA_EXEC_SOCKET` / `PYRRHULA_ENGINE_SOCKET` | unset | Container socket an engine drives. |
 | `PYRRHULA_MCP_GIT_ROOT` | `/app/data/blobs/repos` | Where server-side git repositories live. |
@@ -81,7 +65,6 @@ an address, not a model.
 | Variable | Default | What it does |
 |---|---|---|
 | `PYRRHULA_PLUGIN_DROP_DIR` | `/app/plugins-local` | Folder watched for hand-placed plugin packs — the credential-free install path. |
-| `PYRRHULA_PLUGINS_TOKEN` / `GH_TOKEN` | unset | Token for fetching plugin repos that are private. A clean install must never need one. |
 | `PYRRHULA_PLUGINS_STRICT` | unset | `1` makes a failed plugin fetch a build failure. Without it the build falls back to whatever is cached on disk and the install reports success with the previous pack inside it. What CI should use. |
 | `PYRRHULA_COMPOSE_DNS` | unset | A nameserver for the compose containers, e.g. `1.1.1.1`. Needed on a host whose only resolver is `systemd-resolved` at `127.0.0.53` — a loopback address that means nothing inside a container namespace, so every outbound lookup fails and the symptom is an apparent Hugging Face outage. |
 
@@ -92,65 +75,14 @@ an address, not a model.
 | `PYRRHULA_OTEL_EXPORTER_ENDPOINT` | unset | OTLP collector endpoint. Unset disables export. |
 | `PYRRHULA_OTEL_DEBUG` | unset | Prints spans to stdout. Noisy; for debugging only. |
 
-## Adapter escape hatches
+## Ceilings
 
-These exist so a deployment that hits a wall has a lever, not because anyone is expected
-to set them. Defaults are the supported configuration.
+Bounds the operator imposes on every organization. Defaults are the supported
+configuration.
 
 | Variable | Default | What it does |
 |---|---|---|
 | `PYRRHULA_REVIEW_ROUNDS_CEILING` | `10` | Hard ceiling on review→rework cycles. The *number of rounds* is a workspace setting (`max_review_rounds`); this is only the bound a workspace cannot exceed, because an unbounded review loop spends a tenant's API budget in a cycle nobody watched. |
-
-### Resolved since the audit
-
-- `PYRRHULA_REMOTE_MCP_TIMEOUT_S`, `PYRRHULA_REMOTE_MCP_MAX_RESULT_CHARS` → fields on the
-  MCP server's registration, beside `calls/session`.
-- `PYRRHULA_MAX_REVIEW_ROUNDS` → `max_review_rounds`, a workspace setting resolved through
-  the chain; only the ceiling stays in the environment.
-- `PYRRHULA_EMPTY_RETRY_TOKEN_FACTOR`, `PYRRHULA_REASONING_MIN_COMPLETION_TOKENS` →
-  plain constants. No tenant has a reason to want a different multiplier for "the model
-  reasoned past its allowance", and something nobody should vary is not configuration.
-- `PYRRHULA_GATE_MODEL`/`_API_BASE`, `PYRRHULA_MODERATION_MODEL`/`_API_BASE`,
-  `PYRRHULA_ASSISTANT_MODEL`/`_API_BASE` → **deleted.** Each was only the default beneath
-  a choice the tenant already makes in the UI (the gate connection, the workspace's
-  `moderation_model`, the "Assistant model" profile), and none could carry an API key, so
-  they only ever worked for keyless local providers. A default that a working constant
-  covers is not configuration: unchosen, the gate runs on the acting persona's model,
-  moderation is off, and the assistant profile is empty until someone fills it in. The
-  moderation port is untouched — `ModerationProvider.check()` still knows nothing about
-  tenants; the composition root resolves which adapter to build.
-- `PYRRHULA_EMBEDDING_MODEL`, `PYRRHULA_EMBEDDING_DIMENSION`, `PYRRHULA_RERANKER_MODEL`,
-  `PYRRHULA_RERANKER_ENABLED` → **Admin → Models**, stored in `deployment_setting` and
-  applied on the next restart of the api and worker. Deployment-level by nature (every
-  tenant's vectors sit in one column of one width), never per tenant. The built-in
-  defaults are the models the installers pre-download.
-- `PYRRHULA_DEFAULT_REGISTRATION_POLICY` → a constant, `closed`. Each organisation's
-  policy is set in the admin console: Tenants → **Joining** on its row.
-- `PYRRHULA_OLLAMA_NUM_CTX` → an adapter constant (16384); a connection's own `num_ctx`
-  param overrides it, which is the per-hardware lever that mattered.
-- `PYRRHULA_AUTH_PROVIDER`, `PYRRHULA_ISOLATION_MODE` → deleted; read by nothing.
-- `PYRRHULA_OLLAMA_BASE` → deleted with the seeding script that was its only reader; a
-  connection's API base is a field on the connection.
-- `PYRRHULA_ADMIN_TOKEN`, `PYRRHULA_ADMIN_PORT` → deleted with the legacy token console
-  and its separate container. One way in: a platform admin's own login.
-- `PYRRHULA_JWT_EXPIRY_SECONDS` → the organization's **session lifetime** (Organization
-  page). MCP dispatch tokens, which used to share it, now carry their own one-hour
-  constant: they are minted per call and used at once.
-- `PYRRHULA_PREVIEW_TTL_SECONDS` → the organization's **preview lifetime**, beneath the
-  operator's `PYRRHULA_PREVIEW_MAX_TTL_SECONDS`.
-- `PYRRHULA_RERANKER_ENABLED` → two switches, one per owner: whether a reranker is
-  loaded at all is the platform admin's (Admin → Models); whether an organization's
-  retrieval uses it is the organization's (Organization page).
-- `PYRRHULA_WEB_SEARCH_ENGINES` → `options.engines` on the `web_search` registration.
-  Which engines an instance can actually use is a fact about that instance.
-- `PYRRHULA_HISTORY_CHAR_BUDGET`, `PYRRHULA_CODEGEN_MAX_TOKENS` → connection/persona
-  params (`history_char_budget`, `max_tokens`). Both were justified in code comments by
-  *which model on what hardware*, which is the definition of per-connection.
-
-### Still open
-
-Nothing. Every variable below is a deployment fact, a system default beneath a resolution
-chain, or the documented exception.
 
 ## Container image
 
@@ -184,109 +116,38 @@ Never read by the running product.
 | `PYRRHULA_SMOKE_WORKER_TIMEOUT` | Seconds the installer's post-install check waits for the worker to run its test job (default `90`). |
 | `PYRRHULA_K8S_REGISTRY` | Push images to a registry instead of importing into k3s — the no-sudo install path. |
 | `PYRRHULA_COMPOSE_PROJECT`, `PYRRHULA_WEB_PORT`, `PYRRHULA_API_UPSTREAM` | Compose naming and ports. |
-| `DEEPSEEK_KEY` | A one-off demo script's provider key. Never used by the product. |
 
 ---
 
-## How a setting resolves
+## Settings in the product
 
-Values that two tenants might reasonably disagree about are settings, not environment
-variables, and they resolve through one chain:
+Anything two organizations might reasonably want different is a setting, not an
+environment variable. Workspace settings override organization settings, which override
+the built-in default; a key that is absent inherits, a key that is present is used as
+stored — so clearing an override means removing it, and the UI shows the inherited value
+as the placeholder.
 
-```
-workspace.settings ->  tenant.settings ->  the deployment default (below)
-```
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| `session_lifetime_seconds` | Organization page | 24 h | how long a login lasts |
+| `preview_ttl_seconds` | Organization page | 4 h | default preview lifetime, under `PYRRHULA_PREVIEW_MAX_TTL_SECONDS` |
+| `reranker_enabled` | Organization page | on | whether this organization's retrieval uses the deployment's reranker |
+| daily usage limits | Organization page | unlimited | token caps per organization, connection, persona and user |
+| `secret_mode`, `conduct_rules` | workspace | `excluded` | how secrets are handled; see [portability.md](portability.md) |
+| `max_review_rounds` | workspace | 2 | review→rework cycles, under `PYRRHULA_REVIEW_ROUNDS_CEILING` |
+| `moderation_model` | workspace, then organization | none | the classifier that screens authored content; unset means none |
+| `assistant_context_max_tokens` | workspace | 6000 | retrieved knowledge the assistant may put in front of the model per question |
+| `assistant_class_ratios` | workspace | rules .35 / lore .40 / misc .25 | how that budget splits across knowledge classes |
+| `generation_limits` | admin console, per organization | 300 s / 100 000 chars | circuit breakers on one generation; unparseable values read as the default |
+| egress policy | admin console, per organization | permissive | which provider kinds each purpose may reach |
+| gate connection | workspace secrets card | the persona's own | the model that runs the disclosure gate |
+| retrieval models | Admin → Models | `BAAI/bge-m3`, `BAAI/bge-reranker-v2-m3` | deployment-wide; applied on the next restart |
+| self-serve signup | Admin → Tenants | on | whether strangers may create an organization |
+| joining policy | Admin → Tenants → Joining | `closed` | who may join an existing organization |
 
-**Absent means inherit; present means chosen.** A key that is not in a settings dict falls
-through; a key that is there is used exactly as stored, *including* `0`, `false` and `""`.
-That distinction is load-bearing: a workspace has to be able to turn something off
-deliberately, so "off" and "not set here" cannot be spelled the same way.
-
-Consequently, **clearing an override means removing the key, not saving an empty value.**
-In the UI a blank field inherits, and saving it blank deletes the override rather than
-storing a zero the resolver would honour. The placeholder shows the value being inherited,
-so an empty box is never ambiguous.
-
-The same shape the vocabulary overlay has always used
-(`core/vocabulary/service.py`), implemented once in `core/settings/resolve.py` so no call
-site re-derives it and quietly disagrees about which layer wins.
-
-Settings that use it today: `max_review_rounds`, `moderation_model`,
-`assistant_context_max_tokens`, `assistant_class_ratios`, and the tenant-level
-`session_lifetime_seconds`, `preview_ttl_seconds` and `reranker_enabled` (Organization
-page). `secret_mode`, `conduct_rules` and `allow_automerge` are workspace-only settings
-read straight off the workspace, not resolved through the chain.
-
-`assistant_context_max_tokens` is how many tokens of retrieved workspace knowledge the
-assistant may put in front of the model on one question, across `/assist` and the chat
-widget alike. It defaults to **6000**.
-
-The default matters more than it looks. The budget is split across knowledge classes
-(`rules` 0.35, `lore` 0.40, `misc` 0.25) and *every source file a repository ingest
-produces lands in `misc`* — so the class holding the most material gets the smallest
-share. At the old 2400 the `misc` bucket was 600 tokens, about two chunks, and a question
-about how code fits together was answered from a single chunk of one file. Unused budget
-does spill between classes, but it spills in tokens, and a leftover smaller than one chunk
-buys nothing.
-
-Raise it for a workspace with a codebase attached; lower it for a model with a genuinely
-small context window. It is a workspace-level property, not a platform one: a six-crate
-repository and a one-page handbook do not want the same number.
-
-`assistant_class_ratios` is that split itself, as a map (default
-`{"rules": 0.35, "lore": 0.40, "misc": 0.25}`). Ratios need not sum to 1; they are
-normalised. A workspace whose knowledge is mostly code wants something like
-`{"rules": 0.2, "lore": 0.2, "misc": 0.6}`. A setting that is not a usable map, or whose
-values total zero, is ignored in favour of the default -- a zero total would give every
-class a zero budget, which reads as "the assistant stopped finding anything" rather than as
-a bad setting.
-
-**This is not the same lever as `priority_weight`,** and the difference decides which one
-to reach for. `workspace_knowledge_attachment.priority_weight` scales an attached *source*,
-so it says "this handbook matters more here than that one". It cannot say "code matters
-more than prose", because a repository is a single source whose entries span all three
-classes -- weighting it raises every class equally, and a uniform weight normalises away to
-no change at all. Use `priority_weight` to rank sources against each other, and
-`assistant_class_ratios` to change what a class is worth.
-
-## What is deliberately *not* an environment variable
-
-These were considered and put somewhere a user will actually find them:
-
-- **How long one generation may run, and how much it may emit** — `generation_limits`
-  on the tenant (`{"max_seconds": 300, "max_chars": 100000}`), loaded per request and
-  enforced inside the `ModelProvider` port, exactly like the egress policy beside it.
-  Circuit breakers, not budgets: nothing else in the stack catches a model that stops
-  stopping. The job lease measures *silence*, and a runaway is not silent — one kept a
-  heartbeat alive for 79 minutes while emitting 470,244 characters that then became the
-  next turn's prompt. A character ceiling measures *output*, and the worst case emits
-  none, because a reasoning model's thinking never reaches content — turns of 22 and 58
-  minutes produced nothing at all. So one of each, and both **fail closed**: 0, a
-  negative, or anything unparseable reads as the default, never as "no limit", because
-  no limit is the state they exist to end.
-- **How long to wait on an external MCP server, how much of its answer to accept, and how
-  many times a session may call it** — `timeout_seconds`, `max_result_chars` and
-  `max_calls_per_session`, all fields on the server's registration. An env var would be global, and the external
-  server cannot enforce it per session at all (it is never told which session is calling).
-- **Sampling parameters** (`temperature`, `seed`, `presence_penalty`, `reasoning_effort`) —
-  documented in [models.md](models.md); in short:
-  on the connection, and per persona in the persona editor. One connection serves models
-  with different knobs.
-- **Which knowledge a persona may retrieve** — scope bands and knowledge classes, in the
-  workspace and the flow.
-- **How secrets are handled** — `secret_mode` on the workspace; it also travels in a `.pyr`.
-- **How many rounds a discussion runs** — the flow's own state and gates.
-- **How many times work goes back for rework** — `max_review_rounds` on the workspace.
-- **Which classifier screens authored content** — `moderation_model` on the workspace.
-- **How much transcript a model is given, and how big a file it may write** —
-  `history_char_budget` and `max_tokens` on the connection.
-- **How long a login lasts, how long a preview serves by default, and whether
-  retrieval reranks** — `session_lifetime_seconds`, `preview_ttl_seconds` and
-  `reranker_enabled` on the organization (Organization page, `PUT /tenant/settings`).
-  An enterprise wants eight-hour sessions and a hobby box wants thirty days; a
-  deployment cannot know which it is hosting. Stored values that do not parse, or a
-  preview lifetime above the operator's ceiling, read as the default.
-- **Which models embed and rerank** — deployment-level by nature (one vector column,
-  one width), so not a tenant setting either: **Admin → Models**, applied on the next
-  restart. The gate, moderation and assistant models are each a tenant's own choice in
-  the UI, with no deployment default beneath them.
+`assistant_context_max_tokens` matters more than it looks: every source file a repository
+ingest produces lands in `misc`, so a workspace with a codebase attached wants a larger
+budget, and `assistant_class_ratios` decides what a class is worth (a code-heavy
+workspace wants something like `rules .2 / lore .2 / misc .6`). `priority_weight` on a
+knowledge attachment is a different lever: it ranks *sources* against each other, and
+cannot say "code matters more than prose".
