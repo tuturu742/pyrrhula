@@ -99,7 +99,7 @@ def _make_actor_fields_resolver(tenant_id: uuid.UUID) -> ActorFieldsResolver:
     """Read an actor's stats off its own entity row.
 
     This used to be a fixed ``{dexterity: 14, strength: 14}`` stub on the grounds that no
-    entity system existed yet. One has existed since F3.6, and the stub outliving it meant
+    entity system existed yet. One has existed for a long time, and the stub outliving it meant
     every actor in every session rolled with identical stats: a randomizer that
     validates ``1d20+STR`` against a constant is theatre, and the sheet the player was
     handed was fiction.
@@ -300,7 +300,7 @@ async def run_one_persona_turn(
             axis_definitions, current_profile.axis_values
         )
 
-    # S1 (E2.5+E2.6): the disclosure gate runs BEFORE assembly whenever the phase grants
+    # The disclosure gate runs BEFORE assembly whenever the phase grants
     # secret visibility and the acting principal holds any. Fail-closed inside the gate;
     # a factory failure here concedes nothing (no decisions -> exclusion-by-default,
     # concealed plaintext simply never enters selection). INV-1: the factory lives in
@@ -446,7 +446,7 @@ async def run_one_persona_turn(
         event_seq=event_seq,
         history_summary=history_summary,
         reranker=reranker,
-        # the real renderer, which has existed since F3.6 and was never passed by
+        # The real renderer, which existed for a long time and was never passed by
         # any caller. Without it an entity created in one phase is invisible in the
         # next: the ids live only in a tool result, and the transcript does not replay
         # those. A lead that filed six work items was then asked to hand them to coding
@@ -993,7 +993,7 @@ def _make_conduct_gated_scheduler(inner: NextActorFn, tenant_id: uuid.UUID) -> N
       * not yet wrapped up -> raise ``HumanTurnPendingError`` (before the inner scheduler is
         even consulted, so its cursor is untouched) -> ``advance_session`` returns
         ``awaiting_human`` and parks. The overseer conducts turns out of band
-        (``run_directed_persona_turn`` / the G4.4 override), none of which advance the phase.
+        (``run_directed_persona_turn`` / the override), none of which advance the phase.
       * wrapped up (``conductor_wrap_up`` set) -> return ``None`` so the interpreter, finding
         no actor and no ``await`` on the phase, evaluates the gates and jumps to synthesis.
     In ``auto`` mode, or on any non-conductable phase, it delegates to the real scheduler

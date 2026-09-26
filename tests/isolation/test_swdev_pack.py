@@ -1,7 +1,7 @@
-"""its own acceptance tests for the swdev pack -- the third pack, keeping the D5/
-INV-7 trust chain and the genericity bet (INV-9) exercised in a domain that is neither a
+"""Acceptance tests for the swdev pack -- the third pack, keeping the render-from-record
+(INV-7) trust chain and the genericity bet (INV-9) exercised in a domain that is neither a
 tabletop RPG nor an enterprise workflow. Loaded through the exact same generic
-``core.packs.loader`` F3.7 built; no swdev-specific code anywhere outside
+``core.packs.loader``; no swdev-specific code anywhere outside
 ``packs/swdev/`` itself.
 """
 
@@ -154,8 +154,7 @@ async def test_merge_guard_is_pure_cel_over_the_generic_interpreter(
     assert blocked["transitioned"] is False
 
     # The build passes (its own FSM, unrelated core code) -- then the PR's mirrored
-    # field is updated to reflect it (the sync step a real delegation/webhook wiring,
-    # not yet built, would eventually automate -- G4.16).
+    # field is updated to reflect it (the sync step the delegation wiring automates).
     await transition(
         principal_id,
         tenant_a,
@@ -205,7 +204,7 @@ async def test_merge_guard_is_pure_cel_over_the_generic_interpreter(
 async def test_checklist_verdict_renders_from_resolution_record_not_prose(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """``checklist_eval`` writes a ``ResolutionRecord`` (C1.5/the unmodified
+    """``checklist_eval`` writes a ``ResolutionRecord`` (through the unmodified
     ``ResolutionService``) and the verdict renders from that record (INV-7) -- a model
     asserting "all checks passed" contrary to the record would be decoration, flagged by
     the existing check, not something this pack has to reimplement."""

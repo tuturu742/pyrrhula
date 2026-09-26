@@ -1,6 +1,6 @@
 """CLAUDE.md rule 5: append-only tables must have no UPDATE/DELETE grant for the app
 role. Until now this was enforced only by each migration remembering to REVOKE — with no
-test asserting the actual grants, which is exactly how ``session_event`` shipped in T0.8
+test asserting the actual grants, which is exactly how ``session_event`` once shipped
 missing its REVOKE and nobody noticed. This catalog-based test closes that gap: it reads
 ``information_schema.role_table_grants`` directly and fails if any append-only table that
 exists grants UPDATE or DELETE to ``pyrrhula_app``.
@@ -9,8 +9,8 @@ Only the append-only tables that exist *today* are listed. The rest of rule 5's 
 (``secret_disclosure_event``, ``disclosure_decision``, ``entity_state_change``) lands in
 later phases; each must be added here in the same PR that creates it — the
 ``test_no_unexpected_append_only_tables_appeared`` guard below fails loudly to force that
-(confirmed live: it caught ``checkpoint`` itself, B1.4, ``context_manifest``, C1.3, and
-``resolution_record``, C1.6, before their registration).
+(confirmed live: it caught ``checkpoint``, ``context_manifest`` and ``resolution_record``
+before their registration).
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ _APPEND_ONLY_TABLES_TODAY = {
     "disclosure_decision",
     "behavior_profile",
     "entity_state_change",
-    # Not itself named in CLAUDE.md's rule-5 enumeration (a new F3.12 addition, not one
-    # of the plan's original append-only tables) -- registered here anyway since it's
+    # Not itself named in CLAUDE.md's rule-5 enumeration (a later addition, not one of
+    # the original append-only tables) -- registered here anyway since it's
     # append-only by the same REVOKE convention, and this catalog test is strictly more
     # useful catching a missing REVOKE on it too.
     "persona_version",

@@ -1,9 +1,9 @@
 """RPG axis-pack fixtures (its own subtask): the examples (chattiness,
 cooperativeness, secret_disclosure_propensity, deception_propensity), used by this task's
-validation fixtures and by the disclosure gate tests. The enterprise axis pack lands
-in F3.8 and the swdev axis pack (`review_strictness`, `escalation_propensity`,
-`risk_tolerance` with `stakes: high`) in F3.13 -- this module is the machinery's own
-proof it works, not a claim about pack completeness.
+validation fixtures and by the disclosure gate tests. The enterprise and swdev axis
+packs (`review_strictness`, `escalation_propensity`, `risk_tolerance` with `stakes:
+high`) ship in the plugin repository -- this module is the machinery's own proof it
+works, not a claim about pack completeness.
 
 Plain `dict`s, not `AxisDefinitionSchema` instances, matching
 `core.process.dsl.fixtures`'s own reasoning: a caller exercises the exact same
@@ -81,7 +81,7 @@ SECRET_DISCLOSURE_PROPENSITY: dict[str, object] = {
     "stakes": "high",
     "semantics_md": (
         "How readily the agent's held secrets surface under pressure -- enforced by the "
-        "disclosure gate (E2.5), not by the model's own restraint."
+        "disclosure gate, not by the model's own restraint."
     ),
     "bindings": [
         {"kind": "gate"},

@@ -1,4 +1,4 @@
-"""Between-session state: the workspace clock and scheduled entity effects (G4.2, req 21).
+"""Between-session state: the workspace clock and scheduled entity effects.
 
 Workspaces are not only alive during sessions. Time passes between game nights; a ticket
 ages between review cycles; a work item is unblocked while nobody is in a session. Three
@@ -26,8 +26,8 @@ out of step with what actually happened; the record of what happened is
 ``entity_state_change``, as it is for every other mutation.
 
 Applied effects land with ``cause='fsm'`` and ``cause_ref='schedule:<id>:<tick>'``, and
-``session_id = NULL`` -- the out-of-session mutation surface F3.5 already supports
-(``entity_state_change.session_id`` has been nullable since F3.3 precisely for this).
+``session_id = NULL`` -- the out-of-session mutation surface the mutation service
+supports (``entity_state_change.session_id`` is nullable precisely for this).
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""OverseerService (E2.10, INV-1, INV-5, Q6): the only other secret-plaintext
+"""OverseerService (INV-1, INV-5): the only other secret-plaintext
 read path besides `ContextAssembler.assemble()`. `inspect()` is one transaction --
 permission check, read, and audit append, or none of it. A forced failure between the
 read and the append must leave neither visible (this task's own acceptance criterion) --
@@ -7,8 +7,8 @@ transaction.
 
 **The overseer is a principal type with a permission, not a scope** : in-fiction
 rules (`scope_key`) never gate this service; only `secret:inspect` does. One service for
-both consuming surfaces (the Director's View UI, E2.11, and the `overseer.query` MCP
-tool, E2.12) -- two audit paths would drift, and one of them would lie.
+both consuming surfaces (the Director's View UI and the `overseer.query` MCP tool) --
+two audit paths would drift, and one of them would lie.
 """
 
 from __future__ import annotations

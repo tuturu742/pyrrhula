@@ -1,4 +1,4 @@
-"""A1.3 acceptance criteria for the core embedding batch job, against a live Postgres."""
+"""Acceptance criteria for the core embedding batch job, against a live Postgres."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ async def test_end_to_end_uploaded_doc_produces_searchable_vectors(db_available:
     # knowledge_chunk.embedding is a fixed vector(1024) column; dimension=1024
     # keeps this test's stub provider writable through it -- the "8-dim stub" the task's
     # acceptance criteria describes is for a lightweight test surrogate table
-    # (vector_store_item, T0.3), not the real production-shaped chunk table this test
+    # (vector_store_item), not the real production-shaped chunk table this test
     # exercises.
     provider = StubEmbeddingProvider(dimension=1024)
     stats = await embed_chunks(tenant_id, provider, knowledge_source_id=source_id)
@@ -89,7 +89,7 @@ async def test_identical_content_hash_reuses_cached_embedding_not_recomputed(
     # knowledge_chunk.embedding is a fixed vector(1024) column; dimension=1024
     # keeps this test's stub provider writable through it -- the "8-dim stub" the task's
     # acceptance criteria describes is for a lightweight test surrogate table
-    # (vector_store_item, T0.3), not the real production-shaped chunk table this test
+    # (vector_store_item), not the real production-shaped chunk table this test
     # exercises.
     provider = StubEmbeddingProvider(dimension=1024)
     stats = await embed_chunks(tenant_id, provider, knowledge_source_id=source_id)

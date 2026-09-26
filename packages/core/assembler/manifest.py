@@ -77,7 +77,7 @@ async def write_context_manifest(
     .get_current_behavior_profile``) rather than looked up here -- this module has no
     opinion about which agent a manifest belongs to beyond what the caller already
     resolved for ``assemble()`` itself. ``None`` is legitimate: not every agent has a
-    behavior profile (most don't, pre-E2.3, and low-stakes-only agents may never need
+    behavior profile (most don't, and low-stakes-only agents may never need
     one).
 
     Retry-safe: a resumed turn re-executes at the same ``event_seq`` (CLAUDE.md rule 8)
@@ -126,7 +126,7 @@ async def get_manifest_for_message(
     """the read path (-style access control, applied to manifests rather than
     secrets): the exact viewer of a manifest may always read it back; anyone else needs a
     workspace role granted the ``read_any_manifest`` action (facilitator/overseer by
-    default -- see the C1.3 migration's ``role_permission`` seed), checked through the
+    default -- see the ``role_permission`` seed in the migration), checked through the
     injected ``PermissionService`` port (CLAUDE.md rule 12: call sites depend on the port
     and never construct a specific adapter or inline role logic themselves)."""
     async with tenant_scope(tenant_id) as session:

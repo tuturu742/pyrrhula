@@ -1,4 +1,4 @@
-"""Elapsed-history repopulation for a resumed session (G4.1, req 20).
+"""Elapsed-history repopulation for a resumed session.
 
 A session that has been dormant for a month resumes with a checkpoint's ``state`` but an
 empty working context: the model has no idea what happened. This module builds the recap
@@ -17,7 +17,7 @@ merely convenient:
 
 2. **The summary is per-viewer.** Facts are filtered through the *resuming context's*
    principal before any model call: an ``entity_state_change`` is included only when the
-   entity's ``scope_key`` is in the viewer's resolved scope set (C1.1, the same resolver
+   entity's ``scope_key`` is in the viewer's resolved scope set (the same resolver
    every retrieval path uses -- there is no second visibility implementation here), and a
    disclosure is included only when the viewer was actually disclosed to, or holds
    ``secret:inspect``. A participant's recap therefore cannot contain a fact they could
@@ -32,7 +32,7 @@ merely convenient:
    actually is.
 
 3. **The budget is a reservation, not a truncation.** ``BudgetSpec.history_ratio``
-   ( DSL, G4.1) carves the history slice out of the phase budget *before* retrieval
+   (in the DSL) carves the history slice out of the phase budget *before* retrieval
    runs; ``summarise_history(max_tokens=...)`` then fits the summary to exactly that
    slice. Depth adapts: facts are kept first and narrative gets what remains, because a
    dropped fact is a lie of omission about something that provably happened while a
@@ -325,7 +325,7 @@ async def collect_visible_facts(
 ) -> tuple[MechanicalFact, ...]:
     """The fact frame for one viewer, in event order. Visibility is resolved once, through
     ``core.assembler.visibility.scopes_for`` -- the *same* resolver the assembler and
-    (from G4.5) the exporter use. There is deliberately no "history visibility" of its own
+    the exporter use. There is deliberately no "history visibility" of its own
     to drift out of step with it.
 
     ``between_sessions_since`` additionally pulls in out-of-session entity changes

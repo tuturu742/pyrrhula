@@ -1,6 +1,6 @@
-"""A1.6 acceptance criteria, encoded as an automated check rather than left as a manual
+"""Acceptance criteria, encoded as an automated check rather than left as a manual
 review checklist item (matching this project's existing pattern, e.g. the INV-1 lint):
-"no class weighting applied to scores, anywhere in the retrieval package." D2
+"no class weighting applied to scores, anywhere in the retrieval package." That rule
 is the whole reason WRRF exists instead of a multiplier on similarity scores -- this test
 is what stops a future change from quietly reintroducing one.
 """
@@ -30,6 +30,6 @@ def test_no_score_is_ever_multiplied_in_the_retrieval_package() -> None:
                 offenders.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()}")
 
     assert not offenders, (
-        "D2: priority is budget allocation (WRRF fusion + bucket fill), never a "
+        "priority is budget allocation (WRRF fusion + bucket fill), never a "
         "multiplier on a similarity/rank score. Offending lines:\n" + "\n".join(offenders)
     )

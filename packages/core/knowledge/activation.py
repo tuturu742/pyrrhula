@@ -5,11 +5,11 @@ that solves "the tavern lore shouldn't re-inject every turn while we're in the t
 also shouldn't vanish after one turn" — nothing in the plain-RAG literature does this.
 
 Pure function over already-fetched entries, not a DB-touching module: the caller (the
-future assembler, C1.2) fetches entries and recent-turn scan text, and is responsible for
+assembler) fetches entries and recent-turn scan text, and is responsible for
 persisting the returned ``new_state`` as part of session-derived state — that mechanism is
 the job (event log + checkpoints), which doesn't exist yet. This module owns the
 activation *logic* and its state *shape* only; ``prior_state``/``new_state`` are plain
-JSON-able dicts specifically so whatever B1.4 builds can store them without this module
+JSON-able dicts specifically so the checkpoint store can hold them without this module
 needing to know how.
 
 Secondary-key logic, condensed to fit the 3-value ``logic`` CHECK constraint rather
@@ -195,7 +195,7 @@ def activate_entries(
     # inclusion_group exclusivity: only the lowest insertion_order member of a group
     # activates -- "highest rank wins" per the plan, and insertion_order (author-set
     # priority) is the only ranking signal available at this stage (WRRF's real rank
-    # comes later, A1.6, after retrieval is fused in).
+    # comes later, after retrieval is fused in).
     best_in_group: dict[str, ActivatableEntry] = {}
     for entry, _why in candidates:
         if entry.inclusion_group is None:

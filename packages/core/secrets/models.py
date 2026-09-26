@@ -9,8 +9,8 @@ it needs the pgvector ``vector`` type, which isn't wired into the SQLAlchemy typ
 it's added via raw SQL in the migration and excluded from autogenerate via
 ``migrations/env.py``'s ``_RAW_SQL_COLUMNS`` (a column-level sibling of ``_RAW_SQL_TABLES``:
 unlike ``knowledge_chunk``, every other column on ``secret`` needs real ORM-backed CRUD
-from day one, so excluding the whole table isn't the right shape here). Nothing in E2.1
-populates it — that starts when the disclosure gate or overseer needs
+from day one, so excluding the whole table isn't the right shape here). It is populated
+when the disclosure gate or overseer needs
 semantic search over gists.
 """
 
@@ -38,11 +38,11 @@ from core.tenancy.models import Base
 
 class SecretRow(Base):
     """The record itself. ``content_ciphertext`` is routed through the ``Encryptor``
-    port at the repo layer (identity impl for now, D11) — never read directly by anything
+    port at the repo layer — never read directly by anything
     outside ``core.secrets.repo``/``core.assembler``/``core.overseer`` (INV-1). ``gist`` is
     the only field the disclosure gate will ever see. ``behavioral_directive`` is
-    nullable in the schema but not optional in spirit (E2.2 treats an empty one as a lint
-    warning) — it's the field that makes exclusion produce an agent with a
+    nullable in the schema but not optional in spirit (authoring treats an empty one as a
+    lint warning) — it's the field that makes exclusion produce an agent with a
     motivation instead of a lobotomy."""
 
     __tablename__ = "secret"
@@ -96,7 +96,7 @@ class SecretRow(Base):
 
 
 class SecretHolderRow(Base):
-    """Who knows (D3, brief item 14: the facilitator does *not* see held secrets by
+    """Who knows (the facilitator does *not* see held secrets by
     default -- visibility is an explicit scope opt-in, never a default, so there is no
     facilitator-holder row created implicitly anywhere in this schema or its repo)."""
 
