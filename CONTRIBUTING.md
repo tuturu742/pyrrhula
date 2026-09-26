@@ -39,11 +39,12 @@ know it works.
 ```bash
 uv sync --extra dev
 uv run pytest                 # the whole suite
-uv run ruff check. && uv run ruff format --check.
+uv run ruff check . && uv run ruff format --check .
+uv run mypy packages
 ```
 
-Acceptance criteria in task files are falsifiable on purpose. If one cannot be tested as
-written, say so in the pull request rather than quietly reinterpreting it.
+Say what would prove the change works, and make it falsifiable. If a claim cannot be
+tested as written, say so in the pull request rather than quietly reinterpreting it.
 
 ### Tests you are expected to extend
 
