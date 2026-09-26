@@ -4,7 +4,7 @@ Split from `server.py` so the dispatch machinery has no opinion about which tool
 and from the tool modules so none of them knows about the others. The result is that
 "what is on the MCP surface" is answered in exactly one readable place.
 
-`overseer.query` is registered here rather than living apart, even though E2.12 built it
+`overseer.query` is registered here rather than living apart, even though it came
 first: one surface, one list. Its handler still crosses only `OverseerService`, which
 `tests/architecture/test_mcp_overseer_query_boundary.py` guards independently.
 """

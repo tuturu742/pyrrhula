@@ -1,4 +1,4 @@
-"""per-message ContextManifest inspection (C1.3 -- "a differentiator,
+"""Per-message ContextManifest inspection ("a differentiator,
 not a debug tool"). What was retrieved, which bucket, what rank, why, and what it cost --
 read straight from the durably-written manifest (INV-10), never recomputed. Access
 control is its own ``get_manifest_for_message``: the exact viewer of a manifest may

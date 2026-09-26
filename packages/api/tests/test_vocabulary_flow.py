@@ -41,7 +41,7 @@ def _register_and_login(client: TestClient, slug: str) -> str:
 async def test_list_overlays_includes_the_three_shipped_system_overlays(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """F3.13 added `swdev_v1` as a third shipped system overlay (a fresh INSERT,
+    """`swdev_v1` is the third shipped system overlay (a fresh INSERT,
     its own base migration never pre-seeded it) -- this test's own name and
     assertion set grew from two to three for exactly that reason."""
     slug = f"vocab-list-{uuid.uuid4().hex[:8]}"

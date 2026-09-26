@@ -15,7 +15,7 @@ from typing import Literal, Protocol
 from urllib.parse import urlsplit
 
 # A reviewer's verdict on a PR/MR. "approve" and "request_changes" are FORMAL reviews the
-# host's merge gate can enforce; "comment" is a non-blocking note. G4.17 threads the
+# host's merge gate can enforce; "comment" is a non-blocking note. Delegation threads the
 # ACTING persona's own token to each call, so a formal approve comes from a reviewer
 # identity distinct from the PR author -- the thing a single platform token cannot do.
 ReviewVerdict = Literal["approve", "request_changes", "comment"]

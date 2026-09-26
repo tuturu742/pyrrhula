@@ -1,5 +1,5 @@
-"""v1 Encryptor: the identity function. Swapped for per-tenant KMS/BYOK at H5.7 without
-touching any call site."""
+"""The no-op Encryptor: plaintext in, plaintext out. The development fallback; a
+deployment sets ``PYRRHULA_REQUIRE_ENCRYPTION`` to refuse booting with it."""
 
 from __future__ import annotations
 

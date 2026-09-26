@@ -159,5 +159,5 @@ app.include_router(admin.router)
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Liveness/readiness probe. No DB round-trip on purpose — this is the process check,
-    not a dependency check. Real dependency wiring lands with T0.2/T0.3."""
+    not a dependency check."""
     return {"status": "ok"}

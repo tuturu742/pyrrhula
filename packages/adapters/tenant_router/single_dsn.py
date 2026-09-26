@@ -1,6 +1,6 @@
-"""v1 TenantRouter: every tenant gets the same DSN. ``tenant.region`` and
-``tenant.isolation_mode`` are read (and logged) but not acted on — H5.5/H5.6 replace this
-class with one that actually branches on them, behind the same port."""
+"""The single-DSN TenantRouter: every tenant gets the same DSN. ``tenant.region`` and
+``tenant.isolation_mode`` are read (and logged) but not acted on; a router that branches
+on them sits behind the same port."""
 
 from __future__ import annotations
 

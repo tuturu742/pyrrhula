@@ -1,6 +1,6 @@
 """v1 ``Notifier``: structured-log delivery.
 
-Not a placeholder for a missing decision -- a deliberate default. The pipeline G4.3 builds
+Not a placeholder for a missing decision -- a deliberate default. The notification pipeline
 (who is notified, exactly once, with what visibility-filtered content) is complete and
 tested without any particular channel existing, and this environment has no mail server,
 SMTP credentials, or webhook endpoint to send to. Wiring a real channel is a

@@ -1,4 +1,4 @@
-"""MCP registry admin (G4.12, req 12).
+"""MCP registry admin.
 
 The registry is workspace configuration, and configuration is exactly where the allowlist
 lives -- so this is the surface that decides what agents in a workspace can reach. It is

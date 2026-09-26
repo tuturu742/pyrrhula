@@ -1,4 +1,4 @@
-"""D1.3/INV-7: a message's resolution records are visible per message via API, and the
+"""INV-7: a message's resolution records are visible per message via API, and the
 contradiction badge rides along as a per-record flag -- never derived from prose.
 """
 

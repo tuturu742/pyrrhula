@@ -8,7 +8,7 @@ ref's ``url`` (the workspace's ``mcp_server`` row for ``git`` stores the repo ke
 Code generation is a **scaffold** today -- it commits a task doc + a stub module derived from
 the work item -- because the goal is the working flow (PR opened, reviewed, fixed), not app
 correctness; swapping in a real coding-model call is confined to ``_generate_files``. This
-matches the plan's D15 note that the transport is the single seam a real coding agent plugs
+keeps the transport the single seam a real coding agent plugs
 into. Everything that makes the call *safe* (allowlist, phase policy, idempotency, injection
 envelope, metering) lives in core and is unchanged.
 """

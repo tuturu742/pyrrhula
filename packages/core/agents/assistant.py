@@ -11,7 +11,7 @@ assistant's: who-knows-what is enforced by the system, so the assistant can neve
 material at a user that the user could not read directly (INV-4 keeps every query
 scope-keyed in SQL).
 
-Drafting calls meter as ``purpose='rewrite'`` (same taxonomy slot as the F3.12 edit
+Drafting calls meter as ``purpose='rewrite'`` (same taxonomy slot as the edit
 proposals they generalise); free questions meter as ``purpose='generation'``.
 """
 

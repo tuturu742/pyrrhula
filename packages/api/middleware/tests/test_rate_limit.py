@@ -1,6 +1,6 @@
 """Rate limiting tests. Keys are randomised per test (uuid-based) rather than
 relying on TestClient's fixed synthetic client IP, so repeated runs against a persistent
-Redis don't accumulate stale counts across runs -- the same class of bug T0.4 found in
+Redis don't accumulate stale counts across runs -- the same class of bug once found in
 the identity adapter tests (fixed test data colliding with leftover state).
 """
 

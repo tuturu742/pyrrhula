@@ -39,7 +39,7 @@ class EchoModelProvider:
         yield Chunk(text="", finish_reason="stop")
 
     async def generate_structured(self, req: GenerationRequest, schema: type[ModelT]) -> ModelT:
-        raise NotImplementedError("EchoModelProvider is generate()-only; not needed for T0.8")
+        raise NotImplementedError("EchoModelProvider is generate()-only")
 
     def count_tokens(self, text: str, model: str) -> int:
         return max(len(text.split()), 1)

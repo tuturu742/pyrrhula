@@ -6,8 +6,8 @@ directly -- INV-1 reserves that import for `core.assembler`/`core.overseer`, and
 `OverseerService` is the only boundary this tool is allowed to cross to reach it
 (`tests/architecture/test_mcp_overseer_query_boundary.py` guards this).
 
-Full MCP transport/protocol wiring (tool registration, JSON-RPC framing) is Phase 4's
-G4.13 (: "Phase 4 ships MCP") -- this is the tool's own logic, callable now with a
+Full MCP transport/protocol wiring (tool registration, JSON-RPC framing) lives in
+``api.mcp_server.build`` -- this is the tool's own logic, callable with a
 resolved `(tenant, workspace, principal)` token, ahead of the server that will eventually
 dispatch to it.
 """

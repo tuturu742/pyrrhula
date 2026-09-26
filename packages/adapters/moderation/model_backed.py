@@ -1,4 +1,4 @@
-"""Model-backed ModerationProvider (S3, G4.14): a classifier prompt through the
+"""Model-backed ModerationProvider: a classifier prompt through the
 existing ``ModelProvider`` port -- real judgment without new infrastructure, local
 ollama by default and anything the deployment configures otherwise.
 

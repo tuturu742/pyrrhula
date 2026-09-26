@@ -1,4 +1,4 @@
-"""`EffectfulAction` (G4.12, CLAUDE.md rule 8).
+"""`EffectfulAction` (CLAUDE.md rule 8).
 
 A tool call that changes the world outside Pyrrhula -- posting a message, opening a pull
 request, booking something -- cannot simply be retried. Resume-from-checkpoint re-executes

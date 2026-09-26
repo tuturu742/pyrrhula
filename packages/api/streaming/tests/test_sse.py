@@ -1,4 +1,4 @@
-"""SSE catch-up (T0.8 acceptance criterion): reconnecting with ``Last-Event-ID`` replays
+"""SSE catch-up: reconnecting with ``Last-Event-ID`` replays
 missed durable events. Exercises ``sse_stream()`` directly against a fake ``Request``
 (headers + a disconnect signal) rather than over real HTTP/TestClient — deterministic,
 no risk of hanging on the live-subscribe loop, which by design blocks indefinitely

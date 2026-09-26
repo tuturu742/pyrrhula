@@ -1,4 +1,4 @@
-"""D1.3/INV-7: resolve a message's ``resolution_record_ids`` to their full
+"""INV-7: resolve a message's ``resolution_record_ids`` to their full
 ``ResolutionRecord`` rows -- the session view's resolution widget renders from this endpoint,
 never from the message's own prose. Same shape as ``citations.py``'s per-message resolve
 endpoint, one route file per "thing a message points at by id".

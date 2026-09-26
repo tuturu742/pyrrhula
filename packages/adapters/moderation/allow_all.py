@@ -1,5 +1,6 @@
-"""v1 ModerationProvider: allow everything. Per-tenant policy and real scanning
-(authoring-time and generation-time hooks) land at G4.14."""
+"""The allow-everything ModerationProvider: the default when no classifier is
+configured. Real scanning is ``model_backed``; the hooks that call either are in
+``core.moderation``."""
 
 from __future__ import annotations
 

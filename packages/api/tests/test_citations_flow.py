@@ -105,7 +105,7 @@ async def test_message_citations_endpoint_surfaces_hallucinated_citation_ids(
     message = await submit_user_message(tenant_id, sess.id, uuid.uuid4(), "irrelevant")
 
     # The reply cites [k1], but the manifest that produced its context had no such entry
-    # -- a hallucinated citation, C1.7-adjacent (the "hallucinated-citation flags
+    # -- a hallucinated citation (the "hallucinated-citation flags
     # visible" acceptance criterion).
     result = validate_citations(
         "Per [k1], you succeed.", manifest_entries=[], requires_citation=False

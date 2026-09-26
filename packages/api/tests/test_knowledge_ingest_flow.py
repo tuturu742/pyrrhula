@@ -1,4 +1,4 @@
-"""A1.2 over real HTTP: upload a document (fast, no parsing in the api process), then
+"""Ingestion over real HTTP: upload a document (fast, no parsing in the api process), then
 drive the enqueued job through the same handler the worker process would use, and check
 the resulting chunks + job status.
 """

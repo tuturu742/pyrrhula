@@ -1,4 +1,4 @@
-"""G4.2 over real HTTP: the clock endpoints and the change feed. The core-level
+"""Between-session state over real HTTP: the clock endpoints and the change feed. The core-level
 acceptance criteria live in ``tests/isolation/test_between_session_state.py``; this file
 covers the surface those criteria are reached through -- a route that 500s is not
 something a service-level test would catch.
