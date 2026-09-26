@@ -21,6 +21,9 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
   // Seconds to wait on this server, blank = platform default. A lookup tool should fail
   // fast; a build tool should not be cut off at a lookup tool's patience.
   const [timeout, setTimeout_] = useState("");
+  // Transport-specific knobs, as JSON -- a SearXNG engine list, say. Each transport
+  // reads only its own keys (docs/mcp.md).
+  const [options, setOptions] = useState("");
 
   const servers = useQuery({
     queryKey: ["mcp-servers", workspaceId],
@@ -35,6 +38,14 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
 
   const register = useMutation({
     mutationFn: async () => {
+      let parsedOptions: Record<string, unknown> = {};
+      if (options.trim()) {
+        try {
+          parsedOptions = JSON.parse(options) as Record<string, unknown>;
+        } catch {
+          throw { detail: "options must be a JSON object, e.g. {\"engines\": \"bing news\"}" };
+        }
+      }
       const { error } = await apiClient.PUT("/mcp-servers", {
         body: {
           workspace_id: workspaceId,
@@ -48,9 +59,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           require_confirmation: true,
           max_calls_per_session: cap.trim() ? Number(cap.trim()) : null,
           timeout_seconds: timeout.trim() ? Number(timeout.trim()) : null,
-          // Transport-specific knobs (a SearXNG engine list, say). Registered empty here;
-          // the API is the surface for setting them until a form needs to.
-          options: {},
+          options: parsedOptions,
         },
       });
       if (error) throw error;
@@ -62,6 +71,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
       setTools("");
       setCap("");
       setTimeout_("");
+      setOptions("");
       void queryClient.invalidateQueries({ queryKey: ["mcp-servers", workspaceId] });
     },
     onError: (e) =>
@@ -87,7 +97,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
       <p className="text-xs text-muted-foreground">
         Tools your agents may call during sessions here. Register any
         streamable-HTTP MCP endpoint and allowlist its tools — agents can never reach
-        tools that aren&apos;t listed.
+        tools that aren&apos;t listed. Registering a key again replaces its settings.
       </p>
       {servers.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
       <ul className="flex flex-col gap-1.5">
@@ -105,6 +115,9 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
                   ? ` · ${server.max_calls_per_session} calls per session`
                   : ""}
                 {server.timeout_seconds != null ? ` · ${server.timeout_seconds}s timeout` : ""}
+                {Object.keys(server.options ?? {}).length > 0
+                  ? ` · options ${JSON.stringify(server.options)}`
+                  : ""}
               </span>
             </span>
             <ConfirmButton
@@ -159,6 +172,12 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           inputMode="numeric"
           value={timeout}
           onChange={(e) => setTimeout_(e.target.value.replace(/[^0-9]/g, ""))}
+        />
+        <Input
+          placeholder='options JSON, e.g. {"engines": "bing news"}'
+          className="w-72 font-mono text-xs"
+          value={options}
+          onChange={(e) => setOptions(e.target.value)}
         />
         <Button
           type="submit"

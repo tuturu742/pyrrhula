@@ -33,6 +33,10 @@ interface RepoRowData {
   test_cmd?: string | null;
   build_cmd?: string | null;
   artifact_name?: string | null;
+  preview_image?: string | null;
+  preview_cmd?: string | null;
+  preview_port?: number | null;
+  preview_env?: Record<string, string>;
 }
 
 /**
@@ -743,6 +747,19 @@ function RepoForm({
   const [artifactName, setArtifactName] = useState(
     existing?.artifact_name ?? "",
   );
+  // Preview recipe: the operator override over a `pyrrhula-preview.json` in the repo
+  // (docs/previews.md). Prefilled on edit so a blank field means "cleared", not
+  // "untouched".
+  const [previewImage, setPreviewImage] = useState(existing?.preview_image ?? "");
+  const [previewCmd, setPreviewCmd] = useState(existing?.preview_cmd ?? "");
+  const [previewPort, setPreviewPort] = useState(
+    existing?.preview_port != null ? String(existing.preview_port) : "",
+  );
+  const [previewEnv, setPreviewEnv] = useState(
+    Object.entries(existing?.preview_env ?? {})
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n"),
+  );
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const { data: runtimes } = useQuery({
@@ -779,10 +796,25 @@ function RepoForm({
         test_cmd: testCmd.trim() === "" ? null : testCmd.trim(),
         build_cmd: buildCmd.trim() === "" ? null : buildCmd.trim(),
         artifact_name: artifactName.trim() === "" ? null : artifactName.trim(),
-        // Preview recipe: left alone by this form. Sending {} would wipe an operator
-        // override, so the edit path explicitly does not clear it either.
-        preview_env: {},
+        preview_image: previewImage.trim() === "" ? null : previewImage.trim(),
+        preview_cmd: previewCmd.trim() === "" ? null : previewCmd.trim(),
+        preview_port: previewPort.trim() === "" ? null : Number(previewPort.trim()),
+        preview_env: Object.fromEntries(
+          previewEnv
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.includes("="))
+            .map((line) => {
+              const i = line.indexOf("=");
+              return [line.slice(0, i).trim(), line.slice(i + 1).trim()];
+            }),
+        ),
       };
+      const previewBlank =
+        previewImage.trim() === "" &&
+        previewCmd.trim() === "" &&
+        previewPort.trim() === "" &&
+        previewEnv.trim() === "";
       if (existing) {
         const { data, error } = await apiClient.PATCH("/repos/{repo_id}", {
           params: { path: { repo_id: existing.id } },
@@ -791,7 +823,7 @@ function RepoForm({
             // Both blank clears the build step; either one alone is useless, so they
             // are cleared together the way the API treats them.
             clear_build: buildCmd.trim() === "" && artifactName.trim() === "",
-            clear_preview: false,
+            clear_preview: previewBlank,
             clear_test_cmd: testCmd.trim() === "",
           },
         });
@@ -1017,6 +1049,58 @@ function RepoForm({
           </span>
         </label>
       </div>
+
+      <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3">
+        <legend className="px-1 text-sm font-medium">Preview recipe (optional)</legend>
+        <p className="text-xs text-muted-foreground">
+          How a preview runs the build artifact. Leave blank to use a{" "}
+          <code>pyrrhula-preview.json</code> in the repository, or the static-site
+          default when there is none. Set here when the repository is somebody else&apos;s
+          and a manifest would mean a commit.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Preview image</span>
+            <input
+              className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              value={previewImage}
+              onChange={(e) => setPreviewImage(e.target.value)}
+              placeholder="docker.io/library/node:22-slim"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Preview port</span>
+            <input
+              className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              inputMode="numeric"
+              value={previewPort}
+              onChange={(e) => setPreviewPort(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="3000"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Preview command</span>
+            <input
+              className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              value={previewCmd}
+              onChange={(e) => setPreviewCmd(e.target.value)}
+              placeholder="node server.js"
+            />
+            <span className="text-xs text-muted-foreground">
+              Runs inside the unpacked artifact and must listen on the port above.
+            </span>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Preview environment (KEY=value per line)</span>
+            <textarea
+              className="min-h-16 rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              value={previewEnv}
+              onChange={(e) => setPreviewEnv(e.target.value)}
+              placeholder="TERM=xterm-256color"
+            />
+          </label>
+        </div>
+      </fieldset>
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">
