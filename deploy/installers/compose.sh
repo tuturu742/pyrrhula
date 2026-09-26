@@ -78,6 +78,25 @@ if [ "$PURGE" = 1 ]; then
   # authenticate to its own database.
   say "purging the '$PROJECT' deployment (containers, volumes, generated .env)"
   "${COMPOSE[@]}" "${CARGS[@]}" down -v --remove-orphans 2>/dev/null || true
+  # That `down` needs the compose file to parse, and the compose file needs a .env: on a
+  # fresh checkout (or after .env was lost) it exits non-zero having removed nothing, and
+  # the volumes it was meant to delete survive to fail the next step. Found by doing
+  # exactly that. Finish by name -- every container, volume and network this project
+  # creates carries the project prefix -- and refuse to continue if the database
+  # volume is still there, because "purged" has to mean purged.
+  "$ENGINE" ps -a --format '{{.Names}}' | while read -r name; do
+    case "$name" in "${PROJECT}_"*) "$ENGINE" rm -f "$name" >/dev/null ;; esac
+  done
+  "$ENGINE" volume ls --format '{{.Name}}' | while read -r vol; do
+    case "$vol" in "${PROJECT}_"*) "$ENGINE" volume rm -f "$vol" >/dev/null ;; esac
+  done
+  "$ENGINE" network ls --format '{{.Name}}' | while read -r net; do
+    case "$net" in "${PROJECT}_"*) "$ENGINE" network rm -f "$net" >/dev/null 2>&1 || true ;; esac
+  done
+  if "$ENGINE" volume exists "${PROJECT}_pyrrhula-postgres" 2>/dev/null \
+     || "$ENGINE" volume inspect "${PROJECT}_pyrrhula-postgres" >/dev/null 2>&1; then
+    fail "purge could not remove volume ${PROJECT}_pyrrhula-postgres -- is a container still using it?"
+  fi
   rm -f docker/.env .env
   say "purged -- installing fresh"
 fi
