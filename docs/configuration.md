@@ -11,8 +11,10 @@ workspace, a number in a flow. A limit that a user has to discover as an env var
 limit they will never set. (This is why the sample forensic lab keeps no budget of its
 own: see `max_calls_per_session` below.)
 
-Anything with the `PYRRHULA_` prefix and a matching field in `core/config.py` can also go
-in a `.env` file; the rest are read directly where they are used.
+`.env` is read by Docker Compose, for the variables `docker/compose.selfhost.yml`
+interpolates; the processes themselves read only their environment, so a variable the
+compose file does not pass through has to be added to its env block. The rest are read
+directly where they are used.
 
 ---
 
@@ -27,7 +29,7 @@ in a `.env` file; the rest are read directly where they are used.
 | `PYRRHULA_REDIS_URL` | `redis://localhost:6379/0` | Cache, rate-limit counters, and the live event bus. |
 | `PYRRHULA_DB_POOL_SIZE` | `5` | Pooled connections per engine. **`0` selects `NullPool`** — nothing is pooled and every session opens and closes its own connection. Worth it only where engines are short-lived: the test run sets it, because an engine rebinds per event loop and a pooled connection belonging to an abandoned engine cannot be closed from the loop that notices, so a long run exhausts Postgres. |
 | `PYRRHULA_DB_MAX_OVERFLOW` | `10` | Connections an engine may open beyond the pool under load. Ignored when `PYRRHULA_DB_POOL_SIZE` is `0`. Setting it to `0` alongside a pool of 1 deadlocks anything needing two sessions at once — don't. |
-| `PYRRHULA_JWT_SECRET` | — (**required**) | Signs session tokens. Rotating it logs everyone out. |
+| `PYRRHULA_JWT_SECRET` | — (**required** by compose and k8s; a bare process falls back to an insecure dev default and warns) | Signs session tokens. Rotating it logs everyone out. |
 | `PYRRHULA_JWT_ALGORITHM` | `HS256` | Token signing algorithm. |
 | `PYRRHULA_COOKIE_SECURE` | `false` | Set `true` behind HTTPS so the session cookie is never sent in clear. |
 | `PYRRHULA_ENCRYPTION_KEY` | — | AES-GCM key for secrets and stored credentials. **Required on every container recreate** — without it, previously encrypted data cannot be read. |
@@ -80,7 +82,7 @@ an address, not a model.
 |---|---|---|
 | `PYRRHULA_PLUGIN_DROP_DIR` | `/app/plugins-local` | Folder watched for hand-placed plugin packs — the credential-free install path. |
 | `PYRRHULA_PLUGINS_TOKEN` / `GH_TOKEN` | unset | Token for fetching plugin repos that are private. A clean install must never need one. |
-| `PYRRHULA_PLUGINS_STRICT` | `0` | `1` makes a failed plugin fetch a build failure. Without it the build falls back to whatever is cached on disk and the install reports success with the previous pack inside it. What CI should use. |
+| `PYRRHULA_PLUGINS_STRICT` | unset | `1` makes a failed plugin fetch a build failure. Without it the build falls back to whatever is cached on disk and the install reports success with the previous pack inside it. What CI should use. |
 | `PYRRHULA_COMPOSE_DNS` | unset | A nameserver for the compose containers, e.g. `1.1.1.1`. Needed on a host whose only resolver is `systemd-resolved` at `127.0.0.53` — a loopback address that means nothing inside a container namespace, so every outbound lookup fails and the symptom is an apparent Hugging Face outage. |
 
 ## Observability
@@ -123,7 +125,7 @@ to set them. Defaults are the supported configuration.
   tenant's vectors sit in one column of one width), never per tenant. The built-in
   defaults are the models the installers pre-download.
 - `PYRRHULA_DEFAULT_REGISTRATION_POLICY` → a constant, `closed`. Each organisation's
-  policy is set in the admin console under **Joining**.
+  policy is set in the admin console: Tenants → **Joining** on its row.
 - `PYRRHULA_OLLAMA_NUM_CTX` → an adapter constant (16384); a connection's own `num_ctx`
   param overrides it, which is the per-hardware lever that mattered.
 - `PYRRHULA_AUTH_PROVIDER`, `PYRRHULA_ISOLATION_MODE` → deleted; read by nothing.
@@ -209,10 +211,11 @@ The same shape the vocabulary overlay has always used
 (`core/vocabulary/service.py`), implemented once in `core/settings/resolve.py` so no call
 site re-derives it and quietly disagrees about which layer wins.
 
-Settings that use it today: `secret_mode`, `conduct_rules`, `allow_automerge`,
-`max_review_rounds`, `moderation_model`, `assistant_context_max_tokens`,
-`assistant_class_ratios`, and the tenant-level `session_lifetime_seconds`,
-`preview_ttl_seconds` and `reranker_enabled` (Organization page).
+Settings that use it today: `max_review_rounds`, `moderation_model`,
+`assistant_context_max_tokens`, `assistant_class_ratios`, and the tenant-level
+`session_lifetime_seconds`, `preview_ttl_seconds` and `reranker_enabled` (Organization
+page). `secret_mode`, `conduct_rules` and `allow_automerge` are workspace-only settings
+read straight off the workspace, not resolved through the chain.
 
 `assistant_context_max_tokens` is how many tokens of retrieved workspace knowledge the
 assistant may put in front of the model on one question, across `/assist` and the chat

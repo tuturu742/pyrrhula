@@ -76,7 +76,7 @@ kubectl -n pyrrhula exec deploy/pyrrhula-api -- python -c \
 
 ## 2. Grant it
 
-**One workspace** — *Workspace → MCP servers → Add*. Or over the API:
+**One workspace** — *Workspace → MCP servers → Register*. Or over the API:
 
 ```bash
 curl -X PUT http://localhost:8000/mcp-servers \
@@ -90,7 +90,7 @@ curl -X PUT http://localhost:8000/mcp-servers \
 duplicate. It requires `workflow:manage` (owner/admin) plus membership of the target
 workspace, because it widens what that workspace's agents can reach.
 
-**Every workspace in a tenant** — *Admin → Tenants → MCP servers*, or
+**Every workspace in a tenant** — *Admin → Tenants → MCP* (MCP capabilities), or
 `PUT /admin/tenants/{tenant_id}/mcp-servers`. A tenant grant is materialized onto every
 existing workspace and every workspace created later, and survives re-applying a
 workflow. Use it for infrastructure everyone should have; use a workspace grant for
@@ -102,7 +102,7 @@ anything narrower.
 | --- | --- |
 | `enabled_tools` | The allowlist. A tool not named here cannot be called, whatever the server offers. Not optional, and not a wildcard. |
 | `effectful_tools` | Which of those change something outside the platform. These are metered and audited as effectful, and are the ones `require_confirmation` gates. |
-| `require_confirmation` | Default `true`. A human approves each effectful call. Turn it off only for a server you own and trust to be idempotent. |
+| `require_confirmation` | Default `true`. Effectful calls from an agent turn are refused with `confirmation_required`; there is no in-product approval step yet, so a server whose effectful tools agents should call needs this off. Turn it off only for a server you own and trust to be idempotent. |
 | `credential_ref` | A *pointer* into a secret manager, never the credential itself. Pasting an obvious live key here is refused, but that check is a crude prefix guardrail (`sk-`, `ghp_`, `AKIA`, …), not a secret detector — do not rely on it to catch your mistake. |
 | `max_calls_per_session` | How many times one session may call this server. Blank means unlimited. The cap lives here because an external server is never told which session is calling, so any budget it kept itself would be one pool shared by every concurrent session. A capped-out caller gets a plain `session_call_cap_reached` refusal it can reason about. |
 | `timeout_seconds` | How long to wait, default 120. A property of the server, not the deployment: a lookup tool that answers instantly should fail fast, while an engine tool legitimately runs a build for ten minutes. |
@@ -153,15 +153,16 @@ components:
 ## Troubleshooting
 
 **A tool is not offered to the agent.** It is not in `enabled_tools`, or the key
-collides with a reserved one (`web_search`, `resolution`, `git`, and anything starting
-`git-` are served by dedicated transports and are not routable as external servers).
+collides with a reserved one (`web_search`, `web_fetch`, `resolution`, `git`, and anything
+starting `git-` are served by dedicated transports and are not routable as external servers).
 
 **Calls fail with a connection error.** The grant is fine; the plumbing is not. Test
 reachability from inside the api container, not from your laptop — container DNS and
 host DNS are different worlds.
 
-**Effectful calls hang.** `require_confirmation` is on and nobody has approved them. They
-are waiting for a human, which is the intended behaviour.
+**Effectful calls are refused with `confirmation_required`.** `require_confirmation` is
+on for that server, and an agent turn cannot supply the confirmation. Turn it off for
+that server if its effectful tools are meant to be called by agents.
 
 **The admin console shows servers you did not add.** Look at which block they are in.
 *Built-in tools* is the bundled pack's own `pyrrhula://` tooling. Only *External MCP

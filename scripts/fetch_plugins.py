@@ -158,7 +158,11 @@ if __name__ == "__main__":
             f"         to make this a build failure instead of a warning.",
             file=sys.stderr,
         )
-    if stale and os.environ.get("PYRRHULA_PLUGINS_STRICT"):
+    if stale and os.environ.get("PYRRHULA_PLUGINS_STRICT", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
         sys.exit(1)
     for name, reason in failures:
         print(

@@ -1,6 +1,6 @@
 # Installing Pyrrhula
 
-Three supported deployment targets, one entry point:
+Two supported deployment targets, one entry point:
 
 ```bash
 ./install.sh compose   # docker or podman on one machine -- smallest footprint
@@ -49,8 +49,8 @@ or pin one with `PYRRHULA_DEFAULT_TENANT_SLUG`.
 | Cost | your machine | your machine/cluster |
 | Time to first login | ~5 min (image build) | ~10 min |
 
-Every target ends at the same place: open the printed URL, **Sign up** (first signup
-creates your organization + workspace), follow the setup checklist — add a model
+Every target ends at the same place: open the printed URL, **Register** (the first
+account creates your organization + workspace), follow the setup checklist — add a model
 connection, create a starter team, launch a session.
 
 ---
@@ -110,9 +110,9 @@ git clone <repo> && cd Pyrrhula
 What it does: detects your engine, writes `.env` with five generated secrets
 (backed up to `~/.config/pyrrhula/compose.env.bak`), wires the engine socket for
 delegated coding agents, `compose up -d --build`, waits for health — reporting what the
-stack is doing if it takes more than 45 seconds rather than sitting silent — pre-warms
-the retrieval models, flips the stack to offline model loads once that cache is warm,
-and prints the URL.
+stack is doing if it takes more than 45 seconds rather than sitting silent — and prints
+the URL. It does not download the retrieval models: that choice is the platform admin's,
+under **Admin → Models**.
 
 - **UI** http://localhost:5173 · **platform admin** lives in the same UI: sign in with
   organization `admin`. The installer generates the account and **prints the email and
@@ -127,12 +127,12 @@ and prints the URL.
   `docker/compose.selfhost.yml`, or point connections at any cloud key.
 - **Upgrade**: `git pull && ./install.sh compose` (compose rebuilds; the migrate
   one-shot runs Alembic before api/worker start).
-- **Offline model loads**: once the model cache is populated the installer sets
-  `PYRRHULA_HF_OFFLINE=1` in `.env` and recreates `api`/`worker`. This is not a
-  preference — an unauthenticated hub check has no timeout and can hang *inside* the
-  in-process model load, wedging the event loop (seen on the k8s stack as NotReady for
-  13+ minutes at idle CPU). Set it back to `0` and re-run if you change the configured
-  model and need the new one fetched.
+- **Offline model loads**: `PYRRHULA_HF_OFFLINE` defaults to `1`, so the runtime never
+  reaches Hugging Face on its own; the admin-console download lifts that for its one
+  fetch. This is not a preference — an unauthenticated hub check has no timeout and can
+  hang *inside* the in-process model load, wedging the event loop (seen on the k8s stack
+  as NotReady for 13+ minutes at idle CPU). Set it to `0` only if you want the old lazy
+  in-request fetch back.
 - **TLS**: terminate in front of the web port with any proxy (Caddy example in
   `docs/self-host.md`).
 
@@ -157,15 +157,15 @@ What it does: prereq checks, optional Headlamp install (login token saved to
 `kubectl -n kube-system port-forward svc/headlamp 8085:80`), then the dev-up flow —
 builds both images, imports them into k3s's containerd (**needs sudo** for
 `k3s ctr images import`), generates `deploy/k8s/overlays/dev/secrets.env`, applies
-the kustomize overlay, runs the migration Job, and flips the pods to offline
-embedding mode once the model cache is warm.
+the kustomize overlay, and runs the migration Job.
 
 - **UI** http://pyrrhula.localhost (k3s traefik; `*.localhost` needs no DNS setup).
 - **Platform admin** in the same UI: sign in with organization `admin`.
 - Delegated coding agents run as Jobs in `pyrrhula-envs`, restricted by
   NetworkPolicy to DNS + the api's git endpoint + the internet.
-- **First boot** downloads the 2.2 GB embedding model into the cache volume — the
-  first assistant/knowledge call is slow once, then never again.
+- **Retrieval models** are not downloaded at install: fetch them under **Admin →
+  Models** (or upload a cache archive on a cluster with no route to Hugging Face).
+  Until then semantic queries are refused, plainly.
 - **Upgrade**: `git pull && ./install.sh k8s`.
 - **Multi-node**: the api and worker share ReadWriteOnce volumes, so a `podAffinity`
   keeps them on one node. Spreading them needs ReadWriteMany storage — see below.
@@ -176,12 +176,12 @@ embedding mode once the model cache is warm.
 
 ## After any install
 
-1. **Sign up** — the first account creates your organization; the setup checklist
+1. **Register** — the first account creates your organization; the setup checklist
    walks through the rest.
-2. **Model connections** (Connections page): paste an Anthropic / OpenAI /
+2. **Model connections** (**Personas → Model profiles**): paste an Anthropic / OpenAI /
    Gemini / any OpenAI-compatible key, or point at an Ollama instance. Keys are
    sealed with AES-256-GCM at rest.
-3. **Usage limits** (Projects page → "Daily usage limits"): daily token caps per
+3. **Usage limits** (**Organization** page → "Daily usage limits"): daily token caps per
    organization / connection / persona / user — the platform-side backstop for
    provider bills. 0 = unlimited; at the cap, sessions pause and calls return 429
    until midnight UTC.
@@ -212,7 +212,7 @@ export PYRRHULA_PLUGINS_TOKEN=<a token that can read the pinned repository>
 
 Neither of these needs git access, and both survive restarts.
 
-**Upload.** Admin console → *Plugin repositories* → *Upload pack*: a `.zip` or `.tar.gz`
+**Upload.** Admin console → *Plugin repositories* → *Choose archive*: a `.zip` or `.tar.gz`
 whose root holds `plugin.json`. An archive with a single wrapping directory (GitHub's
 "Download ZIP", or `tar czf` of a checkout) is unwrapped for you. Works on every target
 with no redeploy:
@@ -314,9 +314,9 @@ credential (model keys, repo tokens). Losing it means re-entering them all.
 - **k8s: pods ImagePullBackOff for `localhost/pyrrhula*`** — the `k3s ctr images
   import` step didn't run (it needs sudo); rerun `./install.sh k8s`.
 - **k8s: api pod NotReady for many minutes at idle CPU** — a hung online HF-hub
-  check inside the embedding-model load; the installer flips pods to offline mode
-  once the cache is populated, and a *partial* cache (interrupted first download)
-  fails loudly on restart — delete the cache PVC contents and let it re-download.
+  check inside the embedding-model load; the pods always run offline, and a *partial*
+  cache (an interrupted admin-console download) fails loudly on restart — delete the
+  cache PVC contents and download again.
 - **k8s: engine declarations from outside the cluster** — use the host's LAN IP
   for `api_base`, not `host.containers.internal` (link-local, doesn't route).
 - **Anything model-shaped hangs or errors** — check the connection's key and the

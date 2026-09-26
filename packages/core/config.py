@@ -1,7 +1,8 @@
 """Process-wide settings, read once from the environment.
 
-Two database URLs on purpose: ``database_url`` is the migration/admin
-connection (table owner, used only by the ``migrate`` entrypoint); ``app_database_url`` is
+Two database URLs on purpose: ``database_url`` is the migration/admin connection (table
+owner: the ``migrate`` entrypoint's DDL, plus the two things the api may only do as owner --
+entity-schema DDL and NULL-tenant plugin rows); ``app_database_url`` is
 what every API/worker process uses, connecting as the non-superuser, non-BYPASSRLS
 ``pyrrhula_app`` role so row-level security actually applies to it. Handing the app
 processes the admin URL would make RLS enforcement silently vanish, because a superuser

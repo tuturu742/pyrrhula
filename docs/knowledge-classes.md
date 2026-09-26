@@ -62,8 +62,8 @@ A useful test when filing a source: *if the model contradicts this text, is that
   misc 0.1`, discussion `lore 0.8 / misc 0.2`, and action/resolution turns
   `rules 0.75 / lore 0.25`. Author flows with the same intent: rules where correctness
   matters, lore where narration does, misc as seasoning.
-- The four [sample workspaces](https://github.com/tuturu742/pyrrhula-samples) each ship
-  all the classes their flow budgets, so an imported sample demonstrates the split
+- The [sample workspaces](https://github.com/tuturu742/pyrrhula-samples) that carry
+  knowledge ship the classes their flow budgets, so an imported sample demonstrates the split
   end to end.
 
 ## Levels of lore (who-knows-what, applied to knowledge)
@@ -71,7 +71,8 @@ A useful test when filing a source: *if the model contradicts this text, is that
 A class decides *what kind* of knowledge a source is. A **scope** decides *who* may read
 it. Combine them and lore stops being uniform: not every character knows the same history.
 
-A scope is a named membership set on the workspace (`public`, `role`, or `group`), and
+A scope is a named membership set on the workspace (`public`, `role`, `group`, or a
+per-principal `private`), and
 every knowledge entry carries a `scope_key`. An entry reaches a persona's context only if
 that persona is entitled to its scope — resolved as a SQL predicate at retrieval time, the
 same machinery that gates secrets. Two rules compose:
@@ -81,29 +82,28 @@ same machinery that gates secrets. Two rules compose:
 
 So you build as many tiers as the world needs:
 
-| Scope | Members | Example (Gallowfen) |
+| Scope | Members | Example (karsh-vale) |
 |---|---|---|
-| `workspace_public` | everyone | the guild's tower has blue lights |
-| `scholarly_lore` (group) | the GM, the wizard, a cleric with an archive | who bound the thing under the chapel five centuries ago |
+| `workspace_public` | everyone | the Vale, the ruin, the disappearances, the tavern rumour |
+| `guild_lore` (group) | the referee, Bram, Linnea | how to read masons' marks; a binding inscription against a decorative one |
+| `referee_lore` (group) | the referee alone | what the Hollow Crown actually is |
 | a secret (one holder + the gate) | one persona | what this specific NPC is hiding tonight |
 
 **In the karsh-vale sample** (the `.pyr` bundle in the samples repository) this is wired
-live. The
-common lorebook (Thornwick, the Gallowfen, the bell) is `workspace_public`. A second
-lore source — *The Sundering and the Bell*: Archmagister Vaelith Corr, the mages' circle
-struck from the rolls, the bell's tolls as a failing ward — is filed under a
-`scholarly_lore` group scope whose only members are the GM and **Linnea, the elf
-magic-user**. Bram the dwarf fighter and Pip the halfling thief are not members, so that
-history never enters their context. Nobody is told to "act ignorant"; the deep lore is
-simply absent from the barbarian-shaped character's turn. The stock RPG flow's discussion
-and framing phases declare `scholarly_lore` in their scopes, so the band is in play; the
-sample seeds the membership.
+live. The common lorebook — *Karsh Vale, what everyone knows* — is `workspace_public`. A
+second source, *Guild knowledge: masons' marks and ward-cant*, is filed under a
+`guild_lore` group scope whose members are the referee, **Bram** (a stonemason's son) and
+**Linnea** (college-trained); Pip the halfling thief is not a member, so that lore never
+enters his context. A third, *The truth of the Hollow Crown*, sits in `referee_lore`,
+which only the referee holds. Nobody is told to "act ignorant"; the lore is simply absent
+from Pip's turn. The bundle ships its own flow, whose four phases all declare the three
+bands, and the bundle carries the memberships.
 
 **The software-development equivalent** is identical: file customer requirements and
 business priorities under a `business_context` group scope, put the lead and the PM in it,
 and leave a junior engineer out. The junior's implement turns get the engineering
 standards (`rules`) and none of the business lore — which is both realistic and what you
-want, since a `build` phase budgets `rules` only in the first place. Two independent
+want, since an `implement` phase budgets `rules` only in the first place. Two independent
 filters point the same way: the phase excludes the *class*, and the scope would exclude
 the *persona* even where the class is in play.
 

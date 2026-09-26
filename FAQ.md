@@ -86,7 +86,7 @@ egress policy — and nothing else phones home.
 
 ## What state is the project in?
 
-`0.1.0-rc`: the full stack described in the README is implemented, tested (isolation,
+Approaching `0.1.0-rc`: the full stack described in the README is implemented, tested (isolation,
 leak, replay, and architecture suites gate CI), and running across compose and k8s. An
 ECS exec engine exists as an experimental, unverified adapter, not an install path. It is a single-maintainer project — expect honest response times and
 a real roadmap rather than a growth team.

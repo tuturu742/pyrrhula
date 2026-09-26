@@ -18,11 +18,11 @@ that renders `work_item_status.changes_requested` as "Changes Requested".
 | `delegate_work_item` | Hands the item to the coding agent; it works in a container and pushes a branch + PR |
 | `facilitator_review` | The supervisor persona reads the diff and returns a verdict |
 | `rework_work_item` | Re-runs the agent with the review comments attached |
-| `merge_order` | Plans the order approved items should land in |
+| `merge_order` | One recommendation per delegation batch of two or more PRs, enqueued when the batch is dispatched: the order the branches should land in |
 
 A `request_changes` verdict enqueues `rework_work_item`; that job's completion
 re-submits the item for review, which is how rounds chain. Approval drives the item's
-`approve` transition instead, and the item becomes eligible for `merge_order`.
+`approve` transition instead.
 
 ## How many rounds
 

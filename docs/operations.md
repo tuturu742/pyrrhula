@@ -48,9 +48,7 @@ removing it. **The control is authorization on exec itself** — Kubernetes RBAC
 The api process genuinely needs that DSN: defining an entity schema issues
 `ALTER TABLE`/`CREATE INDEX` through `admin_ddl_session`, and plugin-repository sync
 writes NULL-tenant rows through `admin_registry_session`, neither of which the
-RLS-scoped app role may do. (`docker/compose.selfhost.yml` still describes this DSN as
-"used ONLY by the migrate entrypoint"; that comment predates both features and is wrong
-— the api, worker and admin containers all receive it.)
+RLS-scoped app role may do. The migrate, api and worker containers all receive it.
 
 Two consequences worth stating plainly:
 
@@ -129,8 +127,8 @@ Two different questions, and they were not equally guarded:
   rate limiter, so anyone who could reach the API could obtain a membership, and a session
   token, inside any organization on the deployment.
 
-Each organization now states a policy, in the admin console under **Joining** on its
-tenant card:
+Each organization states a policy, in the admin console under **Tenants → Joining** on
+its row (where pending applications are approved or rejected):
 
 | Policy | What happens to a stranger who tries |
 | --- | --- |
@@ -238,7 +236,7 @@ If you see one job id claimed twice in the worker logs, check that the workers a
 image that has the heartbeat before looking for anything subtler:
 
 ```bash
-kubectl -n pyrrhula logs -l app=worker --tail=200 | grep -E "job_claimed|claim_lost" | sort
+kubectl -n pyrrhula logs -l app=pyrrhula-worker --tail=200 | grep -E "job_claimed|claim_lost" | sort
 ```
 
 Restarting workers during long jobs is safe but not free: the killed worker stops beating,
@@ -282,10 +280,10 @@ login.
 
 | Page | What it answers |
 |---|---|
-| **Tenants** | who exists on this deployment, how many members and agents each has; create one, deactivate or reactivate it, pin its workflow and vocabulary overlay, manage its users, grant MCP servers, set its egress policy, verify its audit chain; and the deployment-wide **Self-serve signup** switch |
+| **Tenants** | who exists on this deployment, how many members and agents each has; create one, deactivate or reactivate it, pin its workflow (which applies that workflow's vocabulary overlay), manage its users, decide who may join and approve applications, grant MCP servers, set its egress policy, verify its audit chain; and the deployment-wide **Self-serve signup** switch |
 | **Plugin repositories** | which workflow-content repositories this deployment trusts and at which commit; register one at a pinned ref, upload an archive for an air-gapped install, re-sync, remove |
-| **Retrieval models** | which embedding and rerank models are installed; download one, upload one, choose which is active. A freshly purged deployment has none, and **every session fails at context assembly until one finishes** |
-| **Assistant model** | the connection the admin assistant itself runs on |
+| **Models** | which embedding and rerank models are installed; download one, upload one, choose which is active. A freshly purged deployment has none, and **every session fails at context assembly until one finishes** |
+| **Assistant** | an assistant that answers questions about the deployment and proposes changes you apply; the model it runs on is set under Models |
 
 What it deliberately cannot do: delete a tenant (see above), read any tenant's session
 content, or change a tenant's own data. Deactivation is the reversible, audited stand-in

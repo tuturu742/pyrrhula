@@ -1,7 +1,7 @@
 # `.pyr` bundles — taking a workspace with you
 
 A `.pyr` is a workspace as a file: its personas, knowledge, flows, entities, vocabulary,
-secrets and session history, in one ZIP you can archive, hand to someone else, or import
+rule systems and tools, secrets and session history, in one ZIP you can archive, hand to someone else, or import
 into another deployment.
 
 It is a plain ZIP — `manifest.json`, JSON for objects, JSONL for logs, Markdown for entry
@@ -16,6 +16,7 @@ bundle diffs in git, which is a real workflow for anyone authoring rules or lore
 | `schemas`, `entities` | Entity schemas — fields, derived values, views and **state machines** — and the entities themselves, each with the state every machine was in |
 | `personas` | Personas, their behaviour-profile versions, and their generation params |
 | `process` | Flow definitions |
+| `rules` | Rule systems and the tool definitions that bind them (karsh-vale's Basic Fantasy system and its `randomizer`) |
 | `vocabulary` | The overlay the workspace was authored under |
 | `secrets` | See *Secrets* below — this one is not automatic |
 | `sessions` | Transcripts, plus the resolution records that back them |
@@ -95,7 +96,10 @@ rather than importing a history that quietly disagrees with itself.
 
 ## Importing
 
-Import is **additive and non-destructive**. It never overwrites:
+Import is **additive and non-destructive** for content. It never overwrites knowledge,
+flows, schemas, personas or secrets; the one deliberate exception is `rules`, where rule
+systems and tool definitions are upserted by key in place, because forking a key that a
+tool's `validation_ref` names would silently break that tool. Otherwise:
 
 - A key that already exists is **forked** (`case` → `case-imported`) and the report lists
   every fork, so two imports of the same bundle cannot silently merge into one another.
@@ -111,9 +115,11 @@ Import is **additive and non-destructive**. It never overwrites:
   made survives the import untouched.
 
 `pyr_format` is the *format* version, not the app version. Import supports the current
-format and the one before it through an upcast chain; the app version is recorded as
-provenance only, because "which app wrote this" is a support question and "what shape is
-this" is a compatibility question.
+format and the one before it through an upcast chain. The app version is never a gate —
+it refuses nothing — but it is compared against the deployment: a bundle from a newer
+platform, or with no usable stamp, gets a warning in the inspection verdict and the import
+report, because "which app wrote this" is a support question and "what shape is this" is
+a compatibility question.
 
 ## Doing it
 
@@ -143,6 +149,7 @@ a whole workspace.
 
 ## Worked examples
 
-The [samples repository](https://github.com/tuturu742/pyrrhula-samples) is five real
-bundles with READMEs — a murder mystery whose suspects hold their own briefs, a Basic
-Fantasy RPG one-shot with lore in three scope bands, and three working sessions.
+The [samples repository](https://github.com/tuturu742/pyrrhula-samples) is seven samples
+with READMEs, six of them `.pyr` bundles — a murder mystery whose suspects hold their own
+briefs, a Basic Fantasy RPG one-shot with lore in three scope bands, and five working
+sessions, two of them against real repositories and one on local models.

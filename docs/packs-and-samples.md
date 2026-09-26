@@ -33,7 +33,7 @@ Each named workflow is a directory, and each of its subdirectories is one conten
 ```
 swdev/
   workflow.json the workflow's own manifest -- name, vocabulary, capabilities
-  schemas/           entity schemas (work_item, character, ...)
+  schemas/           entity schemas (work_item, pull_request, build, ...)
   processes/         flows: phases, actors, budgets, gates, prompts
   rule_systems/      how a roll is judged
   tools/             tool declarations a phase may allow
@@ -53,7 +53,7 @@ is that all of it is data: the pack loader only ever reads JSON.
 {
   "default": {
     "url": "https://github.com/tuturu742/pyrrhula-workflows",
-    "ref": "a0f3307cb3c5956e1ed12ced307c91a2945a0ec2"
+    "ref": "<commit sha>"
   }
 }
 ```
@@ -96,8 +96,8 @@ curl -X POST "$ADMIN/admin/plugin-repositories" -H 'Content-Type: application/js
 curl -X POST "$ADMIN/admin/plugin-repositories/$ID/sync"
 
 # or upload an archive, for an air-gapped deployment
-curl -X POST "$ADMIN/admin/plugin-repositories/upload?name=house-flows" \
-  --data-binary @house-flows.zip
+curl -X POST "$ADMIN/admin/plugin-repositories/upload" \
+  -F name=house-flows -F file=@house-flows.zip
 ```
 
 `GET /admin/plugin-repositories` lists what is registered and at which ref; `DELETE`
@@ -120,13 +120,15 @@ imported never carried.
 
 Loading is **versioned, not idempotent**: loading the same pack twice leaves v1 and v2 of
 every flow active, both in the picker and indistinguishable by name. Applying a workflow
-archives every superseded version afterwards, keeping the newest of each key. If you call
-`load_pack` yourself in a loop, do the same — an in-flight session resolves its phases
-against the definition row it started on, so archive rather than delete.
+is stamped per workspace, so re-applying the same pinned pack loads nothing; a new pin
+loads a new version, and nothing archives the superseded one for you — archive it from
+the flow's own page (`POST /process-definitions/{id}/archive`) rather than deleting it,
+because an in-flight session resolves its phases against the definition row it started on.
 
 ## Setting up sample tenants
 
-Each sample in `pyrrhula-samples` is a directory holding a `.pyr` bundle and a README that
+Each sample in `pyrrhula-samples` is a directory holding a README and, for all but `loxia`
+(which borrows another sample's cast), a `.pyr` bundle, that
 walks a person through setting it up **in the product** — every step is something you do in
 the UI, and no sample asks you to run a script. Some also carry:
 
@@ -171,8 +173,9 @@ ships a `randomizer` tool bound to its own Basic Fantasy rule system, and the `r
 ships the same key bound to the generic d20 system. Import first and apply the workflow
 afterwards, and every roll silently resolves under the wrong rules — the tool still works
 and still writes an honest hash-chained record. If you change a workspace's workflow later,
-import the bundle again; a resident key is skipped, so only what the pack replaced is
-restored.
+import the bundle again: its rule systems and tools upsert in place, so the pack's
+versions are replaced once more, while resident personas are skipped and colliding
+content forks.
 
 ### Running a sample a second time
 

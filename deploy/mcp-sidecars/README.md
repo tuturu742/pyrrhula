@@ -11,8 +11,8 @@ console (Tenants → MCP) or declare them in a workflow pack's `capabilities`.
 
 Build:
 
-    podman build -t godot-mcp:dev -f Dockerfile.godot.
-    podman build -t comfy-mcp:dev -f Dockerfile.comfy.
+    podman build -t godot-mcp:dev -f Dockerfile.godot .
+    podman build -t comfy-mcp:dev -f Dockerfile.comfy .
 
 Run on the host (reachable from a k3s cluster via a host-endpoint Service, the
 same pattern as `deploy/k8s/components/host-ollama/ollama.yaml`):

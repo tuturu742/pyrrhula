@@ -32,7 +32,7 @@ earn their keep:
 | `num_ctx` | Ollama only, and important: its factory default of 4096 makes real prompts return **empty generations silently**. The platform forces 16384 unless you say otherwise. |
 | `history_char_budget` | How much transcript this model is given. A local 8B on a laptop and a hosted frontier model do not want the same number. |
 
-A few keys are refused because the platform manages them: `model`, `messages`, `tools`,
+A few keys are dropped at call time because the platform manages them: `model`, `messages`, `tools`,
 `api_key`, `api_base`, `stream`, `response_format`, `n`. Letting a convenience knob
 reroute a call would make it something else entirely.
 
@@ -80,8 +80,8 @@ Not everything uses a persona's connection:
   acting persona's. It is a strict-JSON classifier over gists — it wants schema
   discipline, not the persona's weight class, and pointing it away from a big local model
   keeps a ~1s judgement from queueing behind a 7B on one GPU.
-- **Moderation** resolves per workspace/tenant (`moderation_model`), then the deployment
-  default. Unset everywhere means content is not screened.
+- **Moderation** resolves per workspace, then tenant (`moderation_model`). Unset
+  everywhere means content is not screened.
 - **The workspace assistant** has its own connection, created empty and filled in on
   the "Assistant model" profile in the personas UI.
 - **The admin assistant** uses a connection on the reserved admin organization, so console

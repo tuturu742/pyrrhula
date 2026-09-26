@@ -7,7 +7,9 @@ delegation pipeline — the build half is in [exec-engines.md](exec-engines.md).
 ## Before a preview exists: the build
 
 A preview serves a **build artifact**, so the repo has to produce one. On the repo's page
-(**Repos → the repo → Edit**), two fields together create the build step:
+(**Repos → the repo → Edit**), two fields together create the build step — or a
+`pyrrhula-build.json` at the ref being worked, which supplies the same fields per layer
+(repo row over manifest over the runtime catalog):
 
 | Field | Example |
 |---|---|
@@ -15,15 +17,17 @@ A preview serves a **build artifact**, so the repo has to produce one. On the re
 | **Artifact file** | `dist.tgz` |
 
 **Both are required.** With either missing there is no build step at all, no artifact is
-uploaded, and *Deploy preview* has nothing to serve — which looks the same as a preview
-that failed.
+uploaded, and **Deploy** on the *Preview deployments* card has nothing to serve — which
+looks the same as a preview that failed. A preview additionally needs the artifact file
+named on the repo row itself, not only in a manifest.
 
 The build command runs in the repo's exec environment after the tests pass (or immediately,
 if no test command is set), from the repo root. Whatever file you name is uploaded to the
 artifact store and is what the preview container downloads.
 
-A `.tar.gz` is the shape the default static server expects (it unpacks it and looks for
-`index.html`). A recipe can take any shape it knows how to run.
+The artifact must be a `.tar.gz` (or `.tgz`) in every case: the platform extracts it
+before anything runs. The default static server then looks for `index.html`; a recipe
+chooses what runs inside the extracted tree, not the artifact's shape.
 
 A preview started against a branch that has never had a green build is refused before any
 container starts, naming the artifact and the branch, because the alternative is a
@@ -63,7 +67,7 @@ Three layers decide, most specific first:
 | Field | Meaning |
 |---|---|
 | `image` | The container the preview runs in. Needs whatever your command needs; nothing is installed for you. |
-| `cmd` | What to run, in the extracted artifact directory. Runs under `sh -lc`, so pipelines and `&&` work. Omit it for the static server. |
+| `cmd` | What to run, in the extracted artifact directory. Runs under `sh -c` with the image's `PATH` preserved, so pipelines and `&&` work. Omit it for the static server. |
 | `port` | What your process listens on. The platform publishes it and routes the share link to it. Default 8080. |
 | `env` | Extra environment. Cannot set `PYR_ARTIFACT_URL` or `PYR_ARTIFACT_TOKEN`. |
 
@@ -156,7 +160,7 @@ backend as its own repo and preview, and point the client at it.
 ## Which branch is being previewed
 
 A preview names a `git_ref`. Artifacts are stored per ref
-(`artifacts/<store>/refs/<ref>/<name>`), and the preview's container name carries the ref
+(`artifacts/<store>/refs/<ref-slug>/<name>`, the slug carrying a digest of the ref), and the preview's container name carries the ref
 too, so two branches of one repository are two previews that can run side by side.
 
 This used to be one slot per repository. `artifact_name` is a single fixed string in the

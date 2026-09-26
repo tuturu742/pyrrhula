@@ -95,7 +95,7 @@ def _validated_cmd(value: Any, *, where: str) -> str:
     if len(cmd) > _MAX_CMD_LEN:
         raise PreviewRecipeError(f"{where}: cmd is longer than {_MAX_CMD_LEN} characters")
     try:
-        # Not used to execute -- the command runs under `sh -lc` so a pipeline is legal --
+        # Not used to execute -- the command runs under `sh -c` so a pipeline is legal --
         # but an unbalanced quote here becomes an unreadable container crash later.
         shlex.split(cmd)
     except ValueError as exc:

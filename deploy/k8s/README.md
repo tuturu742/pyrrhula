@@ -68,7 +68,7 @@ One command from the repo root:
 or directly:
 
 ```bash
-./dev-up.sh     # build images -> import into k3s -> secrets (first run) -> apply -> migrate
+deploy/k8s/dev-up.sh     # build images -> import into k3s -> secrets (first run) -> apply -> migrate
 ```
 
 Open **http://pyrrhula.localhost** (k3s traefik; `*.localhost` needs no DNS setup) and
@@ -158,7 +158,7 @@ Details worth knowing:
   ```
 
   After that, an image update is just:
-  `podman build -t pyrrhula:dev -f docker/Dockerfile. && podman push --tls-verify=false localhost/pyrrhula:dev 127.0.0.1:5000/pyrrhula:dev && kubectl -n pyrrhula rollout restart deploy/pyrrhula-api deploy/pyrrhula-worker`.
+  `podman build -t pyrrhula:dev -f docker/Dockerfile . && podman push --tls-verify=false localhost/pyrrhula:dev 127.0.0.1:5000/pyrrhula:dev && kubectl -n pyrrhula rollout restart deploy/pyrrhula-api deploy/pyrrhula-worker`.
 - **Verification**: `dev-up.sh` runs the post-install check itself and fails if the
   stack cannot do real work. To re-run it later:
 
@@ -189,7 +189,7 @@ flow — it builds, imports and applies `overlays/dev`. Build in CI and apply th
 only because traefik is installed as the *default* IngressClass. Where none is marked
 default — common on EKS, GKE and any hand-installed nginx — no controller claims the
 Ingress and nothing serves it, with no error to explain the silence. The overlay sets it,
-and `installers/k8s.sh` now warns when the cluster has no default.
+and `deploy/installers/k8s.sh` warns when the cluster has no default.
 
 **3. Storage class.** The claims name none, so they bind through the cluster default.
 Managed clusters have one; bare-metal frequently has none and the claims pend forever.
@@ -223,12 +223,11 @@ kubectl -n pyrrhula delete job pyrrhula-migrate --ignore-not-found
 kubectl apply -k deploy/k8s/overlays/mycluster
 ```
 
-**Retrieval models.** `dev-up.sh` pre-warms the embedding cache and then flips the pods to
-`HF_HUB_OFFLINE=1`. Applying an overlay directly does neither, so the first knowledge call
-downloads ~2.2GB into the `hf-cache` claim. Either let it, or fetch from *Admin → Retrieval
-models* (upload a cache tarball on a cluster with no route to huggingface.co), then set the
-offline vars yourself — an unauthenticated hub check has no timeout and can wedge the api's
-event loop.
+**Retrieval models.** Every path — `dev-up.sh` or a bare `kubectl apply -k` — starts the
+pods with `HF_HUB_OFFLINE=1`, and nothing downloads on its own. Fetch the models from
+*Admin → Models* (or upload a cache tarball on a cluster with no route to huggingface.co);
+they land in the `hf-cache` claim. The offline default is deliberate — an unauthenticated
+hub check has no timeout and can wedge the api's event loop.
 
 ## Workflow packs when the plugin repository is unreachable
 
@@ -237,14 +236,14 @@ The install never asks for git credentials. If the pinned repository in
 built-in workflows -- the platform runs, it just has fewer workflows. Add the rest either
 way below; neither needs git.
 
-**Upload (no manifest change).** Admin console -> *Plugin repositories* -> *Upload pack*,
+**Upload (no manifest change).** Admin console -> *Plugin repositories* -> *Choose archive*,
 with a `.zip` or `.tar.gz` whose root holds `plugin.json` (a single wrapping directory,
 as produced by GitHub's "Download ZIP", is unwrapped for you). The content lands in the
 blobs PVC, so it survives restarts and is shared by the api and worker. Or from a shell:
 
 ```bash
 # $TOKEN: a platform admin's login (POST /auth/login with X-Pyrrhula-Tenant: admin)
-curl -sS -X POST http://<host>/admin/plugin-repositories/upload \
+curl -sS -X POST http://<host>/api/admin/plugin-repositories/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F name=my-workflows -F file=@my-workflows.zip
 ```

@@ -11,7 +11,7 @@
 #   3. kubectl apply -f my-mcp.yaml
 #   4. re-run deploy/k8s/dev-up.sh, or patch the address yourself -- dev-up.sh rewrites
 #      every EndpointSlice labelled pyrrhula.io/host-endpoint to this machine's address
-#   5. register it on a workspace: Workspace -> MCP servers -> Add, with
+#   5. register it on a workspace: Workspace -> MCP servers -> Register, with
 #      url http://<name>:<port>, and tick only the tools you want reachable
 #
 # Step 5 is the one that matters for security: the URL being reachable grants nothing.

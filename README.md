@@ -132,8 +132,8 @@ cloud**, and **hybrid** with a per-tenant egress policy deciding which purposes
 
 ### The bundled models
 
-Two models are downloaded from Hugging Face on first boot and run in-process. Pyrrhula
-does **not** redistribute them — your deployment fetches them, so their licences bind you
+Two models are fetched from Hugging Face when the platform admin chooses them under
+**Admin → Models**, and run in-process. Pyrrhula does **not** redistribute them — your deployment fetches them, so their licences bind you
 directly rather than through us.
 
 | Purpose | Model | Licence |
@@ -153,9 +153,9 @@ of quietly returning nothing at query time.
 
 Two things to know before changing the embedding model. Existing vectors are **not**
 re-embedded: a swap orphans every stored chunk embedding, so re-index or start clean.
-And the cache is pre-warmed at install (`deploy/k8s/dev-up.sh`) because a cold in-request
-download blocks the first knowledge call for minutes; once populated, the deployment runs
-with `HF_HUB_OFFLINE=1`, so a new model needs the cache refreshed with offline mode off.
+And the deployment always loads models offline (`HF_HUB_OFFLINE=1`), because a cold
+in-request download blocks the first knowledge call for minutes; the only fetch path is
+the download (or cache upload) on **Admin → Models**.
 
 ## Status and roadmap
 

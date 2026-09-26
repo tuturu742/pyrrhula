@@ -12,10 +12,10 @@ with the compose plugin; ~4 GB RAM for the stack itself (models are extra).
 ```bash
 git clone <this repo> && cd pyrrhula
 cp docker/env.example .env
-# Fill in the five required secrets:
+# Fill in the four required secrets:
 #   openssl rand -base64 48 -> PYRRHULA_JWT_SECRET
 #   openssl rand -base64 32 -> PYRRHULA_ENCRYPTION_KEY (exactly 32 decoded bytes)
-#   openssl rand -hex 24 -> the two passwords + admin token
+#   openssl rand -hex 24 -> the two database passwords
 $EDITOR .env
 
 # Exec environments (agents building/testing code in containers) need the engine socket:
@@ -35,17 +35,17 @@ path does not — that is the difference between the two routes above.)
 Change the password in the app after first login; the account is bootstrapped once and
 editing `.env` later does not rotate it.
 
-First start downloads the embedding model (~2 GB) into the `pyrrhula-hf` volume; set
-`PYRRHULA_HF_OFFLINE=1` afterwards for offline restarts.
+Nothing is downloaded at first start: fetch the retrieval models under **Admin → Models**
+(they land in the `pyrrhula-hf` volume). `PYRRHULA_HF_OFFLINE` defaults to `1`.
 
-**Models**: agents need at least one model connection (UI → Connections): a cloud key
+**Models**: agents need at least one model connection (**Personas → Model profiles**): a cloud key
 (OpenAI / Anthropic / Gemini / any OpenAI-compatible endpoint) or a local Ollama
 (uncomment the `ollama` service, `podman exec ollama ollama pull qwen3:8b`). AMD iGPU
 (e.g. Strix Halo): use the `:rocm` image with `devices: [/dev/kfd, /dev/dri]` and
 `OLLAMA_IGPU_ENABLE=1`.
 
 **Usage limits**: organization owners can set daily hard caps on model tokens —
-per organization, per connection, per persona, per user — under Projects → "Daily
+per organization, per connection, per persona, per user — on the Organization page → "Daily
 usage limits" (API: `GET/PUT /limits`). 0 = unlimited. At the cap, sessions pause
 with the reason and assistant calls return 429 until midnight UTC. This is the
 platform-side backstop for provider API bills.

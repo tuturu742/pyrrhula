@@ -86,12 +86,12 @@ contradicting narration gets a **badge, not a rewrite**.
 | INV-1 | No stored text reaches a model except through `core.assembler.context_assembler.assemble()` | import-graph lint: only `core/assembler/` and `core/overseer/` may import knowledge/secrets repos |
 | INV-2 | `assemble()` requires `Principal` and `phase` — no defaults | type signature |
 | INV-3 | Tenant filtering happens in the database | RLS `FORCE` + filter-omission negative tests |
-| INV-4 | Every vector query carries a required `scope_key` filter, pushed down | defaultless port parameter + pushdown test |
+| INV-4 | Every vector query carries required `scope_keys` and `class_` filters, pushed down | defaultless port parameter + pushdown test |
 | INV-5 | Overseer secret reads write an audit row in the same transaction | single read path in `OverseerService` |
 | INV-6 | Audit log append-only, tamper-evident | no UPDATE/DELETE grant + `prev_hash` chain + verifier job |
 | INV-7 | Mechanical results shown to users come from `ResolutionRecord`, never model prose | UI reads record by id |
 | INV-8 | Concealed secret plaintext absent from generation context | assembler exclusion step + leak-eval harness |
-| INV-9 | Every shipped pack (`rpg`, `enterprise`, `swdev`) loads with zero core changes | all-packs CI smoke test |
+| INV-9 | Every shipped pack (`default`, `rpg`, `swdev`) loads with zero core changes | all-packs CI smoke test |
 | INV-10 | Any turn replays identically from its `ContextManifest` + `ResolutionRecord`s | replay test |
 
 ## 4. Glossary (core term → RPG / enterprise / swdev overlay)
@@ -99,7 +99,7 @@ contradicting narration gets a **badge, not a rewrite**.
 Core code and schemas use the left column and emit `label_key`s; UIs resolve labels through
 `vocabulary_overlay`. Nothing in the database is ever renamed.
 
-| Core term | RPG (`rpg_v1`) | Enterprise (`enterprise_v1`) | swdev (`swdev_v1`) |
+| Core term | RPG (`rpg_v1`) | Default / enterprise (`default_v1`; labels illustrative — the shipped overlay sets only the persona types, *Facilitator* and *Contributor*) | swdev (`swdev_v1`) |
 |---|---|---|---|
 | Tenant | Account | Organisation | Organisation |
 | Workspace | World / Campaign | Workspace | Project |
@@ -118,8 +118,8 @@ Core code and schemas use the left column and emit `label_key`s; UIs resolve lab
 `dice`, `campaign`, `character`, `player`, `spell`, `npc`, and any other RPG term — plus
 swdev terms: `sprint`, `standup`, `engineer`, `pull_request`. They exist only
 in workflow-plugin content (`.plugins/`, pinned in `deploy/plugins.json`) and overlay label
-data. ("Sprint Planning"/"Standup"/"Triage" are process-template names shipped by the swdev
-pack; `pull_request` and `build` are pack entity *schemas*, not core nouns. "Embargoed
+data. ("Standup"/"Work Item Triage" are process-template names shipped by the swdev pack,
+and "Sprint Recap" an overlay label; `pull_request` and `build` are pack entity *schemas*, not core nouns. "Embargoed
 Info" covers undisclosed vulns/incidents/plans — never tool credentials, which stay
 `credential_ref`s.)
 
@@ -138,10 +138,6 @@ capability rather than a domain metaphor. A repository is what it is in every do
 platform serves — there is no neutral synonym to reach for, which is the test a forbidden
 word has to fail.
 
-Note that no lint enforces this list on the core side: `tests/architecture/` checks the
-*frontend* for RPG display strings and bans pack-name literals in core, but the vocabulary
-rule above is a convention you are expected to hold, not a gate that will catch you.
-
 ## 5. Architecture map
 
 ```
@@ -154,7 +150,8 @@ Clients (Web UI · Overseer Console · Public API · MCP clients)
       Knowledge Service · Agent Runtime · Resolution Service
       Entity/FSM Service · Secrets Service · Audit Service
       Ports: Permission · Identity · TenantRouter · VectorStore ·
-             ModelProvider · JobQueue · BlobStore · Encryptor · Moderation
+             ModelProvider · JobQueue · BlobStore · Encryptor · Moderation ·
+             Embedding · Reranker · ExecEnv · McpTransport · Notifier · Preview
   → Workers (same image: ingestion, embedding, async turns, reports, eval)
   → PostgreSQL 16 (RLS FORCE) · Redis · Blob store
   → External: Ollama / OpenAI / Anthropic / Gemini · MCP servers

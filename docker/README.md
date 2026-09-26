@@ -10,10 +10,9 @@ One image (`docker/Dockerfile`), entrypoint selects the process (`api` / `worker
 ```
 
 The compose file requires secrets from `.env` (JWT secret, encryption key, database
-passwords, admin token) and the installer generates them on first run — a bare
+passwords) and the installer generates them on first run — a bare
 `compose up` without that fails. The installer also fetches the workflow packs, wires
-the container-engine socket for exec environments, waits for health, and pre-warms the
-retrieval models. `docs/install.md` is the full guide; `docs/self-host.md` keeps the
+the container-engine socket for exec environments, and waits for health. `docs/install.md` is the full guide; `docs/self-host.md` keeps the
 manual walkthrough for operators who want to assemble it themselves.
 
 What the stack runs: `postgres` (pgvector), `redis`, `migrate` (one-shot, exits 0),
@@ -30,10 +29,10 @@ podman compose -f docker/compose.selfhost.yml down -v   # -v also drops the data
 Running one entrypoint directly, without compose:
 
 ```bash
-podman build -t pyrrhula:dev -f docker/Dockerfile.
+podman build -t pyrrhula:dev -f docker/Dockerfile .
 podman run --rm -p 8000:8000 pyrrhula:dev api
 podman run --rm pyrrhula:dev worker
 podman run --rm -e PYRRHULA_DATABASE_URL=... pyrrhula:dev migrate
 ```
 
-`docker/helm/` is reserved for a future Helm chart and is currently empty.
+`docker/helm/` is reserved for a future Helm chart and holds only a placeholder README.
