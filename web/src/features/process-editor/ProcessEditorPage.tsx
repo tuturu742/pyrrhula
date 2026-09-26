@@ -32,7 +32,7 @@ function uniquePhaseKey(phases: Record<string, PhaseSpec>): string {
 
 /**
  * the editor itself. Two entry modes -- "new" (?template=<key>, from the list
- * page's template gallery discipline 2's "never an empty canvas") and "edit"
+ * page's template gallery, "never an empty canvas") and "edit"
  * (:definitionId, loads that version's document as the working draft; publishing always
  * creates a new version, per its own "publish = new immutable version" convention --
  * there is no in-place update endpoint to call instead).

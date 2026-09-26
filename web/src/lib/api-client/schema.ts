@@ -242,7 +242,7 @@ export interface paths {
         };
         /**
          * Get Session Endpoint
-         * @description D1.3: the session view's initial-load/refresh fetch -- the SSE stream (below)
+         * @description The session view's initial-load/refresh fetch -- the SSE stream (below)
          *     only ever *replays events*, it never hands a caller today's already-current snapshot
          *     if they connect having missed nothing, e.g. right after ``create_session_endpoint``.
          */
@@ -435,7 +435,7 @@ export interface paths {
         put?: never;
         /**
          * Delegate Endpoint
-         * @description D15: the facilitator approves the plan and delegates each work item to a coding agent.
+         * @description The facilitator approves the plan and delegates each work item to a coding agent.
          *     One background job per item (worked in parallel), each producing a real branch + PR on the
          *     server-side git store. Gated on session:conduct.
          */
@@ -457,7 +457,7 @@ export interface paths {
         put?: never;
         /**
          * Review Endpoint
-         * @description D15 review->fix: the facilitator requests changes on a delegated PR; the coding agent
+         * @description Review->fix: the facilitator requests changes on a delegated PR; the coding agent
          *     then pushes a fix commit to the same branch. Gated on session:conduct.
          */
         post: operations["review_endpoint_sessions__session_id__review_post"];
@@ -512,7 +512,7 @@ export interface paths {
         put?: never;
         /**
          * Draft Override Endpoint
-         * @description G4.4 step one: produce the text, do not post it. Verbatim mode is a passthrough;
+         * @description Step one: produce the text, do not post it. Verbatim mode is a passthrough;
          *     voice mode calls the model once and meters it. Nothing is persisted either way, so a
          *     human who changes their mind leaves no trace.
          */
@@ -534,7 +534,7 @@ export interface paths {
         put?: never;
         /**
          * Post Override Endpoint
-         * @description G4.4 step two: the human confirms, and only then does anything get written. The
+         * @description Step two: the human confirms, and only then does anything get written. The
          *     draft is rebuilt from the request rather than held server-side -- a stored draft would
          *     be state to expire, and the permission check runs again here regardless, so nothing is
          *     gained by trusting a server-side copy over the client's.
@@ -557,19 +557,18 @@ export interface paths {
         put?: never;
         /**
          * Request Session Recap
-         * @description G4.3's "resume into context": a human arriving from a digest link (or simply
+         * @description The "resume into context": a human arriving from a digest link (or simply
          *     returning after a long absence) asks for the elapsed history to be repopulated, and
          *     gets back a job to poll rather than a request that blocks on a map-reduce over a
          *     month of session log.
          *
-         *     The recap is built **for the calling principal** -- G4.1's summariser filters its fact
+         *     The recap is built **for the calling principal** -- the summariser filters its fact
          *     frame through that principal's own visibility, so two people opening the same link get
          *     two different, each-correct recaps. That is why the principal comes from the request
          *     context and is not a parameter a caller could set to somebody else.
          *
-         *     This is the entry point G4.1's scope note named as G4.3's to build; the summariser
-         *     itself, its budget, and its provenance recording were all complete before this route
-         *     existed.
+         *     The summariser itself, its budget, and its provenance recording were all complete
+         *     before this route existed; this is only the entry point.
          */
         post: operations["request_session_recap_sessions__session_id__recap_post"];
         delete?: never;
@@ -587,8 +586,8 @@ export interface paths {
         };
         /**
          * List Checkpoints Endpoint
-         * @description D1.3's fork-from-checkpoint entry point's picker list (B1.4's checkpoints, plan
-         *     §5.4) -- oldest first, one row per phase transition this session has made.
+         * @description The fork-from-checkpoint picker list: the checkpoints, oldest first, one row per
+         *     phase transition this session has made.
          */
         get: operations["list_checkpoints_endpoint_sessions__session_id__checkpoints_get"];
         put?: never;
@@ -665,7 +664,7 @@ export interface paths {
         put?: never;
         /**
          * Satisfy Await Endpoint
-         * @description B1.8: the HTTP entry point for resolving a real ``await_state`` row (B1.6) --
+         * @description The HTTP entry point for resolving a real ``await_state`` row --
          *     e.g. the ``feedback_loop``-style phases in ``STANDARD_SESSION_FLOW``. Advancing
          *     further afterward needs the same interpreter-driven background task human-turn
          *     submission does.
@@ -797,7 +796,7 @@ export interface paths {
          * @description The between-sessions change feed: rows, never prose. Scoped through the same
          *     resolver everything else uses, at the ``EXPORT`` pseudo-phase — a workspace-level feed
          *     has no phase to narrow by, and ``EXPORT`` is precisely "everything in this workspace
-         *     this principal is entitled to" (C1.1).
+         *     this principal is entitled to" .
          */
         get: operations["list_workspace_changes_workspaces__workspace_id__changes_get"];
         put?: never;
@@ -1046,7 +1045,7 @@ export interface paths {
         put?: never;
         /**
          * Propose Entry Edit Endpoint
-         * @description F3.12: draft-and-approve for a knowledge entry's body -- this endpoint only ever
+         * @description draft-and-approve for a knowledge entry's body -- this endpoint only ever
          *     proposes. Approving is the separate ``POST .../apply-edit`` call below, which is what
          *     actually publishes a new version.
          */
@@ -1088,7 +1087,7 @@ export interface paths {
         };
         /**
          * List Versions Endpoint
-         * @description D1.1's version history panel -- newest first (``list_versions``'s own ordering).
+         * @description The version history panel -- newest first (``list_versions``'s own ordering).
          */
         get: operations["list_versions_endpoint_knowledge_sources__source_id__versions_get"];
         put?: never;
@@ -1108,7 +1107,7 @@ export interface paths {
         };
         /**
          * List Source Attachments Endpoint
-         * @description D1.1's source detail page: which workspaces is *this* source attached to.
+         * @description The source detail page: which workspaces is *this* source attached to.
          */
         get: operations["list_source_attachments_endpoint_knowledge_sources__source_id__attachments_get"];
         put?: never;
@@ -1149,7 +1148,7 @@ export interface paths {
         /**
          * Ingest Document Endpoint
          * @description Stores the upload and enqueues a worker job — parsing/chunking never happens in
-         *     this process (A1.2: "a 200-page PDF ingests without blocking the API"), only a blob
+         *     this process ("a 200-page PDF ingests without blocking the API"), only a blob
          *     write and a job insert, both fast regardless of document size.
          */
         post: operations["ingest_document_endpoint_knowledge_sources__source_id__ingest_post"];
@@ -1187,7 +1186,7 @@ export interface paths {
         put?: never;
         /**
          * Reembed Stale Endpoint
-         * @description A1.3: sweep every chunk for this tenant whose ``embedding_model`` doesn't match
+         * @description sweep every chunk for this tenant whose ``embedding_model`` doesn't match
          *     the currently configured one (an operator changed the embedding model/tag) and
          *     re-embed it, reusing cached vectors by content_hash where possible.
          */
@@ -1299,8 +1298,8 @@ export interface paths {
         };
         /**
          * List Templates Endpoint
-         * @description D1.2's template gallery: "never from an empty canvas" (§16.5 discipline 2). Serves
-         *     B1.1's own fixtures rather than duplicating this JSON in the frontend, so the gallery
+         * @description The template gallery: "never from an empty canvas". Serves
+         *     its own fixtures rather than duplicating this JSON in the frontend, so the gallery
          *     can never drift from what the interpreter's own golden tests exercise.
          */
         get: operations["list_templates_endpoint_process_definitions_templates_get"];
@@ -1467,7 +1466,7 @@ export interface paths {
         /**
          * Get Capabilities
          * @description Registered before `/model-profiles/{agent_id}` for the same literal-vs-
-         *     path-param routing reason D1.2's `/templates` endpoint documents.
+         *     path-param routing reason the `/templates` endpoint documents.
          */
         get: operations["get_capabilities_model_profiles_capabilities_get"];
         put?: never;
@@ -1487,7 +1486,7 @@ export interface paths {
         };
         /**
          * Get Axis Capabilities
-         * @description E2.9: the UI's "unavailable on this model" state for a behavior-profile axis
+         * @description The UI's "unavailable on this model" state for a behavior-profile axis
          *     control -- one row per axis in `pack_id`, with the machine-readable reason code a
          *     disabled control needs (never just a disabled boolean with no explanation).
          */
@@ -1744,7 +1743,7 @@ export interface paths {
         put?: never;
         /**
          * Propose Persona Edit Endpoint
-         * @description F3.12: draft-and-approve for an agent's persona -- this endpoint only ever
+         * @description draft-and-approve for an agent's persona -- this endpoint only ever
          *     proposes. Approving is the separate ``POST .../apply-persona-edit`` call below.
          */
         post: operations["propose_persona_edit_endpoint_agents__persona_id__propose_persona_edit_post"];
@@ -1767,7 +1766,7 @@ export interface paths {
          * Apply Persona Edit Endpoint
          * @description The only write path an *approved* proposal takes -- the human calling this
          *     endpoint is the approval; there is no separate "are you sure" step server-side, the
-         *     same discipline E2.2's ``PATCH /secrets/{id}`` accept flow already established.
+         *     same discipline the ``PATCH /secrets/{id}`` accept flow already established.
          */
         post: operations["apply_persona_edit_endpoint_agents__persona_id__apply_persona_edit_post"];
         delete?: never;
@@ -2542,7 +2541,7 @@ export interface paths {
          * Get Secret Endpoint
          * @description Plaintext (`content`/`hint_text`/`behavioral_directive`) is populated only for a
          *     principal passing `secret:author` on the secret's workspace -- everyone else gets
-         *     the same response shape with those three fields `null` and `gist` intact (E2.2).
+         *     the same response shape with those three fields `null` and `gist` intact.
          */
         get: operations["get_secret_endpoint_secrets__secret_id__get"];
         put?: never;
@@ -2600,7 +2599,7 @@ export interface paths {
         put?: never;
         /**
          * Draft Endpoint
-         * @description Draft-and-approve, not autopilot (§8.4): this endpoint only ever proposes. Saving
+         * @description Draft-and-approve, not autopilot: this endpoint only ever proposes. Saving
          *     the draft is a separate `PATCH /secrets/{id}` call the client makes only on explicit
          *     author acceptance -- nothing here writes to the secret itself.
          */
@@ -2622,9 +2621,9 @@ export interface paths {
         put?: never;
         /**
          * Validate Schema Endpoint
-         * @description The schema editor's live-validate-on-keystroke call (F3.11) -- never persists
+         * @description The schema editor's live-validate-on-keystroke call -- never persists
          *     anything, so every CEL/tag/FSM issue (including an uncompilable expression) comes
-         *     back anchored to the exact field that produced it, the same shape B1.1's process
+         *     back anchored to the exact field that produced it, the same shape the process
          *     editor already established for `/process-definitions/validate`.
          */
         post: operations["validate_schema_endpoint_entities_schemas_validate_post"];
@@ -2643,8 +2642,8 @@ export interface paths {
         };
         /**
          * List Schema Templates Endpoint
-         * @description F3.11's template gallery: pack-provided schemas (``workspace_id IS NULL``) --
-         *     "new schema" always lands here first (§16.5), never an empty field list.
+         * @description The template gallery: pack-provided schemas (``workspace_id IS NULL``) --
+         *     "new schema" always lands here first, never an empty field list.
          */
         get: operations["list_schema_templates_endpoint_entities_schemas_templates_get"];
         put?: never;
@@ -2669,7 +2668,7 @@ export interface paths {
          * Create Schema Endpoint
          * @description Creating from a template (or saving an edit) both land here: a new immutable
          *     version, never an in-place mutation (matching `entity_schema`'s own versioned-row
-         *     shape, F3.1) -- entities pin whichever version id they were created against.
+         *     shape) -- entities pin whichever version id they were created against.
          */
         post: operations["create_schema_endpoint_entities_schemas_post"];
         delete?: never;
@@ -2687,7 +2686,7 @@ export interface paths {
         };
         /**
          * List Schema Versions Endpoint
-         * @description F3.11's version history panel -- every version of one key, newest first (unlike
+         * @description The version history panel -- every version of one key, newest first (unlike
          *     ``/schemas``, which collapses to the latest per key).
          */
         get: operations["list_schema_versions_endpoint_entities_schemas_versions_get"];
@@ -2710,7 +2709,7 @@ export interface paths {
         put?: never;
         /**
          * Propose Schema Edit Endpoint
-         * @description F3.12: draft-and-approve for an EntitySchema -- runs the proposed definition
+         * @description draft-and-approve for an EntitySchema -- runs the proposed definition
          *     through the same ``validate_schema_definition`` pass the manual save path uses
          *     *before* it is ever returned, so an invalid proposal is never presented for
          *     approval. Approving is the separate ``POST .../apply-edit`` call below.
@@ -2813,7 +2812,7 @@ export interface paths {
         };
         /**
          * Get Entity History Endpoint
-         * @description Per-field timeline for F3.10's history charts -- the progression chart is the
+         * @description Per-field timeline for the history charts -- the progression chart is the
          *     same component/endpoint as any other numeric field's, just a different
          *     ``field_path``.
          */
@@ -2959,7 +2958,7 @@ export interface paths {
          *     lands or is refused, and the caller needs that answer (with the *location* of a broken
          *     resolution chain) in the response, not in a job they have to go poll for.
          *
-         *     The ingestion disclaimer §16.6 asks for is the UI's job, not this route's: it is
+         *     The ingestion disclaimer asks for is the UI's job, not this route's: it is
          *     posture shown before a user chooses to import, whereas the envelope and the scanner
          *     are the mitigations, and putting the disclaimer text here would imply otherwise.
          */
@@ -2979,7 +2978,7 @@ export interface paths {
         };
         /**
          * List Quarantine
-         * @description The review queue behind §16.6's "human reviews each in a dedicated UI".
+         * @description The review queue behind 's "human reviews each in a dedicated UI".
          */
         get: operations["list_quarantine_export_quarantine_get"];
         put?: never;
@@ -3022,7 +3021,7 @@ export interface paths {
         put?: never;
         /**
          * Import Card Endpoint
-         * @description The ecosystem's front door (§11.3): a PNG card, or the plain JSON some tools share
+         * @description The ecosystem's front door: a PNG card, or the plain JSON some tools share
          *     instead. Both spec versions land on the same internal shape before anything is written.
          *
          *     Embedding is enqueued rather than done here. Until it runs the imported lore still
@@ -3148,7 +3147,7 @@ export interface paths {
         /**
          * Review Report
          * @description Marking a report reviewed is what unlocks its artifacts for a template that
-         *     requires it (G4.11). Only a principal who may *read* the report may review it --
+         *     requires it. Only a principal who may *read* the report may review it --
          *     approving something you cannot see is a signature on a blank page.
          */
         post: operations["review_report_reports__report_id__review_post"];
@@ -3237,7 +3236,7 @@ export interface paths {
         };
         /**
          * List Presets
-         * @description §13.7's web-search preset: a registry entry a deployment enables, not a special code
+         * @description The web-search preset: a registry entry a deployment enables, not a special code
          *     path. "Web search is just an MCP server behind a workspace policy flag" is only true if
          *     it is registered the same way everything else is.
          */
@@ -3795,8 +3794,8 @@ export interface paths {
         get: operations["get_egress_policy_endpoint_admin_tenants__tenant_id__egress_policy_get"];
         /**
          * Put Egress Policy Endpoint
-         * @description Set the tenant's D14 egress policy: {purpose: ["local"] | ["local","cloud"]}.
-         *     An absent purpose stays permissive (the plan's explicit default); an empty list
+         * @description Set the tenant's egress policy: {purpose: ["local"] | ["local","cloud"]}.
+         *     An absent purpose stays permissive (the documented default); an empty list
          *     blocks that purpose entirely.
          */
         put: operations["put_egress_policy_endpoint_admin_tenants__tenant_id__egress_policy_put"];
@@ -3859,6 +3858,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/tenants/{tenant_id}/registration-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Registration Policy Endpoint
+         * @description This tenant's policy, the deployment default, and what the choices mean.
+         */
+        get: operations["get_registration_policy_endpoint_admin_tenants__tenant_id__registration_policy_get"];
+        /** Set Registration Policy Endpoint */
+        put: operations["set_registration_policy_endpoint_admin_tenants__tenant_id__registration_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tenants/{tenant_id}/registration-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Registration Requests Endpoint */
+        get: operations["list_registration_requests_endpoint_admin_tenants__tenant_id__registration_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tenants/{tenant_id}/registration-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Registration Endpoint
+         * @description Turn an application into an account, at the role the admin chooses.
+         */
+        post: operations["approve_registration_endpoint_admin_tenants__tenant_id__registration_requests__request_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tenants/{tenant_id}/registration-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Registration Endpoint */
+        post: operations["reject_registration_endpoint_admin_tenants__tenant_id__registration_requests__request_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tenants/{tenant_id}/audit/verify": {
         parameters: {
             query?: never;
@@ -3891,7 +3965,7 @@ export interface paths {
         /**
          * Health
          * @description Liveness/readiness probe. No DB round-trip on purpose — this is the process check,
-         *     not a dependency check. Real dependency wiring lands with T0.2/T0.3.
+         *     not a dependency check.
          */
         get: operations["health_health_get"];
         put?: never;
@@ -4307,6 +4381,10 @@ export interface components {
             encrypted: boolean;
             /** Collisions */
             collisions: number;
+            /** Compatibility */
+            compatibility: string;
+            /** Compatibility Note */
+            compatibility_note: string;
             /** Sections */
             sections: {
                 [key: string]: components["schemas"]["BundleItemResponse"][];
@@ -4333,7 +4411,7 @@ export interface components {
         /**
          * CardExportPreviewResponse
          * @description The loss report, *before* download. Its own endpoint rather than a header on the
-         *     download, because §11.3 requires the user to see what a card cannot carry and then
+         *     download, because requires the user to see what a card cannot carry and then
          *     decide -- and a report delivered alongside the file has already lost that argument.
          */
         CardExportPreviewResponse: {
@@ -5280,6 +5358,11 @@ export interface components {
              * @default []
              */
             skipped: string[];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /** IngestJobResponse */
         IngestJobResponse: {
@@ -6003,6 +6086,16 @@ export interface components {
              * @default []
              */
             setup: string[];
+        };
+        /** RegistrationPolicyRequest */
+        RegistrationPolicyRequest: {
+            /** Policy */
+            policy: string;
+        };
+        /** RejectRequest */
+        RejectRequest: {
+            /** Note */
+            note?: string | null;
         };
         /** RenameSessionRequest */
         RenameSessionRequest: {
@@ -7296,6 +7389,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
+            };
+            /** @description registration requested; an administrator will review it */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -15739,6 +15839,203 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_registration_policy_endpoint_admin_tenants__tenant_id__registration_policy_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                tenant_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_registration_policy_endpoint_admin_tenants__tenant_id__registration_policy_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                tenant_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_registration_requests_endpoint_admin_tenants__tenant_id__registration_requests_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                tenant_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_registration_endpoint_admin_tenants__tenant_id__registration_requests__request_id__approve_post: {
+        parameters: {
+            query?: {
+                role?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                request_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_registration_endpoint_admin_tenants__tenant_id__registration_requests__request_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                request_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RejectRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

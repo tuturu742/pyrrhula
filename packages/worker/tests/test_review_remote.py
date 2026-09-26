@@ -1,4 +1,4 @@
-"""The G4.17 review/merge glue in worker/review.py, without a DB or network: the DB and
+"""The review/merge glue in worker/review.py, without a DB or network: the DB and
 remote seams are monkeypatched so the test asserts the *decisions* -- file a formal
 review, fall back to a comment when the host refuses, and merge under the acting token.
 """

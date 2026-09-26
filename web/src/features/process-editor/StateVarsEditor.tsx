@@ -17,7 +17,7 @@ function defaultForType(type: StateVarType): StateVarSpec["default"] {
   }
 }
 
-/** D1.2 subtask: the `state:` block editor -- session-scoped variables with a
+/** The `state:` block editor -- session-scoped variables with a
  * type-checked default (schema.py's `StateVarSpec` rejects a bool default for an int var
  * and vice versa; this editor can't produce that mismatch since the default input's shape
  * follows the selected type directly). */

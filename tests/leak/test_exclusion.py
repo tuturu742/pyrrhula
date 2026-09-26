@@ -1,4 +1,4 @@
-"""the acceptance criteria for context exclusion (`core.assembler.context_assembler`
+"""The acceptance criteria for context exclusion (`core.assembler.context_assembler`
 step 8 + `core.secrets.exclusion`): a concealed secret's plaintext is structurally absent
 from the assembled context, concealment injects the behavioral directive in its place,
 and a reveal commits the disclosure event + holder update atomically.

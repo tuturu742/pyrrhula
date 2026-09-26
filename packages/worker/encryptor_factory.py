@@ -1,6 +1,6 @@
 """The one place a concrete ``Encryptor`` adapter is selected for the worker --
 deliberately duplicated
-from ``api.encryptor_factory`` (Appendix B keeps api/worker siblings, neither
+from ``api.encryptor_factory`` (the package layout keeps api/worker siblings, neither
 importing the other in production code).
 
 With ``PYRRHULA_ENCRYPTION_KEY`` set (32 bytes, base64) every sealed credential uses

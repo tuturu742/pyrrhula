@@ -17,10 +17,10 @@ import { VocabularySwitcher } from "@/lib/vocabulary/VocabularySwitcher";
 import { relativeTime, sessionDisplayName } from "@/features/session/session-format";
 
 /**
- * D1.3 launch surface. A session is created from an explicit roster (#4): one supervisor
+ * Session launch surface. A session is created from an explicit roster: one supervisor
  * persona hosts, and one or more participant personas join. The interpreter resolves each
  * phase's actors from this roster (by persona_type), so only the selected personas act. An
- * optional agenda (#5) steers the supervisor.
+ * optional agenda steers the supervisor.
  */
 export function WorkspaceDetailPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();

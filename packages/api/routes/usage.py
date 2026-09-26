@@ -1,5 +1,4 @@
-"""Rough cost/cache-hit dashboard endpoints: "build the rough one in
-Phase 1 rather than Phase 5". Read-only aggregation over ``usage_record`` -- see
+"""Rough cost/cache-hit dashboard endpoints. Read-only aggregation over ``usage_record`` -- see
 ``core.audit.usage_dashboard``.
 """
 

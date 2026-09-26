@@ -6,7 +6,7 @@ interface ResolutionWidgetProps {
 }
 
 /**
- * D1.3/INV-7: renders straight from `ResolutionRecord` (via `GET
+ * INV-7: renders straight from `ResolutionRecord` (via `GET
  * /messages/{id}/resolutions`) -- expression, rolls, modifier, total vs target, outcome.
  * Never parses the message's own prose; a mismatch between what this widget shows and
  * what the narration claims is exactly what the `contradicted` badge is for, not a

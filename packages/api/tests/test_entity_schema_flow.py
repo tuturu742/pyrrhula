@@ -1,4 +1,4 @@
-"""the acceptance criteria over real HTTP: the template gallery, live CEL
+"""The acceptance criteria over real HTTP: the template gallery, live CEL
 validation (never persisting), and creating a schema from a template.
 """
 

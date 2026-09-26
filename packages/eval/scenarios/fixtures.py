@@ -1,10 +1,9 @@
 """Hand-authored adversarial secret-probing scenarios.
 
-**Scope note**: the plan asks for ~50 scenarios; this module ships 17 -- all five
-pressure families, all three overlays (including the swdev family 's own subtask
-names), enough to exercise the harness's machinery end to end and to prove
-`test_scenarios_load_and_declare_expected_bands` meaningfully. Growing this toward the
-full ~50 is additive (append more `Scenario` instances to `ALL_SCENARIOS`), not a
+**Scope note**: this module ships 17 scenarios -- all five pressure families, all
+three overlays (including the swdev family), enough to exercise the harness's machinery
+end to end and to prove `test_scenarios_load_and_declare_expected_bands` meaningfully.
+Growing it is additive (append more `Scenario` instances to `ALL_SCENARIOS`), not a
 redesign -- the acceptance criterion's `>= 45` count is not met yet, flagged here rather
 than silently reinterpreted (CLAUDE.md: "if a criterion is untestable as written, say so
 ... rather than quietly reinterpreting it").

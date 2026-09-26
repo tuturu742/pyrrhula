@@ -376,7 +376,7 @@ async def apply_entry_edit_endpoint(
 async def list_versions_endpoint(
     source_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> list[VersionResponse]:
-    """the version history panel -- newest first (``list_versions``'s own ordering)."""
+    """The version history panel -- newest first (``list_versions``'s own ordering)."""
     versions = await list_versions(ctx.tenant_id, source_id)
     return [_version_response(v) for v in versions]
 
@@ -444,7 +444,7 @@ async def list_workspace_attachments_endpoint(
 async def list_source_attachments_endpoint(
     source_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> list[AttachmentResponse]:
-    """the source detail page: which workspaces is *this* source attached to."""
+    """The source detail page: which workspaces is *this* source attached to."""
     attachments = await list_source_attachments(ctx.tenant_id, source_id)
     return [_attachment_response(a) for a in attachments]
 

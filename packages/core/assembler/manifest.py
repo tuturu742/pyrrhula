@@ -120,7 +120,7 @@ async def get_manifest_for_message(
     *,
     permission_service: PermissionService,
 ) -> ContextManifestRow:
-    """the read path (-style access control, applied to manifests rather than
+    """The read path (secret-style access control, applied to manifests rather than
     secrets): the exact viewer of a manifest may always read it back; anyone else needs a
     workspace role granted the ``read_any_manifest`` action (facilitator/overseer by
     default -- see the ``role_permission`` seed in the migration), checked through the

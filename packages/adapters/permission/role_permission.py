@@ -1,7 +1,6 @@
-"""v1 PermissionService: a ``role_permission`` table lookup. Phase 5 adds
-``permission_grant(principal, action, resource_id)`` alongside this table for
-fine-grained RBAC  — this class's ``check()`` signature is the call-site contract
-that doesn't change."""
+"""v1 PermissionService: a ``role_permission`` table lookup. Finer-grained grants can
+sit alongside this table later — this class's ``check()`` signature is the call-site
+contract that doesn't change."""
 
 from __future__ import annotations
 

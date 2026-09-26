@@ -113,7 +113,7 @@ async def record_reveal(
     new_holder_principal_ids: Sequence[uuid.UUID],
     message_id: uuid.UUID | None = None,
 ) -> SecretDisclosureEventRow:
-    """the reveal path: the event and every new holder in ONE transaction (CLAUDE.md
+    """The reveal path: the event and every new holder in ONE transaction (CLAUDE.md
     rule 4's tenant_scope() already gives per-call atomicity; the point here is doing
     *both* writes inside that one call, not two separate ones) -- a forced failure
     partway (e.g. a holder id that doesn't exist) rolls back the event too, so the world

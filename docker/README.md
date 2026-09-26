@@ -36,4 +36,4 @@ podman run --rm pyrrhula:dev worker
 podman run --rm -e PYRRHULA_DATABASE_URL=... pyrrhula:dev migrate
 ```
 
-`docker/helm/` is reserved for the Phase 5 Helm chart and is currently empty.
+`docker/helm/` is reserved for a future Helm chart and is currently empty.

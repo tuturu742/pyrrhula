@@ -1,4 +1,4 @@
-"""the acceptance criteria for the post-generation leak check: a leaking reply
+"""The acceptance criteria for the post-generation leak check: a leaking reply
 regenerates exactly once then falls back with an overseer alert, a clean reply incurs no
 regeneration, and only secrets the caller marks concealed are ever flagged -- revealed/
 public secrets are never in scope, structurally, since the caller controls the

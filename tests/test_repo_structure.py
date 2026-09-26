@@ -1,10 +1,9 @@
 """Guards the repo skeleton itself.
 
 The CI-blocking suites (tests/isolation, tests/architecture, tests/replay, tests/leak,
-tests/packs) are owned by later tasks (T0.4, T0.5, C1.3, Phase 2, Phase 3 respectively)
-and are empty until those tasks land. This test makes sure their directories — and the
-rest of the Appendix B layout — can't quietly disappear in the meantime; each owning task
-adds the real, content-level guard (e.g. the per-table coverage check).
+tests/packs) each carry their own content-level guards (e.g. the per-table coverage
+check). This test only makes sure their directories — and the rest of the repository
+layout — can't quietly disappear.
 """
 
 from __future__ import annotations

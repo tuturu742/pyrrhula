@@ -664,7 +664,7 @@ async def submit_human_turn(
     *,
     on_event: OnEvent | None = None,
 ) -> MessageRow:
-    """the HTTP layer's entry point for a free-mode human actor's turn (see
+    """The HTTP layer's entry point for a free-mode human actor's turn (see
     ``HumanTurnPendingError``) -- the scheduler already durably advanced its cursor past
     this actor when ``advance_session`` raised, so this only needs to write the message
     itself. Same peek-then-claim shape as ``_run_actor_turn``/``core.process.skeleton``:

@@ -181,7 +181,7 @@ jobs:
         env:
           PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
           PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
-      - name: Export/secret leak tests (Phase 2/4)
+      - name: Export/secret leak tests
         run: ./scripts/ci/run-blocking-suite.sh tests/leak
         env:
           PYRRHULA_APP_DATABASE_URL: >-
@@ -212,7 +212,7 @@ jobs:
         env:
           PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
           PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
-      - name: All-shipped-packs genericity smoke test — INV-9 (Phase 3)
+      - name: All-shipped-packs genericity smoke test — INV-9
         run: ./scripts/ci/run-blocking-suite.sh tests/packs
         env:
           PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}

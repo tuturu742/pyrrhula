@@ -1,4 +1,4 @@
-"""the CI-blocking leak test: the export-side counterpart of INV-8.
+"""The CI-blocking leak test: the export-side counterpart of INV-8.
 
 **The scan is of the artifact, not the code path.** What a customer relies on is a property
 of the bytes in the ZIP -- not of which function was called on the way there. Asserting it

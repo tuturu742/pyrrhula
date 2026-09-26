@@ -150,14 +150,13 @@ async def resolve(
 
 
 def render_resolution_fact(record: ResolutionRecordRow, *, check_type: str) -> str:
-    """: the result enters context as a SYSTEM-AUTHORED FACT, not something
-    the model is asked to compute or restate. ``authoritative="true"`` plus the explicit
-    "don't contradict or restate as a different number" instruction is what step 6 (the
-    UI rendering from ``ResolutionRecord`` by id, never parsing prose -- INV-7) depends on
-    being unambiguous about. Not yet wired into ``assemble()``'s render pipeline -- no
-    caller in Phase 1 assembles a context that also runs a resolution in the same turn
-    yet (C1.2-C1.5 all flagged the same "not yet integrated into the runtime" gap); this
-    is the complete, tested rendering half, ready for that wiring.
+    """The result enters context as a SYSTEM-AUTHORED FACT, not something the model is
+    asked to compute or restate. ``authoritative="true"`` plus the explicit "don't
+    contradict or restate as a different number" instruction is what the UI rendering
+    (from ``ResolutionRecord`` by id, never parsing prose -- INV-7) depends on being
+    unambiguous about. Not wired into ``assemble()``'s render pipeline: no caller assembles
+    a context that also runs a resolution in the same turn, so this is the rendering half,
+    used by the pack tests that check a resolution's textual form.
     """
     rolls_str = ", ".join(str(r) for r in record.rolls)
     modifier = record.modifiers.get("total", 0)
@@ -221,7 +220,7 @@ def make_randomizer_handler(
     legal_check_types: frozenset[str] | None,
     actor_fields_resolver: ActorFieldsResolver,
 ) -> ToolHandler:
-    """The real ``randomizer`` tool handler ('s internal-function-calling path),
+    """The real ``randomizer`` tool handler (the internal function-calling path),
     wired into a ``core.agents.tools.ToolRegistry`` at the composition root. Trusted
     actor state comes from the injected ``actor_fields_resolver`` -- never from the tool
     call's own arguments, which the model controls and could lie in (that would just move

@@ -1,5 +1,5 @@
 """Encryptor port. v1 is the identity function — call sites (starting with
-``secret.content``, Phase 2) go through this port from day one so per-tenant KMS/BYOK
+``secret.content``) go through this port from day one so per-tenant KMS/BYOK
  is an adapter swap, not a retrofit touching every write path.
 """
 

@@ -1,4 +1,4 @@
-"""Fixtures for the leak suite (Phase 2/4). Mirrors ``tests/isolation/conftest.py``'s and
+"""Fixtures for the leak suite. Mirrors ``tests/isolation/conftest.py``'s and
 ``tests/replay/conftest.py``'s identical skip-if-unreachable pattern -- this suite needs a
 live Postgres with the relevant migrations applied.
 """

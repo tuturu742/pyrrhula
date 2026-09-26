@@ -1,4 +1,4 @@
-"""the acceptance criteria over real HTTP through the FastAPI app -- create a secret,
+"""The acceptance criteria over real HTTP through the FastAPI app -- create a secret,
 prove plaintext access control, propose an AI-assist draft, and accept it as a new
 version. Uses a scripted `ModelProvider` double (monkeypatched in, same pattern as
 `test_sessions_flow.py`'s embedding-provider override) so no real model call happens.

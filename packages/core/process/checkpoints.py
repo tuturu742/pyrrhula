@@ -83,7 +83,7 @@ async def write_checkpoint(
 
 
 def make_checkpoint_hook(workspace_id: uuid.UUID) -> CheckpointHook:
-    """the ``CheckpointHook`` seam, for real: pass this to
+    """The ``CheckpointHook`` seam, for real: pass this to
     ``advance_session(checkpoint_hook=...)`` to write a real checkpoint at every
     transition instead of the documented no-op default."""
 
@@ -94,7 +94,7 @@ def make_checkpoint_hook(workspace_id: uuid.UUID) -> CheckpointHook:
 
 
 async def list_checkpoints(tenant_id: uuid.UUID, session_id: uuid.UUID) -> list[CheckpointRow]:
-    """the fork-from-checkpoint UI's picker list -- oldest first, same ordering
+    """The fork-from-checkpoint UI's picker list -- oldest first, same ordering
     ``reconstruct_state`` walks forward from."""
     async with tenant_scope(tenant_id) as session:
         rows = (

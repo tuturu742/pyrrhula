@@ -1,4 +1,4 @@
-"""its own acceptance tests for the enterprise pack -- the pack that exists to
+"""Acceptance tests for the enterprise pack -- the pack that exists to
 falsify the genericity bet. Loaded through the exact same generic ``core.packs.loader``;
 no enterprise-specific code anywhere outside ``packs/enterprise/`` itself.
 """

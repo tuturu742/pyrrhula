@@ -1,4 +1,4 @@
-# One image. Different entrypoints. Config, not forks. (plan §13.8)
+# One image. Different entrypoints. Config, not forks.
 #
 #   podman build -t pyrrhula:dev -f docker/Dockerfile .
 #   podman run pyrrhula:dev api        # FastAPI server (uvicorn)
@@ -78,7 +78,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 # warm cache tiktoken tries to download it from openaipublic.blob.core.windows.net on
 # first use. That silently breaks token counting (usage_record, A1.2 chunk sizing) the
 # moment it runs in the actually-offline worker/api containers -- full-local is a
-# supported deployment mode (plan §13.9), not just the model calls within it.
+# supported deployment mode, not just the model calls within it.
 # HF_HOME points the local EmbeddingProvider (sentence-transformers, BAAI/bge-m3, 1024-dim)
 # at the mounted HuggingFace cache volume (docker/compose.selfhost.yml: pyrrhula-hf ->
 # /app/.cache/huggingface), and HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE make it load *purely*

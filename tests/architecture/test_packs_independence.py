@@ -1,11 +1,11 @@
-"""Appendix B's second architecture rule: ``packs/`` may not import from
+"""The second architecture rule: pack content may not import from
 ``packages/core/``. Packs are content plus declarative definitions; the moment a pack
 needs a core import, the core is missing an abstraction — that's a signal, not an
 inconvenience to work around.
 
-Still trivially green now that F3.7/F3.8 have shipped real pack content (F3.13 adds a
-third, swdev): every pack directory is pure JSON, zero ``.py`` files anywhere under
-``packs/`` — a design choice this lint would catch the moment it stopped being true.
+Trivially green while the design holds: every pack directory is pure JSON, zero ``.py``
+files anywhere under the fetched plugin content — a choice this lint would catch the
+moment it stopped being true.
 """
 
 from __future__ import annotations
@@ -61,13 +61,13 @@ def test_packs_import_nothing_from_core() -> None:
             offenders.append(f"{path.relative_to(ROOT)}: imports {sorted(hits)}")
 
     assert not offenders, (
-        "packs/ may not import from packages/core/ (Appendix B). Offending files:\n"
+        "packs may not import from packages/core/ (CLAUDE.md rule 9). Offending files:\n"
         + "\n".join(offenders)
     )
 
 
 def test_pack_importing_core_fails_lint(tmp_path: pathlib.Path) -> None:
-    """its own acceptance criterion: guards the scanner against being silently
+    """Acceptance criterion: guards the scanner against being silently
     vacuous, the same way ``test_vocabulary_lint.py``'s self-test does for its lint."""
     planted = tmp_path / "planted_tool.py"
     planted.write_text("from core.entities.mutation import mutate\n")

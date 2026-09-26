@@ -72,7 +72,7 @@ class Tenant(Base):
 
 class Principal(Base):
     """Unifies humans, service accounts, and agents. Everything downstream references
-    ``principal``, never a human-specific "user" table  — SSO in Phase 5 adds an
+    ``principal``, never a human-specific "user" table  — SSO adds an
     ``identity`` row, not a new FK everywhere."""
 
     __tablename__ = "principal"
@@ -125,8 +125,8 @@ class Identity(Base):
 
 
 class Membership(Base):
-    """Tenant-level role: owner|admin|editor|participant|viewer (requirement 29's minimum
-    five roles). Superseded at finer grain by Phase 5's ``permission_grant`` — call sites
+    """Tenant-level role: owner|admin|editor|participant|viewer (the minimum
+    five roles). Finer-grained grants may supersede it — call sites
     go through ``PermissionService.check()``, never this table directly."""
 
     __tablename__ = "membership"
@@ -227,9 +227,8 @@ class WorkspaceMembership(Base):
 
 class RolePermission(Base):
     """v1 implementation of ``PermissionService`` : data, not code. Global — not
-    tenant-scoped, not RLS-covered. Phase 5 adds ``permission_grant(principal, action,
-    resource_id)`` alongside this for fine-grained RBAC; call sites (``PermissionService
-    .check(principal, action, resource)``) never change."""
+    tenant-scoped, not RLS-covered. Finer-grained grants may sit alongside this later; call
+    sites (``PermissionService.check(principal, action, resource)``) never change."""
 
     __tablename__ = "role_permission"
 

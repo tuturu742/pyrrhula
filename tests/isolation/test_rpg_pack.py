@@ -1,4 +1,4 @@
-"""its own acceptance tests for the RPG pack, loaded through the generic
+"""Acceptance tests for the RPG pack, loaded through the generic
 ``core.packs.loader`` -- no RPG-specific code anywhere outside ``packs/rpg/`` itself.
 """
 
@@ -42,7 +42,7 @@ async def test_create_character_yields_populated_sheet_from_pack_templates(
 ) -> None:
     """ "Create character" from the pack template yields a populated, valid entity
     whose tagged fields resolve through the generic tag->widget registry -- no field
-    builder, no empty schema (F3.10 builds the actual React rendering; this proves the
+    builder, no empty schema (the React sheet renders the other half; this proves the
     backend half: the pack template alone is enough to produce a real character)."""
     tenant_a, _tenant_b = two_tenants
     workspace_id = await _workspace_id(tenant_a)

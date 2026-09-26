@@ -1,7 +1,7 @@
 """Deterministic entity injection: the real
 ``EntityStateRenderer`` for ``core.assembler.context_assembler.assemble()``, replacing
-the Phase-1 no-op default. Entity state is injected because it is **current**, never
-retrieved because it scored well against a query ('s lesson: state is not
+the no-op default. Entity state is injected because it is **current**, never
+retrieved because it scored well against a query (state is not
 knowledge) -- this module never touches ``core.knowledge.retrieval``/``search_and_
 budget``, has no query text or embedding parameter, and runs as its own assembler step
 entirely separate from the knowledge retrieval pipeline.

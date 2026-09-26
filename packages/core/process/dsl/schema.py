@@ -26,7 +26,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-# Agents ARE principals with one of these three roles (requirement 8).
+# Agents ARE principals with one of these roles.
 KNOWN_PERSONA_TYPES = frozenset({"supervisor", "participant"})
 
 # The vocabulary an actors[].any_of entry may draw from: a persona-type-based token
@@ -91,7 +91,7 @@ class ActorSpec(BaseModel):
     """One entry of a phase's ``actors:`` list -- one "who may act" clause. Exactly one of
     ``persona_type``/``any_of``/``human_participant`` selects eligible actors; ``mode``
     decides whether an eligible actor's turn is human-typed (``free``), model-generated
-    (``generate``), or human-typed-in-an-agent's-place (``generate_as``, requirement 10)."""
+    (``generate``), or human-typed-in-an-agent's-place (``generate_as``)."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -119,7 +119,7 @@ class ActorSpec(BaseModel):
     def _selector_shape(self) -> ActorSpec:
         """At most one of persona_type/any_of/human_participant selects eligible actors by
         role. If none is set, ``order: initiative`` must be -- eligibility is then
-        implicit: whoever has the referenced entity field ('s own example omits
+        implicit: whoever has the referenced entity field (a flow may omit
         an explicit selector on its initiative-ordered actor entry, relying on exactly
         this). Any other combination -- two selectors, or no selector with a non-
         initiative order -- is ambiguous and rejected."""
@@ -438,7 +438,7 @@ class PhaseSpec(BaseModel):
     on_complete: str | None = None
 
     def history_slice_tokens(self) -> int:
-        """the phase budget's declared history reservation, in tokens. ``0`` for a
+        """The phase budget's declared history reservation, in tokens. ``0`` for a
         phase with no budget or no ``history_ratio``, so a phase that never declared one
         keeps its full retrieval budget."""
         if self.budget is None:

@@ -65,7 +65,7 @@ class LoreEntry:
 @dataclass(frozen=True)
 class NormalisedCard:
     """One card, whichever spec version it arrived as. ``spec_version`` records what it
-    *was*, for the loss report G4.9 has to write honestly."""
+    *was*, for the loss report the importer has to write honestly."""
 
     spec_version: str
     name: str

@@ -170,7 +170,7 @@ async def test_a_facilitator_may_read_any_manifest_in_the_workspace(
 async def test_manifest_entries_round_trip_class_bucket_rank_score_why_over_http(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """its own inspector needs the entry's class/bucket/rank/score/why -- proven via a
+    """Inspector needs the entry's class/bucket/rank/score/why -- proven via a
     real assemble() output (not a hand-built empty manifest, unlike the other tests
     here), through the actual HTTP response shape."""
     slug = f"manifests-entries-{uuid.uuid4().hex[:8]}"

@@ -1,4 +1,4 @@
-"""its own isolation + acceptance tests: the generated-column/index generator, its
+"""Isolation + acceptance tests: the generated-column/index generator, its
 reversibility, and the ``scope_key`` INV-4 discipline extended to entity queries.
 """
 

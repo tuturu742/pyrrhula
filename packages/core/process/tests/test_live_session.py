@@ -1,5 +1,4 @@
-"""its own acceptance criteria, and the concrete proof for
-``tasks/phase-1/EXIT-GATE.md`` item 1: a real, non-stubbed ``advance_session``/
+"""The concrete proof: a real, non-stubbed ``advance_session``/
 ``run_agent_turn`` call chain runs a session end to end through the real interpreter,
 scheduler, tool loop, and context assembler -- not just a direct-call-only test of one
 piece in isolation.
@@ -70,7 +69,7 @@ def _stub_embedding_provider():  # noqa: ANN201
 
 def _flow_with_randomizer_on_resolve() -> dict[str, object]:
     """MINIMAL_MVP_FLOW, plus a randomizer tool on the resolve phase -- the shipped
-    fixture itself declares no tools, but the exit gate's own slice wants a live
+    fixture itself declares no tools, but this test wants a live
     randomizer call proven through this exact flow shape."""
     flow = deepcopy(MINIMAL_MVP_FLOW)
     phases = flow["phases"]

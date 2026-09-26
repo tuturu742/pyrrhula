@@ -569,7 +569,7 @@ function TenantMcp({
 }
 
 
-/** D14 egress policy: {purpose: ["local"] or ["local","cloud"]}. An absent purpose is
+/** Egress policy: {purpose: ["local"] or ["local","cloud"]}. An absent purpose is
  * permissive (the platform default); an empty list blocks that purpose entirely. */
 function TenantEgress({
   tenantId,

@@ -1,4 +1,4 @@
-"""the timeout sweep worker, against a live Postgres -- resolves expired awaits
+"""The timeout sweep worker, against a live Postgres -- resolves expired awaits
 across multiple tenants in one sweep, leaves not-yet-due awaits untouched, and is
 idempotent against an already-resolved (e.g. satisfied) await.
 """

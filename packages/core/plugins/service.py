@@ -5,7 +5,7 @@ because it writes NULL-tenant rows (``workflow`` templates, global
 ``vocabulary_overlay``) that the app role's RLS WITH CHECK structurally forbids --
 the same reason the admin console owns tenant provisioning. Content is validated
 declaratively (pydantic manifests; the pack loader only ever reads JSON) and nothing
-from a plugin executes, honoring rule 9/D7.
+from a plugin executes, honoring CLAUDE.md rules 9 and 10.
 
 The **default** plugin's pinned content ships inside the image (``/app/packs``,
 copied from ``.plugins/default`` at build -- see deploy/plugins.json), so first boot

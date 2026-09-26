@@ -27,8 +27,7 @@ interface AgentEditorProps {
 
 /**
  * create/edit one agent -- name, role type (overlay-labelled), persona markdown,
- * model profile link, optional entity link, and a stubbed behavior-profile section
- * (E2.x, Phase 2 -- the layout is reserved, not built).
+ * model profile link, optional entity link, and the behavior-profile sliders.
  */
 export function AgentEditor({
   workspaceId,

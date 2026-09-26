@@ -1,6 +1,6 @@
 """Plugin repositories: operator-registered git repositories that provide workflows.
 
-A plugin repository is pure declarative content (rule 9 / D7): ``plugin.json`` at the
+A plugin repository is pure declarative content (CLAUDE.md rules 9 and 10): ``plugin.json`` at the
 root plus one directory per workflow containing ``workflow.json`` (the template row's
 fields) and the pack content the generic loader understands (schemas/, processes/,
 rule_systems/, tools/, axes/, overlay/, seed/). Nothing in a plugin ever executes.

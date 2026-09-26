@@ -1,8 +1,8 @@
-"""the leak criterion: a concealed secret held by the dispatching engineer is absent
+"""The leak criterion: a concealed secret held by the dispatching engineer is absent
 from the delegation brief **by construction**.
 
-Same canary method as E2.6 and G4.7, applied to the actual MCP dispatch payload -- the
-bytes that would leave the building. The point is not that a filter ran; it is that the
+Same canary method as the other leak tests, applied to the actual MCP dispatch payload --
+the bytes that would leave the building. The point is not that a filter ran; it is that the
 brief comes from `assemble()`, whose exclusions apply without this module knowing what they
 are, so there is nothing to forget to filter.
 """

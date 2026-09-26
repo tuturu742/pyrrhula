@@ -1,5 +1,5 @@
 """Secret schema: a first-class record with its own holder set,
-disclosure state machine, and provenance — the substrate everything else in Phase 2
+disclosure state machine, and provenance — the substrate everything else in the secret system
 (gate, exclusion, overseer) operates on. A secret is a property of a *relationship*
 between a fact and its holders, not a field on Entity or Persona: two conspirators
 share one row, one holder each, not a copy per holder.

@@ -124,7 +124,7 @@ Key mechanisms:
 | Model providers | LiteLLM behind a `ModelProvider` port — Ollama, OpenAI, Anthropic, Gemini, … |
 | Frontend | React 18 + Vite + TypeScript, React Flow, Tailwind + shadcn/ui, TanStack Query |
 | Streaming | SSE (POST for commands), Redis pub/sub across workers |
-| Deployment | One image, entrypoint selects api / worker / migrate; compose, k8s, or ECS via `install.sh` (Helm chart planned, Phase 5) |
+| Deployment | One image, entrypoint selects api / worker / migrate; compose or k8s via `install.sh` |
 
 Three deployment modes are supported: **full local** (Ollama only, no API keys), **full
 cloud**, and **hybrid** with a per-tenant egress policy deciding which purposes

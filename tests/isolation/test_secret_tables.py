@@ -1,4 +1,4 @@
-"""its own isolation negative tests (T0.4 shape) for the four secret schema tables.
+"""Isolation negative tests for the four secret schema tables.
 
 Cross-tenant filter omission and the append-only grant catalog check are also covered
 generically by ``test_filter_omission_matrix.py``/``test_coverage_guard.py`` and

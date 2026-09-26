@@ -75,5 +75,5 @@ async def test_library_tenant_row_is_flagged_and_has_the_well_known_id(
             )
         ).one_or_none()
 
-    assert row is not None, "expected the library tenant row to exist by A1.10"
+    assert row is not None, "expected the library tenant row to exist"
     assert row[0] is True

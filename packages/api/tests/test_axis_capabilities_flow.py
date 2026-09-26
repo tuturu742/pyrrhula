@@ -1,4 +1,4 @@
-"""the UI-facing acceptance criterion over real HTTP: a disabled axis control's API
+"""The UI-facing acceptance criterion over real HTTP: a disabled axis control's API
 response carries a machine-readable reason code, not just a bare disabled flag.
 """
 

@@ -329,7 +329,7 @@ async def test_default_resolver_returns_empty_for_agent_tokens_without_injected_
 async def test_default_resolver_with_real_agent_resolver_mixes_human_and_agent_any_of(
     db_available: None,
 ) -> None:
-    """a mixed any_of list (['human_participant', 'participant_agent']) exercised
+    """A mixed any_of list (['human_participant', 'participant_agent']) exercised
     through the *real* persona_candidate_resolver (core.agents.scheduling), not a stub --
     both a real workspace member and a real agent must show up together, since the
     scheduler and its resolvers were previously only ever tested independently."""

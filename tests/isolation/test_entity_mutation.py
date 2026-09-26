@@ -1,4 +1,4 @@
-"""its own acceptance tests: concurrent-transition serialisation, idempotent replay,
+"""Acceptance tests: concurrent-transition serialisation, idempotent replay,
 atomic rollback on a planted effect failure, and permission-before-locking.
 """
 

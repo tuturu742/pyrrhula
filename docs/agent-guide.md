@@ -129,7 +129,7 @@ Info" covers undisclosed vulns/incidents/plans — never tool credentials, which
 `tests/architecture/test_vocabulary_lint.py` enforces this on both halves: the RPG
 overlay's display strings in `web/src`, and the unambiguous forbidden words in
 `packages/core`. It scanned only the frontend until the backend scan found four real
-violations that had been shipping since Phase 1 — `dice_roller`, `dice_grammar`,
+violations that had been shipping for months — `dice_roller`, `dice_grammar`,
 `max_dice_count`, `campaign_recap`. A line may carry a `vocab-ok:` marker with a reason,
 and there is exactly one honest use: a foreign key we call rather than coin (an MCP
 server's own tool name). Prose that wants the marker should be reworded instead.

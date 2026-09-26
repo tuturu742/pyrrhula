@@ -1,6 +1,6 @@
 """RuleSystem: pack content, tenant-scoped storage. Defines which
 mechanical expressions are legal and how modifiers derive from actor state, so the engine
--- not the model -- computes the "+5" ('s anti-hallucination property).
+-- not the model -- computes the "+5" (the anti-hallucination property).
 
 ``modifier_resolver`` (CEL) evaluates over a caller-supplied
 ``actor_fields: dict[str, object]`` -- an injection seam, not a live entity-table read.
@@ -214,10 +214,10 @@ async def create_rule_system(
 
 
 async def get_or_create_default_rule_system(tenant_id: uuid.UUID) -> RuleSystemRow:
-    """a live turn's ``randomizer`` tool needs *some* ``RuleSystemDefinition`` to
+    """A live turn's ``randomizer`` tool needs *some* ``RuleSystemDefinition`` to
     validate against, and nothing seeds one per-tenant today. One tenant-wide default is
-    enough for the exit gate's slice -- no per-ProcessDefinition rule-system link exists
-    in the schema, and Phase 1 doesn't need one. ``create_rule_system`` is already an
+    enough today -- no per-ProcessDefinition rule-system link exists
+    in the schema, and nothing needs one yet. ``create_rule_system`` is already an
     idempotent upsert by ``(tenant_id, key)``, so this is just a named call to it with a
     fixed key -- calling it repeatedly (e.g. once per live turn) never creates a second
     row or drifts an existing one, matching ``MINIMAL_D20_SYSTEM``'s own content."""

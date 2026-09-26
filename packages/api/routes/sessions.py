@@ -110,7 +110,7 @@ stream_router = APIRouter(
 
 class CreateSessionRequest(BaseModel):
     workspace_id: uuid.UUID
-    # Legacy single-persona skeleton path. For a real discussion pick a roster instead (#4):
+    # Legacy single-persona skeleton path. For a real discussion pick a roster instead:
     # one supervisor + one or more participants, which pins the session's actors explicitly.
     persona_id: uuid.UUID | None = None
     supervisor_persona_id: uuid.UUID | None = None
@@ -199,7 +199,7 @@ async def create_session_endpoint(
     background_tasks: BackgroundTasks,
     ctx: RequestContext = Depends(get_request_context),
 ) -> SessionResponse:
-    # Roster path (#4): exactly one supervisor persona + >=1 participant. The supervisor is
+    # Roster path: exactly one supervisor persona + >=1 participant. The supervisor is
     # also the session's primary persona (it owns the initial framing turn).
     roster: list[uuid.UUID] | None = None
     if body.supervisor_persona_id is not None:
@@ -320,7 +320,7 @@ async def list_sessions_endpoint(
 async def get_session_endpoint(
     session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> SessionResponse:
-    """the session view's initial-load/refresh fetch -- the SSE stream (below)
+    """The session view's initial-load/refresh fetch -- the SSE stream (below)
     only ever *replays events*, it never hands a caller today's already-current snapshot
     if they connect having missed nothing, e.g. right after ``create_session_endpoint``."""
     sess = await get_session(ctx.tenant_id, session_id)
@@ -717,7 +717,7 @@ async def delegate_endpoint(
     body: DelegateRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
-    """the facilitator approves the plan and delegates each work item to a coding agent.
+    """The facilitator approves the plan and delegates each work item to a coding agent.
     One background job per item (worked in parallel), each producing a real branch + PR on the
     server-side git store. Gated on session:conduct."""
     sess = await get_session(ctx.tenant_id, session_id)
@@ -995,7 +995,7 @@ class RecapResponse(BaseModel):
 async def request_session_recap(
     session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> RecapResponse:
-    """the "resume into context": a human arriving from a digest link (or simply
+    """The "resume into context": a human arriving from a digest link (or simply
     returning after a long absence) asks for the elapsed history to be repopulated, and
     gets back a job to poll rather than a request that blocks on a map-reduce over a
     month of session log.
@@ -1005,9 +1005,8 @@ async def request_session_recap(
     two different, each-correct recaps. That is why the principal comes from the request
     context and is not a parameter a caller could set to somebody else.
 
-    This is the entry point the scope note named as the to build; the summariser
-    itself, its budget, and its provenance recording were all complete before this route
-    existed."""
+    The summariser itself, its budget, and its provenance recording were all complete
+    before this route existed; this is only the entry point."""
     sess = await get_session(ctx.tenant_id, session_id)
     if sess is None:
         raise HTTPException(status_code=404, detail=f"no session {session_id}")
@@ -1136,7 +1135,7 @@ _MAX_ADVANCE_CONTINUATIONS = 20
 async def _run_process_definition_advance(
     tenant_id: uuid.UUID, session_id: uuid.UUID, process_definition_id: uuid.UUID
 ) -> None:
-    """the background task: drives the real interpreter (possibly several agent
+    """The background task: drives the real interpreter (possibly several agent
     turns + phase transitions in one call) instead of skeleton's one-shot generation."""
     definition_row = await get_definition(tenant_id, process_definition_id)
     assert definition_row is not None  # start_session already pinned a real row
@@ -1280,7 +1279,7 @@ async def satisfy_await_endpoint(
     background_tasks: BackgroundTasks,
     ctx: RequestContext = Depends(get_request_context),
 ) -> dict[str, bool]:
-    """the HTTP entry point for resolving a real ``await_state`` row --
+    """The HTTP entry point for resolving a real ``await_state`` row --
     e.g. the ``feedback_loop``-style phases in ``STANDARD_SESSION_FLOW``. Advancing
     further afterward needs the same interpreter-driven background task human-turn
     submission does."""

@@ -12,10 +12,9 @@ expressions in a shared process), versioned per workspace or pack-provided.
 - **JsonLogic** -- expressive enough for simple predicates but too weak for real derived
   fields (`ceil(sqrt(fields.xp / 100))`) without inventing an ad hoc function-call
   extension that would just become a second, worse expression language.
-- **Starlark** -- Q8's fallback if CEL doesn't survive contact with real pack authoring;
-  deliberately *not* adopted pre-emptively. The phase-3 exit review (Q8, revisited once
-  three packs' worth of guards/deriveds/constraints/merge-gates/checklists exist) is where
-  this gets revisited with evidence, not before.
+- **Starlark** -- the fallback if CEL doesn't survive contact with real pack authoring;
+  deliberately *not* adopted pre-emptively. Revisited only with evidence from real pack
+  content (guards/deriveds/constraints/merge-gates/checklists), not before.
 
 ``state_machines`` (``core.entities.fsm.StateMachineDef``) and ``views``
 (``core.entities.views.ViewDef``) were both amended forward in place once their real

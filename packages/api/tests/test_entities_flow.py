@@ -1,4 +1,4 @@
-"""the acceptance criterion over real HTTP: a private-tagged field is present in
+"""The acceptance criterion over real HTTP: a private-tagged field is present in
 the response for an authorized viewer and absent (not blanked) for one who isn't --
 the wire contract the React sheet renders from.
 """

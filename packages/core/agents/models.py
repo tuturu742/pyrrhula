@@ -154,7 +154,7 @@ class Persona(Base):
 
 
 class PersonaVersion(Base):
-    """an append-only history log of ``agent.persona_md`` over time -- unlike
+    """An append-only history log of ``agent.persona_md`` over time -- unlike
     knowledge, ``persona_md`` itself stays a plain mutable column (no draft/published
     split exists for it), so this table is a log an edit writes *alongside* that column
     update, not the column's own source of truth. Written by

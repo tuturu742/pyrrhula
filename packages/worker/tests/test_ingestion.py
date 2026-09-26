@@ -1,4 +1,4 @@
-"""the worker-side job handler wiring (BlobStore fetch + idempotency + the real
+"""The worker-side job handler wiring (BlobStore fetch + idempotency + the real
 pipeline), exercised against a live Postgres and a temp-dir BlobStore.
 """
 

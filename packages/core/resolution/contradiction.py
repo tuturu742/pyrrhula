@@ -3,10 +3,10 @@ scan of a reply against its turn's resolution records. Flags for a UI correction
 **no regeneration, ever**. The resolution widget already renders the truth straight from
 ``ResolutionRecord`` (INV-7); a contradicting narration is cosmetic and self-correcting --
 the reader sees the badge and the real number sits right there. That is a strictly
-different, much lower-stakes failure mode than 's secret-leak check (which *does*
+different, much lower-stakes failure mode than the secret-leak check (which *does*
 regenerate) -- **do not generalise this module's no-regen posture to that one.**
 
-**Conservative by design** (the task's own words: "prefer false negatives over noisy
+**Conservative by design** ("prefer false negatives over noisy
 flags"). Two independent, narrow signals, each only fired when unambiguous:
 
 1. **Outcome words.** The reply mentions success-family or failure-family words, but not
@@ -112,7 +112,7 @@ def scan_for_contradictions(
 async def flag_contradictions(
     tenant_id: uuid.UUID, message_id: uuid.UUID, flags: list[ContradictionFlag]
 ) -> None:
-    """Persists flags onto the message ('s ``moderation_flags`` column) -- a no-op if
+    """Persists flags onto the message (its ``moderation_flags`` column) -- a no-op if
     ``flags`` is empty, leaving ``moderation_flags`` at its default ``{}}`` rather than
     writing an empty ``contradiction`` key (so "flagged" is exactly "the key is present
     and non-empty", not "the key exists but is empty")."""

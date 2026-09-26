@@ -183,7 +183,7 @@ def _loc_to_path(loc: tuple[object, ...]) -> str:
 def validate_raw(
     raw: dict[str, object],
 ) -> tuple[EntitySchemaDefinition | None, list[SchemaValidationIssue]]:
-    """the dry-run entrypoint (mirrors ``core.process.dsl.validator.validate_raw``
+    """The dry-run entrypoint (mirrors ``core.process.dsl.validator.validate_raw``
     exactly): structural (Pydantic) validation first -- a document that fails it (bad
     shape, unknown field type, malformed range) never reaches the semantic pass below,
     which assumes a structurally valid document to walk. A caller (the schema editor's

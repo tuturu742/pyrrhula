@@ -5,8 +5,8 @@ something this check is meant to paper over. This module exists for what exclusi
 structurally can't see: hint drift, a model inferring the fact from a too-specific
 directive, an author-written directive that gives the game away.
 
-**Q4's badge decision explicitly does not apply here.** Contradicted *narration*
-(`core.resolution.contradiction`, C1.7) gets a UI badge and no regeneration -- a wrong
+**The contradiction badge's rationale explicitly does not apply here.** Contradicted *narration*
+(`core.resolution.contradiction`) gets a UI badge and no regeneration -- a wrong
 roll-total claim is cosmetic and self-correcting (the widget renders the truth straight
 from `ResolutionRecord`, INV-7). A *leak* is not cosmetic and does not self-correct: once
 a fact is in a delivered reply, it's disclosed, irreversibly. The loss profiles differ

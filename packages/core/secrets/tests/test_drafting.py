@@ -1,4 +1,4 @@
-"""the AI-assist acceptance criteria for `core.secrets.drafting` in isolation, against
+"""The AI-assist acceptance criteria for `core.secrets.drafting` in isolation, against
 a scripted `ModelProvider` double -- no HTTP, no `core.secrets.authoring` involved."""
 
 from __future__ import annotations

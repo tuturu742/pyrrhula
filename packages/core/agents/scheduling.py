@@ -1,4 +1,4 @@
-"""the real ``persona_candidate_resolver`` implementation
+"""The real ``persona_candidate_resolver`` implementation
 ``core.process.scheduler.make_default_candidate_resolver`` has an injection seam for
 exactly this -- ``Persona.persona_type`` is what this resolves against.
 
@@ -42,7 +42,7 @@ async def _personas_with_type(
     with_chattiness: bool = False,
 ) -> list[Candidate]:
     """Personas of ``persona_type`` eligible to act. When ``session_id`` names a session with
-    an explicit roster (#4), candidates come from that roster; otherwise (skeleton/legacy
+    an explicit roster, candidates come from that roster; otherwise (skeleton/legacy
     sessions with no roster) they fall back to the whole workspace. Archived personas never
     qualify either way."""
     async with tenant_scope(tenant_id) as session:

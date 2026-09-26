@@ -18,7 +18,7 @@ SYSTEM_DEFAULT_OVERLAY_KEY = "rpg_v1"
 
 async def list_overlays(tenant_id: uuid.UUID) -> list[VocabularyOverlayRow]:
     """System overlays (visible to every tenant) plus this tenant's own custom ones (no
-    authoring UI in Phase 1, so today this is always just the two shipped system sets)."""
+    authoring UI yet, so today this is always just the shipped system sets)."""
     async with tenant_scope(tenant_id) as session:
         rows = (
             await session.execute(

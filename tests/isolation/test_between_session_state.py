@@ -1,4 +1,4 @@
-"""its own isolation + acceptance tests: the workspace clock, scheduled entity
+"""Isolation + acceptance tests: the workspace clock, scheduled entity
 effects, and the between-sessions change feed.
 
 Lives under ``tests/isolation/`` because `entity_schedule` is a new tenant-scoped RLS

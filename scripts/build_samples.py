@@ -150,8 +150,8 @@ def _facilitator_led_flow(
         "ratio": {"lore": 0.7, "misc": 0.3},
         "spill": "proportional",
         "max_tokens": 3000,
-        # Half the budget is the conversation. At 0.0 -- the value every pre-G4.1 flow
-        # carries -- each speaker answers into a void and the table reads like monologues.
+        # Half the budget is the conversation. At 0.0 each speaker answers into a void and
+        # the table reads like monologues.
         "history_ratio": 0.5,
     }
 

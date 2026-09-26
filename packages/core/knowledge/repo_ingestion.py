@@ -68,7 +68,7 @@ DEFAULT_CLASS_MAP: tuple[tuple[str, str], ...] = (
 )
 
 # Docs-first: these chunk through the normal path. Everything else is `misc` and
-# `experimental` ('s named Phase-6 trigger).
+# `experimental`.
 _DOC_SUFFIXES = frozenset({".md", ".markdown", ".txt", ".rst", ".adoc"})
 
 _MAX_FILE_BYTES = 512 * 1024
@@ -176,7 +176,7 @@ async def ingest_repo_snapshot(
         class_ = classify(repo_file.path, class_map)
         document = is_document(repo_file.path)
         if not document:
-            # Source code: plain chunking into `misc`, flagged so 's code-aware-
+            # Source code: plain chunking into `misc`, flagged so a later code-aware
             # chunking evaluation can find exactly what was treated naively.
             class_ = "misc"
             report.experimental.append(repo_file.path)

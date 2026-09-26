@@ -1,4 +1,4 @@
-"""the acceptance criteria for the disclosure gate (`core.secrets.gate`): an unfired
+"""The acceptance criteria for the disclosure gate (`core.secrets.gate`): an unfired
 prefilter makes no model call, a malformed/failing gate call fails closed to conceal, the
 request payload never carries plaintext, and every decision persists atomically with its
 usage record.

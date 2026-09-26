@@ -1,4 +1,4 @@
-"""Generic pack loader (its own subtask, reused unmodified by F3.8/F3.13/F3.9): reads
+"""Generic pack loader, shared unmodified by every shipped pack: reads
 a shipped pack's on-disk JSON content and materializes it into a tenant through the
 *exact same* save/authoring functions manual authoring would use -- entity schemas,
 rule systems, tool definitions, process definitions, axis

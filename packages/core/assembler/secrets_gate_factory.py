@@ -200,7 +200,7 @@ async def resolve_turn_secrets(
     # every held secret's plaintext enters context with a keep-it-secret instruction.
     # Reachable only through the explicit `eval_arm` parameter (never over HTTP; the
     # architecture fence test locks this) -- it exists so the benchmark can MEASURE
-    # what instruction-only concealment actually leaks ('s named trap).
+    # what instruction-only concealment actually leaks (the instruction-only trap).
     if eval_arm == "prompt_only":
         exposed: list[ResolvedSecretDecision] = []
         for c in candidates_raw:

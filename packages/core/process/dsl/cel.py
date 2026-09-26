@@ -16,7 +16,7 @@ This is a real check, not merely a syntax check, but it is not a full type-check
 expression whose runtime behaviour depends on the *actual* value of a state variable
 (not just its type) at a specific evaluation could still misbehave in ways this dummy
 evaluation can't catch (e.g. divide-by-zero only when a var is exactly 0). Out of scope
-for a static validator; the interpreter's own error handling (B1.2: "an interpreter fault
+for a static validator; the interpreter's own error handling ("an interpreter fault
 pauses the session, never a stuck lock") is the backstop for that class of failure.
 """
 

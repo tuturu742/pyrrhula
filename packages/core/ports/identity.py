@@ -2,8 +2,8 @@
 adapter swaps behind the same port — nothing downstream references a human-specific
 "user" table, only ``Principal`` + ``Identity``.
 
-Tenant is resolved *before* identity verification (subdomain/header/single-tenant-default,
-T0.6), so ``verify_local`` takes ``tenant_id`` explicitly rather than searching for an
+Tenant is resolved *before* identity verification (subdomain/header/single-tenant
+default), so ``verify_local`` takes ``tenant_id`` explicitly rather than searching for an
 email across every tenant — ``Identity`` is RLS-protected like any other tenant-scoped
 table, and a wrong tenant guess simply finds no matching row, which is the correct
 login-failure behaviour anyway.

@@ -1,7 +1,6 @@
-"""Rough cost/cache-hit dashboard data: "build the rough one in Phase 1
-rather than Phase 5" -- tokens + estimated spend + cache-hit rate, aggregated straight from
-``usage_record``. No new table: this is a read-only query layer over data the runtime already
-write every turn.
+"""Rough cost/cache-hit dashboard data: tokens + estimated spend + cache-hit rate,
+aggregated straight from ``usage_record``. No new table: this is a read-only query layer
+over data the runtime already writes every turn.
 
 Cache-hit rate is ``cached_tokens / prompt_tokens`` -- the fraction of prompt tokens that
 were served from a provider's prompt cache rather than freshly processed, which is exactly

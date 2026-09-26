@@ -1,4 +1,4 @@
-"""its own isolation + acceptance tests: guarded FSM transitions, the append-only
+"""Isolation + acceptance tests: guarded FSM transitions, the append-only
 grant on ``entity_state_change``, and static FSM validation (reachability, dangling
 transitions) hooked into the schema save path.
 """

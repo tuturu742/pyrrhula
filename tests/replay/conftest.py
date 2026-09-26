@@ -1,5 +1,5 @@
 """Fixtures for the replay suite (INV-10). Mirrors ``tests/isolation/conftest.py``'s
-skip-if-unreachable pattern -- this suite needs a live Postgres with the C1.3 migration
+skip-if-unreachable pattern -- this suite needs a live Postgres with the migrations
 applied.
 """
 

@@ -1,4 +1,4 @@
-"""its own architecture lint: nothing under `packages/api/mcp_server/` imports a repo
+"""Architecture lint: nothing under `packages/api/mcp_server/` imports a repo
 module directly.
 
 `test_inv1_import_graph.py` already sweeps the whole tree for the same two modules. This

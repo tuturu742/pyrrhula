@@ -36,7 +36,7 @@ class VocabularyOverlayRow(Base):
     )
     key: Mapped[str] = mapped_column(String(63), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    # {label_key: display_string, ...} -- Appendix A's glossary, keyed by label_key.
+    # {label_key: display_string, ...} -- the glossary, keyed by label_key.
     labels: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

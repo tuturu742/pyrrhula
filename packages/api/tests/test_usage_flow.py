@@ -1,4 +1,4 @@
-"""the cost/cache-hit dashboard is visible per session via API."""
+"""The cost/cache-hit dashboard is visible per session via API."""
 
 from __future__ import annotations
 

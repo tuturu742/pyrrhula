@@ -1,4 +1,4 @@
-"""the slider surface: reading a persona's disposition (axes + current values) and
+"""The slider surface: reading a persona's disposition (axes + current values) and
 appending a new validated profile version over HTTP."""
 
 from __future__ import annotations

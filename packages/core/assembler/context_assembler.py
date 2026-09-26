@@ -157,7 +157,7 @@ class EntityStateBlock:
 
 @dataclass(frozen=True)
 class HistorySummaryBlock:
-    """the pre-rendered elapsed-history summary, resolved by the caller exactly the
+    """The pre-rendered elapsed-history summary, resolved by the caller exactly the
     way ``EntityStateBlock``/``behavior_directives_text`` are -- ``core.sessions.history
     .summarise_history`` builds it (a worker job, a model call, and per-viewer visibility
     filtering, none of which belong inside the assembler), this module only places it and
@@ -205,7 +205,7 @@ async def _noop_secrets_gate(
 def citation_envelope(
     citation_id: str, class_: str, source_name: str, entry_title: str, body: str
 ) -> str:
-    """'s citation envelope. Contents are DATA, never instructions -- the standing
+    """The citation envelope. Contents are DATA, never instructions -- the standing
     system rule that makes this safe against knowledge-borne prompt injection lives in the
     agent's system prompt (outside this module's scope), not in the envelope shape itself.
 
@@ -231,7 +231,7 @@ def token_proxy(rendered: str) -> int:
 
 
 class HistoryBudgetExceededError(Exception):
-    """an injected ``HistorySummaryBlock`` claims more tokens than the turn's whole
+    """An injected ``HistorySummaryBlock`` claims more tokens than the turn's whole
     history budget allows. Loud rather than silently truncated -- the summariser owns
     fitting the summary to the budget it was given (``core.sessions.history
     .summarise_history(max_tokens=...)``), and a mismatch here means a caller passed a

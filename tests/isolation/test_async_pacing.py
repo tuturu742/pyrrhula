@@ -1,4 +1,4 @@
-"""the isolation + acceptance tests: notification/reminder/timeout firing exactly once
+"""The isolation + acceptance tests: notification/reminder/timeout firing exactly once
 each, visibility-filtered digests, and a long await surviving a process restart.
 
 Lives under ``tests/isolation/`` because `notification` is a new tenant-scoped RLS table
@@ -73,7 +73,7 @@ async def _session_at_await_phase(
     """A session pinned to STANDARD_SESSION_FLOW and parked in its human-await phase.
     Set directly rather than driven through the interpreter: the phases between the
     initial one and `feedback_loop` exercise scheduler/turn-taking machinery that has
-    nothing to do with what G4.3 is about, and walking them would make these tests fail
+    nothing to do with what these tests are about, and walking them would make these tests fail
     for reasons unrelated to their own claims."""
     persona_id = await seed_dev_agent(tenant_id, workspace_id)
     sess = await create_session(tenant_id, workspace_id, persona_id)

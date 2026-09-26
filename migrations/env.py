@@ -1,9 +1,9 @@
 """Alembic environment. Async engine, URL from PYRRHULA_DATABASE_URL.
 
-target_metadata is None until T0.2 introduces the shared declarative base
-(``core.tenancy.models.Base``) — until then ``alembic revision`` has nothing to
-autogenerate against, but ``alembic upgrade head`` on an empty version chain is a
-correct, deliberate no-op (T0.1's acceptance criterion).
+``target_metadata`` is the shared declarative base (``core.tenancy.models.Base``) with
+every model module imported so autogenerate sees each table; it falls back to ``None``
+when the packages are not importable, in which case ``alembic upgrade head`` still runs
+the version chain and only ``alembic revision --autogenerate`` has nothing to diff.
 """
 
 from __future__ import annotations

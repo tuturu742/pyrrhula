@@ -1,7 +1,6 @@
 """Publishable three-arm report: renders a matrix of `MatrixCell`s (per
-(model/provider, axis-value, arm)) into a markdown write-up -- the Phase-2 exit gate
-requires this exist and be readable by a human deciding whether actually works,
-not just a machine-readable pass/fail.
+(model/provider, axis-value, arm)) into a markdown write-up -- readable by a human
+deciding whether the safety layer actually works, not just a machine-readable pass/fail.
 """
 
 from __future__ import annotations

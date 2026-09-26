@@ -3,7 +3,7 @@
 Registered into a generate turn's ``ToolRegistry`` only when BOTH gates hold: the acting
 persona's ``web_search`` switch (who may search) and a registered ``web_search`` MCP server
 on the workspace allowlist (whether this workspace may egress at all -- CLAUDE.md rule 11:
-the allowlist, not D14, controls MCP egress). The call itself goes through
+the allowlist, not the model egress policy, controls MCP egress). The call itself goes through
 ``core.mcp.client.call_tool`` -- allowlist re-derivation, injection envelope, action-record
 audit -- with a synthesized single-tool phase spec, the same shape
 ``worker.delegation._delegation_phase`` established: the phase argument is the client's

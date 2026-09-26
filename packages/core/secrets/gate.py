@@ -80,7 +80,7 @@ class _DecisionSchema(BaseModel):
 class GateResponseSchema(BaseModel):
     """The strict JSON schema the gate call must produce -- on a local model this
     is what grammar-constrained decoding (Ollama JSON-schema format / GBNF) targets;
-    Q5's all-modes decision makes that mandatory, not a nice-to-have, though the actual
+    the all-modes decision makes that mandatory, not a nice-to-have, though the actual
     grammar wiring is an adapter-level concern (`core.ports.model_provider
     .generate_structured`), not this module's."""
 
@@ -105,7 +105,7 @@ def compute_fired_secrets(
     phase_flags: frozenset[str],
     tau: float,
 ) -> tuple[CandidateSecret, ...]:
-    """'s prefilter, no model call: fires per-candidate iff `"mechanical" not in
+    """The prefilter, no model call: fires per-candidate iff `"mechanical" not in
     phase_flags` and `cos_sim(recent_turns_embedding, candidate.gist_embedding) > tau`.
     `candidates` is assumed already filtered to "agent's held secrets ∩ active scope" by
     the caller -- that intersection needs `core.secrets.repo`/holder reads this module

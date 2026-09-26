@@ -7,9 +7,9 @@ must be a compile error, not a leak. Post-filtering (fetch candidates, discard o
 scope ones in application code) is forbidden: it degrades recall and is a leak surface the
 first time a caller forgets to apply it.
 
-This port doesn't own a table. In Phase 1, A1.4 points an adapter at the real
-``knowledge_chunk`` table; the pgvector adapter here is written generically (table/column
-names are constructor arguments) so that's a configuration change, not a rewrite.
+This port doesn't own a table. The pgvector adapter is written generically (table/column
+names are constructor arguments), so pointing it at the real ``knowledge_chunk`` table is
+a configuration change, not a rewrite.
 """
 
 from __future__ import annotations

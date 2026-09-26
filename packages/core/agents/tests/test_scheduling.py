@@ -1,4 +1,4 @@
-"""the real persona_type-based candidate resolver -- the scheduler injection seam
+"""The real persona_type-based candidate resolver -- the scheduler injection seam
 core.process.scheduler.make_default_candidate_resolver has always had.
 """
 
@@ -93,8 +93,8 @@ async def test_any_of_human_token_is_ignored_by_the_agent_resolver(db_available:
 
 
 async def test_initiative_with_no_explicit_selector_returns_empty(db_available: None) -> None:
-    """No Entity system exists in Phase 1 -- 'implicit eligibility: whoever has the
-    field' has nothing to query against, an honest empty result, not a guess."""
+    """With no selector and nothing to query against, 'implicit eligibility: whoever has
+    the field' yields an honest empty result, not a guess."""
     tenant_id, _owner_id, workspace_id = await seed_dev_tenant(
         slug=f"sched-agents-initiative-{uuid.uuid4().hex[:8]}"
     )

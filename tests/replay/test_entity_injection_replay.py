@@ -1,4 +1,4 @@
-"""INV-10 for F3.6: a turn with injected entities replays byte-identical from the
+"""INV-10 for entity injection: a turn with injected entities replays byte-identical from the
 manifest + pinned entity versions. Mirrors ``test_context_manifest_replay.py``'s shape
 (re-running ``assemble()`` with the same recorded inputs reproduces ``rendered_hash``
 exactly) -- the property INV-10 needs, extended to cover the entity-injection step.

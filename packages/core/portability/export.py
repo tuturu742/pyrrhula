@@ -349,7 +349,7 @@ async def _add_chunks(
     visible: frozenset[str],
     prefix: str,
 ) -> None:
-    """Chunk texts, keyed by chunk id -- **not** in 's illustrative layout, and added
+    """Chunk texts, keyed by chunk id -- not part of the original bundle layout, and added
     deliberately.
 
     A ``ContextManifest`` records which *chunks* a turn included, and a turn's rendered

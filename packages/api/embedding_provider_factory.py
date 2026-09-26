@@ -1,7 +1,7 @@
 """The one place a concrete ``EmbeddingProvider`` adapter is selected at the API layer
 . Mirrors ``api.model_provider_factory``'s composition-root pattern for the same
 port -- deliberately duplicated from ``worker.embedding_provider_factory`` rather than
-importing across the api/worker package boundary (Appendix B's layout keeps them
+importing across the api/worker package boundary (the package layout keeps them
 siblings, neither importing the other in production code).
 """
 

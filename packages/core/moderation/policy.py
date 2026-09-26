@@ -8,12 +8,12 @@
   that respected it would be a scanner the secrets system blinded.
 * **at generation** -- replies are visible and are scanned before delivery.
 
-Neither depends on an overseer existing, which is the point: Q6's rule is that a
+Neither depends on an overseer existing, which is the point: the workspace rule is that a
 multi-human workspace needs an overseer **or** moderation with overseer-equivalent
 visibility, and an arm that only worked when an overseer was present would satisfy nothing.
 
-**Policy lives in `tenant.settings`, and the default is permissive** ('s seam
-principle). A platform that arrived pre-censoring would be a platform tenants fight; one
+**Policy lives in `tenant.settings`, and the default is permissive.** A platform that
+arrived pre-censoring would be a platform tenants fight; one
 that cannot be configured to block anything is a platform enterprises cannot buy. So: a
 seam, off by default, with the categories and the action a tenant's own decision.
 
@@ -46,8 +46,8 @@ class ModerationPolicy:
     action: Action = "flag"
     categories: tuple[str, ...] = ()
     # Overseer-equivalent visibility: does this tenant's moderation surface flagged content
-    # to a human who can act on it? Q6's second arm turns on this, not on `enabled` --
-    # scanning that nobody reads is not oversight.
+    # to a human who can act on it? The workspace rule's second arm turns on this, not on
+    # `enabled` -- scanning that nobody reads is not oversight.
     overseer_equivalent: bool = False
 
     @property

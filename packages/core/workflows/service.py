@@ -1,11 +1,12 @@
 """Workflow selection, tenant authoring, and capability provisioning (#2 + moddable
 workflows).
 
-Selecting a workflow for a tenant pins its vocabulary overlay (reusing the Phase-1
+Selecting a workflow for a tenant pins its vocabulary overlay (reusing the
 tenant-default mechanism) and records the workflow key in ``tenant.settings``. Applying its
 capabilities to a workspace registers the declared MCP servers on that workspace's allowlist
 (``core.mcp.registry.register_server``) -- so, e.g., the software-development workflow is what
-gives a workspace's personas git access, egress-controlled by the MCP allowlist (not D14).
+gives a workspace's personas git access, egress-controlled by the MCP allowlist rather than
+the model egress policy.
 
 Tenant authoring: workflows with a non-NULL ``tenant_id`` are a tenant's own (RLS-scoped,
 shadowing a same-keyed global on lookup); NULL rows are read-only system templates. A

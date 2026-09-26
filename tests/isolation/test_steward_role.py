@@ -7,7 +7,7 @@ closes that, without collapsing the facilitator/overseer split for the multi-hum
 workspaces where it earns its keep.
 
 These tests fix the two halves of the seat (both permission sets), the visibility
-implication (a steward matches a facilitator-only scope), and the Q6 presence check (a
+implication (a steward matches a facilitator-only scope), and the overseer presence check (a
 steward is an overseer for "does this workspace have oversight").
 """
 
@@ -168,7 +168,7 @@ async def test_a_steward_sees_the_facilitator_only_scope(
 async def test_a_steward_satisfies_the_oversight_requirement(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """Q6: a workspace that needs an overseer present is satisfied by a steward, so a solo
+    """A workspace that needs an overseer present is satisfied by a steward, so a solo
     owner does not have to invent a second human to clear the check."""
     from core.overseer.workspace_requirements import validate_overseer_requirement
 

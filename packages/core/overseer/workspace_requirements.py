@@ -39,7 +39,7 @@ async def validate_overseer_requirement(tenant_id: uuid.UUID, workspace_id: uuid
         distinct_humans = set(human_principal_ids)
 
         # A steward is an overseer too (core.tenancy.roles): a solo workspace whose
-        # creator holds the combined seat satisfies Q6's "there is an overseer" without a
+        # creator holds the combined seat satisfies "there is an overseer" without a
         # second human. roles_satisfying pushes that down as the predicate.
         has_overseer = await session.scalar(
             select(WorkspaceMembership.id).where(

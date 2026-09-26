@@ -144,7 +144,7 @@ async def test_templates_endpoint_serves_the_named_fixtures(
 async def test_standard_session_flow_template_publishes_unmodified(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
-    """the acceptance criterion: "author the Standard Session Flow entirely in
+    """The acceptance criterion: "author the Standard Session Flow entirely in
     the UI; the saved JSON validates and runs a session." The editor's template gallery
     hands the author this exact fixture (served by /process-definitions/templates,
     verbatim from fixtures.py) as the starting canvas; publishing it unmodified through

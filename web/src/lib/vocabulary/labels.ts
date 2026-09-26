@@ -14,7 +14,7 @@
  * itself) for the first paint before any async fetch resolves, and for pages with no
  * workspace context at all (login, workspace list).
  *
- * Rule for contributors (mirrors the plan's Appendix A rule for the backend): if you're
+ * Rule for contributors (mirrors the backend's vocabulary rule): if you're
  * about to write "Arbiter", "Rulebook", "World", or any other RPG-overlay noun directly in
  * a `.tsx` file, stop — add the entry here (and to the overlay migration's seed data) and
  * call `useLabel()`/`t(key)` instead.

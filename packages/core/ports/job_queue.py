@@ -54,7 +54,7 @@ class JobQueue(Protocol):
     async def fail(self, job_id: uuid.UUID, error: str) -> None: ...
 
     async def get(self, job_id: uuid.UUID) -> Job | None:
-        """Read-only status lookup (A1.2: job progress surfaced via API). Callers that
+        """Read-only status lookup, for surfacing job progress over the API. Callers that
         expose this over HTTP must check ``tenant_id`` themselves — the ``job`` table
         carries no RLS (see this module's docstring), so this method deliberately
         doesn't scope by tenant either; unscoped-by-design, not an oversight."""

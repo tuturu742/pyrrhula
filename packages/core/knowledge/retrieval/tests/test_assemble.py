@@ -1,5 +1,5 @@
 """Acceptance criteria for the full search+fuse+budget pipeline, against a live
-Postgres. This is the golden test the Phase-1 exit gate references: "budget ratio change
+Postgres. This is the golden test: "budget ratio change
 -> visibly different retrieval."
 """
 

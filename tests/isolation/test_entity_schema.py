@@ -1,4 +1,4 @@
-"""its own isolation + acceptance tests for ``entity_schema``. The generic
+"""Isolation + acceptance tests for ``entity_schema``. The generic
 filter-omission coverage lives in ``test_filter_omission_matrix.py``/
 ``test_coverage_guard.py`` (extended in this PR); this file proves the specific claims
 the acceptance criteria name: bad CEL is rejected at save with the offending
@@ -159,7 +159,7 @@ async def test_entity_schema_cross_tenant_filter_omission_returns_zero_rows(
 async def test_list_schema_versions_returns_every_version_newest_first(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """the version history panel needs every version of a key, not just the
+    """The version history panel needs every version of a key, not just the
     latest -- ``list_latest_schemas`` deliberately collapses to one row per key, so
     this is a distinct query, exercised here against real save-time versioning."""
     tenant_a, _tenant_b = two_tenants

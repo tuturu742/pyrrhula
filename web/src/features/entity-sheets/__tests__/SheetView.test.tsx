@@ -23,7 +23,7 @@ function makeEntity(overrides: Partial<EntityView> = {}): EntityView {
 describe("SheetView", () => {
   it("test_scope_filtered_fields_are_indistinguishable_from_absent", () => {
     // A field the viewer can't see is never present in the API response at all (the
-    // backend's own contract, F3.6/F3.10) -- this proves the client-side rendering
+    // backend's own contract) -- this proves the client-side rendering
     // side of that same contract: nothing renders for a field that was never sent,
     // there is no separate "hidden" placeholder/blank state to distinguish from
     // "doesn't exist".

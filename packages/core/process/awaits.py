@@ -108,7 +108,7 @@ async def create_await(
 
 
 def make_await_hook(definition: ProcessDefinitionDSL | None = None) -> OnAwaitHook:
-    """the ``OnAwaitHook`` seam, for real: pass this to
+    """The ``OnAwaitHook`` seam, for real: pass this to
     ``advance_session(on_await=...)`` to persist a real ``await_state`` row instead of
     the documented plain-status-flip default.
 

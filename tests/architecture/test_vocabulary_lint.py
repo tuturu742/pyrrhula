@@ -20,8 +20,8 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WEB_SRC = ROOT / "web" / "src"
 
-# The RPG overlay's own distinctive display strings (from the D1.6 migration's rpg_v1
-# seed / DEFAULT_LABELS) -- deliberately the unambiguous ones, not generic English words
+# The RPG overlay's own distinctive display strings (from the seeded rpg_v1
+# overlay / DEFAULT_LABELS) -- deliberately the unambiguous ones, not generic English words
 # ("World", "Session", "Character" alone would false-positive against ordinary prose).
 _BANNED_LITERALS = (
     "Arbiter",

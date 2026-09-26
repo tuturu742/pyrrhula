@@ -9,7 +9,7 @@ import { useLabel } from "@/lib/vocabulary/useLabel";
 /**
  * process-definition hub -- pick an existing definition to keep editing (its latest
  * version becomes the working draft), or start a fresh one from the template gallery.
- * "Never from an empty canvas" (discipline 2): there is no "blank" option here at
+ * "Never from an empty canvas": there is no "blank" option here at
  * all, only the two shipped fixtures.
  */
 export function ProcessDefinitionListPage() {

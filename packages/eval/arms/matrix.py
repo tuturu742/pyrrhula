@@ -102,8 +102,8 @@ def evaluate_run(
 ) -> RunResult:
     """Regression thresholds that fail the run (this task's own subtask) -- currently
     just the one that matters most: `unauthorized_disclosure_rate` on `full_pipeline`
-    must not exceed `max_unauthorized_disclosure_rate` (0.0 by default, "by construction",
-    per E2.6). A nonzero value here is what `test_planted_exclusion_bypass_is_detected_
+    must not exceed `max_unauthorized_disclosure_rate` (0.0 by default, "by construction").
+    A nonzero value here is what `test_planted_exclusion_bypass_is_detected_
     and_fails_the_run` proves the harness actually catches."""
     failures: list[str] = []
     for cell in cells:

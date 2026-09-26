@@ -15,7 +15,7 @@ produced. That is the structural reason planted text inside a tool *response* ca
 authorise a further call: the response is not an input to the decision.
 
 **Every result is wrapped before it is context.** ``ENVELOPE`` marks returned content as
-data. External output is data, never instructions -- the same standing rule 's citation
+data. External output is data, never instructions -- the same standing rule the citation
 envelope encodes for knowledge, applied at the other door.
 
 **Effectful calls go through `EffectfulAction`.** Idempotency key first, external call
@@ -78,8 +78,8 @@ class SessionCallCapError(Exception):
 
 
 class ConfirmationRequiredError(Exception):
-    """An effectful call needs a human's go-ahead and did not have one. Q6's multi-human
-    rule and the enterprise posture both assume this gate exists to turn on, so it is a
+    """An effectful call needs a human's go-ahead and did not have one. The multi-human
+    workspace rule and the enterprise posture both assume this gate exists to turn on, so it is a
     default rather than a nicety -- `require_confirmation` starts true."""
 
     def __init__(self, server_key: str, tool_name: str) -> None:

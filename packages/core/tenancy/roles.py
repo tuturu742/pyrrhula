@@ -7,7 +7,7 @@ Two kinds of role check live in this codebase and must not be confused:
   facilitator's and overseer's), so that path needs nothing from this module.
 * **Is this role one the caller is looking for by name?** -- scope membership
   (``assembler.visibility``), notification targeting (``sessions.notifications``), and the
-  Q6 overseer-presence requirement (``overseer.workspace_requirements``) all match a
+  overseer-presence requirement (``overseer.workspace_requirements``) all match a
   stored role against a wanted role name. That is where implication has to be applied, and
   it is declared here once so the three sites cannot drift.
 

@@ -1,4 +1,4 @@
-"""its own architecture lint: `core/actions/delegation.py` reaches stored text only
+"""Architecture lint: `core/actions/delegation.py` reaches stored text only
 through `ContextAssembler.assemble()`.
 
 The task states the rule and the reason: "A second, ad-hoc brief-assembly path kills INV-1

@@ -1,6 +1,6 @@
 """Weighted Reciprocal Rank Fusion: fuses per-class
-dense/sparse/keyed candidate lists on **ranks**, never scores. This is the entire point of
-D2 — sparse (BM25-ish) and dense (cosine) scores live in different, incommensurable
+dense/sparse/keyed candidate lists on **ranks**, never scores. This is the entire point:
+sparse (BM25-ish) and dense (cosine) scores live in different, incommensurable
 distributions, and multiplying either by a class-priority weight produces a number with no
 interpretation. RRF sidesteps the normalisation problem by never looking at a raw score at
 all, only at each candidate's rank position within its own originating list.

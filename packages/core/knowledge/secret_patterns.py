@@ -1,4 +1,4 @@
-"""Declarative committed-credential patterns (G4.15, CLAUDE.md rule 10).
+"""Declarative committed-credential patterns (CLAUDE.md rule 10).
 
 Gitleaks-style rules **as configuration data**: a regex, a name, and (for high-entropy
 generic strings) a minimum Shannon entropy. No plugin surface, no user-authored code -- a

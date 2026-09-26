@@ -1,5 +1,5 @@
-"""the operational definition of "generic". For every shipped pack directory
-under ``packs/`` -- discovered, never hardcoded by name (F3.14 adds a third pack by
+"""The operational definition of "generic". For every shipped pack directory
+under ``packs/`` -- discovered, never hardcoded by name (a new pack is added by
 adding a directory, not editing this file) -- loads the pack through the generic
 ``core.packs.loader``, then runs the smoke script *that pack itself ships*
 (``<pack>/smoke.json``): an entity from the pack's own schema, a mutation, a

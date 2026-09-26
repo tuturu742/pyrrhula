@@ -2,7 +2,7 @@
 and fetch. A definition that fails validation is **never persisted** -- ``create_definition``
 raises before touching the database, so every row that does exist in ``process_definition``
 is one the interpreter can trust by construction; there is no draft/invalid state to
-accidentally read. Dry-run validation (for an editor giving live feedback, D1.2) is
+accidentally read. Dry-run validation (for an editor giving live feedback) is
 ``validate_document``, which never persists anything at all.
 """
 

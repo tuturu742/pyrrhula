@@ -2,8 +2,8 @@
 
 Four properties, each an acceptance criterion, and each a decision worth stating:
 
-**The bundle is attacker-controlled input.** Not "might be" -- is. Q2 killed the
-marketplace, not the threat; out-of-band sharing means bundles arrive from strangers
+**The bundle is attacker-controlled input.** Not "might be" -- is. No marketplace
+exists, but that is not the threat; out-of-band sharing means bundles arrive from strangers
 anyway, and their knowledge entries are headed for a tool-calling agent's context. Every
 imported body runs through ``injection_scan``, and anything flagged imports
 **quarantined**: present in the database, absent from retrieval, until a human clears it.

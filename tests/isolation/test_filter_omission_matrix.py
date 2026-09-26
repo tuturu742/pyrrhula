@@ -392,7 +392,7 @@ async def test_provider_credential_filter_omission(
 async def test_vocabulary_overlay_filter_omission(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """System overlays (``tenant_id IS NULL``, seeded by the D1.6 migration) are
+    """System overlays (``tenant_id IS NULL``, seeded by the baseline migration) are
     legitimately visible to every tenant by design -- this test's actual claim is
     narrower: a tenant-*owned* custom overlay never leaks to another tenant, even though
     both tenants see the same NULL-tenant rows."""
@@ -602,7 +602,7 @@ async def test_entry_activation_state_filter_omission(
 async def test_persona_git_credential_filter_omission(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """the per-persona git-identity binding is tenant-scoped: a raw select with no
+    """The per-persona git-identity binding is tenant-scoped: a raw select with no
     tenant filter, run in tenant A, must not see tenant B's row. Seeded by raw INSERT to
     avoid depending on repo/persona FKs the negative test does not otherwise set up."""
     tenant_a, tenant_b = two_tenants

@@ -122,7 +122,15 @@ async def public_config() -> PublicConfigResponse:
 
 # response_model=None: this returns a token OR a 202 "pending" body, and FastAPI
 # cannot build one response model from the union.
-@router.post("/register", dependencies=[Depends(rate_limit_by_ip)], response_model=None)
+@router.post(
+    "/register",
+    dependencies=[Depends(rate_limit_by_ip)],
+    response_model=None,
+    responses={
+        200: {"model": TokenResponse},
+        202: {"description": "registration requested; an administrator will review it"},
+    },
+)
 async def register(
     body: RegisterRequest,
     response: Response,

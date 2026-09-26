@@ -1,7 +1,7 @@
 """Prompt-injection scanning for imported text.
 
 A `.pyr` bundle, a character card, or a repository README is **attacker-controlled input**
-headed for a tool-calling agent's context. Q2 killed the marketplace, not the threat:
+headed for a tool-calling agent's context. No marketplace exists, but that is not the threat:
 out-of-band sharing means bundles arrive from strangers anyway.
 
 **What this is and is not.** It is a pattern scanner: declarative rules over text, no model

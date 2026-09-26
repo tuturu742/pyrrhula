@@ -138,7 +138,7 @@ async def get_axis_capabilities(
     pack_id: str,
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[AxisCapabilityResponse]:
-    """the UI's "unavailable on this model" state for a behavior-profile axis
+    """The UI's "unavailable on this model" state for a behavior-profile axis
     control -- one row per axis in `pack_id`, with the machine-readable reason code a
     disabled control needs (never just a disabled boolean with no explanation)."""
     axes = await list_axis_definitions(ctx.tenant_id, pack_id)
@@ -397,7 +397,7 @@ async def _run_connection_test(
     provider_kind: str, model: str, api_base: str | None, api_key: str | None
 ) -> TestConnectionResponse:
     """The shared 'ask the provider to say OK' probe, used by both the by-id test (a saved
-    connection) and the test-before-save form (#2)."""
+    connection) and the test-before-save form."""
     provider = get_model_provider(provider_kind)
     model_string = f"{provider_kind}/{model}"
     # A connection-test probe is operator diagnostics, not tenant content -- egress

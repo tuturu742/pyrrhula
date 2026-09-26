@@ -1,4 +1,4 @@
-"""the core acceptance criteria: a high-stakes axis is rejected on a model the
+"""The core acceptance criteria: a high-stakes axis is rejected on a model the
 capability matrix marks incapable, and mutating the stored capability result flips that
 outcome without any code change.
 """

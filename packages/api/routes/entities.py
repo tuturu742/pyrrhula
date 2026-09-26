@@ -184,7 +184,7 @@ async def validate_schema_endpoint(body: ValidateSchemaRequest) -> ValidateSchem
 async def list_schema_templates_endpoint(
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[SchemaResponse]:
-    """the template gallery: pack-provided schemas (``workspace_id IS NULL``) --
+    """The template gallery: pack-provided schemas (``workspace_id IS NULL``) --
     "new schema" always lands here first, never an empty field list."""
     rows = await list_latest_schemas(ctx.tenant_id, None)
     return [_schema_response(r) for r in rows]
@@ -240,7 +240,7 @@ async def list_schema_versions_endpoint(
     workspace_id: uuid.UUID | None = None,
     ctx: RequestContext = Depends(get_request_context),
 ) -> list[SchemaResponse]:
-    """the version history panel -- every version of one key, newest first (unlike
+    """The version history panel -- every version of one key, newest first (unlike
     ``/schemas``, which collapses to the latest per key)."""
     rows = await list_schema_versions(ctx.tenant_id, workspace_id, key)
     return [_schema_response(r) for r in rows]

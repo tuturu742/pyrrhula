@@ -1,6 +1,6 @@
-"""the leak criterion: a participant recap generated over a session containing
+"""The leak criterion: a participant recap generated over a session containing
 concealed secrets contains no trace of them. Scanned at the artifact level -- the report's
-own `content_md`, plus its stored row -- with the same three detectors G4.7 uses.
+own `content_md`, plus its stored row -- with the same three detectors the other leak tests use.
 
 The point of scanning the artifact rather than the code path is the same here as there:
 the property a reader relies on is about the words in the recap. A code-path test proves

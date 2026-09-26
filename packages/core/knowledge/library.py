@@ -122,7 +122,7 @@ async def seed_library_source(
     which already works unmodified for a library source (the RLS disjunct is what makes
     that read succeed; the attachment row itself is written under the consuming tenant, so
     no write to the library tenant is ever needed to attach). Real pack ingestion (parsing
-    a pack's on-disk content into ``entries``) is Phase 3's job -- this is the thin,
+    a pack's on-disk content into ``entries``) is the pack loader's job -- this is the thin,
     already-sufficient primitive that job will call, not a reimplementation of it now.
     """
     source = await create_source(LIBRARY_TENANT_ID, key=key, name=name, class_=class_)

@@ -1,5 +1,5 @@
 """The worker's composition root for ``JobQueue`` selection — mirrors
-``api.job_queue_factory`` (A1.3, needed so the ingestion job can enqueue the follow-up
+``api.job_queue_factory`` (needed so the ingestion job can enqueue the follow-up
 embedding job it chains to).
 """
 

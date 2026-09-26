@@ -1,4 +1,4 @@
-"""the worker-side embedding job handlers, including the D14 egress check reading
+"""The worker-side embedding job handlers, including the egress check reading
 a real tenant's ``settings.egress_policy`` -- exercised against a live Postgres.
 """
 

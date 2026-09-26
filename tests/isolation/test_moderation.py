@@ -1,7 +1,8 @@
 """Acceptance criteria for the moderation layer: the authoring scan reads a secret's
 content whatever its disclosure state, the generation hook follows the
 regenerate-then-fallback ladder, per-tenant policy produces different outcomes on identical
-text, and a multi-human workspace may satisfy Q6 with moderation instead of an overseer.
+text, and a multi-human workspace may satisfy the overseer requirement with moderation
+instead of an overseer.
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ async def test_authoring_scan_reads_secret_content_regardless_of_disclosure_stat
 
     # `undisclosed` is the default, and is exactly the state that would blind a scanner
     # which respected disclosure -- nothing has been said to anyone, so a
-    # disclosure-respecting scan would see nothing. 's point is that this one does not.
+    # disclosure-respecting scan would see nothing. The point is that this one does not.
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SecretRow, secret.id)
         assert row is not None
@@ -293,7 +294,7 @@ async def test_multi_human_workspace_accepts_moderation_in_lieu_of_overseer(
         await validate_overseer_requirement(tenant_id, workspace_id)
 
     # Moderation enabled but *not* overseer-equivalent changes nothing: scanning that
-    # nobody reads is not oversight, and Q6 asks for oversight.
+    # nobody reads is not oversight, and the rule asks for oversight.
     await set_policy(tenant_id, ModerationPolicy(enabled=True, action="block"))
     with pytest.raises(OverseerRequiredError):
         await validate_overseer_requirement(tenant_id, workspace_id)

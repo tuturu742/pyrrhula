@@ -157,7 +157,7 @@ MINIMAL_MVP_FLOW: dict[str, object] = {
 
 
 # A multi-persona discussion that runs EITHER autonomously OR human-conducted, chosen live
-# per session via ``session.turn_policy`` (#7) -- not baked into the definition, so one
+# per session via ``session.turn_policy`` -- not baked into the definition, so one
 # pinned flow serves both modes:
 #
 #   * auto (turn_policy='auto'): framing -> (discussion -> regroup) x max_rounds ->

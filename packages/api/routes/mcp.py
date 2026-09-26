@@ -157,7 +157,7 @@ class PresetResponse(BaseModel):
 
 @router.get("/presets")
 async def list_presets() -> list[PresetResponse]:
-    """'s web-search preset: a registry entry a deployment enables, not a special code
+    """The web-search preset: a registry entry a deployment enables, not a special code
     path. "Web search is just an MCP server behind a workspace policy flag" is only true if
     it is registered the same way everything else is."""
     return [PresetResponse(**WEB_SEARCH_PRESET)]  # type: ignore[arg-type]

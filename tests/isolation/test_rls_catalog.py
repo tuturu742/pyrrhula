@@ -35,7 +35,7 @@ async def test_every_tenant_id_table_has_forced_rls(db_available: None) -> None:
     async with unscoped_session() as session:
         rows = (await session.execute(text(_CATALOG_QUERY))).all()
 
-    assert rows, "expected at least one tenant_id-bearing table to exist by T0.4"
+    assert rows, "expected at least one tenant_id-bearing table to exist"
 
     missing_rls = [
         name

@@ -16,7 +16,7 @@ both the writer (``seed_default_scopes``) and reader (``scopes_for``) must agree
                              membership, agents included via their own principal id.
 
 The ``agent_private:<principal_id>`` convention (per-principal compartment, groundwork for
-Phase 2 secrets) needs no ``scope`` row at all -- ``scopes_for`` grants it structurally to
+secrets) needs no ``scope`` row at all -- ``scopes_for`` grants it structurally to
 its own owner, see that module's docstring.
 """
 
@@ -98,7 +98,7 @@ class ContextManifestRow(Base):
         ARRAY(UUID(as_uuid=True)), nullable=False, default=list
     )
     entity_versions: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
-    # Nullable until Phase 2's behavior-profile machinery exists.
+    # Nullable: a turn without a pinned behavior profile leaves it unset.
     behavior_profile_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_counts: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False, default=dict)
     rendered_hash: Mapped[str] = mapped_column(String(64), nullable=False)

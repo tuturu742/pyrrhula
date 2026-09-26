@@ -1,4 +1,4 @@
-"""its own acceptance tests: private-field visibility and "injected, not retrieved"
+"""Acceptance tests: private-field visibility and "injected, not retrieved"
 against a live ``assemble()`` call. INV-10 replay coverage lives in
 ``tests/replay/test_entity_injection_replay.py``.
 """

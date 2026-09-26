@@ -16,7 +16,7 @@ an empty scope set unconditionally, including no private compartment (see below)
 own compartment, in every phase (including EXPORT), independent of whether the phase's
 declared ``visibility.scopes`` mentions it -- process authors can't enumerate per-principal
 keys they don't know at authoring time, and it can never leak (a principal can only ever
-compute *their own* id's key). Pure groundwork for Phase 2's secret system today; nothing
+compute *their own* id's key). Groundwork for the secret system; nothing
 reads or writes through it yet.
 
 **EXPORT pseudo-phase.** ``scopes_for(..., visibility=EXPORT, session_id=None)`` skips the
@@ -118,7 +118,7 @@ async def scopes_for(
     session_id: uuid.UUID | None,
 ) -> ScopeSet:
     """``session_id`` is accepted (not defaulted away) as a forward seam for a future
-    session-scoped compartment (Phase 2: who has been *told* something *in this
+    session-scoped compartment (who has been *told* something *in this
     session*) -- unused today. EXPORT always passes ``None``; there is no session."""
     del session_id  # unused today -- see docstring
 

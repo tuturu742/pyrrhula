@@ -441,7 +441,7 @@ async def test_effectful_mcp_call_survives_restart_without_double_execution(
 async def test_effectful_calls_require_confirmation_by_default(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
-    """`require_confirmation` starts true: Q6's multi-human rule and the enterprise
+    """`require_confirmation` starts true: the multi-human workspace rule and the enterprise
     posture both assume a human gate exists to turn on, so it is a default rather than a
     nicety. A read-only tool is unaffected -- the gate is about effects, not about calls."""
     tenant_id, _tenant_b = two_tenants

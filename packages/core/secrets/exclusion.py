@@ -52,8 +52,8 @@ class ExclusionRedaction:
 
 def render_injection(resolved: ResolvedSecretDecision) -> tuple[str, ExclusionRedaction | None]:
     """No decision at all, or an unrecognised action, defaults to conceal -- the
-    assembler enforces fail-closed independently of E2.5 doing the same (this task's own
-    subtask); a bug that let an unvalidated action string through must not become a leak."""
+    assembler enforces fail-closed independently of the disclosure gate doing the same; a
+    bug that let an unvalidated action string through must not become a leak."""
     # EVAL ARMS ONLY (arms 1-2), checked BEFORE the fail-closed normalizer on
     # purpose -- these are the deliberately-broken designs the benchmark must measure:
     # plaintext in context WITH an instruction to keep it secret. Only
@@ -105,8 +105,8 @@ async def apply_reveal(
     """The reveal path's atomic side effect: the disclosure event and the extended
     holder set commit together (`core.secrets.decisions.record_reveal`) -- subsequent
     turns' visibility reflects the new holder set immediately, since the world changed
-    the moment the fact was spoken ('s "the reveal updates ACLs because disclosure
-    changes the world"). The caller (context_assembler) is responsible for actually
+    the moment the fact was spoken (the reveal updates ACLs because disclosure changes
+    the world). The caller (context_assembler) is responsible for actually
     calling this only when `resolved.action == 'reveal_full'`."""
     return await record_reveal(
         tenant_id,

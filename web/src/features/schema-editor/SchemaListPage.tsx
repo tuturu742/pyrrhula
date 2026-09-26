@@ -6,9 +6,9 @@ import { useLabel } from "@/lib/vocabulary/useLabel";
 import { listSchemaTemplates, listSchemas } from "./api";
 
 /**
- * F3.11 hub, mirroring `ProcessDefinitionListPage`'s exact split: existing schemas in
+ * Schema hub, mirroring `ProcessDefinitionListPage`'s exact split: existing schemas in
  * the current scope to keep editing, or the template gallery to start a new one.
- * "Start from blank" is present but visually secondary (discipline 2) -- it's a
+ * "Start from blank" is present but visually secondary -- it's a
  * plain link at the bottom of the templates section, not a competing first option.
  */
 export function SchemaListPage() {
