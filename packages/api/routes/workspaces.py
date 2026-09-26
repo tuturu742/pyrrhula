@@ -1,10 +1,10 @@
 """Minimal read-only workspace/agent listing: the frontend's workspace-list and
 agent-select flow needs something real to list against. Full workspace/agent management
-(create, edit, delete) is Phase 1 scope (D1.x) — this adds only the read side needed to
+(create, edit, delete) lives elsewhere — this adds only the read side needed to
 make the login -> workspace list -> session flow genuinely functional rather than
 requiring hardcoded ids pasted into the UI.
 
-G4.2 adds the two between-session surfaces: advancing the workspace clock (an explicit,
+Also the two between-session surfaces: advancing the workspace clock (an explicit,
 permission-gated act that enqueues the schedule-effect job rather than applying it inline)
 and the change feed (records, not prose, filtered by the caller's own scope set).
 """

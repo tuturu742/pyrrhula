@@ -1,4 +1,4 @@
-"""VisibilityResolver (C1.1 requirement 13): the single component that
+"""VisibilityResolver: the single component that
 answers "which scope keys may this principal read in this phase?" -- the mandatory,
 pushed-down filter (INV-4) for every retrieval call, and the one visibility
 implementation export and reporting must reuse rather than reimplement.
@@ -45,7 +45,7 @@ from core.tenancy.scope import tenant_scope
 
 EXPORT: Final = "EXPORT"
 
-# The two default scopes every workspace gets (task C1.1): a workspace-wide public
+# The two default scopes every workspace gets: a workspace-wide public
 # compartment, and a facilitator-only one. Both reuse vocabulary already shared with
 # WorkspaceMembership.role / Persona.persona_type -- 'facilitator' means the same thing in
 # both places, deliberately.

@@ -284,7 +284,7 @@ async def run_agent_turn(
     # core.assembler.layout.LayoutSections) -- a fixed position, valid across the whole
     # tool loop below, since tool-loop iterations only ever *append* to `conversation`.
     cache_boundary_index: int | None = None,
-    # S2/S3 (E2.7 + G4.14): applied to the FINAL reply text before it is persisted --
+    # Applied to the FINAL reply text before it is persisted --
     # the post-generation leak check and moderation live behind this seam, so the
     # durable message is always the checked one. None = passthrough.
     finalize_reply: Callable[[str], Awaitable[str]] | None = None,
@@ -296,7 +296,7 @@ async def run_agent_turn(
     triggered_by: str = "unknown",
     # when the interpreter is driving this turn, it -- not this function -- is the
     # one that peeked the event_seq slot this turn must claim (its own idempotency key
-    # is derived from that same peeked value). None (every pre-B1.8 call site) preserves
+    # is derived from that same peeked value). None (the older call sites) preserves
     # the original self-claim-from-session_row behaviour exactly.
     event_seq: int | None = None,
 ) -> TurnResult:

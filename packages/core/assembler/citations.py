@@ -1,4 +1,4 @@
-"""Citation validation (C1.8/requirement 6): agents cite ``[k7]``-style
+"""Citation validation: agents cite ``[k7]``-style
 knowledge ids from the manifest's envelope (the ``ManifestEntry.citation_id``); a
 cheap post-generation validator checks every cited id against the manifest that actually
 produced the context the reply was generated from, so a hallucinated citation -- an id
@@ -53,7 +53,8 @@ def validate_citations(
 ) -> CitationValidationResult:
     """``manifest_entries`` is ``ContextManifestRow.entries``'s stored JSON shape (see
     ``core.assembler.manifest._entry_to_json``) -- each dict carries ``citation_id``,
-    ``entry_key``, ``source_id``, ``version_id`` as C1.2/C1.3 already produce them."""
+    ``entry_key``, ``source_id``, ``version_id`` as the assembler and manifest produce
+    them."""
     cited_ids = extract_cited_ids(reply_text)
     entries_by_citation_id = {
         entry["citation_id"]: entry for entry in manifest_entries if "citation_id" in entry

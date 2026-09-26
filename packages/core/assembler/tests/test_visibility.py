@@ -1,4 +1,4 @@
-"""C1.1 acceptance criteria for the VisibilityResolver, against a live Postgres."""
+"""Acceptance criteria for the VisibilityResolver, against a live Postgres."""
 
 from __future__ import annotations
 
@@ -207,7 +207,7 @@ async def test_export_returns_full_legitimate_scope_set_independent_of_any_phase
 async def test_export_matches_phase_scoped_result_when_phase_declares_everything(
     db_available: None,
 ) -> None:
-    """Golden-test-shared-with-G4.5 framing (task file): EXPORT must be the resolver's
+    """Golden test shared with the exporter: EXPORT must be the resolver's
     same logic, not a parallel implementation -- proven here by showing a phase that
     happens to declare every scope in the workspace produces the identical result."""
     tenant_id, workspace_id, principals = await _setup("vis-export-parity")

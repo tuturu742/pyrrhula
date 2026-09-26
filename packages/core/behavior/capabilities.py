@@ -5,7 +5,7 @@ pair can actually do, not tenant data (`unscoped_session()`, no RLS).
 
 **Data-driven, not code-driven** (this task's own acceptance criterion): mutating a
 stored row flips what `is_axis_capable`/`get_capability` report without touching a line
-of code -- the nightly E2.8 run's job is to keep these rows current, not to encode
+of code -- the eval harness's job is to keep these rows current, not to encode
 capability logic here.
 """
 
@@ -55,7 +55,7 @@ async def upsert_capability(
     structured_output_fidelity: float | None = None,
     behavioral_fidelity: float | None = None,
 ) -> ModelCapabilityRow:
-    """The write side of "data-driven": this is what a nightly E2.8 run (or a test
+    """The write side of "data-driven": this is what an eval run (or a test
     mutating the stored result) calls -- never a code change to flip a capability."""
     async with unscoped_session() as session:
         existing = await session.scalar(

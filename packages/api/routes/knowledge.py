@@ -2,8 +2,8 @@
 immutable versions, attach sources to workspaces. Talks to
 ``core.knowledge.authoring`` — never ``core.knowledge.repo``, which INV-1 reserves for
 ``core.assembler``/``core.overseer`` (see that module's docstring for why authoring is
-exempt). Full authoring UX (diffs, re-splitting, bulk import) is D1.1; this is the CRUD
-surface its acceptance criteria needs to exist against.
+exempt). This is the CRUD surface the authoring UX (diffs, re-splitting, bulk import)
+builds on.
 """
 
 from __future__ import annotations
@@ -462,7 +462,7 @@ async def ingest_document_endpoint(
     ctx: RequestContext = Depends(get_request_context),
 ) -> IngestJobResponse:
     """Stores the upload and enqueues a worker job — parsing/chunking never happens in
-    this process (A1.2: "a 200-page PDF ingests without blocking the API"), only a blob
+    this process ("a 200-page PDF ingests without blocking the API"), only a blob
     write and a job insert, both fast regardless of document size."""
     data = await file.read()
     blob_key = f"knowledge/{ctx.tenant_id}/{source_id}/{uuid.uuid4()}-{file.filename}"

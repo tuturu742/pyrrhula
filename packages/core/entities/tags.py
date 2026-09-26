@@ -7,8 +7,8 @@ the exact same widget, differing only in metadata values.
 
 **A closed set on purpose** (design decision): an open vocabulary quietly
 becomes field-name semantics again, and the renderer grows a switch per pack -- exactly
-what D7 forbids. These nine tags covered every schema across all three overlays in the
-plan's own analysis; a tenth is a deliberate *core* decision to propose, never pack
+what the no-user-code rule forbids. These nine tags cover every schema across all three
+overlays; a tenth is a deliberate *core* decision to propose, never pack
 data (INV-9's all-packs smoke test is what keeps everyone honest about this).
 """
 
@@ -35,8 +35,8 @@ SEMANTIC_TAGS: frozenset[str] = frozenset(
 
 # tag -> widget id. Total (every core tag maps to something, test_tag_widget_registry_
 # is_total_and_domain_blind asserts this) and domain-blind (no reference to any pack or
-# domain content anywhere in this module) -- the React components themselves land in
-# F3.10; this is the registry *contract* those components are keyed by.
+# domain content anywhere in this module) -- the React components live in the frontend;
+# this is the registry *contract* those components are keyed by.
 TAG_WIDGET_REGISTRY: dict[str, str] = {
     "resource": "resource_bar",
     "attribute": "attribute_block",

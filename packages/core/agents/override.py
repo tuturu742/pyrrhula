@@ -1,4 +1,4 @@
-"""Human-in-place-of-agent (G4.4 ``generate_as``, req 10).
+"""Human-in-place-of-agent (``generate_as``).
 
 The director speaking as the innkeeper and the manager stepping in for a stuck engineer
 agent are the same mechanism: a permitted human writes a turn that the session records as
@@ -291,8 +291,8 @@ async def post_override(
 async def _write_override_leak_alert(
     tenant_id: uuid.UUID, session_id: uuid.UUID, leaked_secret_ids: Sequence[uuid.UUID]
 ) -> None:
-    """The same ``secret_leak_alert`` event kind E2.7 writes -- one alert stream for the
-    overseer, whether the near-miss came from a model or from a person."""
+    """The same ``secret_leak_alert`` event kind the leak check writes -- one alert
+    stream for the overseer, whether the near-miss came from a model or from a person."""
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SessionRow, session_id)
         assert row is not None

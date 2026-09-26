@@ -64,8 +64,8 @@ router = APIRouter(
 
 class ExportRequest(BaseModel):
     workspace_id: uuid.UUID
-    # G4.7 widens this to participant | full | sanitised, with the `secret:inspect` gate
-    # and audit row that `full` requires. G4.5 ships the participant path.
+    # participant | full | sanitised; `full` requires the `secret:inspect` gate and writes
+    # an audit row.
     mode: str = "participant"
     # Which bundle sections to include (default: everything except connections).
     # "connections" embeds model connections WITH decrypted provider credentials --

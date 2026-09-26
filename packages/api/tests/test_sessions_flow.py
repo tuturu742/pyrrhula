@@ -240,7 +240,7 @@ async def test_checkpoints_and_fork_endpoints(
     session_id = create_resp.json()["id"]
 
     # No checkpoints yet -- write one directly (its own function; the interpreter
-    # would normally call this at every phase transition, but the T0.8-skeleton session
+    # would normally call this at every phase transition, but the skeleton session
     # created above never transitions through the real interpreter).
     await write_checkpoint(tenant_id, uuid.UUID(session_id), workspace_id)
 
@@ -265,7 +265,7 @@ async def test_process_definition_backed_session_runs_through_the_real_http_endp
     client: TestClient, db_available: None, redis_available: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """a session created with a real process_definition_id is driven by the
-    interpreter, not the T0.8 skeleton -- the engine-level mechanics are already proven
+    interpreter, not the skeleton -- the engine-level mechanics are already proven
     exhaustively by core/process/tests/test_live_session.py; this proves the same thing
     is reachable through the actual HTTP surface a client uses."""
     monkeypatch.setattr(

@@ -1,6 +1,6 @@
 """``scope`` : named visibility compartments within a workspace.
 Every ``KnowledgeEntry``/``Entity``/``EntityField`` carries a ``scope_key`` (already true
-for ``knowledge_entry``/``knowledge_chunk`` since A1.1); this table is what gives those
+for ``knowledge_entry``/``knowledge_chunk``); this table is what gives those
 free-text keys real membership semantics.
 
 ``members`` JSONB shape (the plan's own snippet just says "principal/role refs" --
@@ -105,7 +105,7 @@ class ContextManifestRow(Base):
     # which elapsed-history range a resume summary covered, and the hash of the
     # summary text itself -- INV-10 across a resume needs both (the range says which
     # events to re-summarise, the hash says whether you rebuilt the same text). All three
-    # NULL on a turn that injected no summary, which is every turn before G4.1.
+    # NULL on a turn that injected no summary.
     history_summary_from_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
     history_summary_to_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
     history_summary_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

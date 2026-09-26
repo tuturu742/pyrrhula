@@ -1,4 +1,4 @@
-"""C1.2 acceptance criteria for the ContextAssembler, against a live Postgres."""
+"""Acceptance criteria for the ContextAssembler, against a live Postgres."""
 
 from __future__ import annotations
 
@@ -475,7 +475,7 @@ async def test_entity_state_and_secrets_gate_seams_flow_into_the_manifest(
         return EntityStateBlock(rendered_text="Entity: the door is locked.", token_count=5)
 
     async def fake_secrets_gate(rendered_knowledge, viewer, phase, session_id):  # noqa: ANN001
-        # C1.4 calls this once per layout side (stable/volatile); only actually redact
+        # The assembler calls this once per layout side (stable/volatile); only actually redact
         # (and report a Redaction) on the side that contains the match, matching how a
         # real gate would behave -- an unconditional redaction here would double-count.
         if "hidden fact" not in rendered_knowledge:

@@ -1,12 +1,10 @@
 """the real ``persona_candidate_resolver`` implementation
-``core.process.scheduler.make_default_candidate_resolver`` has had an injection seam
-for since B1.3 -- ``Persona.persona_type`` (added at B1.7) is exactly what this resolves
-against; nothing wired it into the scheduler until now.
+``core.process.scheduler.make_default_candidate_resolver`` has an injection seam for
+exactly this -- ``Persona.persona_type`` is what this resolves against.
 
 ``order == "initiative"`` with no explicit selector (the DSL's "implicit eligibility:
 whoever has the referenced entity field" shape) resolves to an empty candidate list,
-not an error -- there is no Entity system anywhere in Phase 1 (a gap B1.3/B1.4 already
-found and documented), so there is nothing to query. A phase actually relying on this
+not an error -- this resolver does not query entities. A phase actually relying on this
 shape simply never gets a turn from this resolver; that's a real, honest limitation,
 not a silent wrong answer.
 """
