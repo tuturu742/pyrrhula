@@ -1,4 +1,4 @@
-"""C1.6 acceptance criteria for the ToolDefinition registry, against a live Postgres."""
+"""Acceptance criteria for the ToolDefinition registry, against a live Postgres."""
 
 from __future__ import annotations
 

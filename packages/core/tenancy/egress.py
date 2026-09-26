@@ -1,4 +1,4 @@
-"""D14 egress policy loading (S4): one place to read a tenant's
+"""Egress policy loading (S4): one place to read a tenant's
 ``settings["egress_policy"]`` -- ``{purpose: ["local"] | ["local","cloud"]}`` -- with
 a short TTL cache so the per-turn call paths don't pay a query per model call.
 

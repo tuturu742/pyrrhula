@@ -1,4 +1,4 @@
-"""T0.8 acceptance criterion: the message insert and its usage_record commit or roll
+"""Acceptance criterion: the message insert and its usage_record commit or roll
 back together. Simulates a failure partway through the same transaction
 ``generate_agent_response`` uses (message + session_event + usage_record all in one
 ``tenant_scope()`` block) and confirms NOTHING from that block was persisted -- not just

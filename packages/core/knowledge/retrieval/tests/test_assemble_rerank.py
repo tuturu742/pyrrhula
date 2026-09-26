@@ -1,4 +1,4 @@
-"""A1.7 acceptance criteria for reranking wired into the full search+fuse+rerank+budget
+"""Acceptance criteria for reranking wired into the full search+fuse+rerank+budget
 pipeline: rerank changes within-bucket order only -- bucket membership (which class a
 chunk can ever land in) and each bucket's token budget are untouched by whether
 reranking ran at all.

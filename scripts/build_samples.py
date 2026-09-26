@@ -1856,8 +1856,7 @@ RESULTS = __RESULTS__
 
 TOOL = {
     "name": "evidence_check",
-    "description": (
-        "Send a forensic lab request by radio. Results come back immediately. Your "
+    "description": ("Send a forensic lab request by radio. Results come back immediately. Your "
         "allowance for this interview is limited, so choose carefully."
     ),
     "inputSchema": {
@@ -1942,8 +1941,7 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--host", default="0.0.0.0")
     ns = ap.parse_args()
-    print(
-        f"Hägnaryd forensic lab listening on {ns.host}:{ns.port} -- "
+    print(f"Hägnaryd forensic lab listening on {ns.host}:{ns.port} -- "
         "set calls/session in Pyrrhula to limit an interview"
     )
     HTTPServer((ns.host, ns.port), Handler).serve_forever()

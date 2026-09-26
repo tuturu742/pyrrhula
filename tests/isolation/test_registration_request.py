@@ -1,4 +1,4 @@
-"""T0.4 coverage for ``registration_request``: registered in ``test_coverage_guard.py``'s
+"""Coverage for ``registration_request``: registered in ``test_coverage_guard.py``'s
 ``_COVERED_TABLES``. Behavioural coverage for the policy itself lives in
 ``packages/api/tests/test_registration_policy.py``; this file proves only the
 cross-tenant filter-omission property, which needs this directory's ``two_tenants``

@@ -1,4 +1,4 @@
-"""G4.12 acceptance criteria for the MCP client: an un-allowlisted tool is invisible and
+"""Acceptance criteria for the MCP client: an un-allowlisted tool is invisible and
 uncallable, an effectful call that crashes mid-flight never re-executes, planted text in a
 tool *response* cannot authorise a further call, and a phase's tool policy narrows the
 workspace allowlist.

@@ -1,4 +1,4 @@
-"""G4.1 acceptance criteria for elapsed-history summarisation, against a live Postgres and
+"""Acceptance criteria for elapsed-history summarisation, against a live Postgres and
 a scripted ``ModelProvider`` double (the same pattern ``core.knowledge.tests.test_editing``
 and ``tests/isolation/test_entity_editing`` use).
 

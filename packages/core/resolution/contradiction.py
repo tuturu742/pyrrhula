@@ -1,4 +1,4 @@
-"""Contradiction check (C1.7, Q4 resolved 2026-07-16): best-effort
+"""Contradiction check: best-effort
 scan of a reply against its turn's resolution records. Flags for a UI correction badge --
 **no regeneration, ever**. The resolution widget already renders the truth straight from
 ``ResolutionRecord`` (INV-7); a contradicting narration is cosmetic and self-correcting --

@@ -23,8 +23,7 @@ _CATALOG_QUERY = """
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
       AND c.relkind = 'r'
-      AND EXISTS (
-          SELECT 1 FROM information_schema.columns col
+      AND EXISTS (SELECT 1 FROM information_schema.columns col
           WHERE col.table_schema = 'public'
             AND col.table_name = c.relname
             AND col.column_name = 'tenant_id'

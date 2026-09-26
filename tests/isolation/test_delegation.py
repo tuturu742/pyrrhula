@@ -1,4 +1,4 @@
-"""G4.16 acceptance criteria for coding-agent delegation: a forced restart reconciles
+"""Acceptance criteria for coding-agent delegation: a forced restart reconciles
 instead of double-dispatching, the FSM and the rendered state come from the outcome record
 rather than the summary prose, planted instructions in the returned summary authorise
 nothing, and the call is metered `purpose='delegation'`.

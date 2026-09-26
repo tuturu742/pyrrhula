@@ -1,4 +1,4 @@
-"""C1.7 acceptance criteria for the contradiction scanner."""
+"""Acceptance criteria for the contradiction scanner."""
 
 from __future__ import annotations
 

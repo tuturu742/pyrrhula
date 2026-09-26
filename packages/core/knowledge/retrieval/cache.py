@@ -1,4 +1,4 @@
-"""Redis cache over the per-class retrieval cascade ( cost note, A1.9):
+"""Redis cache over the per-class retrieval cascade:
 within a scene, the same content re-queries for many turns, so hit rates should be high —
 cache the expensive part (post-WRRF fusion, pre-rerank candidates) and let reranking
 (query-specific and cheap) run fresh every time.

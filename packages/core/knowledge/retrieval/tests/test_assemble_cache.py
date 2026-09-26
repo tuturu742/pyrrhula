@@ -1,4 +1,4 @@
-"""A1.9 acceptance criteria for the cache wired into the full pipeline: a cache hit must
+"""Acceptance criteria for the cache wired into the full pipeline: a cache hit must
 be genuinely skipping the dense+sparse search, not merely returning an equal-by-chance
 result -- proven by deleting the underlying chunks between calls and confirming the
 second call still succeeds with the identical result. Also confirms scope_set and

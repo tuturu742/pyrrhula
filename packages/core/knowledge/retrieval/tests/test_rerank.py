@@ -1,4 +1,4 @@
-"""A1.7 acceptance criteria for the rerank step, against a live Postgres."""
+"""Acceptance criteria for the rerank step, against a live Postgres."""
 
 from __future__ import annotations
 

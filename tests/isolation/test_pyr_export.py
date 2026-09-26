@@ -1,4 +1,4 @@
-"""G4.5 acceptance criteria for `.pyr` export: the participant slice matches the
+"""Acceptance criteria for `.pyr` export: the participant slice matches the
 resolver's answer and lists every omission, the service delegates all visibility to that
 resolver (a *static* assertion over its source), integrity hashes catch tampering, and a
 turn replays from bundle contents alone.

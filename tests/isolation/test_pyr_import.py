@@ -1,4 +1,4 @@
-"""G4.6 acceptance criteria for `.pyr` import: a previous-format bundle upcasts and its
+"""Acceptance criteria for `.pyr` import: a previous-format bundle upcasts and its
 session still replays, planted injection content lands quarantined and stays out of
 retrieval until reviewed, a tampered resolution chain fails with a location, and colliding
 keys fork instead of overwriting.

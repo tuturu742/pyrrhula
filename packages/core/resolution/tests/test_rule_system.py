@@ -1,4 +1,4 @@
-"""C1.5 acceptance criteria for RuleSystem storage, authoring validation, and outcome
+"""Acceptance criteria for RuleSystem storage, authoring validation, and outcome
 banding, against a live Postgres.
 """
 

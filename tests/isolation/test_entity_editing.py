@@ -1,4 +1,4 @@
-"""F3.12 acceptance criteria for chat-based EntitySchema editing, against a live
+"""Acceptance criteria for chat-based EntitySchema editing, against a live
 Postgres and a scripted `ModelProvider` double (mirroring `core.secrets.tests.
 test_drafting`'s pattern). This is the domain where "fails schema validation" has real
 teeth (CEL compile-checking, FSM reachability, tag contracts) -- the acceptance

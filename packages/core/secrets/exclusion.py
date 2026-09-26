@@ -54,7 +54,7 @@ def render_injection(resolved: ResolvedSecretDecision) -> tuple[str, ExclusionRe
     """No decision at all, or an unrecognised action, defaults to conceal -- the
     assembler enforces fail-closed independently of E2.5 doing the same (this task's own
     subtask); a bug that let an unvalidated action string through must not become a leak."""
-    # EVAL ARMS ONLY ( arms 1-2), checked BEFORE the fail-closed normalizer on
+    # EVAL ARMS ONLY (arms 1-2), checked BEFORE the fail-closed normalizer on
     # purpose -- these are the deliberately-broken designs the benchmark must measure:
     # plaintext in context WITH an instruction to keep it secret. Only
     # `core.assembler.secrets_gate_factory.resolve_turn_secrets` constructs this action,

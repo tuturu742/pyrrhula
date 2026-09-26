@@ -1,4 +1,4 @@
-"""T0.8 walking skeleton: engine-level tests (no HTTP), using the EchoModelProvider so
+"""Walking skeleton: engine-level tests (no HTTP), using the EchoModelProvider so
 they're deterministic and don't need a live Ollama.
 """
 

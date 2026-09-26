@@ -1,4 +1,4 @@
-"""B1.1 acceptance criterion: "A definition that validates cannot make the interpreter
+"""Acceptance criterion: "A definition that validates cannot make the interpreter
 throw on structural grounds (fuzz/property test over generated valid definitions)."
 
 the interpreter doesn't exist yet, so this can't literally run one. What it proves

@@ -1,4 +1,4 @@
-"""A1.9 acceptance criteria: the cache key includes scope_set and version_set, so two
+"""Acceptance criteria: the cache key includes scope_set and version_set, so two
 principals with different scopes never share an entry, and publishing a new version
 (which changes the resolved version_set) misses rather than returning stale candidates.
 """

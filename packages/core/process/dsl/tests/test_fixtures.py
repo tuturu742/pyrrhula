@@ -1,4 +1,4 @@
-"""B1.1 acceptance criteria against the two shipped fixtures."""
+"""Acceptance criteria against the two shipped fixtures."""
 
 from __future__ import annotations
 

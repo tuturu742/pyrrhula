@@ -1,4 +1,4 @@
-"""G4.11 acceptance criteria for report rendering: every format carries identical content
+"""Acceptance criteria for report rendering: every format carries identical content
 and a visible redaction stub, artifacts are scoped to the report's target principal, and a
 review-required template blocks downloads until reviewed.
 

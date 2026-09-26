@@ -1,4 +1,4 @@
-"""G4.1 acceptance criteria for the resume path itself: the history budget is respected
+"""Acceptance criteria for the resume path itself: the history budget is respected
 end to end and the resumed turn replays from its manifest (INV-10 across a resume), and a
 definition edited while the session slept does not silently apply.
 """

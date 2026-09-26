@@ -1,4 +1,4 @@
-"""A1.10 unit coverage for the library tenant helpers, against a live Postgres:
+"""Unit coverage for the library tenant helpers, against a live Postgres:
 fork-on-edit forks a library source into the caller's tenant, reuses an already-forked
 copy on a second edit rather than forking again, and leaves a non-library source alone.
 """

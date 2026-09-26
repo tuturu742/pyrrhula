@@ -240,7 +240,7 @@ async def run_one_persona_turn(
     """One model-generated persona turn: context assembly  + manifest write  +
     tool-loop generation, committed by ``run_agent_turn`` at the given ``event_seq``.
 
-    ``eval_arm`` is the benchmark-only switch ( arms): no HTTP surface passes
+    ``eval_arm`` is the benchmark-only switch (arms): no HTTP surface passes
     it, only the eval runner's direct core call -- enforced by
     ``tests/architecture/test_eval_arm_fence.py``. Arms 1/2 deliberately weaken
     exclusion to measure the designs rejects; the leak check is skipped for them

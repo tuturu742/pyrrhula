@@ -6,7 +6,7 @@ interface ContextInspectorPanelProps {
 }
 
 /**
- * per-message transparency ( -- "a differentiator, not a debug tool").
+ * per-message transparency (-- "a differentiator, not a debug tool").
  * Everything here reads straight from the durably-written ContextManifest (INV-10) and
  * usage_record -- nothing is recomputed or guessed at render time. Permission-checked
  * server-side by its own get_manifest_for_message (a 403 renders as a plain "not

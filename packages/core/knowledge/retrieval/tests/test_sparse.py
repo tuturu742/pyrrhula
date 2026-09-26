@@ -1,4 +1,4 @@
-"""A1.4 acceptance criteria for sparse (lexical) retrieval, against a live Postgres."""
+"""Acceptance criteria for sparse (lexical) retrieval, against a live Postgres."""
 
 from __future__ import annotations
 

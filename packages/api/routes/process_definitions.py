@@ -126,7 +126,7 @@ class TemplateResponse(BaseModel):
 # against definition_id.
 @router.get("/templates")
 async def list_templates_endpoint() -> list[TemplateResponse]:
-    """the template gallery: "never from an empty canvas" ( discipline 2). Serves
+    """the template gallery: "never from an empty canvas" (discipline 2). Serves
     its own fixtures rather than duplicating this JSON in the frontend, so the gallery
     can never drift from what the interpreter's own golden tests exercise."""
     return [

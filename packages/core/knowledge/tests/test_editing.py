@@ -1,4 +1,4 @@
-"""F3.12 acceptance criteria for chat-based knowledge editing, against a live Postgres
+"""Acceptance criteria for chat-based knowledge editing, against a live Postgres
 and a scripted `ModelProvider` double (mirroring `core.secrets.tests.test_drafting`'s own
 pattern) -- no HTTP, no chat orchestration."""
 

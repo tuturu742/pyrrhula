@@ -16,7 +16,7 @@ export interface SheetViewProps {
 }
 
 /**
- * Auto-generated graphical entity representation (req 19, F3.10): a pure function of
+ * Auto-generated graphical entity representation: a pure function of
  * schema + data. The `ViewDef` (if the schema declares one) decides grouping/ordering/
  * tabs; a field the `ViewDef` doesn't mention still renders, in a synthesized default
  * group, never silently dropped. Zero domain knowledge anywhere in this component --

@@ -1,4 +1,4 @@
-"""A1.4 acceptance criteria for dense (vector) retrieval, against a live Postgres."""
+"""Acceptance criteria for dense (vector) retrieval, against a live Postgres."""
 
 from __future__ import annotations
 

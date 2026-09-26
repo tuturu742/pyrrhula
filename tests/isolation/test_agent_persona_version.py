@@ -1,4 +1,4 @@
-"""T0.4 coverage for ``persona_version`` : registered in
+"""Coverage for ``persona_version`` : registered in
 ``test_coverage_guard.py``'s ``_COVERED_TABLES``. Functional coverage for
 ``core.agents.editing`` (propose/apply persona edits) lives in
 ``packages/core/agents/tests/test_editing.py``; this file only proves the cross-tenant

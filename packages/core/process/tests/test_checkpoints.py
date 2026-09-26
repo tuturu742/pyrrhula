@@ -1,4 +1,4 @@
-"""B1.4 acceptance criteria for checkpoints, against a live Postgres: checkpoint-per-
+"""Acceptance criteria for checkpoints, against a live Postgres: checkpoint-per-
 transition, state reconstruction from checkpoint+tail across 100 randomised turns, and
 fork isolation. The append-only grant test lives in
 ``tests/isolation/test_append_only_grants.py`` (registered there, not duplicated here).

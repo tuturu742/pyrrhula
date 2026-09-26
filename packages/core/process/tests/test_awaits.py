@@ -1,4 +1,4 @@
-"""B1.6 acceptance criteria for await + timeout, against a live Postgres: suspend/resume
+"""Acceptance criteria for await + timeout, against a live Postgres: suspend/resume
 on human input, take the timeout transition when input never arrives, the satisfy-vs-
 timeout race resolves to exactly one outcome, and an awaiting session holds no locks or
 worker slots.

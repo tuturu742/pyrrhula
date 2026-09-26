@@ -1,4 +1,4 @@
-"""Per-tenant moderation policy (G4.14 (Q6), req 31).
+"""Per-tenant moderation policy.
 
  identifies two scans as the *real* controls, and this module is what they consult:
 

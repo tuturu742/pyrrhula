@@ -1,4 +1,4 @@
-"""B1.5 acceptance criteria for session concurrency control, against a live Postgres:
+"""Acceptance criteria for session concurrency control, against a live Postgres:
 exactly one winner per turn under concurrent advance attempts, no lost queued inputs,
 and a slow "model call" doesn't block reads of other sessions.
 """

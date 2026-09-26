@@ -1,4 +1,4 @@
-"""Pure unit tests (no DB) for content-hash determinism ( acceptance criterion:
+"""Pure unit tests (no DB) for content-hash determinism (acceptance criterion:
 "content_hash is reproducible from its entries")."""
 
 from __future__ import annotations

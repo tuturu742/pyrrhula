@@ -1,4 +1,4 @@
-"""A1.8 acceptance criteria for pin-vs-follow resolution and fork-from-version, against a
+"""Acceptance criteria for pin-vs-follow resolution and fork-from-version, against a
 live Postgres.
 """
 

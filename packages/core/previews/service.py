@@ -27,8 +27,7 @@ _SERVE_PROGRAM = """
 import base64, io, os, sys, tarfile, urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-_PATH_PRELUDE = (
-    '_pyr_path="$PATH"; '
+_PATH_PRELUDE = ('_pyr_path="$PATH"; '
     'if [ -r /etc/profile ]; then. /etc/profile >/dev/null 2>&1 || true; fi; '
     'PATH="$_pyr_path${PATH:+:$PATH}"; export PATH; unset _pyr_path; '
 )

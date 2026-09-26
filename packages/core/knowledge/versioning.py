@@ -1,4 +1,4 @@
-"""Pin-vs-follow resolution and fork-from-version ( req 5, A1.8) — how
+"""Pin-vs-follow resolution and fork-from-version — how
 rules iterate without breaking whatever is currently reading them.
 
 Pin-vs-follow operates at the granularity the schema actually has: a workspace's

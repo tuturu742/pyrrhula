@@ -1,4 +1,4 @@
-"""Notifier port (G4.3/, req 21). "It's your turn" has to leave the
+"""Notifier port. "It's your turn" has to leave the
 building somehow, and *how* is a deployment decision -- email today, a chat webhook or a
 push channel tomorrow -- while *when* and *to whom* are product decisions that belong in
 core. This port is that line.

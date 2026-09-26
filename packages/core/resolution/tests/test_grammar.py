@@ -1,4 +1,4 @@
-"""C1.5 acceptance criteria for the randomizer-expression grammar/parser."""
+"""Acceptance criteria for the randomizer-expression grammar/parser."""
 
 from __future__ import annotations
 

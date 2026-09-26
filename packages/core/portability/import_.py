@@ -1,4 +1,4 @@
-"""`.pyr` import (G4.6/, req 23/24).
+"""`.pyr` import.
 
 Four properties, each an acceptance criterion, and each a decision worth stating:
 

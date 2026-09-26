@@ -1,4 +1,4 @@
-"""Per-workspace MCP registry (G4.12, req 12).
+"""Per-workspace MCP registry.
 
 **Allowlist, not blocklist.** `enabled_tools` is the complete set of tools that exist as
 far as this workspace is concerned. A tool the server offers and the workspace has not

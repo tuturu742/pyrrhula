@@ -1,4 +1,4 @@
-"""G4.13 acceptance criteria for the MCP server surface: a `randomizer` call over MCP and
+"""Acceptance criteria for the MCP server surface: a `randomizer` call over MCP and
 over the service produce equivalent records, `knowledge.query` returns exactly the token
 principal's visible slice, `entity.mutate` requires and honours an idempotency key, and no
 handler imports a repo module (that last one is `tests/architecture/

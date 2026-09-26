@@ -1,4 +1,4 @@
-"""MCP client runtime (G4.12, req 12).
+"""MCP client runtime.
 
 Four things happen here and nowhere else, which is the point -- each of them is a control,
 and a control that exists in two places is a control that will disagree with itself:

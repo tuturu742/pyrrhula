@@ -1,4 +1,4 @@
-"""Report rendering (G4.11, req 26): `report.content_md` to Markdown, HTML,
+"""Report rendering: `report.content_md` to Markdown, HTML,
 EPUB, and PDF.
 
 **Rendering adds format, never content.** Every renderer takes the same `content_md` and

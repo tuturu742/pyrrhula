@@ -1,4 +1,4 @@
-"""A1.1 acceptance criteria, exercised against a live Postgres."""
+"""Acceptance criteria, exercised against a live Postgres."""
 
 from __future__ import annotations
 

@@ -4,13 +4,10 @@ own recorded inputs and checking ``sha256(rendered) == rendered_hash``) is CI-bl
 lives in ``tests/replay/``, not here -- this module owns writing a manifest and reading
 one back, which the replay test (and the inspector) both build on.
 
-**Not auto-wired into ``core.agents.runtime``.** Nothing in Phase 1 yet calls
-``assemble()`` as part of an actual agent turn -- that integration needs C1.5/C1.6 (a real
-rule system and resolution service) to exist first for a real phase to make sense, and no
-task in this phase's list names that wiring as its own job. ``write_context_manifest`` is
-a standalone, directly-callable function today, matching this project's established
-injection-seam discipline: build the complete, tested piece now, wire it into the runtime
-once the pieces it would coordinate with actually exist.
+**Wired into every live turn.** ``core.process.live_session`` calls ``assemble()`` for
+each agent turn and persists the result through ``write_context_manifest``. Both remain
+standalone, directly-callable functions, matching this project's injection-seam
+discipline: build the complete, tested piece, then wire it in at the composition root.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""A1.8 acceptance criteria for entry-level diffing, against a live Postgres."""
+"""Acceptance criteria for entry-level diffing, against a live Postgres."""
 
 from __future__ import annotations
 
