@@ -25,6 +25,14 @@ issues welcome on any of it, and "I want to build this" beats "+1".
   that runs for weeks across timezones without a facilitator babysitting it.
 - **OIDC/SAML** — the identity port is there; enterprise login lands when a real
   deployment asks for it.
+- **Execution engines as a runtime registry** — several engines per deployment
+  (local socket, Kubernetes, cloud runners), **declared and edited by the platform
+  admin in the console** rather than in a worker environment variable that needs a
+  redeploy to change, and **selected per tenant** as today. The tenant-side half exists
+  (`tenant.settings.exec_engine`); the admin-side half is the work: a deployment-level
+  registry with the same shape as the retrieval-model override, a page to edit it, and
+  the one honest limit stated in the UI — a socket engine is only usable where the
+  socket is actually mounted, which no setting can create.
 
 ## Far / open questions
 
@@ -40,7 +48,7 @@ issues welcome on any of it, and "I want to build this" beats "+1".
   ordinary work a human contributor does without asking.
 
   Not a small change to make safely, and the three things it needs are the reason it is
-  here rather than in Near: egress policy for pods (D14 governs model calls by purpose;
+  here rather than in Near: egress policy for pods (the egress policy governs model calls by purpose;
   a pod's network is currently ungoverned, and arbitrary commands plus network is an
   exfiltration path for both repository contents and the pod's git token), resource and
   wall-clock limits per engine (a run timeout exists; CPU and memory do not), and a

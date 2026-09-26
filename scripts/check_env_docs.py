@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Every environment variable the code reads must have a row in docs/configuration.md.
 
-Run in CI. The doc is the audit's output (see `tasks/config-as-settings.md`); a variable
+Run in CI. The doc is the audit's output; a variable
 added without a row is a variable nobody will find, and a row left behind after a variable
 is removed is a lie about what the deployment reads.
 
