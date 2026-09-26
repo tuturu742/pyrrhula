@@ -1,12 +1,14 @@
 """AWS ECS (Fargate) ``PreviewProvider``: a long-lived preview as a **RunTask**.
 
-Deliberately a task, not a service. The worker's IAM policy (deploy/aws/iam.tf) grants
+**EXPERIMENTAL -- unverified.** See ``adapters/exec_env/aws_ecs.py``; the same caveat.
+
+Deliberately a task, not a service. The worker's IAM policy grants
 ``RunTask``/``DescribeTasks``/``ListTasks``/``StopTask`` and does **not** grant
 ``CreateService`` or ``servicediscovery:*`` -- so a task needs no new IAM, while a service
 would need both plus Cloud Map to get a name. We don't need a name: the proxy talks to the
 task's private IP, read off the ENI attachment.
 
-The api task reaches it over ``aws_security_group_rule.envs_preview_from_app``.
+The api task reaches it over a security-group rule from the app to the env subnets.
 
 ECS cannot override an image at RunTask time, so this reuses the exec-env adapter's
 convention of a task-definition family per image.

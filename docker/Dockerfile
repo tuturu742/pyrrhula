@@ -53,9 +53,9 @@ COPY .plugins/default ./packs
 # The pin file: ensure_default_synced records the real provenance (url + sha), not
 # the baked fallback.
 COPY deploy/plugins.json ./deploy/plugins.json
-# The post-install check travels in the image rather than being piped in: Fargate has
-# no exec to pipe into, and an operator wanting to re-run it later should not need
-# the source tree.
+# The post-install check travels in the image rather than being piped in: a target
+# without an exec to pipe into cannot receive it, and an operator wanting to re-run it
+# later should not need the source tree.
 COPY deploy/installers/smoke.py ./deploy-smoke.py
 COPY docker/entrypoint.sh /entrypoint.sh
 

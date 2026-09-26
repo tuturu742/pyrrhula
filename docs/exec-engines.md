@@ -93,7 +93,12 @@ the namespace. Private images: pre-create a docker-registry Secret and name it i
 `image_pull_secret`. Verify with kind/minikube: declare the engine, switch a tenant to
 it, delegate — a Job appears in the namespace and the PR lands as usual.
 
-### `aws-ecs` (implemented)
+### `aws-ecs` (experimental — unverified)
+
+> **Experimental.** The adapter is complete and once ran against a live account, but no
+> release is verified against AWS and the Terraform that stood that account up has been
+> removed. Nothing in the default install path references it. Treat it as a starting
+> point for a cloud runner, not a supported target; a supported one is on the roadmap.
 
 `adapters/exec_env/aws_ecs.py` — one **Fargate task** per `run_script`. ECS cannot
 override a task's image at run time, so the adapter registers a task-definition

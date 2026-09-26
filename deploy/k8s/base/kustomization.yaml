@@ -23,8 +23,8 @@ resources:
   - backup-cronjob.yaml
   - envs-networkpolicy.yaml
 
-# Non-secret app config -- mirrors docker/compose.selfhost.yml's &app_env (one
-# contract, third deployment; see also deploy/aws/ecs.tf app_environment).
+# Non-secret app config -- mirrors docker/compose.selfhost.yml's &app_env: one
+# contract, both deployments.
 configMapGenerator:
   - name: pyrrhula-config
     namespace: pyrrhula

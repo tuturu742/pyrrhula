@@ -37,7 +37,6 @@ managed by Pyrrhula. One product, one codebase.
 ```bash
 ./install.sh compose   # docker or podman on this machine
 ./install.sh k8s       # a Kubernetes cluster (one-command dev install on k3s)
-./install.sh aws       # AWS ECS Fargate via Terraform
 ```
 
 Each installer checks prerequisites (`--check` to only check), generates secrets,

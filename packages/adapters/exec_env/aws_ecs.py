@@ -1,5 +1,9 @@
 """AWS ECS (Fargate) ``ExecEnvProvider``: delegated work as one-shot **tasks**.
 
+**EXPERIMENTAL -- unverified.** Complete, and once run against a live account, but no
+release is verified against AWS and the install path that stood that account up no longer
+ships. Kept as a working starting point for a cloud runner; not a supported target.
+
 Engine declaration (see docs/exec-engines.md):
 
     {"key": "aws", "kind": "aws-ecs",

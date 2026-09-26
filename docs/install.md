@@ -5,7 +5,6 @@ Three supported deployment targets, one entry point:
 ```bash
 ./install.sh compose   # docker or podman on one machine  -- smallest footprint
 ./install.sh k8s       # a Kubernetes cluster              -- built against k3s
-./install.sh aws       # AWS ECS Fargate via Terraform     -- cloud demo stack
 ```
 
 Add `--check` to any target to verify prerequisites without changing anything.
@@ -42,13 +41,13 @@ organization can no longer infer which one a header-less login means, and says s
 instead of guessing. Either name the organization at login, switch to `--multi-tenant`,
 or pin one with `PYRRHULA_DEFAULT_TENANT_SLUG`.
 
-| | compose | k8s | aws |
-|---|---|---|---|
-| Good for | trying it out, small self-host | dev/test on a cluster, k8s shops | a shareable cloud demo |
-| Prereqs | docker or podman (+compose) | kubectl + a cluster (k3s: one curl) | AWS account, terraform/tofu, AWS CLI |
-| Agents' code runs in | sibling containers (engine socket) | one-shot **Jobs** (isolated namespace) | one-shot **Fargate tasks** |
-| Cost | your machine | your machine/cluster | ~$115/mo at defaults |
-| Time to first login | ~5 min (image build) | ~10 min | ~25 min (RDS creation) |
+| | compose | k8s |
+|---|---|---|
+| Good for | trying it out, small self-host | dev/test on a cluster, k8s shops |
+| Prereqs | docker or podman (+compose) | kubectl + a cluster (k3s: one curl) |
+| Agents' code runs in | sibling containers (engine socket) | one-shot **Jobs** (isolated namespace) |
+| Cost | your machine | your machine/cluster |
+| Time to first login | ~5 min (image build) | ~10 min |
 
 Every target ends at the same place: open the printed URL, **Sign up** (first signup
 creates your organization + workspace), follow the setup checklist — add a model
@@ -99,7 +98,6 @@ including one that will only ever run `swdev`. To re-run it later:
 ```bash
 podman exec pyrrhula_api_1 python /app/deploy-smoke.py          # compose
 kubectl -n pyrrhula exec deploy/pyrrhula-api -- python /app/deploy-smoke.py   # k8s
-cd deploy/aws && ./smoke.sh                                      # aws
 ```
 
 ## compose (docker / podman)
@@ -176,35 +174,6 @@ embedding mode once the model cache is warm.
   **other clusters** (non-k3s: registry images, ingress class, storage class, the
   single-node constraint): `deploy/k8s/README.md`, *Other clusters*, with a copyable
   overlay at `deploy/k8s/overlays/cluster`.
-
-## aws (ECS Fargate)
-
-> **Beta path.** The Terraform is complete and has run against a live account, but it
-> is not re-verified every release the way compose and k8s are. Expect to read the
-> plan before applying, and file an issue for anything that drifts.
-
-```bash
-aws configure          # or SSO -- any credentials that can create VPC/RDS/ECS/IAM
-./install.sh aws
-```
-
-What it does: `terraform apply` (VPC, RDS Postgres 16 + pgvector, ElastiCache,
-EFS, ECR, ALB, Secrets Manager — five secrets generated and injected by ARN, never
-in task definitions), builds and pushes both images to ECR, runs the migration
-task, prints the ALB URL.
-
-- Delegated coding agents run as one-shot Fargate tasks, isolated by security
-  group to the api's git endpoint + the internet.
-- **Admin console** is off by default; set `admin_cidrs = ["<your-ip>/32"]` in
-  `deploy/aws/variables.tf` (or a tfvars file) and re-apply.
-- **Upgrade**: rerun `./install.sh aws` (terraform no-ops when unchanged, images
-  re-push, migration reruns) then force new deployments — commands printed by
-  `deploy/aws/build-and-push.sh`.
-- Demo topology (public subnets + security groups, HTTP ALB) and the production
-  hardening list: `deploy/aws/README.md`. **Teardown**: `terraform destroy` in
-  `deploy/aws`.
-
----
 
 ## After any install
 
@@ -319,8 +288,6 @@ restart.
   container applies any new migrations before the api starts.
 - **k8s**: `git pull && ./install.sh k8s` — rebuilds the images, re-applies the
   overlay, and waits for the migration Job.
-- **aws**: rebuild and push the image (`deploy/aws/build-and-push.sh`), then
-  `terraform apply`; the migrate task runs on deploy.
 
 Downgrading is not supported: some migrations carry data transformations whose
 `downgrade()` exists for development only. Take a backup before upgrading

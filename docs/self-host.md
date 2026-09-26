@@ -54,16 +54,10 @@ platform-side backstop for provider API bills.
 ## Kubernetes
 
 `deploy/k8s/` runs the whole stack on any cluster (built against single-node k3s):
-kustomize base + dev overlay, `dev-up.sh` one-command install, and an `aws-ecs`-style
+kustomize base + dev overlay, `dev-up.sh` one-command install, and an
 exec-engine story where delegated coding agents run as one-shot **Jobs** in an
 isolated namespace. The engine can also be used standalone against a cluster while
 the app stays on compose. See `deploy/k8s/README.md`.
-
-## AWS
-
-`deploy/aws/` is a complete ECS Fargate deployment (Terraform): RDS + ElastiCache +
-EFS + ALB + Secrets Manager, with delegated coding work running as one-shot Fargate
-tasks via the `aws-ecs` exec engine. See `deploy/aws/README.md`.
 
 ## TLS
 

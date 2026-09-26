@@ -68,7 +68,7 @@ in a `.env` file; the rest are read directly where they are used.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PYRRHULA_EXEC_ENGINES` | unset | Registry of execution engines (podman socket, k8s, AWS) available for delegated work. |
+| `PYRRHULA_EXEC_ENGINES` | unset | Registry of execution engines (podman socket, k8s, and the experimental `aws-ecs`) available for delegated work. |
 | `PYRRHULA_EXEC_SOCKET` / `PYRRHULA_ENGINE_SOCKET` | unset | Container socket an engine drives. |
 | `PYRRHULA_MCP_GIT_ROOT` | `/app/data/blobs/repos` | Where server-side git repositories live. |
 | `PYRRHULA_GIT_HTTP_BASE` | `http://pyrrhula_api_1:8000` | Base URL agents clone from over smart-HTTP. Must be reachable **from inside a job container**, which is why it is not the public URL. |

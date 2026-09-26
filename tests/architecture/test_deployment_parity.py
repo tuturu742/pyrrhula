@@ -1,13 +1,13 @@
-"""The three deployment paths configure the same product.
+"""The deployment paths configure the same product.
 
-Compose, k8s and AWS each stand up Pyrrhula, and each drifted independently: AWS shipped
-no admin bootstrap at all (so the documented "sign in as platform admin" step had no
-account to sign into), and it baked in an assistant model every other path had
+Compose and k8s each stand up Pyrrhula, and each has drifted independently before: one
+path shipped no admin bootstrap at all (so the documented "sign in as platform admin"
+step had no account to sign into), and one baked in an assistant model the other had
 deliberately emptied.
 
-This does not demand the three be identical -- they legitimately differ, and where they
+This does not demand the paths be identical -- they legitimately differ, and where they
 do the difference should be a decision someone wrote down. It demands that the knobs a
-deployment cannot work without are present in all three.
+deployment cannot work without are present in both.
 """
 
 from __future__ import annotations
@@ -50,9 +50,8 @@ def _k8s_names() -> set[str]:
 def test_every_deployment_path_can_produce_a_platform_admin() -> None:
     compose = _names("docker/compose.selfhost.yml")
     kustomize = _k8s_names()
-    aws = _names("deploy/aws/ecs.tf")
 
-    for label, present in (("compose", compose), ("k8s", kustomize), ("aws", aws)):
+    for label, present in (("compose", compose), ("k8s", kustomize)):
         missing = sorted(_LOAD_BEARING - present)
         assert not missing, (
             f"{label} configures no {missing} -- a deployment missing these either cannot "
@@ -63,13 +62,16 @@ def test_every_deployment_path_can_produce_a_platform_admin() -> None:
 def test_no_deployment_bakes_in_an_assistant_model() -> None:
     """A fresh install has no provider credential. Naming a model anyway points it at
     something it cannot reach, which is exactly what every path removed once already."""
-    aws = (ROOT / "deploy/aws/variables.tf").read_text()
-    match = re.search(r'variable "assistant_model".*?default\s*=\s*"([^"]*)"', aws, re.S)
-    assert match is not None, "the assistant_model variable moved; update this guard"
-    assert match.group(1) == "", (
-        f"AWS defaults the assistant model to {match.group(1)!r}; every other path ships "
-        "it empty so a fresh install does not point at a model it has no key for"
+    compose = (ROOT / "docker/compose.selfhost.yml").read_text()
+    match = re.search(r"^\s*PYRRHULA_ASSISTANT_MODEL:\s*(.*)$", compose, re.M)
+    assert match is not None, "compose stopped passing PYRRHULA_ASSISTANT_MODEL; update this guard"
+    assert match.group(1).strip() in ('""', "''", "${PYRRHULA_ASSISTANT_MODEL:-}"), (
+        f"compose defaults the assistant model to {match.group(1).strip()!r}; a fresh "
+        "install must not point at a model it has no key for"
     )
+    kustomize = (ROOT / "deploy/k8s/base/kustomization.yaml").read_text()
+    baked = re.findall(r"^\s*-\s*PYRRHULA_ASSISTANT_MODEL=(\S+)", kustomize, re.M)
+    assert not baked, f"k8s bakes in an assistant model: {baked}"
 
 
 def test_the_example_env_lists_what_the_compose_file_consumes() -> None:
