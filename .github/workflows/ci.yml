@@ -84,8 +84,8 @@ jobs:
           PYRRHULA_REDIS_URL: redis://localhost:6379/0
 
   # ── CI-blocking suites ────────────────────────────────────────────────────────────
-  # Each of these gates merges once its owning task lands (T0.4, T0.5, C1.3, Phase 2,
-  # Phase 3). Until then they still run — proving the directory exists and collecting
+  # Each of these suites gates merges. They run on every push — proving the directory
+  # exists and collecting
   # zero tests is a deliberate, visible no-op, not a silently skipped job.
 
   isolation:
@@ -113,7 +113,7 @@ jobs:
         env:
           PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
           PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
-      - name: Cross-tenant isolation negative tests (T0.2 smoke now; full matrix in T0.4)
+      - name: Cross-tenant isolation negative tests
         run: ./scripts/ci/run-blocking-suite.sh tests/isolation
         env:
           PYRRHULA_PLUGINS_TOKEN: ${{ secrets.PLUGINS_TOKEN }}
@@ -137,7 +137,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
       - run: uv sync --extra dev
-      - name: Import-graph lint — INV-1 (T0.5)
+      - name: Import-graph lint — INV-1
         run: ./scripts/ci/run-blocking-suite.sh tests/architecture
         env:
           PYRRHULA_REDIS_URL: redis://localhost:6379/0
@@ -151,7 +151,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
       - run: uv sync --extra dev
-      - name: Context manifest replay — INV-10 (C1.3)
+      - name: Context manifest replay — INV-10
         run: ./scripts/ci/run-blocking-suite.sh tests/replay
 
   leak:

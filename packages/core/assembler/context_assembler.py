@@ -12,7 +12,7 @@ The 10 steps of, and which task owns each:
 
 1. **Scope**  -- ``VisibilityResolver.scopes_for`` -- done, real.
 2. **Budget split**  -- ``phase.budget.ratio``/``.max_tokens`` -- done, real.
-3-6. **Per-class hybrid retrieve, WRRF fuse, rerank, bucket fill** (A1.4-A1.7) --
+3-6. **Per-class hybrid retrieve, WRRF fuse, rerank, bucket fill** --
    ``search_and_budget`` -- done, real.
 7. **Entity state**  -- ``entity_state_renderer`` is an injection seam, still
    defaulting to a no-op here (every live turn now calls ``assemble()`` via
@@ -27,7 +27,7 @@ The 10 steps of, and which task owns each:
    plaintext fields *only* populated when the action legally allows it -- see
    ``core.secrets.exclusion.ResolvedSecretDecision``), resolved by the caller from
    ``core.secrets.gate``'s output before calling ``assemble()`` (same pattern as
-   ``behavior_directives_text``, E2.4: the model call and the repo reads that produce a
+   ``behavior_directives_text``: the model call and the repo reads that produce a
    resolved decision happen upstream, not inside this function). Per decision,
    ``core.secrets.exclusion.render_injection`` decides what text (if any) enters the
    volatile block, and a ``reveal_full`` additionally commits the disclosure event +
@@ -137,12 +137,12 @@ class ContextManifest:
     content_hash: str
     # exactly which entity versions were injected this turn -- ``{entity_id:
     # version}``. Persisted onto ``context_manifest.entity_versions``/``checkpoint
-    # .entity_versions`` (both existed as ``{}``-always placeholders since C1.3/B1.4),
+    # .entity_versions`` (both began as ``{}``-always placeholders),
     # so a replayed/forked turn can tell which entity state it was generated against.
     entity_versions: dict[str, int] = field(default_factory=dict)
     # which elapsed-history range the injected summary
     # covered, and the hash of the summary text itself. ``None`` on a turn that injected
-    # no summary -- the overwhelmingly common case, and every pre-G4.1 caller.
+    # no summary -- the overwhelmingly common case.
     history_summary_from_seq: int | None = None
     history_summary_to_seq: int | None = None
     history_summary_hash: str | None = None
@@ -292,7 +292,7 @@ async def _render_history(
     ``after_event_seq`` excludes messages a resume summary already covers: including
     them verbatim *and* in the summary would double-charge the same history against the
     budget and hand the model the same turn twice. ``None`` = no summary, include
-    everything (every pre-G4.1 caller)."""
+    everything."""
     async with tenant_scope(tenant_id) as session:
         stmt = select(MessageRow).where(MessageRow.session_id == session_id)
         if after_event_seq is not None:
@@ -561,7 +561,7 @@ async def assemble(
         # the history slice comes out of the phase budget *before* retrieval runs,
         # not as a truncation of what retrieval already spent -- see BudgetSpec
         # .history_ratio. `history_slice_tokens()` is 0 for every phase that never
-        # declared one, so this subtraction is a no-op for all pre-G4.1 definitions.
+        # declared one, so this subtraction is a no-op for every definition without one.
         history_reserved_tokens = phase.history_slice_tokens()
 
         # Activation, if the caller did not supply it. The whole activation feature --

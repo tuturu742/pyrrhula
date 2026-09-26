@@ -1,4 +1,4 @@
-"""The turn scheduler (B1.3 actors): who acts next within a phase, in
+"""The turn scheduler: who acts next within a phase, in
 what order, until when. Produces a ``NextActorFn`` (the exact injection point) backed
 by a real, persisted cursor (``session.actor_cursor``) that survives kill/resume without
 skipping or double-acting an actor.
@@ -7,12 +7,11 @@ skipping or double-acting an actor.
 ``human_participant``/``any_of``'s human-based tokens resolve against a real
 ``workspace_membership`` query -- that table exists. Persona-role-based tokens
 (``persona_type``, ``any_of``'s ``"<role>_agent"`` tokens) and initiative order's entity-
-field lookups are **injected**, not queried here: ``agent.persona_type`` doesn't exist as a
-column until B1.7, and there is no ``entity``/``entity_schema`` table at all in Phase 1 --
-neither exists to query. This mirrors its own injection of ``next_actor_fn`` for the
-identical reason (build against schema that exists, wire in the rest when it does), one
-layer down: this module's ``CandidateResolver`` is the seam B1.7 (real agent-role queries)
-and the entity-schema task (real ``entity_field`` lookups, not yet on any Phase-1 task
+field lookups are **injected**, not queried here: this module must not reach into the
+persona or entity tables itself. That mirrors the interpreter's own injection of
+``next_actor_fn`` for the identical reason, one layer down: this module's
+``CandidateResolver`` is the seam that real persona-role queries and real
+``entity_field`` lookups (which live elsewhere
 list) plug real implementations into.
 
 ``order`` (declared/initiative/free) picks the scheduling algorithm; ``mode``
@@ -87,10 +86,9 @@ def make_default_candidate_resolver(
     *,
     persona_candidate_resolver: CandidateResolver | None = None,
 ) -> CandidateResolver:
-    """The resolver B1.3 can build for real today: humans via ``workspace_membership``,
+    """The resolver this module can build on its own: humans via ``workspace_membership``,
     agents via an injected fallback (``None`` = no agent candidates -- correct for a
-    phase with no agent actors, a real gap for one that has them, until B1.7 supplies a
-    real ``persona_type`` query). Initiative values are always ``None`` from this resolver;
+    phase with no agent actors; the real ``persona_type`` query is injected by the caller). Initiative values are always ``None`` from this resolver;
     a caller wanting real initiative order must supply its own resolver that also injects
     entity-field lookups -- see module docstring."""
 

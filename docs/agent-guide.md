@@ -14,11 +14,11 @@ A self-hosted or SaaS, **multi-tenant from day one** platform for structured mul
 conversations. Knowledge, process, and participant state are versioned structured data; the
 conversation is driven by an explicit phase/turn engine. First market: AI-managed tabletop
 RPG campaigns. Second (same engine, different overlay + pack): enterprise multi-agent
-workflows. Third (D15, same pattern): **multi-agent software development** — a facilitator
+workflows. Third (same pattern): **multi-agent software development** — a facilitator
 agent as engineering manager proposing tasks, participant agents as engineers on a shared
 repository, implementation delegated to external coding agents over MCP; end state is
-dogfooding (Pyrrhula's own backlog worked by a Pyrrhula-managed team, G4.17). One product,
-no separate SKU (Q1).
+dogfooding (Pyrrhula's own backlog worked by a Pyrrhula-managed team). One product,
+no separate SKU.
 
 The organizing principle of the architecture:
 
@@ -267,7 +267,7 @@ tenant), not an archived session.**
   `resolution_record`‡ (hash chain), `completed_operation` (idempotency).
 - **Audit/usage:** `audit_log`‡ (hash chain), `usage_record` (same transaction as the
   message; `purpose` ∈ generation|gate|rerank|embed|report|rewrite|delegation — `delegation`
-  added in v1.2 for D15 delegated coding-agent work), `price_table`, `report`.
+  added for delegated coding-agent work), `price_table`, `report`.
 
 ## 7. Coding conventions
 
@@ -301,8 +301,8 @@ tenant), not an archived session.**
 - **Repeatability against a persistent Postgres/Redis.** This dev environment doesn't reset
   the database between test runs, and CI's service containers persist for the whole job. Any
   test using a hardcoded email, tenant slug, or Redis key will pass once and then fail on the
-  next run when it collides with its own leftover data — found and fixed three times during
-  T0.2–T0.6 (identity emails, the `shared@example.com` cross-tenant test, the IP rate-limit
+  next run when it collides with its own leftover data — found and fixed three times early
+  on (identity emails, the `shared@example.com` cross-tenant test, the IP rate-limit
   key). Always randomise test data (`f"{uuid.uuid4()}"` suffix) or explicitly reset the
   specific key/row a test depends on; never assume a clean slate.
 - **`TestClient` runs the ASGI app on a separate event loop from the test function's own.**
@@ -327,14 +327,14 @@ tenant), not an archived session.**
 - **RLS policies must use `NULLIF(current_setting('app.tenant_id', true), '')::uuid`**, not a
   bare `::uuid` cast. Postgres resets a transaction-local custom GUC to `''` (not NULL) once
   its transaction ends — a bare cast then raises `invalid_text_representation` on the next
-  unscoped read on that pooled connection instead of failing safe to zero rows. Discovered and
-  fixed during T0.2; every future tenant-scoped table's policy must use the same shape.
+  unscoped read on that pooled connection instead of failing safe to zero rows. Every
+  tenant-scoped table's policy must use the same shape.
 - **Export runs through `VisibilityResolver`** with the `EXPORT` pseudo-phase — export must
   never have its own visibility logic.
 - **Foreign keys are enforced independently of RLS.** A FK referencing a row in a *different*
   tenant still satisfies the constraint — FK checks run with elevated internal privileges that
   bypass RLS policies. Any endpoint that accepts an id meant to reference another tenant-scoped
-  row (e.g. `create_session(workspace_id, agent_id)`, T0.8) must explicitly look that row up
+  row (e.g. `create_session(workspace_id, agent_id)`) must explicitly look that row up
   inside `tenant_scope(tenant_id)` first and reject if it's not visible there — never rely on
   the FK constraint alone to prove the referenced row belongs to the caller's tenant.
 - **Reports** filter the input event stream by the target principal's visibility *before*

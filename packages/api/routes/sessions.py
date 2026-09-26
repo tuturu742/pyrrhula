@@ -1,9 +1,8 @@
 """Session/message endpoints + SSE stream. the walking skeleton
 (``core.process.skeleton``) still powers a session created *without* a
 ``process_definition_id``; one created *with* one runs through the real interpreter +
-tool-calling agent runtime (B1.8, ``core.process.live_session``) instead. Both paths
-coexist -- see ``B1.8-live-session-wiring.md`` for why this is additive, not a
-replacement.
+tool-calling agent runtime (``core.process.live_session``) instead. Both paths coexist:
+the skeleton is additive to the real interpreter, not a replacement for it.
 """
 
 from __future__ import annotations
@@ -123,7 +122,7 @@ class CreateSessionRequest(BaseModel):
     # #7: 'auto' (autonomous scheduler) or 'directed' (a human conducts each discussion
     # turn). Defaults to autonomous; it is also toggleable live via PATCH /turn-policy.
     turn_policy: Literal["auto", "directed"] = "auto"
-    # omitted (the default) keeps the T0.8 walking-skeleton path exactly as it
+    # omitted (the default) keeps the walking-skeleton path exactly as it
     # was; supplying a real, immutable process_definition_id (a specific version --
     # ProcessDefinitionRow rows are never "latest", see core.process.authoring's own
     # docstring) pins the session to the real interpreter instead.
@@ -758,7 +757,7 @@ async def review_endpoint(
     body: ReviewRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
-    """D15 review->fix: the facilitator requests changes on a delegated PR; the coding agent
+    """Review->fix: the facilitator requests changes on a delegated PR; the coding agent
     then pushes a fix commit to the same branch. Gated on session:conduct."""
     sess = await get_session(ctx.tenant_id, session_id)
     if sess is None:
@@ -875,7 +874,7 @@ async def draft_override_endpoint(
     body: OverrideDraftRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> OverrideDraftResponse:
-    """G4.4 step one: produce the text, do not post it. Verbatim mode is a passthrough;
+    """Step one: produce the text, do not post it. Verbatim mode is a passthrough;
     voice mode calls the model once and meters it. Nothing is persisted either way, so a
     human who changes their mind leaves no trace."""
     sess = await get_session(ctx.tenant_id, session_id)
@@ -932,7 +931,7 @@ async def post_override_endpoint(
     body: OverridePostRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> OverrideMessageResponse:
-    """G4.4 step two: the human confirms, and only then does anything get written. The
+    """Step two: the human confirms, and only then does anything get written. The
     draft is rebuilt from the request rather than held server-side -- a stored draft would
     be state to expire, and the permission check runs again here regardless, so nothing is
     gained by trusting a server-side copy over the client's."""

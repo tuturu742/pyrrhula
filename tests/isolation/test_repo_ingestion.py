@@ -1,4 +1,4 @@
-"""G4.15 acceptance criteria for repo-as-knowledge ingestion: the path-glob mapping puts
+"""Acceptance criteria for repo-as-knowledge ingestion: the path-glob mapping puts
 `tasks/**` in `lore` and `CLAUDE.md` in `rules` and both retrieve through the standard
 cascade, re-ingesting a SHA is a no-op while a new SHA versions the diff, a committed
 AWS-style key is quarantined out of retrieval, and a planted README injection is too.
@@ -46,7 +46,7 @@ def _files() -> list[RepoFile]:
         RepoFile(path="README.md", content="# Project\n\nBuild with make."),
         RepoFile(path="docs/architecture.md", content="The assembler is the only read path."),
         RepoFile(path="docs/adr/0001-ports.md", content="We use ports and adapters."),
-        RepoFile(path="tasks/phase-4/G4.15.md", content="Ingest a repo as knowledge."),
+        RepoFile(path="tasks/ingest-a-repo.md", content="Ingest a repo as knowledge."),
         RepoFile(path="src/main.py", content="def main() -> None:\n    print('hello')\n"),
         RepoFile(path="CONTRIBUTING.md", content="Run the tests before you push."),
     ]
@@ -106,7 +106,7 @@ def test_the_class_map_is_ordered_and_specific_rules_win() -> None:
     )
     assert classify("docs/architecture.md") == "lore"
     assert classify("README.md") == "lore"
-    assert classify("tasks/phase-4/G4.15.md") == "lore"
+    assert classify("tasks/ingest-a-repo.md") == "lore"
     assert classify("src/main.py") == "misc"
     assert classify("Makefile") == "misc"
 
@@ -188,7 +188,7 @@ async def test_repo_snapshot_ingests_with_path_glob_class_mapping(
             ).all()
         }
 
-    assert by_key[entry_key_for("tasks/phase-4/G4.15.md")] == "lore"
+    assert by_key[entry_key_for("tasks/ingest-a-repo.md")] == "lore"
     assert by_key[entry_key_for("CLAUDE.md")] == "rules"
     assert by_key[entry_key_for("docs/adr/0001-ports.md")] == "rules"
     # Source code lands in `misc` and is named as experimental, so 's code-aware
@@ -199,7 +199,7 @@ async def test_repo_snapshot_ingests_with_path_glob_class_mapping(
 
     # Retrievable through the standard cascade, with scope pushdown.
     retrievable = await _retrievable_keys(tenant_id, report.knowledge_source_id)
-    assert entry_key_for("tasks/phase-4/G4.15.md") in retrievable
+    assert entry_key_for("tasks/ingest-a-repo.md") in retrievable
     assert entry_key_for("CLAUDE.md") in retrievable
 
 
@@ -338,7 +338,7 @@ async def test_repo_readme_injection_content_is_quarantined(
     key = entry_key_for("README.md")
     assert key in flagged
     assert "instruction_override" in flagged[key], (
-        "the injection scan is G4.6's, reused -- one quarantine mechanism, not a repo-shaped "
+        "the injection scan is the import scan, reused -- one quarantine mechanism, not a repo-shaped "
         "variant of one"
     )
 

@@ -169,9 +169,9 @@ class ActorSpec(BaseModel):
 
 
 class VisibilitySpec(BaseModel):
-    """/'s "who sees what" declared per-phase -- mandatory, no default (requirement
-    13 made structural). ``secrets`` values are provisional pending C1.1/Phase 2's full
-    disclosure-state machine; only the vocabulary the plan's own example uses is accepted
+    """"Who sees what", declared per phase -- mandatory, no default. ``secrets`` values
+    name how the disclosure-state machine is consulted; only the documented vocabulary is
+    accepted
     today, deliberately narrow rather than a permissive free string."""
 
     model_config = ConfigDict(extra="forbid")
@@ -195,8 +195,8 @@ class BudgetSpec(BaseModel):
     is not a knowledge class, and folding it in there would make every pack's class
     ratios mean something different depending on whether the phase resumes).
 
-    Default ``0.0`` = no reservation, which is exactly the pre-G4.1 behaviour for every
-    already-authored phase.
+    Default ``0.0`` = no reservation, which is the behaviour of every phase that never
+    declared one.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -318,7 +318,7 @@ class AwaitSpec(BaseModel):
 
 
 class PacingSpec(BaseModel):
-    """Definition-level pacing defaults (G4.3, req 21): "each actor has 48h, reminder at
+    """Definition-level pacing defaults: "each actor has 48h, reminder at
     24h". Data on the ProcessDefinition, inherited by any ``await`` that doesn't state its
     own -- a play-by-post game and a week-long enterprise review cycle differ in these two
     numbers and in nothing else, which is exactly why they belong in the definition rather
@@ -439,8 +439,8 @@ class PhaseSpec(BaseModel):
 
     def history_slice_tokens(self) -> int:
         """the phase budget's declared history reservation, in tokens. ``0`` for a
-        phase with no budget or no ``history_ratio`` -- the pre-G4.1 default, so every
-        already-authored phase keeps its exact previous retrieval budget."""
+        phase with no budget or no ``history_ratio``, so a phase that never declared one
+        keeps its full retrieval budget."""
         if self.budget is None:
             return 0
         return int(self.budget.max_tokens * self.budget.history_ratio)

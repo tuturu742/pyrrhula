@@ -17,10 +17,9 @@ expressions in a shared process), versioned per workspace or pack-provided.
   three packs' worth of guards/deriveds/constraints/merge-gates/checklists exist) is where
   this gets revisited with evidence, not before.
 
-``state_machines``/``views`` were both amended forward in place -- F3.2
-(``core.entities.fsm.StateMachineDef``) and F3.4 (``core.entities.views.ViewDef``) --
-the "amend forward" pattern ``docs/phase-workflow.md`` names for a later task revising
-an earlier one's already-shipped shape, rather than F3.1 guessing their content early.
+``state_machines`` (``core.entities.fsm.StateMachineDef``) and ``views``
+(``core.entities.views.ViewDef``) were both amended forward in place once their real
+shape was known, rather than guessed at early.
 """
 
 from __future__ import annotations
@@ -54,8 +53,8 @@ _DUMMY_TYPE_FOR_CEL: dict[FieldType, str] = {
 
 class FieldDef(BaseModel):
     """One typed field. ``tags``/``tag_metadata`` are validated against the fixed
-    vocabulary in that task's hookup (this model accepts any string tag structurally;
-    F3.1 alone doesn't know the tag vocabulary yet). ``scope_key`` marks a field
+    vocabulary in the rendering hookup (this model accepts any string tag structurally;
+    the schema alone does not know the tag vocabulary). ``scope_key`` marks a field
     ``private`` at the per-field grain (the ``private`` tag contract) -- ``None`` means
     the field participates in the entity's own top-level visibility only."""
 

@@ -1,4 +1,4 @@
-"""`delegate_work_item` (G4.16 ★, D15//, CLAUDE.md rules 8/10/11).
+"""`delegate_work_item` (CLAUDE.md rules 8/10/11).
 
 An engineer agent dispatches a work item to an external coding agent over MCP; the session
 suspends; the structured outcome drives the work item's FSM. Five decisions carry this, and
@@ -33,7 +33,7 @@ and the FSM transition is driven by the outcome *record*, never by what the summ
 
 Metering: one `usage_record` with ``purpose='delegation'`` (the v1.2 taxonomy addition),
 written in the action's completion transaction (rule 11). The MCP **allowlist** is the
-egress control here; D14 is not extended -- its scope is `ModelProvider` calls, and
+egress control here; the egress policy is not extended -- its scope is `ModelProvider` calls, and
 widening it would blur the one distinction that makes both controls legible.
 """
 
@@ -391,7 +391,7 @@ async def _drive_fsm(
     result: DelegationResult,
 ) -> None:
     """Drives the work item through **the** mutation service, with the action as
-    `cause_ref`. Not a direct row update: F3.5 owns guard evaluation, the state-change
+    `cause_ref`. Not a direct row update: the mutation service owns guard evaluation, the state-change
     record, and the idempotency, and a delegation that wrote state itself would be a second
     writer with none of them.
 
@@ -451,7 +451,7 @@ async def _try_transition(
             error=str(exc)[:200],
         )
         return
-    # F3.5 returns `transitioned` plus `new_state`; a guard that refused reports
+    # The mutation service returns `transitioned` plus `new_state`; a guard that refused reports
     # `transitioned: False` with the state unchanged. Recording only real transitions
     # keeps `result.transitions` a list of things that happened rather than of things
     # that were attempted.
