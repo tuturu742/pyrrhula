@@ -13,7 +13,7 @@ never even calls it a second time. ``resolve()`` carries its *own*, independent 
 too (an advisory lock + an existing-row check keyed on ``(session_id, event_seq)``,
 returning the already-written record instead of writing a second one) -- defense in
 depth, and the only guarantee that exists at all for a caller that reaches ``resolve()``
-some other way (the future MCP façade, G4.13, won't go through the tool loop).
+some other way (the MCP façade does not go through the tool loop).
 """
 
 from __future__ import annotations
@@ -42,8 +42,8 @@ from core.tenancy.scope import tenant_scope
 
 class InvalidResolutionError(Exception):
     """The request never became a roll -- illegal expression, wrong modifier, check not
-    legal in this phase, ... . Carries the same structured ``ValidationError`` C1.5
-    produces, so a caller (the tool handler, an API route) can report it without
+    legal in this phase, ... . Carries the same structured ``ValidationError`` the
+    validator produces, so a caller (the tool handler, an API route) can report it without
     re-deriving what went wrong."""
 
     def __init__(self, error: ValidationError) -> None:

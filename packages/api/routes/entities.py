@@ -3,7 +3,7 @@ React sheet renders from. Reuses ``core.assembler.visibility.scopes_for`` (the E
 pseudo-phase -- "everything this principal can see in this workspace", the right
 default for a standalone sheet view outside any specific process phase) and
 ``core.entities.injection.visible_fields`` (the same per-field ``private``-tag filter
-F3.6 built for context assembly) -- one filtering rule, reused, never reimplemented for
+context assembly uses) -- one filtering rule, reused, never reimplemented for
 the API. A field the viewer can't see is absent from the response entirely, never
 present-with-a-blanked-value, so the client genuinely cannot tell "hidden" from
 "doesn't exist" (its own acceptance criterion).
@@ -202,7 +202,7 @@ async def create_schema_endpoint(
 ) -> SchemaResponse:
     """Creating from a template (or saving an edit) both land here: a new immutable
     version, never an in-place mutation (matching `entity_schema`'s own versioned-row
-    shape, F3.1) -- entities pin whichever version id they were created against."""
+    shape) -- entities pin whichever version id they were created against."""
     definition, issues = validate_raw(body.definition)
     if issues or definition is None:
         raise HTTPException(

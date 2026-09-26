@@ -1,9 +1,9 @@
 /**
- * Vocabulary overlay resolver (D1.6; , Appendix A, requirement 32).
+ * Vocabulary overlay resolver.
  *
  * Core code and the API only ever emit `label_key`s (e.g. `"role.facilitator"`); the UI
  * resolves those through an overlay to get the domain-specific display string. Nothing in
- * this codebase ever hardcodes "Arbiter" or "Rulebook" outside this file and the D1.6
+ * this codebase ever hardcodes "Arbiter" or "Rulebook" outside this file and the overlay
  * seed data (`tests/architecture/test_vocabulary_lint.py` is the CI check for that rule).
  *
  * The real overlay is tenant/workspace-configurable data served by the backend
@@ -16,7 +16,7 @@
  *
  * Rule for contributors (mirrors the plan's Appendix A rule for the backend): if you're
  * about to write "Arbiter", "Rulebook", "World", or any other RPG-overlay noun directly in
- * a `.tsx` file, stop — add the entry here (and to the D1.6 migration's seed data) and
+ * a `.tsx` file, stop — add the entry here (and to the overlay migration's seed data) and
  * call `useLabel()`/`t(key)` instead.
  */
 

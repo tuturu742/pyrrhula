@@ -1,7 +1,7 @@
 """``ToolDefinition`` : register once, expose twice -- the same registry
 entry backs both internal function-calling (the tool loop, today) and the MCP façade
-(G4.13, later); this table is the *declarative metadata* half of that, not the dispatch
-mechanism itself. Actual dispatch stays exactly where B1.7 put it: a
+(``api.mcp_server``); this table is the *declarative metadata* half of that, not the
+dispatch mechanism itself. Actual dispatch stays in the agent runtime: a
 ``core.agents.tools.ToolRegistry`` mapping a tool key to a real Python handler, wired at
 the composition root. ``impl_ref`` here is descriptive ("which built-in implements this"),
 not something this module interprets to look up or execute code -- CLAUDE.md rule 10 (no
@@ -145,7 +145,7 @@ async def list_tool_definitions(tenant_id: uuid.UUID) -> list[ToolDefinitionRow]
     """Every registered tool definition for a tenant, by key. the MCP surface is
     registry-driven -- a pack that registers a new deterministic tool gets it exposed
     without a code change -- and that requires a way to ask what is registered, which
-    C1.6 never needed (it only ever resolved one tool by key at a time)."""
+    the resolution service never needed (it only ever resolved one tool by key at a time)."""
     async with tenant_scope(tenant_id) as session:
         rows = (
             await session.execute(

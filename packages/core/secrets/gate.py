@@ -1,16 +1,16 @@
 """The disclosure gate: the structured pre-decision
 that chooses conceal/hint/reveal_full per secret before generation. Sees gists only,
 never `secret.content` -- a security boundary, not an optimisation, since it's what lets
-this run on a small/cheap/possibly-cloud model under D14 without the secret leaving the
-building.
+this run on a small/cheap/possibly-cloud model under the egress policy without the
+secret leaving the building.
 
 Deliberately free of `core.secrets.repo`: this module cannot import it (INV-1 restricts
 that module to `core.assembler`/`core.overseer`) and doesn't need to -- every input here
-is a plain argument the caller (eventually `core.assembler.context_assembler`, E2.6)
+is a plain argument the caller (`core.assembler.context_assembler`)
 already resolved. This module persists its own output through `core.secrets.decisions`,
 which is *not* INV-1-restricted (writing a decision never reads `content_ciphertext`).
 
-The gate decides; E2.6 enforces. Neither is useful without the other.
+The gate decides; the assembler enforces. Neither is useful without the other.
 """
 
 from __future__ import annotations

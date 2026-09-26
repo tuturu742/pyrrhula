@@ -1,4 +1,4 @@
-"""Designated-overseer requirement (E2.10, Q6/): a workspace with multiple
+"""Designated-overseer requirement: a workspace with multiple
 unrelated humans, or any enterprise-tenant workspace, must have a principal holding the
 `overseer` workspace role before it can be configured -- an agent-only or solo-human
 workspace does not. "Enterprise-tenant" is read from the workspace's own resolved
@@ -53,9 +53,9 @@ async def validate_overseer_requirement(tenant_id: uuid.UUID, workspace_id: uuid
     is_multi_human = len(distinct_humans) >= _MULTI_HUMAN_THRESHOLD
 
     if (is_multi_human or is_enterprise) and has_overseer is None:
-        # G4.14 supplies Q6's *second arm*: "an overseer **or** moderation with
-        # overseer-equivalent visibility". E2.10 built the first arm and left this one
-        # open because there was no moderation layer to point at yet. `enabled` alone is
+        # The requirement's *second arm*: "an overseer **or** moderation with
+        # overseer-equivalent visibility". The first arm came first and left this one
+        # open until there was a moderation layer to point at. `enabled` alone is
         # not enough -- scanning that nobody reads is not oversight, so the tenant must
         # also have said their moderation surfaces flagged content to a human who can act.
         policy = await get_policy(tenant_id)

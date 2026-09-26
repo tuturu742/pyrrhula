@@ -46,7 +46,7 @@ class Tenant(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     slug: Mapped[str] = mapped_column(String(63), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    # 'shared' (RLS in one DB) | 'schema' | 'database' — D11/H5.6 escalation hook.
+    # 'shared' (RLS in one DB) | 'schema' | 'database' — the isolation escalation hook.
     isolation_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="shared")
     # Read by the TenantRouter port; v1 impl ignores it and returns one DSN.
     region: Mapped[str] = mapped_column(String(63), nullable=False, default="default")
@@ -151,9 +151,9 @@ class Membership(Base):
 
 
 class Workspace(Base):
-    """Minimal for T0.2. ``vocabulary_overlay_id`` and ``default_process_definition_id``
-     are added by ALTER TABLE migrations once those tables exist  —
-    the same incremental-schema-growth pattern T0.8 uses for ``session``."""
+    """``vocabulary_overlay_id`` and ``default_process_definition_id`` are added by ALTER
+    TABLE migrations once those tables exist — the same incremental-schema-growth pattern
+    ``session`` uses."""
 
     __tablename__ = "workspace"
 

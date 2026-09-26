@@ -12,7 +12,7 @@ Flagged entries import quarantined, exactly as `.pyr` bundles do -- one quaranti
 mechanism, not a card-shaped variant of one.
 
 **`extensions` survives byte-for-byte**, on the agent and on every entry. The spec reserves
-it and requires implementations not to destroy it; G4.9 round-trips what it carries.
+it and requires implementations not to destroy it; the export round-trips what it carries.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from core.portability.injection_scan import quarantine_reason, scan_text
 from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
 
-# Where the card's own extension payload lands on the imported agent, and where G4.9 looks
+# Where the card's extension payload lands on the imported agent, and where export looks
 # for it on the way back out. One constant, so the two directions cannot disagree.
 EXTENSIONS_KEY = "ccv3_extensions"
 
@@ -164,7 +164,7 @@ async def _create_persona(
 def _render_persona(card: NormalisedCard) -> str:
     """The card's prompt-shaping fields, in the order the spec places them, with the
     Pyrrhula-native extension payload appended as a fenced block so a round-trip through
-    G4.9 can find it again. Kept as prose rather than a side table because a persona *is*
+    export can find it again. Kept as prose rather than a side table because a persona *is*
     prose -- the moment it becomes structured, someone has to decide what happens to a
     field the structure didn't anticipate."""
     parts = [card.persona_md]

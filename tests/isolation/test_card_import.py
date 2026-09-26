@@ -1,5 +1,5 @@
-"""G4.8 acceptance criteria for CCv2/CCv3 card import: a V3 card's decorators map onto
-A1.5 activation fields faithfully, a V2 card normalises to the same internal shape,
+"""Acceptance criteria for CCv2/CCv3 card import: a V3 card's decorators map onto
+activation fields faithfully, a V2 card normalises to the same internal shape,
 `extensions` survives byte-identical, and planted injection text lands quarantined.
 
 The fixtures build real PNGs (signature + IHDR + tEXt + IEND) rather than reading files
@@ -198,7 +198,7 @@ def test_png_chunk_roundtrip_and_ccv3_preference() -> None:
     with pytest.raises(MalformedCardError, match="base64"):
         extract_card(_png_with_text({"ccv3": b"!!!not base64!!!"}))
 
-    # Writing replaces a same-keyword chunk rather than duplicating it (G4.9 relies on it).
+    # Writing replaces a same-keyword chunk rather than duplicating it (export relies on it).
     rewritten = write_text_chunks(png, {"ccv3": encode_card_payload({"spec": "rewritten"})})
     assert extract_card(rewritten)[1]["spec"] == "rewritten"
     assert len(read_text_chunks(rewritten)) == 2

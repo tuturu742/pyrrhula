@@ -2,10 +2,10 @@
 mechanical expressions are legal and how modifiers derive from actor state, so the engine
 -- not the model -- computes the "+5" ('s anti-hallucination property).
 
-No Entity system exists anywhere in Phase 1 (F3.6 is Phase 3) -- ``modifier_resolver``
-(CEL) evaluates over a caller-supplied ``actor_fields: dict[str, object]``, an injection
-seam matching the entity-state stub, not a live Entity table read. F3.6 replaces the
-*source* of ``actor_fields``, not this module's shape.
+``modifier_resolver`` (CEL) evaluates over a caller-supplied
+``actor_fields: dict[str, object]`` -- an injection seam, not a live entity-table read.
+The entity system supplies the *source* of ``actor_fields``; it does not change this
+module's shape.
 
 Unlike ``process_definition``, this is **not** append-only/versioned: a rule
 system is mutable, upserted-by-key content (matching ``knowledge_source``'s shape), not
@@ -236,8 +236,8 @@ async def get_rule_system(tenant_id: uuid.UUID, key: str) -> RuleSystemRow | Non
 
 # ── MVP fixtures (its own subtask: a d20-like system + a coin-flip, both exercised by
 # the same validator code path with no core branching on system kind -- the real INV-9
-# test this task cares about). Richer systems ship as workflow-pack or bundle content,
-# F3.7; these are core-neutral-named placeholders for the Phase-1 exit slice only. ──
+# tests here care about). Richer systems ship as workflow-pack or bundle content;
+# these are core-neutral-named placeholders. ──
 
 MINIMAL_D20_SYSTEM = RuleSystemDefinitionSchema(
     key="mvp_d20",

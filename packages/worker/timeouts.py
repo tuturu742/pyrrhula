@@ -1,11 +1,11 @@
-"""Timeout sweep (B1.6 await): fires the ``on_timeout`` transition for
+"""Timeout sweep: fires the ``on_timeout`` transition for
 any ``await_state`` row whose ``timeout_at`` has passed and that hasn't already been
 satisfied. Run via ``python -m worker.timeouts`` (a separate small loop, not a
 ``JobQueue`` handler -- see ``core.process.awaits``'s module docstring for why a periodic
 per-tenant sweep, not the job queue, is how this gets safe cross-tenant reach without
 touching CLAUDE.md's closed no-RLS exception list).
 
-G4.3 adds a second, symmetric sweep on the same tick: ``sweep_due_reminders`` sends the
+A second, symmetric sweep runs on the same tick: ``sweep_due_reminders`` sends the
 one configured nudge for any await whose ``reminder_at`` has passed and that is still
 unresolved. Same per-tenant-scoped shape as the timeout sweep for the same RLS reason, and
 exactly-once comes from the notification table's UNIQUE ``dedupe_key`` rather than from
@@ -17,7 +17,7 @@ completely and correctly -- but actually taking further interpreter steps from t
 (running `advance_session`/`advance_session_locked`) needs a real scheduler
 (`next_actor_fn`) and agent runtime (`execute_turn`), neither of which exist yet outside
 test doubles. Whatever eventually calls `advance_session_locked` for a live
-session (the real HTTP layer, once B1.7 exists) will simply see the session already
+session (the HTTP layer) will simply see the session already
 sitting in its post-timeout phase, ready to continue, the next time it runs -- no state is
 lost by not chaining automatically here.
 """

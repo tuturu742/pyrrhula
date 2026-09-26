@@ -1,12 +1,12 @@
-"""The deliberately dumb, deletable T0.8 walking skeleton: a hardcoded two-phase process
+"""The deliberately dumb walking skeleton: a hardcoded two-phase process
 (``prompt`` — waiting for a user message — and ``respond`` — the agent is generating).
 
 This exists only to prove the pipe end to end before any real feature
 exists: request -> tenant-scoped persistence -> a real model call through the
 ``ModelProvider`` port -> streaming -> durable, same-transaction usage metering. The real
-interpreter, arbitrary phase graphs, checkpoints, and await/resume land at B1.1-B1.6 and
-replace this module; ``session``/``session_event``/``message``/``usage_record`` themselves
-are NOT thrown away — B1.4/B1.7 extend this schema in place.
+interpreter (arbitrary phase graphs, checkpoints, await/resume) is the path a session with
+a process definition takes; this one remains for a session without.
+``session``/``session_event``/``message``/``usage_record`` are shared by both.
 
 Two things are deliberately NOT imported here, for the same reason: this module is
 ``core`` and must never depend on ``api`` or on a specific ``adapters.*`` implementation

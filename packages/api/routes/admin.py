@@ -651,7 +651,7 @@ async def delete_tenant_mcp_endpoint(tenant_id: uuid.UUID, key: str) -> None:
     await _audit_admin(tenant_id, "tenant:mcp_revoke", "tenant", {"key": key})
 
 
-# ── egress policy (D14: which provider kinds each purpose may reach) ─────────────────
+# ── egress policy (which provider kinds each purpose may reach) ──────────────────────
 _EGRESS_PURPOSES = {"generation", "gate", "rerank", "embed", "report", "rewrite", "delegation"}
 _EGRESS_KINDS = {"local", "cloud"}
 
@@ -671,8 +671,8 @@ async def get_egress_policy_endpoint(tenant_id: uuid.UUID) -> dict[str, object]:
 async def put_egress_policy_endpoint(
     tenant_id: uuid.UUID, body: EgressPolicyBody
 ) -> dict[str, object]:
-    """Set the tenant's D14 egress policy: {purpose: ["local"] | ["local","cloud"]}.
-    An absent purpose stays permissive (the plan's explicit default); an empty list
+    """Set the tenant's egress policy: {purpose: ["local"] | ["local","cloud"]}.
+    An absent purpose stays permissive (the documented default); an empty list
     blocks that purpose entirely."""
     for purpose, kinds in body.policy.items():
         if purpose not in _EGRESS_PURPOSES:
