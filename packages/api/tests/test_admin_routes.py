@@ -479,3 +479,62 @@ def test_workspace_mcp_put_requires_workflow_manage(
         headers=_auth(viewer_token),
     )
     assert resp.status_code == 403, resp.text
+
+
+def test_assistant_connection_probes_use_the_form_values_or_the_stored_key(
+    admin: TestClient, db_available: None, redis_available: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The admin assistant's connection form has the same Fetch and Test as a tenant's
+    model-profile form -- and, like that form, a blank key on Test means "the one on
+    file", so an operator editing the model never re-pastes a credential."""
+    resp = admin.put(
+        "/admin/assistant/model",
+        json={"provider": "echo", "model": "probe", "api_key": "sk-stored"},
+        headers=_auth(),
+    )
+    assert resp.status_code == 200, resp.text
+
+    seen: list[tuple[str, str | None]] = []
+
+    class _RecordingProvider:
+        async def generate(self, req: object):  # noqa: ANN001, ANN201
+            seen.append((req.model, req.api_key))  # type: ignore[attr-defined]
+            return
+            yield  # pragma: no cover -- makes this an async generator
+
+    monkeypatch.setattr(
+        "api.routes.agents.get_model_provider", lambda _provider: _RecordingProvider()
+    )
+
+    blank = admin.post(
+        "/admin/assistant/model/test",
+        json={"provider": "echo", "model": "probe", "api_key": ""},
+        headers=_auth(),
+    )
+    assert blank.status_code == 200, blank.text
+    assert blank.json()["ok"] is True
+    typed = admin.post(
+        "/admin/assistant/model/test",
+        json={"provider": "echo", "model": "other", "api_key": "sk-form"},
+        headers=_auth(),
+    )
+    assert typed.status_code == 200, typed.text
+    assert seen == [("echo/probe", "sk-stored"), ("echo/other", "sk-form")]
+
+    # No model yet is a form error, not a provider error.
+    assert (
+        admin.post(
+            "/admin/assistant/model/test", json={"provider": "echo", "model": ""}, headers=_auth()
+        ).status_code
+        == 422
+    )
+
+    # Fetch is best-effort: an unreachable endpoint is a detail line, never a 500.
+    listing = admin.post(
+        "/admin/assistant/model/available-models",
+        json={"provider": "ollama", "api_base": "http://127.0.0.1:9"},
+        headers=_auth(),
+    )
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["models"] == []
+    assert listing.json()["detail"]

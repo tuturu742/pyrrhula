@@ -39,3 +39,6 @@ dump.rdb
 .kube/
 eval-results/
 
+
+# Written by deploy/installers/compose.sh with this host's resolver; never a repo fact.
+docker/compose.dns.yml

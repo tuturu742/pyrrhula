@@ -25,6 +25,12 @@ from pydantic import BaseModel, EmailStr
 from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider
 from api.auth.platform_admin import is_platform_admin
 from api.middleware.auth import get_request_context
+from api.routes.agents import (
+    AvailableModelsResponse,
+    TestConnectionResponse,
+    _list_provider_models,
+    _run_connection_test,
+)
 from core.config import get_settings
 from core.mcp.registry import is_external_mcp_url
 from core.tenancy.admin import ADMIN_TENANT_ID
@@ -371,6 +377,57 @@ async def set_admin_assistant_model_endpoint(
 
 class AdminAssistantChatRequest(BaseModel):
     messages: list[dict[str, str]] = []
+
+
+class AdminAssistantProbeBody(BaseModel):
+    """The form's own values, before they are saved. A blank key means "use the stored
+    one", the same fallback the tenant form has when editing a saved connection."""
+
+    provider: str
+    model: str = ""
+    api_base: str | None = None
+    api_key: str | None = None
+
+
+async def _admin_connection_key(body_key: str | None) -> str | None:
+    if body_key:
+        return body_key
+    from api.encryptor_factory import get_encryptor
+    from core.admin.assistant import get_admin_connection
+    from core.agents.authoring import resolve_connection_api_key
+
+    row = await get_admin_connection()
+    if row is None or not row.credential_ref:
+        return None
+    return await resolve_connection_api_key(
+        ADMIN_TENANT_ID, row.credential_ref, encryptor=get_encryptor()
+    )
+
+
+@router.post("/assistant/model/available-models")
+async def admin_assistant_available_models_endpoint(
+    body: AdminAssistantProbeBody,
+) -> AvailableModelsResponse:
+    """What the provider offers, for the assistant-connection form -- the same probe the
+    tenant form uses, with the admin connection's stored key as the fallback."""
+    return await _list_provider_models(
+        body.provider.strip(), body.api_base or None, await _admin_connection_key(body.api_key)
+    )
+
+
+@router.post("/assistant/model/test")
+async def admin_assistant_test_connection_endpoint(
+    body: AdminAssistantProbeBody,
+) -> TestConnectionResponse:
+    """Ask the provider to say OK with the form's values, before saving."""
+    if not body.provider.strip() or not body.model.strip():
+        raise HTTPException(status_code=422, detail="provider and model are both required")
+    return await _run_connection_test(
+        body.provider.strip(),
+        body.model.strip(),
+        body.api_base or None,
+        await _admin_connection_key(body.api_key),
+    )
 
 
 @router.post("/assistant/chat")

@@ -1,6 +1,0 @@
-services:
-  api:     { dns: [ "1.1.1.1" ] }
-  worker:  { dns: [ "1.1.1.1" ] }
-  migrate: { dns: [ "1.1.1.1" ] }
-  admin:   { dns: [ "1.1.1.1" ] }
-  searxng: { dns: [ "1.1.1.1" ] }

@@ -9,8 +9,12 @@ import { UserMenu } from "@/components/UserMenu";
 
 /** App shell: a full-width top bar — brand left, primary nav beside it, account actions
  * pinned right — over a wide content container. Nav entries highlight when active.
- * Platform admins (organization "admin") get the admin navigation instead — their
- * tenant has no workspaces to convene. */
+ *
+ * Accounts signed into the reserved admin organization get the admin navigation instead:
+ * that tenant has no workspaces to convene. Everyone else gets the product navigation,
+ * and a platform admin among them (the single-tenant owner) gets one more tab, "App
+ * settings", which holds the same admin pages. Single tenant means one UI, not two
+ * consoles for one person. */
 export function AppShell() {
   const { data: currentWorkflow } = useQuery({
     queryKey: ["workflow-current"],
@@ -24,8 +28,9 @@ export function AppShell() {
   const t = useLabel();
   const me = useMe();
   const isAdmin = me.data?.platform_admin === true;
+  const adminOrg = me.data?.admin_tenant === true;
 
-  const links: Array<{ to: string; label: string; end?: boolean }> = isAdmin
+  const links: Array<{ to: string; label: string; end?: boolean }> = adminOrg
     ? [
         { to: "/admin/tenants", label: "Tenants" },
         { to: "/admin/plugins", label: "Plugin repositories" },
@@ -43,6 +48,7 @@ export function AppShell() {
         // workflow has no repo access shouldn't see a dead section.
         ...(repoAccess ? [{ to: "/repos", label: "Repos" }] : []),
         { to: "/organization", label: "Organization" },
+        ...(isAdmin ? [{ to: "/admin", label: "App settings" }] : []),
       ];
 
   return (
@@ -50,10 +56,10 @@ export function AppShell() {
       <header className="border-b border-border">
         <div className="flex w-full min-w-0 items-center gap-8 overflow-x-auto px-6 py-3">
           <Link
-            to={isAdmin ? "/admin/tenants" : "/"}
+            to={adminOrg ? "/admin/tenants" : "/"}
             className="shrink-0 text-base font-semibold tracking-tight"
           >
-            Pyrrhula{isAdmin ? " Admin" : ""}
+            Pyrrhula{adminOrg ? " Admin" : ""}
           </Link>
           <nav className="flex flex-1 items-center gap-1 text-sm">
             {links.map((l) => (
@@ -82,7 +88,7 @@ export function AppShell() {
       <main className="mx-auto w-full max-w-6xl px-6 py-6">
         <Outlet />
       </main>
-      {!isAdmin && <AssistantWidget />}
+      {!adminOrg && <AssistantWidget />}
     </div>
   );
 }

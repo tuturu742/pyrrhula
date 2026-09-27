@@ -35,6 +35,7 @@ import { AdminModelsPage } from "@/features/admin/AdminModelsPage";
 import { AdminAssistantPage } from "@/features/admin/AdminAssistantPage";
 import { useMe } from "@/features/admin/useMe";
 import { useAdminLanding } from "@/features/admin/useAdminLanding";
+import { AdminSettingsLayout } from "@/features/admin/AdminSettingsLayout";
 
 /**
  * Where "/" goes.
@@ -57,6 +58,13 @@ function HomeRoute() {
   if (me.data?.admin_tenant !== true) return <WorkspaceListPage />;
   // Which admin page depends on whether this deployment has a retrieval model yet; see
   // useAdminLanding. Render nothing rather than flashing the wrong page first.
+  if (landing.loading) return null;
+  return <Navigate to={landing.path} replace />;
+}
+
+/** "/admin" itself: the same first-run choice the admin organization's home makes. */
+function AdminIndexRoute() {
+  const landing = useAdminLanding();
   if (landing.loading) return null;
   return <Navigate to={landing.path} replace />;
 }
@@ -106,16 +114,16 @@ export function App() {
               <Route path="/schemas" element={<SchemaListPage />} />
               <Route path="/schemas/new" element={<SchemaEditorPage />} />
               <Route path="/schemas/:schemaId" element={<SchemaEditorPage />} />
-              <Route path="/admin/tenants" element={<AdminTenantsPage />} />
-              <Route path="/admin/plugins" element={<AdminPluginReposPage />} />
-              <Route path="/admin/models" element={<AdminModelsPage />} />
-              {/* The page was "Retrieval models" before it also held the assistant's
-                  connection; keep old links working rather than 404 a bookmark. */}
-              <Route
-                path="/admin/retrieval"
-                element={<Navigate to="/admin/models" replace />}
-              />
-              <Route path="/admin/assistant" element={<AdminAssistantPage />} />
+              <Route path="/admin" element={<AdminSettingsLayout />}>
+                <Route index element={<AdminIndexRoute />} />
+                <Route path="tenants" element={<AdminTenantsPage />} />
+                <Route path="plugins" element={<AdminPluginReposPage />} />
+                <Route path="models" element={<AdminModelsPage />} />
+                {/* The page was "Retrieval models" before it also held the assistant's
+                    connection; keep old links working rather than 404 a bookmark. */}
+                <Route path="retrieval" element={<Navigate to="/admin/models" replace />} />
+                <Route path="assistant" element={<AdminAssistantPage />} />
+              </Route>
               {/* In-shell 404 for signed-in users; the bare one below covers signed-out. */}
               <Route path="*" element={<NotFoundPage />} />
             </Route>

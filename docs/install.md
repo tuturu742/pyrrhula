@@ -52,7 +52,8 @@ one person or one team. Multi-tenant means every sign-in names its organization.
 
 **A single-tenant install needs no credentials from the installer.** Open the URL, sign
 up, and you are the owner of the deployment's one organization *and* its platform
-admin — one account, both the workspace product and Admin → Models. There is no second
+admin — one account, one UI: the admin pages sit under an **App settings** tab in
+your own navigation (**Admin → Models** in this guide means that tab). There is no second
 generated account to log in as. (One is still bootstrapped as break-glass, printed at
 the end of the install; you should not need it.)
 

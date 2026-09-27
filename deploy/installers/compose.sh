@@ -346,9 +346,9 @@ if [ "$SINGLE_TENANT" = true ]; then
   echo "  its administrator -- no organization name to type, and nothing to copy from"
   echo "  here. Re-run with --multi-tenant to host several organizations instead."
   echo
-  echo "  Next   Admin -> Models: choose and download the retrieval models (needed"
-  echo "         for semantic search), then add a model connection under Personas ->"
-  echo "         Model profiles."
+  echo "  Next   App settings -> Models (a tab in your own navigation): choose and"
+  echo "         download the retrieval models (needed for semantic search), then add"
+  echo "         a model connection under Personas -> Model profiles."
   echo
   echo "  Locked out? A break-glass platform admin exists: organization 'admin',"
   echo "  $(envval .env PYRRHULA_ADMIN_EMAIL '(not set)') / $(envval .env PYRRHULA_ADMIN_PASSWORD '(not set)') (also in .env)."

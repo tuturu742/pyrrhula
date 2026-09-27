@@ -3582,6 +3582,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/assistant/model/available-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Assistant Available Models Endpoint
+         * @description What the provider offers, for the assistant-connection form -- the same probe the
+         *     tenant form uses, with the admin connection's stored key as the fallback.
+         */
+        post: operations["admin_assistant_available_models_endpoint_admin_assistant_model_available_models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/assistant/model/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Assistant Test Connection Endpoint
+         * @description Ask the provider to say OK with the form's values, before saving.
+         */
+        post: operations["admin_assistant_test_connection_endpoint_admin_assistant_model_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/assistant/chat": {
         parameters: {
             query?: never;
@@ -4077,6 +4118,24 @@ export interface components {
              * Provider
              * @default
              */
+            provider: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Api Base */
+            api_base?: string | null;
+            /** Api Key */
+            api_key?: string | null;
+        };
+        /**
+         * AdminAssistantProbeBody
+         * @description The form's own values, before they are saved. A blank key means "use the stored
+         *     one", the same fallback the tenant form has when editing a saved connection.
+         */
+        AdminAssistantProbeBody: {
+            /** Provider */
             provider: string;
             /**
              * Model
@@ -15369,6 +15428,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAssistantModelBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_assistant_available_models_endpoint_admin_assistant_model_available_models_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAssistantProbeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableModelsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_assistant_test_connection_endpoint_admin_assistant_model_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAssistantProbeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestConnectionResponse"];
                 };
             };
             /** @description Validation Error */
