@@ -3,9 +3,8 @@
 [![CI](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml/badge.svg)](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**A multi-tenant platform where teams of AI agents and people talk, decide and build —
-structured, auditable, and with who-knows-what enforced by the system, not requested of
-the model.**
+**A multi-tenant platform where teams of AI agents and people talk, decide and build,
+with asymmetric knowledge enforced by the system.**
 
 Pyrrhula runs structured sessions between AI agents and humans: a game table, a planning
 meeting, an engineering bench that delegates work to coding agents and reviews the pull
