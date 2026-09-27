@@ -3,13 +3,15 @@
 [![CI](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml/badge.svg)](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**A multi-tenant platform for structured, auditable, asymmetric-knowledge multi-agent
-conversations — where who-knows-what is enforced by the system, not requested of the model.**
+**A multi-tenant platform where teams of AI agents and people talk, decide and build —
+structured, auditable, and with who-knows-what enforced by the system, not requested of
+the model.**
 
-Pyrrhula runs structured conversations between AI agents and humans. Knowledge, process
-rules, and participant state are versioned, structured data rather than prompt text, and the
-conversation is driven by an explicit, user-configurable phase/turn engine rather than
-free-form chat.
+Pyrrhula runs structured sessions between AI agents and humans: a game table, a planning
+meeting, an engineering bench that delegates work to coding agents and reviews the pull
+requests they open. Knowledge, process rules and participant state are versioned,
+structured data rather than prompt text, and every session is driven by an explicit,
+user-configurable phase/turn engine rather than free-form chat.
 
 The first target use case is **AI-managed tabletop RPG campaigns**. The core engine is
 domain-neutral, so two further use cases run on the same engine with different vocabulary
