@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from api.authz import require_tenant_permission
+from api.mcp_transport_factory import get_mcp_transport
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from core.mcp.registry import (
@@ -32,6 +33,7 @@ from core.mcp.registry import (
     list_servers,
     register_server,
 )
+from core.ports.mcp import McpTransportError
 from core.tenancy.context import RequestContext
 from core.tenancy.models import WorkspaceMembership
 from core.tenancy.scope import tenant_scope
@@ -171,6 +173,45 @@ async def read_mcp_server(
     if row is None:
         raise HTTPException(status_code=404, detail=f"no MCP server {key!r} in this workspace")
     return _to_response(row)
+
+
+class McpServerTestResponse(BaseModel):
+    ok: bool
+    detail: str
+    # What the server offered, so a typo in the allowlist is visible next to the real names.
+    tools: list[str]
+
+
+@router.post("/{key}/test")
+async def test_mcp_server(
+    key: str, workspace_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
+) -> McpServerTestResponse:
+    """Ask the server what it offers, the same discovery a turn runs, and say so plainly.
+
+    A turn treats an unreachable server as "no tools this turn" and carries on, which is
+    right for a session and wrong for the person who just typed the URL: they learn about
+    a bad address from a persona explaining why it cannot use its tool. This is the same
+    listing, reported to the human instead of swallowed. Read-only, so membership is enough.
+    """
+    await _require_workspace_member(ctx, workspace_id)
+    row = await get_server(ctx.tenant_id, workspace_id, key)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no MCP server {key!r} in this workspace")
+    try:
+        specs = await get_mcp_transport().list_tools(row.to_ref())
+    except McpTransportError as exc:
+        return McpServerTestResponse(ok=False, detail=str(exc)[:500], tools=[])
+    offered = [s.name for s in specs]
+    missing = [name for name in row.enabled_tools if name not in offered]
+    if missing:
+        return McpServerTestResponse(
+            ok=False,
+            detail=f"reachable, but not offering {', '.join(missing)} -- check the tool names",
+            tools=offered,
+        )
+    return McpServerTestResponse(
+        ok=True, detail=f"reachable, offers {len(offered)} tool(s)", tools=offered
+    )
 
 
 @router.delete("/{key}", status_code=204)

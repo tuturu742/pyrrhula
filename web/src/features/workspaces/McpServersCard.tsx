@@ -78,6 +78,25 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
       toast.error(String((e as { detail?: string })?.detail ?? "Registration failed.")),
   });
 
+  // Ask the server what it offers -- the discovery a turn runs, reported to the person
+  // instead of swallowed. A turn treats an unreachable server as "no tools this turn"
+  // and carries on; the only symptom was a persona explaining why its tool had gone.
+  const [testResults, setTestResults] = useState<
+    Record<string, { ok: boolean; detail: string; tools: string[] }>
+  >({});
+  const test = useMutation({
+    mutationFn: async (serverKey: string) => {
+      const { data, error } = await apiClient.POST("/mcp-servers/{key}/test", {
+        params: { path: { key: serverKey }, query: { workspace_id: workspaceId } },
+      });
+      if (error) throw error;
+      return { serverKey, result: data };
+    },
+    onSuccess: ({ serverKey, result }) =>
+      setTestResults((prev) => ({ ...prev, [serverKey]: result })),
+    onError: () => toast.error("Could not reach the test endpoint."),
+  });
+
   const remove = useMutation({
     mutationFn: async (serverKey: string) => {
       const { error } = await apiClient.DELETE("/mcp-servers/{key}", {
@@ -98,6 +117,8 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
         Tools your agents may call during sessions here. Register any
         streamable-HTTP MCP endpoint and allowlist its tools — agents can never reach
         tools that aren&apos;t listed. Registering a key again replaces its settings.
+        Press <b>Test</b> after registering: the address must route from where the api
+        runs, which a server on your own machine may not.
       </p>
       {servers.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
       <ul className="flex flex-col gap-1.5">
@@ -106,7 +127,7 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
             key={server.key}
             className="flex items-center justify-between gap-2 text-sm"
           >
-            <span>
+            <span className="min-w-0">
               <span className="font-medium">{server.key}</span>
               <span className="ml-2 text-xs text-muted-foreground">{server.url}</span>
               <span className="block text-xs text-muted-foreground">
@@ -119,18 +140,42 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
                   ? ` · options ${JSON.stringify(server.options)}`
                   : ""}
               </span>
+              {testResults[server.key] && (
+                <span
+                  className={`block text-xs ${
+                    testResults[server.key].ok ? "text-green-600" : "text-destructive"
+                  }`}
+                >
+                  {testResults[server.key].ok ? "✓ " : "✗ "}
+                  {testResults[server.key].detail}
+                  {testResults[server.key].tools.length > 0
+                    ? ` — offers: ${testResults[server.key].tools.join(", ")}`
+                    : ""}
+                </span>
+              )}
             </span>
-            <ConfirmButton
-              title="Remove MCP server"
-              description={`Remove "${server.key}"? Agents lose its tools on their next turn. Re-register any time.`}
-              confirmLabel="Remove"
-              destructive
-              onConfirm={() => remove.mutate(server.key)}
-            >
-              <Button variant="ghost" size="sm" className="text-destructive">
-                Remove
+            <span className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={test.isPending && test.variables === server.key}
+                title="Ask the server which tools it offers, from where the api runs"
+                onClick={() => test.mutate(server.key)}
+              >
+                {test.isPending && test.variables === server.key ? "Testing…" : "Test"}
               </Button>
-            </ConfirmButton>
+              <ConfirmButton
+                title="Remove MCP server"
+                description={`Remove "${server.key}"? Agents lose its tools on their next turn. Re-register any time.`}
+                confirmLabel="Remove"
+                destructive
+                onConfirm={() => remove.mutate(server.key)}
+              >
+                <Button variant="ghost" size="sm" className="text-destructive">
+                  Remove
+                </Button>
+              </ConfirmButton>
+            </span>
           </li>
         ))}
       </ul>

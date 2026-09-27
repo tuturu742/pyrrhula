@@ -3292,6 +3292,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp-servers/{key}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Mcp Server
+         * @description Ask the server what it offers, the same discovery a turn runs, and say so plainly.
+         *
+         *     A turn treats an unreachable server as "no tools this turn" and carries on, which is
+         *     right for a session and wrong for the person who just typed the URL: they learn about
+         *     a bad address from a persona explaining why it cannot use its tool. This is the same
+         *     listing, reported to the human instead of swallowed. Read-only, so membership is enough.
+         */
+        post: operations["test_mcp_server_mcp_servers__key__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mcp-servers/asset/{workspace_id}/{key}/{path}": {
         parameters: {
             query?: never;
@@ -5723,6 +5748,15 @@ export interface components {
             };
             /** Credential Ref */
             credential_ref: string | null;
+        };
+        /** McpServerTestResponse */
+        McpServerTestResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Detail */
+            detail: string;
+            /** Tools */
+            tools: string[];
         };
         /** MeResponse */
         MeResponse: {
@@ -14771,6 +14805,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_mcp_server_mcp_servers__key__test_post: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpServerTestResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

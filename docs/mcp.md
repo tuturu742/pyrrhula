@@ -44,10 +44,17 @@ alongside the others and it is reachable at `http://<service-name>:<port>`. Put 
 the default network, not `envs` — that one is deliberately restricted to exec
 environments.
 
-**compose, server running on the host.** Reach the host from a container at
-`http://host.containers.internal:<port>` (podman) or `http://host.docker.internal:<port>`
-(Docker Desktop). On Docker for Linux, add
-`extra_hosts: ["host.docker.internal:host-gateway"]` to the `api` and `worker` services.
+**compose, server running on the host.** Bind the server to `0.0.0.0` and register it
+at your machine's LAN address, `http://<lan-ip>:<port>` — the one `ip -4 addr` shows on
+your wifi or ethernet interface. That routes from every container runtime. The aliases
+are less reliable: `host.containers.internal` resolves under rootless podman but
+frequently does not route from a compose network (it maps to a link-local address), and
+`host.docker.internal` needs Docker Desktop or, on Docker for Linux,
+`extra_hosts: ["host.docker.internal:host-gateway"]` on the `api` and `worker` services.
+Whichever you choose, press **Test** next to the server after registering: it runs the
+same discovery a turn runs, from where the api runs, and names the tools it found. A
+server a turn cannot reach contributes no tools and the turn goes on — the persona then
+explains its missing tool in fiction, which is not where you want to find out.
 
 **Kubernetes, server running on the host.** A pod cannot reach the node's localhost by
 name, so give it a Service with a hand-written EndpointSlice. Copy the template:

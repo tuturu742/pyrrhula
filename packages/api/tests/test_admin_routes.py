@@ -538,3 +538,65 @@ def test_assistant_connection_probes_use_the_form_values_or_the_stored_key(
     assert listing.status_code == 200, listing.text
     assert listing.json()["models"] == []
     assert listing.json()["detail"]
+
+
+def test_mcp_server_test_reports_unreachable_and_missing_tools_to_the_person(
+    admin: TestClient,
+    api: TestClient,
+    db_available: None,
+    redis_available: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A turn swallows an unreachable MCP server (fewer tools, carry on). The Test button
+    must not: the person who typed the address needs the error, and a typo in the
+    allowlist needs the real names beside it."""
+    slug = f"adm-mcpt-{uuid.uuid4().hex[:8]}"
+    owner_email = f"{uuid.uuid4().hex}@example.com"
+    body = admin.post(
+        "/admin/tenants",
+        json={
+            "slug": slug,
+            "name": "T",
+            "owner_email": owner_email,
+            "owner_password": "hunter2hunter",
+        },
+        headers=_auth(),
+    ).json()
+    wid = body["workspace_id"]
+    owner = api.post(
+        "/auth/login",
+        json={"email": owner_email, "password": "hunter2hunter"},
+        headers={"X-Pyrrhula-Tenant": slug},
+    ).json()["access_token"]
+    put = api.put(
+        "/mcp-servers",
+        json={
+            "workspace_id": wid,
+            "key": "lab",
+            "url": "http://127.0.0.1:9/mcp",
+            "enabled_tools": ["evidence_check"],
+        },
+        headers=_auth(owner),
+    )
+    assert put.status_code == 200, put.text
+
+    # Nothing listens on port 9: the real transport's own error, not a 500.
+    down = api.post(f"/mcp-servers/lab/test?workspace_id={wid}", headers=_auth(owner))
+    assert down.status_code == 200, down.text
+    assert down.json()["ok"] is False
+    assert "lab" in down.json()["detail"]
+
+    class _Offers:
+        async def list_tools(self, server: object) -> list[object]:
+            from core.ports.mcp import McpToolSpec
+
+            return [McpToolSpec(name="evidence_lookup", description="", parameters={})]
+
+    monkeypatch.setattr("api.routes.mcp.get_mcp_transport", lambda: _Offers())
+    typo = api.post(f"/mcp-servers/lab/test?workspace_id={wid}", headers=_auth(owner)).json()
+    assert typo["ok"] is False
+    assert "evidence_check" in typo["detail"]
+    assert typo["tools"] == ["evidence_lookup"]
+
+    unknown = api.post(f"/mcp-servers/nope/test?workspace_id={wid}", headers=_auth(owner))
+    assert unknown.status_code == 404

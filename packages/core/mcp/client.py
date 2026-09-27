@@ -34,6 +34,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
+
 from core.actions.effectful import (
     ActionAlreadyDispatchedError,
     EffectfulAction,
@@ -130,10 +132,15 @@ async def available_tools(
     for row in await list_servers(tenant_id, workspace_id):
         try:
             discovered = await transport.list_tools(row.to_ref())
-        except McpTransportError:
+        except McpTransportError as exc:
             # An unreachable server contributes no tools rather than failing the turn: the
             # model simply has fewer capabilities this turn, which is a degradation the
-            # process can survive.
+            # process can survive. It is still said out loud: a server registered at an
+            # address that does not route from the container left no trace at all, and the
+            # only symptom was the persona inventing a reason its tool was gone.
+            structlog.get_logger().warning(
+                "mcp.discovery_failed", server=row.key, url=row.url, error=str(exc)[:300]
+            )
             continue
         allowed.extend(t for t in apply_allowlist(row, discovered) if t.spec.name in phase_tools)
     return allowed
