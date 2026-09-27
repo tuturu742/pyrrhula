@@ -147,7 +147,7 @@ async def signup_allowed() -> bool:
             row = await session.scalar(
                 text("SELECT value FROM deployment_setting WHERE key = :k").bindparams(k=SIGNUP_KEY)
             )
-    except Exception:  # noqa: BLE001 -- before the migration runs there is no table yet
+    except ProgrammingError:  # before the migration runs there is no table yet
         return default
     if isinstance(row, dict) and "allowed" in row:
         return bool(row["allowed"])
@@ -188,13 +188,11 @@ async def apply_retrieval_override() -> dict[str, Any] | None:
     also exactly the semantics the admin console promises ("takes effect on the next
     restart"), rather than a weaker version of it.
 
-    Best-effort: a deployment whose database is not reachable yet, or has not run the
-    migration, keeps the built-in defaults.
+    A database that has not run the migration yields the built-in defaults; a database
+    that is not reachable raises, so the caller (``core.startup``) retries rather than
+    silently running the wrong models until the next restart.
     """
-    try:
-        effective = await get_retrieval_models()
-    except Exception:  # noqa: BLE001 -- never block startup on an optional override
-        return None
+    effective = await get_retrieval_models()
     if effective.get("source") != "admin console":
         return None
 
