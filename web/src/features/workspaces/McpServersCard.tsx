@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client/client";
+import type { components } from "@/lib/api-client/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -10,6 +11,8 @@ import { ConfirmButton } from "@/components/ConfirmButton";
  * owner-permissioned PUT/DELETE existed with no UI — registration was admin-console
  * or curl only. `credential_ref` names an ENV VAR on the server holding the bearer
  * token; keys are never stored in this table. */
+type McpServer = components["schemas"]["McpServerResponse"];
+
 export function McpServersCard({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient();
   const [key, setKey] = useState("");
@@ -24,6 +27,10 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
   // Transport-specific knobs, as JSON -- a SearXNG engine list, say. Each transport
   // reads only its own keys (docs/mcp.md).
   const [options, setOptions] = useState("");
+  // The row being edited, if any. PUT replaces a key's whole configuration, so a save
+  // carries the fields this form does not show (effectful tools, confirmation, the
+  // credential ref, the result cap) from the original row rather than resetting them.
+  const [editing, setEditing] = useState<McpServer | null>(null);
 
   const servers = useQuery({
     queryKey: ["mcp-servers", workspaceId],
@@ -55,8 +62,10 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
             .split(",")
             .map((t) => t.trim())
             .filter(Boolean),
-          effectful_tools: [],
-          require_confirmation: true,
+          effectful_tools: editing?.effectful_tools ?? [],
+          require_confirmation: editing?.require_confirmation ?? true,
+          credential_ref: editing?.credential_ref ?? null,
+          max_result_chars: editing?.max_result_chars ?? null,
           max_calls_per_session: cap.trim() ? Number(cap.trim()) : null,
           timeout_seconds: timeout.trim() ? Number(timeout.trim()) : null,
           options: parsedOptions,
@@ -65,18 +74,39 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Server registered — its allowed tools join agent turns here.");
-      setKey("");
-      setUrl("");
-      setTools("");
-      setCap("");
-      setTimeout_("");
-      setOptions("");
+      toast.success(
+        editing
+          ? "Server updated — agents see the new settings on their next turn."
+          : "Server registered — its allowed tools join agent turns here.",
+      );
+      clearForm();
       void queryClient.invalidateQueries({ queryKey: ["mcp-servers", workspaceId] });
     },
     onError: (e) =>
       toast.error(String((e as { detail?: string })?.detail ?? "Registration failed.")),
   });
+
+  function clearForm() {
+    setEditing(null);
+    setKey("");
+    setUrl("");
+    setTools("");
+    setCap("");
+    setTimeout_("");
+    setOptions("");
+  }
+
+  function startEditing(server: McpServer) {
+    setEditing(server);
+    setKey(server.key);
+    setUrl(server.url);
+    setTools(server.enabled_tools.join(", "));
+    setCap(server.max_calls_per_session != null ? String(server.max_calls_per_session) : "");
+    setTimeout_(server.timeout_seconds != null ? String(server.timeout_seconds) : "");
+    setOptions(
+      Object.keys(server.options ?? {}).length > 0 ? JSON.stringify(server.options) : "",
+    );
+  }
 
   // Ask the server what it offers -- the discovery a turn runs, reported to the person
   // instead of swallowed. A turn treats an unreachable server as "no tools this turn"
@@ -158,6 +188,14 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
               <Button
                 variant="outline"
                 size="sm"
+                title="Load this server into the form below; saving replaces its settings"
+                onClick={() => startEditing(server)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={test.isPending && test.variables === server.key}
                 title="Ask the server which tools it offers, from where the api runs"
                 onClick={() => test.mutate(server.key)}
@@ -186,10 +224,18 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           if (key.trim() && url.trim()) register.mutate();
         }}
       >
+        {editing && (
+          <span className="w-full text-xs text-muted-foreground">
+            Editing <b>{editing.key}</b> — Save replaces its settings.
+          </span>
+        )}
         <Input
           placeholder="key (e.g. engine)"
           className="w-36"
           value={key}
+          // The key is the identity PUT replaces by; changing it here would register a
+          // second server and leave the first as it was.
+          readOnly={editing !== null}
           onChange={(e) => setKey(e.target.value)}
         />
         <Input
@@ -229,8 +275,13 @@ export function McpServersCard({ workspaceId }: { workspaceId: string }) {
           variant="outline"
           disabled={!key.trim() || !url.trim() || register.isPending}
         >
-          Register
+          {editing ? "Save" : "Register"}
         </Button>
+        {editing && (
+          <Button type="button" variant="ghost" size="sm" onClick={clearForm}>
+            Cancel
+          </Button>
+        )}
       </form>
     </div>
   );
