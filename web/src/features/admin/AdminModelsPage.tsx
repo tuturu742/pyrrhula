@@ -130,9 +130,12 @@ function ModelCacheCard() {
       </div>
 
       {data?.offline ? (
-        <p className="text-xs text-amber-600">
-          This deployment runs with <code>HF_HUB_OFFLINE=1</code>, so it will not reach
-          Hugging Face. Upload a cache archive instead, or restart with it unset.
+        <p className="text-xs text-muted-foreground">
+          This deployment runs offline (<code>HF_HUB_OFFLINE=1</code>): the api and worker
+          never reach Hugging Face on their own. <b>Download from Hugging Face</b> above is
+          the one exception — it lifts that for its own fetch, on the worker, and puts it
+          back. Use the archive upload only where the worker has no route to{" "}
+          <code>huggingface.co</code> at all.
         </p>
       ) : null}
       {missing.length > 0 ? (
