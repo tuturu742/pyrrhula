@@ -22,6 +22,7 @@ from typing import Any
 
 from sqlalchemy import String, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.tenancy.models import Base
@@ -92,7 +93,7 @@ async def get_retrieval_models() -> dict[str, Any]:
                     k=RETRIEVAL_MODELS_KEY
                 )
             )
-    except Exception:  # noqa: BLE001 -- before the migration runs there is no table yet
+    except ProgrammingError:  # before the migration runs there is no table yet
         return effective
     if isinstance(row, dict) and row:
         effective.update({k: v for k, v in row.items() if k in effective})

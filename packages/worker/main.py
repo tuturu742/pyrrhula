@@ -123,14 +123,17 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
 
 async def main() -> None:
     configure_tracing(service_name="pyrrhula-worker")
-    try:
-        from core.deployment_settings import apply_retrieval_override
+    from core.deployment_settings import apply_retrieval_override
+    from core.startup import run_boot_hooks
 
+    async def _retrieval_override() -> None:
         applied = await apply_retrieval_override()
         if applied:
             log.info("retrieval.override_applied", model=applied.get("embedding_model"))
-    except Exception as exc:  # noqa: BLE001 -- never block startup on an optional override
-        log.warning("retrieval.override_failed", error=str(exc)[:300])
+
+    # Retried until the database answers (core.startup): a worker that starts before
+    # Postgres must not silently run the built-in models when the admin chose others.
+    await run_boot_hooks([("retrieval.override", _retrieval_override)])
     log.info("worker.startup")
 
     stop = asyncio.Event()

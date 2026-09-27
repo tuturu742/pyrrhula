@@ -51,29 +51,28 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_tracing(service_name="pyrrhula-api")
-    # First boot on a fresh database: the default (baked) workflow plugin syncs itself
-    # and the env-configured platform-admin account is ensured. Both best-effort and
-    # idempotent -- a failure surfaces in logs/console panels, never blocks startup.
-    try:
-        from core.plugins.service import ensure_default_synced
+    # First boot on a fresh database: the default (baked) workflow plugin syncs itself,
+    # the env-configured platform-admin account is ensured, and the admin console's
+    # retrieval override is folded in. All idempotent, and all retried until the database
+    # answers (core.startup): on a fresh install this process routinely starts before
+    # Postgres does, and a one-shot attempt left deployments with no admin account.
+    from api.admin_bootstrap import ensure_admin_account
+    from core.deployment_settings import apply_retrieval_override
+    from core.plugins.service import ensure_default_synced
+    from core.startup import run_boot_hooks
 
-        await ensure_default_synced()
-    except Exception as exc:  # noqa: BLE001
-        log.warning("plugins.default_sync_failed", error=str(exc)[:300])
-    try:
-        from api.admin_bootstrap import ensure_admin_account
-
-        await ensure_admin_account()
-    except Exception as exc:  # noqa: BLE001
-        log.warning("admin_bootstrap.failed", error=str(exc)[:300])
-    try:
-        from core.deployment_settings import apply_retrieval_override
-
+    async def _retrieval_override() -> None:
         applied = await apply_retrieval_override()
         if applied:
             log.info("retrieval.override_applied", model=applied.get("embedding_model"))
-    except Exception as exc:  # noqa: BLE001
-        log.warning("retrieval.override_failed", error=str(exc)[:300])
+
+    await run_boot_hooks(
+        [
+            ("plugins.default_sync", ensure_default_synced),
+            ("admin_bootstrap", ensure_admin_account),
+            ("retrieval.override", _retrieval_override),
+        ]
+    )
     log.info("api.startup")
     yield
     await close_redis()
