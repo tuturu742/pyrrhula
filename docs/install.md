@@ -102,8 +102,19 @@ deployment runs is a decision its operator makes, so it is made where decisions 
 - **Download from Hugging Face** — a background job; the sizes on that page grow as it
   runs. Safe to press twice.
 - **Upload cache archive** — for a deployment with no route to `huggingface.co`. On a
-  machine that has one, fetch the models, then
-  `tar czf cache.tgz -C ~/.cache/huggingface hub` and upload that file.
+  machine that has one, with Python and `pip install huggingface_hub`:
+
+  ```bash
+  python -c "from huggingface_hub import snapshot_download as d; d('BAAI/bge-m3'); d('BAAI/bge-reranker-v2-m3')"
+  tar czf cache.tgz -C ~/.cache/huggingface hub
+  ```
+
+  The first line downloads into `~/.cache/huggingface/hub` (substitute the models you
+  chose); the second archives that `hub` directory — `-C` changes into its parent and
+  `hub` is what gets archived, so the command is written exactly as shown, not with
+  `hub` appended to the path. Upload `cache.tgz` on the Models page. An archive of the
+  directory's contents (`tar czf cache.tgz -C ~/.cache/huggingface/hub .`) is accepted
+  too: the upload looks for the `models--<org>--<name>` directories wherever they sit.
 
 Until you do, the deployment is *installed and working* — it just cannot answer a
 semantic query. Knowledge still ingests, chunks and stores; sessions still run. The

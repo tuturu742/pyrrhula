@@ -136,10 +136,23 @@ function ModelCacheCard() {
         </p>
       ) : null}
       {missing.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Air-gapped? On a machine that can reach Hugging Face, fetch the models, then{" "}
-          <code>tar czf cache.tgz -C ~/.cache/huggingface hub</code> and upload that here.
-        </p>
+        <div className="text-xs text-muted-foreground">
+          <p>
+            Air-gapped? On a machine that can reach Hugging Face, with Python and{" "}
+            <code>pip install huggingface_hub</code>:
+          </p>
+          <pre className="mt-1 overflow-x-auto rounded-md bg-secondary/40 p-2 font-mono">
+{`python -c "from huggingface_hub import snapshot_download as d; ${missing
+  .map((m) => `d('${m.model.replace(/^local\//, "")}')`)
+  .join("; ")}"
+tar czf cache.tgz -C ~/.cache/huggingface hub`}
+          </pre>
+          <p className="mt-1">
+            The first line downloads into <code>~/.cache/huggingface/hub</code>; the second
+            archives that <code>hub</code> directory (<code>-C</code> changes into its parent,{" "}
+            <code>hub</code> is what gets archived). Upload <code>cache.tgz</code> here.
+          </p>
+        </div>
       ) : null}
     </div>
   );
