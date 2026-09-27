@@ -83,8 +83,8 @@ function ModelCacheCard() {
         <h2 className="text-sm font-medium">On this deployment</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Models are cached in <code>{data?.cache_path ?? "…"}</code>, shared by the api and
-          the worker. Nothing here is required: whatever is missing is fetched the first
-          time something embeds — that first call is just slow.
+          the worker. Nothing is fetched on its own: until a model is present, semantic
+          search is refused and says so, while knowledge still ingests and chunks.
         </p>
       </div>
 
@@ -106,7 +106,7 @@ function ModelCacheCard() {
         <Button
           size="sm"
           variant="outline"
-          disabled={download.isPending || data?.offline}
+          disabled={download.isPending}
           onClick={() => download.mutate()}
         >
           {download.isPending ? "Queueing…" : "Download from Hugging Face"}
