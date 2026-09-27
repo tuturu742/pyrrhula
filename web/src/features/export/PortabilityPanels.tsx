@@ -49,6 +49,7 @@ const SECTION_LABEL: Record<string, string> = {
 export function ImportPanel({ workspaceId }: { workspaceId: string }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -129,38 +130,61 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
         scanner land in the quarantine queue below and stay out of retrieval until a
         person approves each one.
       </p>
-      <div className="flex items-center gap-2">
+      {/* The native file control draws its own unthemed button and grows with the
+          filename, which pushed the row past the card on a long name. A themed button
+          over a hidden input, with the name shown separately and allowed to truncate,
+          and a row that wraps instead of overflowing. */}
+      <div className="flex flex-wrap items-center gap-2">
         <input
           ref={fileInput}
           type="file"
           accept=".pyr,.tar.gz,.tgz"
-          className="text-sm"
-          onChange={() => {
+          className="hidden"
+          onChange={(e) => {
+            setFileName(e.target.files?.[0]?.name ?? null);
             setInspection(null);
             setResult(null);
           }}
         />
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0"
+          onClick={() => fileInput.current?.click()}
+        >
+          Choose file
+        </Button>
+        <span
+          className="max-w-[16rem] truncate text-sm text-muted-foreground"
+          title={fileName ?? undefined}
+        >
+          {fileName ?? "No file chosen"}
+        </span>
         <input
           type="password"
           placeholder="password (if encrypted)"
           autoComplete="off"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-52 rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          className="w-52 min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
         />
         <Button
           variant="outline"
-          disabled={inspect.isPending}
+          className="shrink-0"
+          disabled={inspect.isPending || !fileName}
           onClick={() => inspect.mutate()}
         >
           {inspect.isPending ? "Reading…" : "Inspect"}
         </Button>
         <Button
           variant="outline"
+          className="shrink-0"
           // Nothing ticked must never reach the server: an empty `sections` field arrives
           // as absent, and absent means "import everything" -- so the one click that
           // clearly means "none of it" would otherwise do the most.
-          disabled={importBundle.isPending || (inspection !== null && chosen.size === 0)}
+          disabled={
+            importBundle.isPending || !fileName || (inspection !== null && chosen.size === 0)
+          }
           onClick={() => importBundle.mutate()}
         >
           {importBundle.isPending
