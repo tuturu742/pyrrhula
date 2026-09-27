@@ -25,6 +25,7 @@ import importlib
 import os
 import pathlib
 import shutil
+import socket
 import tarfile
 from dataclasses import dataclass
 from typing import IO, Any
@@ -116,6 +117,21 @@ def fetch_models(embedding_model: str, reranker_model: str | None) -> dict[str, 
     # So flip the constants the libraries actually consult, and put them back. Both are
     # set: the environment for anything imported after this point, the constants for
     # everything already holding a copy.
+    # Say what is actually wrong before the client library gets a chance to. A container
+    # that cannot resolve the host fails inside huggingface_hub with "Cannot send a
+    # request, as the client has been closed", which names neither the network nor the
+    # fix; found on a host whose resolver was systemd-resolved's loopback address.
+    host = os.environ.get("HF_ENDPOINT", "https://huggingface.co").split("://", 1)[-1].split("/")[0]
+    try:
+        socket.getaddrinfo(host, 443)
+    except OSError as exc:
+        raise ModelFetchError(
+            f"this container cannot resolve {host} ({exc}). On compose, the host's resolver "
+            "is probably a loopback address containers cannot reach: rerun the installer "
+            "(it now picks the upstream resolver) or set PYRRHULA_COMPOSE_DNS. With no route "
+            "to Hugging Face at all, upload a cache archive instead."
+        ) from exc
+
     offline_vars = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
     previous_env = {name: os.environ.get(name) for name in offline_vars}
     for name in offline_vars:
@@ -154,6 +170,10 @@ def fetch_models(embedding_model: str, reranker_model: str | None) -> dict[str, 
         "embedding": presence(embedding_model).as_dict(),
         "reranker": presence(reranker_model).as_dict() if reranker_model else None,
     }
+
+
+class ModelFetchError(RuntimeError):
+    """A download that could not start, with the reason and the fix in the message."""
 
 
 class CacheUploadError(ValueError):

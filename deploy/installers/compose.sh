@@ -178,15 +178,23 @@ fi
 # only nameserver is 127.0.0.53, a loopback address that means nothing in a container's
 # namespace, and podman's DNS forwards there. Say so now rather than at the first
 # download, and say what to do about it.
-if command -v podman >/dev/null && [ "$ENGINE" = podman ]; then
-  if grep -qs '^nameserver 127\.' /etc/resolv.conf; then
-    echo "   note: this host resolves DNS through a loopback address (127.0.0.x)."
-    echo "         Containers cannot reach that, so downloads inside the deployment"
-    echo "         will fail with connection errors that look like an outage."
-    echo "         Fix once, either way:"
-    echo "           - podman: add   dns_servers = [\"1.1.1.1\"]   under [containers]"
-    echo "             in ~/.config/containers/containers.conf, or"
-    echo "           - set PYRRHULA_COMPOSE_DNS=1.1.1.1 before this installer."
+# Rather than tell the operator to fix it, use the resolver systemd-resolved itself
+# forwards to: /run/systemd/resolve/resolv.conf lists the real upstreams (k3s does the
+# same). Link-local IPv6 entries carry a scope a container cannot use, so only IPv4 is
+# taken; with nothing usable, a public resolver and a note. PYRRHULA_COMPOSE_DNS set by
+# the operator always wins.
+if [ -z "${PYRRHULA_COMPOSE_DNS:-}" ] && grep -qs '^nameserver 127\.' /etc/resolv.conf; then
+  UPSTREAM=$(sed -n 's/^nameserver \([0-9][0-9.]*\)$/\1/p' /run/systemd/resolve/resolv.conf 2>/dev/null | head -1)
+  if [ -n "$UPSTREAM" ]; then
+    export PYRRHULA_COMPOSE_DNS="$UPSTREAM"
+    echo "   note: this host resolves DNS through a loopback address (127.0.0.x), which a"
+    echo "         container cannot reach; using its upstream resolver $UPSTREAM inside the"
+    echo "         deployment instead (set PYRRHULA_COMPOSE_DNS to choose another)."
+  else
+    export PYRRHULA_COMPOSE_DNS="1.1.1.1"
+    echo "   note: this host resolves DNS through a loopback address (127.0.0.x) and names"
+    echo "         no upstream; using 1.1.1.1 inside the deployment (set PYRRHULA_COMPOSE_DNS"
+    echo "         to choose another)."
   fi
 fi
 
