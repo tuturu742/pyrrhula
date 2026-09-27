@@ -1,7 +1,7 @@
 # Pyrrhula
 
 [![CI](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml/badge.svg)](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **A multi-tenant platform for structured, auditable, asymmetric-knowledge multi-agent
 conversations — where who-knows-what is enforced by the system, not requested of the model.**
@@ -191,25 +191,21 @@ bug in one of them.
 
 ## Licence
 
-Pyrrhula is free software under the **GNU Affero General Public License v3.0 only**
-([LICENSE](LICENSE)). Run it, study it, change it, share it.
+Pyrrhula is free software under the **MIT License** ([LICENSE](LICENSE)). Run it, study
+it, change it, ship it, host it — commercially or not — with nothing owed back but the
+licence notice. Contributions come in under the [CLA](CLA.md), which keeps the project
+free to offer other terms later without asking every contributor again.
 
-The Affero clause is the part that matters here: if you modify Pyrrhula and let other
-people use it **over a network**, you have to offer them the source of your modified
-version. An ordinary GPL would not require that, and this is a product people run as a
-service.
-
-Two things that are deliberately *not* AGPL, because they are content you are meant to
-adapt rather than code you are meant to extend:
+All three repositories carry the same licence:
 
 | Repository | Licence |
 |---|---|
-| Pyrrhula (this repository) | AGPL-3.0-only |
+| Pyrrhula (this repository) | MIT |
 | [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples) — importable example workspaces | MIT |
 | [pyrrhula-workflows](https://github.com/tuturu742/pyrrhula-workflows) — workflow packs (schemas, flows, axes) | MIT |
 
-So a `.pyr` bundle you build from a sample, or a workflow pack you write starting from
-one of ours, carries no obligation back to us. Only the engine does.
+So a `.pyr` bundle you build from a sample, a workflow pack you write starting from one
+of ours, and a deployment you modify all carry no obligation back to us.
 
 Copyright © 2026 tuturu742.
 

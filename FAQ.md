@@ -50,12 +50,12 @@ and rerank models (bge-m3 family by default) are self-hosted and swappable. A hy
 deployment can pin which purposes (generation, gate, embed, …) may reach hosted
 providers, per tenant, via the egress policy.
 
-## Why AGPL?
+## Why MIT?
 
-The engine's value is easy to wrap in a closed SaaS, and AGPL is the licence that keeps
-improvements flowing back when someone does. Packs and samples are MIT — content you
-build from them carries no obligation. If AGPL genuinely blocks your use case, the CLA
-keeps dual-licensing possible: open an issue and ask.
+Because the thing that matters at this stage is that people can try it, run it and build
+on it without asking anyone. Engine, packs and samples are all MIT, so nothing you build
+or host carries an obligation back. Contributions come in under a CLA, which keeps the
+project free to offer other terms later without asking every contributor again.
 
 ## How is this different from…
 

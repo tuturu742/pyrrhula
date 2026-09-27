@@ -99,8 +99,8 @@ aware that would make these representations inaccurate in any respect.
 **You keep your copyright.** This agreement grants a licence; it is not an assignment.
 Your contribution remains yours, and you may use it elsewhere however you like.
 
-**Pyrrhula is distributed under AGPL-3.0-only.** Your contribution is published under that
-licence like the rest of the project.
+**Pyrrhula is distributed under the MIT License.** Your contribution is published under
+that licence like the rest of the project.
 
 **Corporate contributors.** If you are contributing on behalf of an employer that holds
 rights in your work, clause 4 applies. Raise it in the pull request and a corporate

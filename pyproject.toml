@@ -2,7 +2,7 @@
 name = "pyrrhula"
 version = "0.1.0"
 description = "Multi-tenant, multi-agent orchestration platform (tabletop-RPG-first, enterprise-second)"
-license = "AGPL-3.0-only"
+license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
