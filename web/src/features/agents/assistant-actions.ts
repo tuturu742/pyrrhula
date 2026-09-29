@@ -13,6 +13,20 @@ export interface ApplyResult {
 
 type Args = Record<string, unknown>;
 const s = (v: unknown): string => (typeof v === "string" ? v : String(v ?? ""));
+/** A model writes a list as a comma-separated string as often as it writes an array. */
+const list = (v: unknown): string[] =>
+  Array.isArray(v)
+    ? v.map(s).filter(Boolean)
+    : s(v)
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+const bool = (v: unknown): boolean =>
+  v === true || ["true", "yes", "1"].includes(s(v).toLowerCase());
+const num = (v: unknown): number => {
+  const parsed = Number.parseInt(s(v), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 async function sourceIdByKey(key: string): Promise<string | null> {
   const { data } = await apiClient.GET("/knowledge/sources");
@@ -79,18 +93,60 @@ export async function applyAssistantAction(
             title: s(args.title),
             body_md: s(args.body_md),
             class: s(args.class ?? "lore"),
-            scope_key: "workspace_public",
-            keys: [],
+            scope_key: s(args.scope_key || "workspace_public"),
+            keys: list(args.keys),
             secondary_keys: [],
             logic: "AND",
             use_regex: false,
-            constant: false,
+            constant: bool(args.constant),
             position: "before_char",
-            insertion_order: 0,
+            insertion_order: num(args.insertion_order),
           },
         },
       );
       return result(error, "Entry saved (draft).");
+    }
+    case "attach_knowledge_source": {
+      const sourceId = await sourceIdByKey(s(args.source_key));
+      if (!sourceId) return { ok: false, detail: `no source ${s(args.source_key)}` };
+      const { error } = await apiClient.POST("/knowledge/sources/{source_id}/attachments", {
+        params: { path: { source_id: sourceId } },
+        body: {
+          workspace_id: workspaceId,
+          scope_key: s(args.scope_key || "workspace_public"),
+          priority_weight: 1.0,
+          enabled: true,
+        },
+      });
+      return result(error, "Source attached to this workspace.");
+    }
+    case "create_process_definition": {
+      const { error } = await apiClient.POST("/process-definitions", {
+        body: {
+          key: s(args.key),
+          name: s(args.name),
+          definition: (args.definition ?? {}) as Record<string, never>,
+          workspace_id: workspaceId,
+        },
+      });
+      return result(error, "Flow created.");
+    }
+    case "create_session": {
+      const { error } = await apiClient.POST("/sessions", {
+        body: {
+          workspace_id: workspaceId,
+          process_definition_id: s(args.process_definition_id),
+          supervisor_persona_id: s(args.supervisor_persona_id),
+          participant_persona_ids: list(args.participant_persona_ids),
+          name: args.name ? s(args.name) : null,
+          agenda_md: args.agenda_md ? s(args.agenda_md) : null,
+          turn_policy: (s(args.turn_policy || "auto") === "directed"
+            ? "directed"
+            : "auto") as "auto" | "directed",
+          repo_ids: [],
+        },
+      });
+      return result(error, "Session started.");
     }
     case "create_knowledge_source": {
       const { error } = await apiClient.POST("/knowledge/sources", {

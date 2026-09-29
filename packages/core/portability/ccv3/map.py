@@ -118,7 +118,8 @@ async def import_card(
         if reason is not None:
             result.quarantined.append((entry.entry_key, reason))
 
-    version = await publish_version(tenant_id, source.id)
+    # chunk=False: this importer writes one whole-body chunk per entry below, on purpose.
+    version = await publish_version(tenant_id, source.id, chunk=False)
     await attach_source_to_workspace(
         tenant_id, workspace_id, source.id, "workspace_public", version_pin=version.id
     )
@@ -189,8 +190,9 @@ async def _chunk_published_entries(
     it into pieces that retrieve independently, which changes the activation behaviour the
     card's author tuned. The whole reason to import a card faithfully is that behaviour.
 
-    Chunks are created here rather than by the ingestion pipeline because a card is not a
-    document upload; it arrives already structured. Embeddings stay the existing
+    Chunks are created here rather than by ``publish_version``'s default chunker (which
+    is asked not to, ``chunk=False``) because a card is not a document; it arrives already
+    structured. Embeddings stay the existing
     `embed_chunks` job's job -- the API route enqueues it after import, and until it runs
     the entries retrieve through the keyed/sparse paths, which is exactly how lore is
     meant to fire anyway."""

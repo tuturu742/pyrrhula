@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from core.agents.tools import ToolContext, ToolHandler, ToolResult
 from core.mcp.client import (
@@ -30,8 +33,10 @@ from core.mcp.registry import list_servers
 from core.ports.mcp import McpTransport, McpTransportError
 from core.ports.model_provider import ToolSpec
 from core.process.dsl.schema import BudgetSpec, PhaseSpec, VisibilitySpec
-from core.sessions.models import SessionRow
+from core.sessions.models import SessionEventRow, SessionRow
 from core.tenancy.scope import tenant_scope
+
+OnEvent = Callable[[int, str, dict[str, Any]], Awaitable[None]]
 
 # Keys served by dedicated transports/handlers -- never surfaced through this module.
 # `web_fetch` belongs here for the same reason `web_search` does, and leaving it out was a
@@ -101,6 +106,43 @@ async def remote_tools_for_workspace(
     return out
 
 
+# How much of a tool's answer the transcript keeps. The model saw the whole thing (up to
+# the server's own result cap); the event is for a person reading along, and a page of
+# search results in the middle of a conversation is not reading along.
+_EVENT_RESULT_CHARS = 2000
+
+
+async def _record_tool_call_event(
+    ctx: ToolContext,
+    event_seq: int,
+    payload: dict[str, object],
+    on_event: OnEvent | None,
+) -> None:
+    """The transcript's own account of a remote tool call, at the seq the handler
+    reserved for it.
+
+    Until this existed a call to a registered MCP server left the transcript exactly one
+    trace: a `tool_calls_made` count on the message that followed. The request the model
+    made and what came back lived only in the idempotency ledger, which has no reader --
+    so a lab answer the inspector narrated could not be checked against what the lab said,
+    and a refused or failed call looked the same as a successful one. This is a durable
+    `session_event`, so it replays on reconnect and renders inline like a phase change.
+    """
+    assert ctx.session_id is not None
+    async with tenant_scope(ctx.tenant_id) as session:
+        session.add(
+            SessionEventRow(
+                tenant_id=ctx.tenant_id,
+                session_id=ctx.session_id,
+                event_seq=event_seq,
+                kind="tool_call",
+                payload=payload,
+            )
+        )
+    if on_event is not None:
+        await on_event(event_seq, "tool_call", payload)
+
+
 def make_remote_tool_handler(
     *,
     workspace_id: uuid.UUID,
@@ -108,6 +150,8 @@ def make_remote_tool_handler(
     tool_name: str,
     all_tool_names: list[str],
     transport: McpTransport,
+    on_event: OnEvent | None = None,
+    author: str = "",
 ) -> ToolHandler:
     async def handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
         if ctx.session_id is None:
@@ -124,6 +168,13 @@ def make_remote_tool_handler(
             row.next_event_seq = event_seq + 1
 
         arguments = {k: v for k, v in args.items() if k != "_context"}
+        event: dict[str, object] = {
+            "server_key": server_key,
+            "tool_name": tool_name,
+            "arguments": arguments,
+            "author": author,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
         try:
             invocation = await mcp_call_tool(
                 ctx.tenant_id,
@@ -139,6 +190,9 @@ def make_remote_tool_handler(
         except SessionCallCapError as exc:
             # The model gets a plain, honest refusal it can reason about -- the same
             # shape the sample lab's own budget message takes -- rather than a failure.
+            await _record_tool_call_event(
+                ctx, event_seq, {**event, "outcome": "refused", "message": str(exc)}, on_event
+            )
             return ToolResult(
                 content=json.dumps(
                     {
@@ -148,21 +202,35 @@ def make_remote_tool_handler(
                 )
             )
         except ConfirmationRequiredError:
+            message = (
+                f"tool {tool_name!r} is effectful and its registration requires "
+                "operator confirmation; it cannot be auto-invoked from a model turn"
+            )
+            await _record_tool_call_event(
+                ctx, event_seq, {**event, "outcome": "refused", "message": message}, on_event
+            )
             return ToolResult(
-                content=json.dumps(
-                    {
-                        "error": "confirmation_required",
-                        "message": (
-                            f"tool {tool_name!r} is effectful and its registration requires "
-                            "operator confirmation; it cannot be auto-invoked from a model turn"
-                        ),
-                    }
-                )
+                content=json.dumps({"error": "confirmation_required", "message": message})
             )
         except (McpTransportError, ToolNotAvailableError) as exc:
+            await _record_tool_call_event(
+                ctx, event_seq, {**event, "outcome": "failed", "message": str(exc)[:300]}, on_event
+            )
             return ToolResult(
                 content=json.dumps({"error": "remote_tool_failed", "message": str(exc)[:300]})
             )
+        result_text = invocation.raw.content
+        await _record_tool_call_event(
+            ctx,
+            event_seq,
+            {
+                **event,
+                "outcome": "failed" if invocation.raw.is_error else "completed",
+                "result": result_text[:_EVENT_RESULT_CHARS],
+                "result_truncated": len(result_text) > _EVENT_RESULT_CHARS,
+            },
+            on_event,
+        )
         return ToolResult(content=invocation.envelope)
 
     return handler

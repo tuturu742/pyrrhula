@@ -1029,3 +1029,52 @@ def test_a_value_refusal_only_drops_the_parameter_it_names() -> None:
     )
     assert named == "temperature"
     assert _unsupported_value_param(Exception("AuthenticationError: invalid api key")) is None
+
+
+async def test_reasoning_streamed_beside_a_tool_call_rides_on_the_tool_call_chunk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DeepSeek streams its thinking as `reasoning_content` deltas, then the tool call.
+    The runtime needs that reasoning to hand back with the call, so it arrives on the
+    same chunk; a delta without the field (a MagicMock here, an OpenAI delta in life)
+    contributes nothing."""
+    import litellm
+
+    def _part(content="", reasoning=None, fragment=None, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        delta = MagicMock(content=content, tool_calls=[fragment] if fragment else None)
+        delta.reasoning_content = reasoning
+        choice.delta = delta
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    fragment = MagicMock()
+    fragment.index = 0
+    fragment.id = "call_1"
+    fragment.function = MagicMock()
+    fragment.function.name = "randomizer"
+    fragment.function.arguments = '{"expression": "2d6"}'
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        async def gen():
+            yield _part(reasoning="A reaction roll ")
+            yield _part(reasoning="is 2d6.")
+            yield _part(fragment=fragment)
+            yield _part(finish="tool_calls")
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="deepseek/deepseek-v4-pro",
+        messages=[{"role": "user", "content": "The reeve eyes the strangers."}],
+        purpose="generation",
+    )
+    chunks = [c async for c in provider.generate(req)]
+    with_call = next(c for c in chunks if c.tool_calls)
+    assert with_call.tool_calls[0].name == "randomizer"
+    assert with_call.reasoning == "A reaction roll is 2d6."

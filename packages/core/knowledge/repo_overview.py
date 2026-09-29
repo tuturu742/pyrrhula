@@ -25,7 +25,6 @@ from core.knowledge.authoring import (
     upsert_draft_entry,
 )
 from core.knowledge.models import KnowledgeEntry, KnowledgeSource
-from core.knowledge.publish_chunks import chunk_published_entries
 from core.tenancy.scope import tenant_scope
 
 _SCOPE_KEY = "workspace_public"
@@ -113,11 +112,10 @@ async def save_repo_overview(
             scope_key=_SCOPE_KEY,
         ),
     )
+    # Publishing chunks the version (core.knowledge.authoring.publish_version); before it
+    # did, this module chunked here itself, and before THAT it chunked nowhere and its
+    # docstring promised retrieval anyway.
     version = await publish_version(tenant_id, source.id, change_note=change_note)
-    # Publishing alone would leave all three entries out of retrieval entirely: the
-    # assembler reads chunks, so an unchunked entry is visible to the graph page and to
-    # nothing else -- which is what this module's docstring used to promise the opposite of.
-    await chunk_published_entries(tenant_id, source.id, version.id)
     return source.id, version.id
 
 

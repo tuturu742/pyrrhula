@@ -53,14 +53,22 @@ async def rerank_bucket(
     *,
     top_k_in: int = TOP_K_IN,
     top_k_out: int = TOP_K_OUT,
+    constant_chunk_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> list[FusedHit]:
     """``chunk_texts`` maps chunk_id -> chunk text (``FusedHit`` doesn't carry it — the
     same separation ``core.knowledge.embedding`` uses, accepting text as a parameter
     rather than fetching it itself; ``fetch_chunk_texts`` above is the DB-touching half a
-    caller uses to build this dict)."""
-    candidates_in = fused[:top_k_in]
+    caller uses to build this dict).
+
+    ``constant_chunk_ids`` are the always-on entries. They are not the reranker's to
+    judge: a constant entry's rank is an author's decision, and the top-k caps here were
+    dropping them whenever a large source put enough plausible chunks ahead of them --
+    a rulebook of seven hundred chunks and the table's own "how to call a roll" note was
+    gone. They come first, in their fused order, and the rest is reranked and capped."""
+    constants = [h for h in fused if h.chunk_id in constant_chunk_ids]
+    candidates_in = [h for h in fused if h.chunk_id not in constant_chunk_ids][:top_k_in]
     if not candidates_in:
-        return []
+        return constants
 
     with _tracer.start_as_current_span("rerank.rerank_bucket") as span:
         span.set_attribute("pyrrhula.rerank.candidate_count", len(candidates_in))
@@ -81,7 +89,7 @@ async def rerank_bucket(
         key=lambda hit: (-score_by_chunk.get(hit.chunk_id, float("-inf")), str(hit.chunk_id)),
     )[:top_k_out]
 
-    return [
+    return constants + [
         FusedHit(
             chunk_id=hit.chunk_id,
             entry_id=hit.entry_id,

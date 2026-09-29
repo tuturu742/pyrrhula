@@ -62,6 +62,20 @@ A useful test when filing a source: *if the model contradicts this text, is that
   misc 0.1`, discussion `lore 0.8 / misc 0.2`, and action/resolution turns
   `rules 0.75 / lore 0.25`. Author flows with the same intent: rules where correctness
   matters, lore where narration does, misc as seasoning.
+- **A phase's `max_tokens` is a floor, not the whole answer.** A flow is portable and the
+  model is chosen later, so a frontier model would otherwise be handed the same budget as
+  a local one. Where the platform recognises the model, knowledge gets a capped share of
+  its context window instead, never less than the flow asked for. Where it does not — an
+  OpenAI-compatible endpoint with an unfamiliar model name, say — the flow's number stands.
+  Set `knowledge_token_budget` on the connection to decide it yourself.
+- **Always-on (`constant`) entries take at most a share of a class's slice**, so attaching
+  a handbook beside them is not pointless. Room search does not spend comes back to them,
+  and they are offered in the author's `insertion_order`. A workspace's **Knowledge
+  budget** card shows, per phase and class, what each gets and which always-on entries
+  fit — worth a look after importing anything large.
+- **A `rules` entry with no activation keys gets them from its own title when published**,
+  so an ingested handbook answers to what a turn *names* rather than only to what it
+  resembles. The entry editor says when keys were derived; edit or clear them freely.
 - The [sample workspaces](https://github.com/tuturu742/pyrrhula-samples) that carry
   knowledge ship the classes their flow budgets, so an imported sample demonstrates the split
   end to end.

@@ -1158,6 +1158,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/knowledge/workspaces/{workspace_id}/saturation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace Saturation Endpoint
+         * @description Does this workspace's knowledge have room to be retrieved under this flow?
+         *
+         *     Per phase and class: the bucket the phase gives it, and what the always-on entries
+         *     already occupy. A saturated class is one whose constants fill the bucket, which turns
+         *     retrieval for that class off -- silently, because a full bucket is what a bucket is
+         *     for. Read-only arithmetic over attachments, entries and the flow.
+         */
+        get: operations["workspace_saturation_endpoint_knowledge_workspaces__workspace_id__saturation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/knowledge/sources/{source_id}/ingest": {
         parameters: {
             query?: never;
@@ -1674,9 +1699,9 @@ export interface paths {
         /**
          * Starter Team Endpoint
          * @description Onboarding shortcut: a working roster in one click -- Lead (supervisor) + two
-         *     participants, each with the workspace role agent personas need to act on entities
-         *     and take turns (supervisor->facilitator, participant->participant). Idempotent by
-         *     persona key; safe to call on a workspace that already has some of them.
+         *     participants. Each gets the workspace role its type implies from ``create_persona``
+         *     itself, the same as a persona made any other way. Idempotent by persona key; safe to
+         *     call on a workspace that already has some of them.
          */
         post: operations["starter_team_endpoint_agents_starter_team_post"];
         delete?: never;
@@ -4657,6 +4682,31 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /** ClassSaturationResponse */
+        ClassSaturationResponse: {
+            /** Class */
+            class: string;
+            /** Bucket Tokens */
+            bucket_tokens: number;
+            /** Constant Tokens */
+            constant_tokens: number;
+            /** Retrievable Tokens */
+            retrievable_tokens: number;
+            /** Constant Entries */
+            constant_entries: number;
+            /** Admitted Constant Entries */
+            admitted_constant_entries: number;
+            /** Admitted Constant Tokens */
+            admitted_constant_tokens: number;
+            /** Dropped Constant Entries */
+            dropped_constant_entries: number;
+            /** Constant Entry Keys */
+            constant_entry_keys: string[];
+            /** Saturated */
+            saturated: boolean;
+            /** Tight */
+            tight: boolean;
+        };
         /** ClockResponse */
         ClockResponse: {
             /** Clock Value */
@@ -5260,6 +5310,11 @@ export interface components {
              * @default []
              */
             keys: string[];
+            /**
+             * Keys Derived
+             * @default false
+             */
+            keys_derived: boolean;
             /**
              * Secondary Keys
              * @default []
@@ -5934,6 +5989,17 @@ export interface components {
             /** Scopes */
             scopes: string[];
         };
+        /** PhaseSaturationResponse */
+        PhaseSaturationResponse: {
+            /** Phase Key */
+            phase_key: string;
+            /** Max Tokens */
+            max_tokens: number;
+            /** History Reserved Tokens */
+            history_reserved_tokens: number;
+            /** Classes */
+            classes: components["schemas"]["ClassSaturationResponse"][];
+        };
         /** PluginRepoOut */
         PluginRepoOut: {
             /**
@@ -6569,6 +6635,16 @@ export interface components {
              * Format: uuid
              */
             await_state_id: string;
+        };
+        /** SaturationResponse */
+        SaturationResponse: {
+            /**
+             * Process Definition Id
+             * Format: uuid
+             */
+            process_definition_id: string;
+            /** Phases */
+            phases: components["schemas"]["PhaseSaturationResponse"][];
         };
         /** SchemaDefinitionDiffResponse */
         SchemaDefinitionDiffResponse: {
@@ -10012,6 +10088,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttachmentResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_saturation_endpoint_knowledge_workspaces__workspace_id__saturation_get: {
+        parameters: {
+            query: {
+                process_definition_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaturationResponse"];
                 };
             };
             /** @description Validation Error */

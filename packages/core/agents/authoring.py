@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from core.agents.models import Agent, Persona, PersonaVersion, ProviderCredentialRow
 from core.ports.encryptor import Encryptor
-from core.tenancy.models import Principal
+from core.tenancy.models import Principal, WorkspaceMembership
 from core.tenancy.scope import tenant_scope
 
 
@@ -162,6 +162,21 @@ async def archive_agent(tenant_id: uuid.UUID, agent_id: uuid.UUID) -> None:
         await session.flush()
 
 
+# The workspace role a persona needs to do what its type implies: a supervisor
+# conducts and adjudicates (facilitator), a participant acts on entities and takes turns
+# (participant), an informational persona answers questions and touches nothing
+# (viewer). Permission checks key on this membership -- `entity:create` and
+# `secret:create` are workspace grants -- so a persona without one exists but cannot
+# act. That was the state of every persona made outside the onboarding shortcut: the
+# editor's own create form and every imported bundle produced casts that rolled their
+# scores and were then refused the sheet.
+WORKSPACE_ROLE_FOR_PERSONA_TYPE: dict[str, str] = {
+    "supervisor": "facilitator",
+    "participant": "participant",
+    "informational": "viewer",
+}
+
+
 async def create_persona(
     tenant_id: uuid.UUID,
     workspace_id: uuid.UUID,
@@ -195,6 +210,15 @@ async def create_persona(
         )
         session.add(agent)
         await session.flush()
+        session.add(
+            WorkspaceMembership(
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                principal_id=agent_principal.id,
+                role=WORKSPACE_ROLE_FOR_PERSONA_TYPE.get(persona_type, "participant"),
+            )
+        )
+        await session.flush()
         return agent
 
 
@@ -224,8 +248,18 @@ async def update_persona(
             agent.params = dict(params)
         if web_search is not None:
             agent.web_search = web_search
-        if persona_type is not None:
+        if persona_type is not None and persona_type != agent.persona_type:
             agent.persona_type = persona_type
+            # The role follows the type: a participant promoted to supervisor gets to
+            # conduct, and a supervisor demoted stops adjudicating.
+            membership = await session.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == agent.workspace_id,
+                    WorkspaceMembership.principal_id == agent.principal_id,
+                )
+            )
+            if membership is not None:
+                membership.role = WORKSPACE_ROLE_FOR_PERSONA_TYPE.get(persona_type, "participant")
         if persona_md is not None:
             agent.persona_md = persona_md
         if entity_id is not ...:

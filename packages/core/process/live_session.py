@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -32,6 +32,7 @@ from core.agents.runtime import (
 from core.agents.scheduling import make_persona_candidate_resolver
 from core.agents.tools import ToolHandler, ToolRegistry
 from core.assembler.context_assembler import assemble
+from core.assembler.knowledge_budget import effective_knowledge_tokens
 from core.assembler.manifest import write_context_manifest
 from core.behavior.directives import render_directives_for_profile
 from core.behavior.repo import get_current_behavior_profile, list_axis_definitions
@@ -194,6 +195,23 @@ def _tail_trim(
         used += len(message["content"])
     kept.reverse()
     return kept
+
+
+def needs_floor_turn(conversation: Sequence[Mapping[str, object]]) -> bool:
+    """Whether the request needs a closing user turn before the model may speak: no
+    user turn at all, or the last turn is not one (the speaker's own previous message,
+    or a tool result)."""
+    return not conversation or conversation[-1].get("role") != "user"
+
+
+def phase_resolution_tools(specs: Sequence[ToolSpec], phase: Any) -> list[ToolSpec]:
+    """The workspace's resolution tools this phase declares. The registration used to be
+    the only gate, so the supervisor carried the randomizer into every phase -- and a flow whose
+    resolve phase alone says `tools: [randomizer]` was saying so to nobody. Same reading
+    of silence as ``core.mcp.client.available_tools``: a phase that lists no tools gets
+    none."""
+    declared = set(getattr(phase, "tools", None) or [])
+    return [spec for spec in specs if spec.name in declared]
 
 
 def _phase_remote_allowlist(phase: Any) -> list[str] | None:
@@ -426,6 +444,27 @@ async def run_one_persona_turn(
             except Exception as exc:  # noqa: BLE001 -- a summary is an enrichment
                 structlog.get_logger().warning("history.summarise_failed", error=str(exc)[:200])
 
+    # How much knowledge this turn may carry. The phase says how much of this KIND of
+    # turn should be recalled; it cannot know which model will read it, because a flow is
+    # portable and the connection is chosen later by someone who never opens it. So the
+    # phase's number is a floor and the model's own window raises it, unless the
+    # connection stated a number of its own (core.assembler.knowledge_budget).
+    budget_tokens: int | None = None
+    if phase.budget is not None:
+        window: int | None = None
+        if persona_agent is not None:
+            try:
+                window = (
+                    model_provider_factory(persona_agent.provider)
+                    .capabilities(f"{persona_agent.provider}/{persona_agent.model}")
+                    .context_window
+                )
+            except Exception:  # noqa: BLE001 -- an unknown model is not a turn failure
+                window = None
+        budget_tokens = effective_knowledge_tokens(
+            phase.budget.max_tokens, params=turn_params, context_window=window
+        )
+
     _t_assemble = time.monotonic()
     manifest = await assemble(
         viewer_principal,
@@ -440,6 +479,7 @@ async def run_one_persona_turn(
         # phase declares no ratio, so this is still 0 for all of them -- the number
         # now comes from the definition instead of from this call site.
         history_max_tokens=phase.history_slice_tokens(),
+        budget_tokens=budget_tokens,
         behavior_directives_text=directives_text,
         resolved_secret_decisions=resolved_secret_decisions,
         disclosing_principal_id=principal_id,
@@ -645,8 +685,9 @@ async def run_one_persona_turn(
             resolution_tools_for_workspace,
         )
 
-        resolution_specs = await resolution_tools_for_workspace(
-            tenant_id, workspace_id, transport=mcp_transport
+        resolution_specs = phase_resolution_tools(
+            await resolution_tools_for_workspace(tenant_id, workspace_id, transport=mcp_transport),
+            phase,
         )
         resolution_names = [spec.name for spec in resolution_specs]
         for spec in resolution_specs:
@@ -713,6 +754,8 @@ async def run_one_persona_turn(
                     tool_name=spec.name,
                     all_tool_names=remote_names,
                     transport=mcp_transport,
+                    on_event=on_event,
+                    author=persona_name,
                 ),
             )
 
@@ -775,12 +818,17 @@ async def run_one_persona_turn(
         {"role": "system", "content": block} for block in system_blocks
     ]
     messages.extend(dict(turn) for turn in conversation)
-    if not any(m["role"] == "user" for m in conversation):
+    if needs_floor_turn(conversation):
         # Chat-completions backends (e.g. ollama's chat API, which litellm routes to
         # whenever tools are registered) reject a request with no user-role message.
-        # Two ways to get there: the session's first turn (empty transcript), and a
+        # Three ways to get there: the session's first turn (empty transcript), a
         # persona whose history so far is only its OWN past turns (perspective mapping
-        # keeps those 'assistant'). A neutral floor-holding line covers both.
+        # keeps those 'assistant'), and a persona speaking twice in a row -- the referee
+        # resolving a roll and then opening the next scene -- whose transcript ends on
+        # its own assistant turn. A trailing assistant message reads as "continue this
+        # text", not "reply": DeepSeek's thinking mode rejects it outright (it wants the
+        # reasoning behind the message it is being asked to continue), and every other
+        # backend quietly completes the previous line instead of taking a new turn.
         # The phase's own instruction when there is one, because a model with nothing to
         # answer answers the placeholder. The neutral line remains for a phase that
         # declares no prompt.

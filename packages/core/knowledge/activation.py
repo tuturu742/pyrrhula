@@ -87,6 +87,10 @@ class ActivatedEntry:
     entry_key: str
     rank: int
     why: str
+    # The author's own priority field, carried out so the budget can offer always-on
+    # entries in the order they were written rather than in whatever order this turn's
+    # search happened to rank them.
+    insertion_order: int = 0
 
 
 @dataclass
@@ -226,7 +230,13 @@ def activate_entries(
             )
 
         activated.append(
-            ActivatedEntry(entry_id=entry.id, entry_key=entry.entry_key, rank=0, why=why)
+            ActivatedEntry(
+                entry_id=entry.id,
+                entry_key=entry.entry_key,
+                rank=0,
+                why=why,
+                insertion_order=entry.insertion_order,
+            )
         )
 
     order_by_entry_id = {e.id: e.insertion_order for e, _ in candidates}

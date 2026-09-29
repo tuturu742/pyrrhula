@@ -63,7 +63,14 @@ from core.workflows.service import list_workflows_for_tenant
 
 log = structlog.get_logger()
 
-_MAX_TOOL_ITERATIONS = 6
+_MAX_TOOL_ITERATIONS = 12
+
+# A chat reply is short; a proposal is not. The write tools carry whole documents -- an
+# entry's body, a persona's prose, an eight-phase flow -- and 900 tokens, which is a
+# generous answer, truncates a flow document into nothing: the tool call never closes, so
+# the turn produces neither text nor a proposal and the user sees an empty reply. Sized to
+# the largest thing the catalog can be asked to write, not to the common case.
+_MAX_REPLY_TOKENS = 8000
 _CHAT_TIMEOUT_S = 300
 _MAX_HISTORY_MESSAGES = 30
 
@@ -95,6 +102,12 @@ def _obj(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
 
 def _s(description: str) -> dict[str, str]:
     return {"type": "string", "description": description}
+
+
+def _phase_keys(definition: object) -> list[str]:
+    """The phase names of a stored flow document, for the assistant to name one."""
+    phases = definition.get("phases") if isinstance(definition, dict) else None
+    return sorted(str(key) for key in phases) if isinstance(phases, dict) else []
 
 
 def _register_read_tools(
@@ -194,6 +207,35 @@ def _register_read_tools(
             )
         )
 
+    async def _list_definitions(_a: dict[str, object], _c: ToolContext) -> ToolResult:
+        from core.process.authoring import list_definitions
+
+        rows = await list_definitions(tenant_id, workspace_id=workspace_id)
+        return ToolResult(
+            content=json.dumps(
+                [
+                    {
+                        "id": str(r.id),
+                        "key": r.key,
+                        "name": r.name,
+                        "version": r.version,
+                        "phases": _phase_keys(r.definition),
+                    }
+                    for r in rows
+                ]
+            )
+        )
+
+    async def _get_definition(args: dict[str, object], _c: ToolContext) -> ToolResult:
+        from core.process.authoring import list_definitions
+
+        wanted = str(args.get("key") or "")
+        rows = await list_definitions(tenant_id, workspace_id=workspace_id)
+        row = next((r for r in rows if r.key == wanted), None)
+        if row is None:
+            return ToolResult(content=json.dumps({"error": f"no flow {wanted!r}"}))
+        return ToolResult(content=json.dumps({"key": row.key, "definition": row.definition}))
+
     async def _list_workflows(_a: dict[str, object], _c: ToolContext) -> ToolResult:
         rows = await list_workflows_for_tenant(tenant_id)
         return ToolResult(
@@ -256,6 +298,26 @@ def _register_read_tools(
         ),
         _list_workflows,
     )
+    registry.register(
+        ToolSpec(
+            name="get_process_definition",
+            description=(
+                "Read one flow's whole DSL document by key -- the phases, actors, "
+                "visibility, budgets and transitions. Read an existing flow before "
+                "authoring one."
+            ),
+            parameters=_obj({"key": _s("the flow's key (from list_process_definitions)")}, ["key"]),
+        ),
+        _get_definition,
+    )
+    registry.register(
+        ToolSpec(
+            name="list_process_definitions",
+            description="List the flows (process definitions) this workspace can run.",
+            parameters=_obj({}, []),
+        ),
+        _list_definitions,
+    )
 
 
 # One entry per write tool: (description, JSON-schema params). Args mirror the request
@@ -300,8 +362,67 @@ _WRITE_TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
                 "title": _s("entry title"),
                 "body_md": _s("full markdown body"),
                 "class": _s("rules | lore | misc"),
+                "scope_key": _s(
+                    "who may read it: workspace_public (default, everyone) or "
+                    "facilitator_only (the referee/supervisor alone)"
+                ),
+                "constant": _s(
+                    "'true' to put this entry in EVERY turn regardless of the "
+                    "conversation. Reserve it for the one or two things that must "
+                    "always be present; everything else should be retrieved."
+                ),
+                "keys": _s(
+                    "comma-separated words that should activate this entry when they "
+                    "appear in a turn. Leave empty for a rules entry and the title is "
+                    "used."
+                ),
+                "insertion_order": _s("author priority among always-on entries (lower first)"),
             },
             ["source_key", "entry_key", "title", "body_md"],
+        ),
+    ),
+    "attach_knowledge_source": (
+        "Attach a knowledge source to this workspace so its entries can be retrieved. "
+        "A source that is created and published but never attached reaches nobody.",
+        _obj(
+            {
+                "source_key": _s("knowledge source key"),
+                "scope_key": _s("scope the attachment reads under (default workspace_public)"),
+            },
+            ["source_key"],
+        ),
+    ),
+    "create_process_definition": (
+        "Author a flow (process definition): its phases, actors, visibility, budgets and "
+        "transitions, as the DSL document. Validated on apply; invalid documents are "
+        "refused with the reason.",
+        _obj(
+            {
+                "key": _s("stable slug"),
+                "name": _s("display name"),
+                "definition": {
+                    "type": "object",
+                    "description": (
+                        "the whole DSL document: name, vocabulary_overlay, initial_phase, "
+                        "phases{...}, optional state"
+                    ),
+                },
+            },
+            ["key", "name", "definition"],
+        ),
+    ),
+    "create_session": (
+        "Start a session on a flow, with a supervisor persona and participants.",
+        _obj(
+            {
+                "process_definition_id": _s("flow id (from list_process_definitions)"),
+                "supervisor_persona_id": _s("the conducting persona's id"),
+                "participant_persona_ids": _s("comma-separated persona ids"),
+                "name": _s("session display name"),
+                "agenda_md": _s("what this session is for"),
+                "turn_policy": _s("auto | directed (default auto)"),
+            },
+            ["process_definition_id", "supervisor_persona_id"],
         ),
     ),
     "create_knowledge_source": (
@@ -544,7 +665,7 @@ async def _chat_inner(
             model=model_string,
             messages=conversation,
             purpose="generation",
-            max_tokens=900,
+            max_tokens=_MAX_REPLY_TOKENS,
             tools=registry.specs(),
             api_base=profile.api_base,
             params=dict(profile.params or {}),

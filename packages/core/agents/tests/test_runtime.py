@@ -37,6 +37,7 @@ class _ScriptedTurn:
     text: str
     tool_calls: tuple[ToolCall, ...] = ()
     cached_tokens: int = 0
+    reasoning: str = ""
 
 
 @dataclass
@@ -48,9 +49,12 @@ class _ScriptedProvider:
     turns: list[_ScriptedTurn]
     fail_first_n: int = 0
     call_count: int = field(default=0, init=False)
+    # Every request's messages, so a test can see what the runtime sent back.
+    requests: list[list[dict[str, object]]] = field(default_factory=list, init=False)
 
     async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
         self.call_count += 1
+        self.requests.append([dict(m) for m in req.messages])
         if self.call_count <= self.fail_first_n:
             raise ConnectionError("simulated provider failure")
         turn = self.turns.pop(0)
@@ -60,6 +64,7 @@ class _ScriptedProvider:
             finish_reason=finish_reason,
             tool_calls=turn.tool_calls,
             cached_tokens=turn.cached_tokens,
+            reasoning=turn.reasoning,
         )
 
     async def generate_structured(self, req: GenerationRequest, schema: type) -> object:  # type: ignore[type-arg]
@@ -457,3 +462,78 @@ async def test_a_model_that_never_stops_calling_tools_is_made_to_answer(
 
     assert result.content_md == "Filed from what I already have."
     assert result.tool_calls_made == 3
+
+
+async def test_a_thinking_models_reasoning_goes_back_with_its_tool_call(
+    db_available: None,
+) -> None:
+    """DeepSeek in thinking mode refuses the follow-up request unless the assistant
+    message carrying the tool_calls also carries the reasoning behind them. It is sent
+    only when the provider produced one: an OpenAI-shaped endpoint gets the message it
+    always got."""
+    tenant_id, session_id, persona_id = await _setup("runtime-reasoning")
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="",
+                tool_calls=(ToolCall(id="call_1", name="roll_die", arguments={"sides": 20}),),
+                reasoning="A reaction check is 2d6; call the randomizer.",
+            ),
+            _ScriptedTurn(text="The result is 7."),
+        ]
+    )
+
+    async def roll_die_handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
+        return ToolResult(content="7")
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(name="roll_die", description="Roll a die", parameters={}), roll_die_handler
+    )
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "The reeve eyes the strangers."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=registry,
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    assert result.content_md == "The result is 7."
+
+    follow_up = provider.requests[1]
+    assistant = next(m for m in follow_up if m.get("role") == "assistant" and m.get("tool_calls"))
+    assert assistant["reasoning_content"] == "A reaction check is 2d6; call the randomizer."
+
+
+async def test_no_reasoning_means_no_reasoning_field(db_available: None) -> None:
+    tenant_id, session_id, persona_id = await _setup("runtime-no-reasoning")
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="", tool_calls=(ToolCall(id="call_1", name="roll_die", arguments={}),)
+            ),
+            _ScriptedTurn(text="Done."),
+        ]
+    )
+
+    async def roll_die_handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
+        return ToolResult(content="7")
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(name="roll_die", description="Roll a die", parameters={}), roll_die_handler
+    )
+    await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Roll."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=registry,
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    assistant = next(
+        m for m in provider.requests[1] if m.get("role") == "assistant" and m.get("tool_calls")
+    )
+    assert "reasoning_content" not in assistant

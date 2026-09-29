@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy import text
 
 from core.knowledge.authoring import (
     EntryFields,
@@ -81,6 +82,24 @@ async def test_add_entries_then_publish_produces_reproducible_hash(db_available:
     # The draft rows are untouched — still there, still editable, for the next round.
     draft_after_publish = await list_draft_entries(tenant_id, source.id)
     assert {e.entry_key for e in draft_after_publish} == {"grappling", "stealth"}
+
+    # Published means retrievable: retrieval reads knowledge_chunk, and a version whose
+    # entries were never chunked is visible in the UI and absent from every context.
+    async with tenant_scope(tenant_id) as session:
+        chunked = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT e.entry_key FROM knowledge_chunk c "
+                        "JOIN knowledge_entry e ON e.id = c.entry_id WHERE c.version_id = :v"
+                    ),
+                    {"v": version.id},
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert set(chunked) == {"grappling", "stealth"}
 
 
 async def test_republish_without_changes_is_reproducible_and_chains_parent(
@@ -235,3 +254,135 @@ async def test_delete_draft_entry_on_unknown_key_is_a_no_op(db_available: None) 
     tenant_id, _ws = await _setup("kn-delete-missing")
     source = await create_source(tenant_id, key="core-rules", name="Core Rules", class_="rules")
     await delete_draft_entry(tenant_id, source.id, "never-existed")  # does not raise
+
+
+# ── keys derived from titles at publish ─────────────────────────────────────────────
+
+
+async def _published_entry(tenant_id: uuid.UUID, version_id: uuid.UUID, key: str):  # noqa: ANN202
+    entries = await list_version_entries(tenant_id, version_id)
+    return next(e for e in entries if e.entry_key == key)
+
+
+async def test_publishing_a_rules_source_fills_in_keys_from_the_titles(
+    db_available: None,
+) -> None:
+    """Nothing that ingests a document writes activation keys, so a handbook arrives with
+    the keyed list empty and retrieval left guessing from prose. The titles are already
+    there."""
+    tenant_id, _ws = await _setup("kn-derive")
+    source = await create_source(tenant_id, key="rulebook", name="Rulebook", class_="rules")
+    for entry_key, title in (
+        ("goblin", "Goblin"),
+        ("spider", "Spider, Giant Crab"),
+        ("intro", "What is This?"),
+    ):
+        await upsert_draft_entry(
+            tenant_id,
+            source.id,
+            entry_key,
+            EntryFields(title=title, body_md="text", class_="rules", scope_key="workspace_public"),
+        )
+
+    version = await publish_version(tenant_id, source.id)
+
+    assert (await _published_entry(tenant_id, version.id, "goblin")).keys == ["Goblin"]
+    assert (await _published_entry(tenant_id, version.id, "spider")).keys == [
+        "Spider, Giant Crab",
+        "Spider",
+        "Giant Crab",
+    ]
+    # A title that names the document rather than a thing in it derives nothing.
+    assert (await _published_entry(tenant_id, version.id, "intro")).keys == []
+
+    # Written to the draft, so the author sees them in the editor and can change them.
+    drafts = {e.entry_key: e for e in await list_draft_entries(tenant_id, source.id)}
+    assert drafts["goblin"].keys == ["Goblin"]
+    assert drafts["goblin"].keys_derived is True
+    assert drafts["intro"].keys_derived is False
+
+
+async def test_only_rules_entries_get_derived_keys(db_available: None) -> None:
+    """Lore titles are proper nouns dense search already finds; misc is texture nobody
+    looks up by name."""
+    tenant_id, _ws = await _setup("kn-derive-class")
+    source = await create_source(tenant_id, key="lorebook", name="Lorebook", class_="lore")
+    await upsert_draft_entry(
+        tenant_id,
+        source.id,
+        "vale",
+        EntryFields(
+            title="Karsh Vale", body_md="text", class_="lore", scope_key="workspace_public"
+        ),
+    )
+    version = await publish_version(tenant_id, source.id)
+    assert (await _published_entry(tenant_id, version.id, "vale")).keys == []
+
+
+async def test_keys_an_author_wrote_are_never_replaced(db_available: None) -> None:
+    tenant_id, _ws = await _setup("kn-derive-authored")
+    source = await create_source(tenant_id, key="rulebook", name="Rulebook", class_="rules")
+    await upsert_draft_entry(
+        tenant_id,
+        source.id,
+        "goblin",
+        EntryFields(
+            title="Goblin",
+            body_md="text",
+            class_="rules",
+            scope_key="workspace_public",
+            keys=["goblinoid", "hobgoblin"],
+        ),
+    )
+    version = await publish_version(tenant_id, source.id)
+    entry = await _published_entry(tenant_id, version.id, "goblin")
+    assert entry.keys == ["goblinoid", "hobgoblin"]
+    assert entry.keys_derived is False
+
+
+async def test_clearing_derived_keys_means_none_and_stays_that_way(db_available: None) -> None:
+    """The marker is what makes "this entry deliberately has no keys" expressible. Without
+    it, clearing them would be undone by the next publish."""
+    tenant_id, _ws = await _setup("kn-derive-cleared")
+    source = await create_source(tenant_id, key="rulebook", name="Rulebook", class_="rules")
+    fields = EntryFields(
+        title="Goblin", body_md="text", class_="rules", scope_key="workspace_public"
+    )
+    await upsert_draft_entry(tenant_id, source.id, "goblin", fields)
+    await publish_version(tenant_id, source.id)
+
+    # The author clears them.
+    await upsert_draft_entry(tenant_id, source.id, "goblin", fields)
+    version = await publish_version(tenant_id, source.id)
+
+    assert (await _published_entry(tenant_id, version.id, "goblin")).keys == []
+    drafts = {e.entry_key: e for e in await list_draft_entries(tenant_id, source.id)}
+    assert drafts["goblin"].keys_derived is True  # offered once, declined
+
+
+async def test_editing_derived_keys_hands_them_to_the_author(db_available: None) -> None:
+    tenant_id, _ws = await _setup("kn-derive-edited")
+    source = await create_source(tenant_id, key="rulebook", name="Rulebook", class_="rules")
+    await upsert_draft_entry(
+        tenant_id,
+        source.id,
+        "goblin",
+        EntryFields(title="Goblin", body_md="text", class_="rules", scope_key="workspace_public"),
+    )
+    await publish_version(tenant_id, source.id)
+
+    await upsert_draft_entry(
+        tenant_id,
+        source.id,
+        "goblin",
+        EntryFields(
+            title="Goblin",
+            body_md="text",
+            class_="rules",
+            scope_key="workspace_public",
+            keys=["Goblin", "goblins", "gobbo"],
+        ),
+    )
+    drafts = {e.entry_key: e for e in await list_draft_entries(tenant_id, source.id)}
+    assert drafts["goblin"].keys == ["Goblin", "goblins", "gobbo"]
+    assert drafts["goblin"].keys_derived is False

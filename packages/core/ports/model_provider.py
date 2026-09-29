@@ -60,6 +60,10 @@ class Chunk:
     finish_reason: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
     cached_tokens: int = 0
+    # The model's own reasoning behind a tool call, when the provider exposes it. Some
+    # endpoints (DeepSeek in thinking mode) require it echoed back on the assistant
+    # message that carries the tool_calls, and refuse the follow-up call without it.
+    reasoning: str = ""
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,11 @@ class Capabilities:
     supports_tools: bool
     supports_json_mode: bool
     supports_prompt_caching: bool
+    # How many tokens of input this model accepts, when the adapter can say. None means
+    # unknown, which callers must read as "assume nothing" rather than "assume small":
+    # the knowledge budget falls back to what the flow asked for
+    # (core.assembler.knowledge_budget).
+    context_window: int | None = None
 
 
 @dataclass(frozen=True)

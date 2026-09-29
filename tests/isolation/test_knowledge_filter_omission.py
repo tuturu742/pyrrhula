@@ -4,7 +4,7 @@
 a raw query with no ``WHERE tenant_id = ...`` clause, scoped to tenant A, must never
 surface tenant B's rows.
 
-The first three of those five tables have one *documented* exception to
+Four of those five tables (all but the attachment) have one *documented* exception to
 "only my own tenant_id comes back": the library tenant's rows are visible to every
 tenant's scoped session by design (see ``core.knowledge.library``,
 ``tests/isolation/test_library_matrix.py``). Those tests below assert the still-true,
@@ -59,21 +59,15 @@ async def _seed_full_chain(tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> Non
                 {"sid": source.id, "vid": version.id},
             )
         ).scalar_one()
+        # Publishing chunked the entry; give that chunk a vector so the dense path has
+        # a row to leak.
         vector_literal = "[" + ",".join(["0.1"] * 1024) + "]"
         await session.execute(
             text(
-                "INSERT INTO knowledge_chunk "
-                "(tenant_id, entry_id, version_id, ordinal, text, token_count, class, "
-                " scope_key, embedding, content_hash) "
-                "VALUES (:tenant_id, :entry_id, :version_id, 0, 'Roll 1d20+STR.', 4, "
-                " 'rules', 'workspace_public', CAST(:vec AS vector), 'deadbeef')"
+                "UPDATE knowledge_chunk SET embedding = CAST(:vec AS vector) "
+                "WHERE entry_id = :entry_id AND version_id = :version_id"
             ),
-            {
-                "tenant_id": tenant_id,
-                "entry_id": entry_id,
-                "version_id": version.id,
-                "vec": vector_literal,
-            },
+            {"entry_id": entry_id, "version_id": version.id, "vec": vector_literal},
         )
 
 
@@ -129,7 +123,11 @@ async def test_knowledge_chunk_filter_omission(two_tenants: tuple[uuid.UUID, uui
 
     async with tenant_scope(tenant_a) as session:
         rows = (await session.execute(text("SELECT tenant_id FROM knowledge_chunk"))).all()
-    assert {row[0] for row in rows} == {tenant_a}
+    tenant_ids = {row[0] for row in rows}
+    # Chunks carry the same library disjunct as the entries they belong to: a library
+    # source that is readable but not retrievable would be readable in name only.
+    assert tenant_ids <= {tenant_a, LIBRARY_TENANT_ID}
+    assert _tenant_b not in tenant_ids
 
 
 async def test_workspace_knowledge_attachment_filter_omission(

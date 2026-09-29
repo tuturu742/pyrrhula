@@ -338,6 +338,27 @@ def _repair_call(
     return None
 
 
+def _context_window(model: str) -> int | None:
+    """How much input this model takes, or None when nothing here knows.
+
+    Ollama is asked as a window the platform *sets* rather than one the model declares:
+    the adapter sends ``num_ctx`` on every call, so what the model could theoretically
+    accept is beside the point -- what it will be given is this. Everything else comes
+    from LiteLLM's model table, which is a lookup and therefore silent about anything it
+    has not heard of; unknown is reported as unknown rather than guessed at.
+    """
+    if model.lower().startswith(("ollama/", "ollama_chat/")):
+        return _OLLAMA_NUM_CTX
+    try:
+        import litellm
+
+        info = litellm.get_model_info(model)
+    except Exception:  # noqa: BLE001 -- an unknown model is not an error here
+        return None
+    window = (info or {}).get("max_input_tokens")
+    return int(window) if isinstance(window, int) and window > 0 else None
+
+
 class LiteLLMModelProvider:
     async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
         check_egress(req.purpose, req.model, req.egress_policy)
@@ -409,6 +430,7 @@ class LiteLLMModelProvider:
                     this_call = repaired
 
             pending_calls: dict[int, dict[str, Any]] = {}
+            reasoning_parts: list[str] = []
             streamed_chars = 0
             deadline = time.monotonic() + req.max_generation_seconds
             async for part in response:
@@ -429,6 +451,12 @@ class LiteLLMModelProvider:
                 delta = part.choices[0].delta
                 finish_reason = part.choices[0].finish_reason
                 text = delta.content or ""
+                # DeepSeek (and LiteLLM's normalisation of other reasoning models) streams
+                # the thinking as `reasoning_content`, never as content. Kept only to hand
+                # back with a tool call; it is not output.
+                reasoning_delta = getattr(delta, "reasoning_content", None)
+                if isinstance(reasoning_delta, str) and reasoning_delta:
+                    reasoning_parts.append(reasoning_delta)
 
                 for fragment in delta.tool_calls or []:
                     slot = pending_calls.setdefault(
@@ -456,6 +484,7 @@ class LiteLLMModelProvider:
                             finish_reason="tool_calls",
                             tool_calls=tool_calls,
                             cached_tokens=cached_tokens,
+                            reasoning="".join(reasoning_parts),
                         ),
                         True,
                     )
@@ -643,4 +672,5 @@ class LiteLLMModelProvider:
             supports_tools=True,
             supports_json_mode=True,
             supports_prompt_caching=any(marker in lowered for marker in _PROMPT_CACHING_MARKERS),
+            context_window=_context_window(model),
         )

@@ -375,3 +375,45 @@ async def test_a_personas_own_brief_reaches_its_turn(db_available: None) -> None
     )
     assert "Aksel Rygg" in system_text, "the persona's own brief never reached the model"
     assert "Nadia Brekke" in system_text
+
+
+def test_a_closing_user_turn_is_added_whenever_the_transcript_does_not_end_on_one() -> None:
+    """Three shapes: an empty transcript, a persona whose history is only its own turns,
+    and a persona speaking twice in a row (a supervisor resolving a check, then opening the
+    next phase). The last one ended the request on an assistant message, which DeepSeek's
+    thinking mode refuses and every other backend reads as "continue this text"."""
+    from core.process.live_session import needs_floor_turn
+
+    assert needs_floor_turn([])
+    assert needs_floor_turn([{"role": "assistant", "content": "I open the phase."}])
+    assert needs_floor_turn(
+        [
+            {"role": "user", "content": "Bram: I search the room."},
+            {"role": "assistant", "content": "The result came up 7."},
+        ]
+    )
+    assert not needs_floor_turn(
+        [
+            {"role": "assistant", "content": "The result came up 7."},
+            {"role": "user", "content": "Pip: I take the coin."},
+        ]
+    )
+
+
+def test_resolution_tools_reach_only_the_phases_that_declare_them() -> None:
+    """The flow says `tools: [randomizer]` on its resolve phase and nothing elsewhere;
+    the supervisor used to carry the randomizer into every phase regardless."""
+    from types import SimpleNamespace
+
+    from core.ports.model_provider import ToolSpec
+    from core.process.live_session import phase_resolution_tools
+
+    specs = [
+        ToolSpec(name="randomizer", description="", parameters={}),
+        ToolSpec(name="resolve_and_apply", description="", parameters={}),
+    ]
+    assert [
+        s.name for s in phase_resolution_tools(specs, SimpleNamespace(tools=["randomizer"]))
+    ] == ["randomizer"]
+    assert phase_resolution_tools(specs, SimpleNamespace(tools=[])) == []
+    assert phase_resolution_tools(specs, SimpleNamespace()) == []

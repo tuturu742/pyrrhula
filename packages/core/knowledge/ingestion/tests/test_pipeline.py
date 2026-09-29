@@ -138,9 +138,18 @@ async def test_chunks_carry_denormalised_class_and_scope_key(db_available: None)
         count_tokens=_word_count,
     )
 
+    # By this source's entries: the library tenant's chunks are visible to every tenant by
+    # design, so an unfiltered LIMIT 1 can hand back one of those instead.
     async with tenant_scope(tenant_id) as session:
         row = (
-            await session.execute(text("SELECT class, scope_key FROM knowledge_chunk LIMIT 1"))
+            await session.execute(
+                text(
+                    "SELECT c.class, c.scope_key FROM knowledge_chunk c "
+                    "JOIN knowledge_entry e ON e.id = c.entry_id "
+                    "WHERE e.knowledge_source_id = :s LIMIT 1"
+                ),
+                {"s": source_id},
+            )
         ).one()
     assert row[0] == "rules"
     assert row[1] == "faction_thieves"

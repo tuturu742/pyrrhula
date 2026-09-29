@@ -52,7 +52,10 @@ frequently does not route from a compose network (it maps to a link-local addres
 `host.docker.internal` needs Docker Desktop or, on Docker for Linux,
 `extra_hosts: ["host.docker.internal:host-gateway"]` on the `api` and `worker` services.
 Whichever you choose, press **Test** next to the server after registering: it runs the
-same discovery a turn runs, from where the api runs, and names the tools it found. A
+same discovery a turn runs, from where the api runs, and names the tools it found. Once
+a persona calls a tool, the call shows in the session transcript as its own line — the
+arguments, the outcome, and the answer behind a disclosure — so what a persona narrates
+can be checked against what its tool said. A
 server a turn cannot reach contributes no tools and the turn goes on — the persona then
 explains its missing tool in fiction, which is not where you want to find out.
 

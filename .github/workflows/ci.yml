@@ -133,6 +133,11 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
       - run: uv sync --extra dev
+      # test_packs_independence asserts the pack corpus is actually here: without it the
+      # INV-9 lint passes vacuously, which is exactly what a CI job must not do. The
+      # fetch is pinned in deploy/plugins.json and the repository is public.
+      - name: Fetch the pinned workflow plugins
+        run: uv run python scripts/fetch_plugins.py
       - name: Import-graph lint — INV-1
         run: ./scripts/ci/run-blocking-suite.sh tests/architecture
         env:

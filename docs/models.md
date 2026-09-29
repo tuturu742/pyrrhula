@@ -31,6 +31,7 @@ earn their keep:
 | `reasoning_effort` | On reasoning models. Set it deliberately and the platform stops trying to manage it for you. |
 | `num_ctx` | Ollama only, and important: its factory default of 4096 makes real prompts return **empty generations silently**. The platform forces 16384 unless you say otherwise. |
 | `history_char_budget` | How much transcript this model is given. A local 8B on a laptop and a hosted frontier model do not want the same number. |
+| `knowledge_token_budget` | How much retrieved knowledge this model is given per turn, overriding both the flow's number and the platform's guess from the model's context window. Set it when you have measured your own model, or when you run an OpenAI-compatible endpoint whose model name nothing recognises. |
 
 A few keys are dropped at call time because the platform manages them: `model`, `messages`, `tools`,
 `api_key`, `api_base`, `stream`, `response_format`, `n`. Letting a convenience knob

@@ -338,6 +338,14 @@ async def import_bundle_endpoint(
     except UnsupportedFormatError as exc:
         raise HTTPException(status_code=415, detail=str(exc)) from exc
 
+    if report.knowledge_sources:
+        # A bundle carries chunk text, never vectors -- embeddings are per deployment.
+        # Without this sweep an imported workspace answered lexical search only, and
+        # nothing said so: the same silent absence that unchunked publishing had.
+        await get_job_queue().enqueue(
+            ctx.tenant_id, "reembed_stale", {"tenant_id": str(ctx.tenant_id)}
+        )
+
     return ImportResponse(
         knowledge_sources=report.knowledge_sources,
         entries=report.entries,
