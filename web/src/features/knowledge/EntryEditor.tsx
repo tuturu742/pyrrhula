@@ -165,7 +165,14 @@ export function EntryEditor({ sourceId, existingEntry, onSaved, onCancel }: Entr
         </legend>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Keys" hint="Comma-separated. Any/all (per Logic) must appear in the scan text.">
+          <Field
+            label="Keys"
+            hint={
+              existingEntry?.keys_derived
+                ? "From this entry's title, filled in when the source was published. Edit them freely; clearing them keeps them cleared."
+                : "Comma-separated. Any/all (per Logic) must appear in the scan text."
+            }
+          >
             <input
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
               value={keys}

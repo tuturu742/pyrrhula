@@ -87,23 +87,11 @@ async def _seed_scoped_knowledge(tenant_id: uuid.UUID, workspace_id: uuid.UUID) 
             entry_key,
             EntryFields(title=entry_key, body_md=body, class_="lore", scope_key=scope_key),
         )
+    # Publishing chunks the version (one chunk per short entry), so nothing to seed.
     version = await publish_version(tenant_id, source.id)
     await attach_source_to_workspace(
         tenant_id, workspace_id, source.id, "workspace_public", version_pin=version.id
     )
-    async with tenant_scope(tenant_id) as session:
-        await session.execute(
-            text(
-                "INSERT INTO knowledge_chunk "
-                "(tenant_id, entry_id, version_id, ordinal, text, token_count, class, "
-                " scope_key, embedding, content_hash) "
-                "SELECT e.tenant_id, e.id, e.version_id, 0, e.body_md, 8, e.class, "
-                "       e.scope_key, NULL, md5(e.body_md) "
-                "FROM knowledge_entry e "
-                "WHERE e.knowledge_source_id = :s AND e.version_id IS NOT NULL"
-            ),
-            {"s": source.id},
-        )
 
 
 async def test_mcp_and_http_tool_calls_produce_equivalent_resolution_records(

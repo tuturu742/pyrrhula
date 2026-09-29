@@ -118,27 +118,13 @@ async def _seed_two_scoped_entries(
 
 
 async def _seed_chunks_for_published_entries(tenant_id: uuid.UUID) -> None:
-    """Published entries carry no chunks -- chunking is the ingestion pipeline's job
-     -- and both the assembler and the export's chunk section work on *chunks*. One
-    chunk per published entry, seeded the same way ``test_context_assembler`` does, plus
-    ``constant = true`` so activation includes them without a real embedding model in the
-    loop. Each chunk inherits its entry's ``scope_key``, which is what makes the chunk
-    section's scope filter testable rather than vacuous."""
+    """Publishing chunked each entry (one chunk per short entry, inheriting the entry's
+    ``scope_key`` -- which is what makes the chunk section's scope filter testable rather
+    than vacuous). What publishing does not do is mark them ``constant``, and that is what
+    lets activation include them without a real embedding model in the loop."""
     async with tenant_scope(tenant_id) as session:
         await session.execute(
             text("UPDATE knowledge_entry SET constant = true WHERE tenant_id = :t"),
-            {"t": tenant_id},
-        )
-        await session.execute(
-            text(
-                "INSERT INTO knowledge_chunk "
-                "(tenant_id, entry_id, version_id, ordinal, text, token_count, class, "
-                " scope_key, embedding, content_hash) "
-                "SELECT e.tenant_id, e.id, e.version_id, 0, e.body_md, 8, e.class, "
-                "       e.scope_key, NULL, md5(e.body_md) "
-                "FROM knowledge_entry e "
-                "WHERE e.tenant_id = :t AND e.version_id IS NOT NULL"
-            ),
             {"t": tenant_id},
         )
 

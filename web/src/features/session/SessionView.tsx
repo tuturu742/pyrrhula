@@ -73,6 +73,27 @@ interface ErrorPayload {
   message: string;
 }
 
+/** A call to a registered MCP server, recorded at the moment it happened. The model's
+ * request and the server's answer (bounded), or why there was no answer -- so a reader
+ * can check what a persona narrates against what its tool actually said. */
+interface ToolCallPayload {
+  server_key: string;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  outcome: "completed" | "failed" | "refused" | string;
+  author?: string;
+  created_at?: string;
+  result?: string;
+  result_truncated?: boolean;
+  message?: string;
+}
+
+const TOOL_OUTCOME_CLASS: Record<string, string> = {
+  completed: "text-emerald-600",
+  failed: "text-destructive",
+  refused: "text-amber-600",
+};
+
 interface ExecEnvironmentPayload {
   action: string; // created | reused
   noun: string; // container | pod | Fargate task | environment
@@ -1095,6 +1116,33 @@ function TimelineEvent({
           {p.actor ? <> by {p.actor}</> : null}
           {p.image ? <> ({p.image})</> : null} —
         </div>
+      );
+    }
+    case "tool_call": {
+      const c = event.payload as ToolCallPayload;
+      const args = Object.entries(c.arguments ?? {})
+        .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+        .join(", ");
+      return (
+        <details className="text-left text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            <span className="font-medium">{c.author || "tool"}</span>
+            {" → "}
+            <span className="font-mono">
+              {c.server_key}.{c.tool_name}
+            </span>
+            {args ? <span className="font-mono"> ({args})</span> : null}
+            {" · "}
+            <span className={TOOL_OUTCOME_CLASS[c.outcome] ?? ""}>{c.outcome}</span>
+            {c.outcome !== "completed" && c.message ? <span> — {c.message}</span> : null}
+          </summary>
+          {c.result ? (
+            <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-secondary/60 p-2 font-mono">
+              {c.result}
+              {c.result_truncated ? "\n[…]" : ""}
+            </pre>
+          ) : null}
+        </details>
       );
     }
     case "await": {

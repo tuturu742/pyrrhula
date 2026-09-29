@@ -158,6 +158,9 @@ class EntryResponse(BaseModel):
     # round-trip an *existing* entry's activation state without a second, ad hoc read
     # path. Same field set, same defaults, symmetric with EntryRequest.
     keys: list[str] = []
+    # Whether those keys came from the entry's title rather than from a person, so the
+    # editor can say so -- an author reading keys they did not write should be told.
+    keys_derived: bool = False
     secondary_keys: list[str] = []
     logic: str = "AND"
     use_regex: bool = False
@@ -187,6 +190,7 @@ def _entry_response(entry, *, forked_source_id: uuid.UUID | None = None) -> Entr
         scope_key=entry.scope_key,
         version_id=entry.version_id,
         keys=list(entry.keys),
+        keys_derived=bool(getattr(entry, "keys_derived", False)),
         secondary_keys=list(entry.secondary_keys),
         logic=entry.logic,
         use_regex=entry.use_regex,
@@ -298,7 +302,19 @@ async def publish_version_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await _enqueue_embedding(ctx.tenant_id, source_id)
     return _version_response(version)
+
+
+async def _enqueue_embedding(tenant_id: uuid.UUID, source_id: uuid.UUID) -> None:
+    """Publishing chunks the new version (core); the vectors are the worker's job. Until
+    it runs, the new chunks answer lexical search only -- and without this call they
+    never answered semantic search at all."""
+    await get_job_queue().enqueue(
+        tenant_id,
+        "embed_chunks",
+        {"tenant_id": str(tenant_id), "knowledge_source_id": str(source_id)},
+    )
 
 
 class ProposeEntryEditRequest(BaseModel):
@@ -369,6 +385,7 @@ async def apply_entry_edit_endpoint(
         )
     except NoSuchDraftEntryError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await _enqueue_embedding(ctx.tenant_id, source_id)
     return _version_response(version)
 
 
@@ -438,6 +455,92 @@ async def list_workspace_attachments_endpoint(
 ) -> list[AttachmentResponse]:
     attachments = await list_workspace_attachments(ctx.tenant_id, workspace_id)
     return [_attachment_response(a) for a in attachments]
+
+
+class ClassSaturationResponse(BaseModel):
+    class_: str = Field(serialization_alias="class")
+    bucket_tokens: int
+    constant_tokens: int
+    retrievable_tokens: int
+    constant_entries: int
+    # How many of them are guaranteed a place, and how many therefore are not: the share
+    # cap keeps room for retrieval, and an author with more always-on text than fits
+    # should be told which way that went.
+    admitted_constant_entries: int
+    admitted_constant_tokens: int
+    dropped_constant_entries: int
+    # Every always-on entry of this class, in the order the budget offers them (the
+    # author's insertion_order). The ones past `admitted_constant_entries` are the ones
+    # that only appear when retrieval leaves room.
+    constant_entry_keys: list[str]
+    saturated: bool
+    tight: bool
+
+
+class PhaseSaturationResponse(BaseModel):
+    phase_key: str
+    max_tokens: int
+    history_reserved_tokens: int
+    classes: list[ClassSaturationResponse]
+
+
+class SaturationResponse(BaseModel):
+    process_definition_id: uuid.UUID
+    phases: list[PhaseSaturationResponse]
+
+
+@router.get("/workspaces/{workspace_id}/saturation")
+async def workspace_saturation_endpoint(
+    workspace_id: uuid.UUID,
+    process_definition_id: uuid.UUID,
+    ctx: RequestContext = Depends(get_request_context),
+) -> SaturationResponse:
+    """Does this workspace's knowledge have room to be retrieved under this flow?
+
+    Per phase and class: the bucket the phase gives it, and what the always-on entries
+    already occupy. A saturated class is one whose constants fill the bucket, which turns
+    retrieval for that class off -- silently, because a full bucket is what a bucket is
+    for. Read-only arithmetic over attachments, entries and the flow."""
+    from core.knowledge.retrieval.saturation import workspace_saturation
+    from core.process.authoring import get_definition
+    from core.process.dsl.validator import validate_raw
+
+    row = await get_definition(ctx.tenant_id, process_definition_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no flow {process_definition_id}")
+    dsl, issues = validate_raw(row.definition)
+    if dsl is None:
+        raise HTTPException(
+            status_code=422, detail=f"flow does not validate: {issues[0].message if issues else ''}"
+        )
+    report = await workspace_saturation(ctx.tenant_id, workspace_id, dsl)
+    return SaturationResponse(
+        process_definition_id=process_definition_id,
+        phases=[
+            PhaseSaturationResponse(
+                phase_key=phase.phase_key,
+                max_tokens=phase.max_tokens,
+                history_reserved_tokens=phase.history_reserved_tokens,
+                classes=[
+                    ClassSaturationResponse(
+                        class_=c.class_,
+                        bucket_tokens=c.bucket_tokens,
+                        constant_tokens=c.constant_tokens,
+                        retrievable_tokens=c.retrievable_tokens,
+                        constant_entries=c.constant_entries,
+                        admitted_constant_entries=c.admitted_constant_entries,
+                        admitted_constant_tokens=c.admitted_constant_tokens,
+                        dropped_constant_entries=c.dropped_constant_entries,
+                        constant_entry_keys=c.constant_entry_keys,
+                        saturated=c.saturated,
+                        tight=c.tight,
+                    )
+                    for c in phase.classes
+                ],
+            )
+            for phase in report
+        ],
+    )
 
 
 @router.get("/sources/{source_id}/attachments")
@@ -573,6 +676,7 @@ async def fork_source_endpoint(
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await _enqueue_embedding(ctx.tenant_id, forked.id)
     return _source_response(forked)
 
 

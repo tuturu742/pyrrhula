@@ -155,7 +155,7 @@ async def _call_provider_with_retry(
     egress_policy: dict[str, list[str]] | None = None,
     persona_params: dict[str, object] | None = None,
     limits: GenerationLimits = DEFAULT_LIMITS,
-) -> tuple[str, list[ToolCall], _UsagePoint]:
+) -> tuple[str, list[ToolCall], _UsagePoint, str]:
     """Tries ``profile`` up to ``max_retries`` times with exponential backoff; on total
     failure, tries ``fallback_profile`` once (if set). Raises
     ``AllRetriesExhaustedError`` if every attempt failed."""
@@ -186,6 +186,7 @@ async def _call_provider_with_retry(
                 start = time.monotonic()
                 full_text: list[str] = []
                 tool_calls: tuple[ToolCall, ...] = ()
+                reasoning = ""
                 cached_tokens = 0
                 async for chunk in provider.generate(req):
                     if chunk.text:
@@ -194,6 +195,7 @@ async def _call_provider_with_retry(
                             await on_chunk(chunk.text)
                     if chunk.tool_calls:
                         tool_calls = chunk.tool_calls
+                        reasoning = chunk.reasoning
                     if chunk.cached_tokens:
                         cached_tokens = chunk.cached_tokens
                 latency_ms = int((time.monotonic() - start) * 1000)
@@ -234,7 +236,7 @@ async def _call_provider_with_retry(
                 )
                 span.set_attribute("pyrrhula.runtime.used_fallback", is_fallback)
                 span.set_attribute("pyrrhula.runtime.attempts", attempt_index + 1)
-                return content, list(tool_calls), usage
+                return content, list(tool_calls), usage, reasoning
             except Exception as exc:  # noqa: BLE001 -- any provider failure triggers retry/fallback
                 last_exc = exc
                 structlog.get_logger().info(
@@ -350,7 +352,7 @@ async def run_agent_turn(
         tools = tool_registry.specs()
 
         for _iteration in range(max_tool_loop):
-            content, tool_calls, usage = await _call_provider_with_retry(
+            content, tool_calls, usage, reasoning = await _call_provider_with_retry(
                 profile,
                 fallback_profile,
                 conversation,
@@ -393,6 +395,10 @@ async def run_agent_turn(
                 {
                     "role": "assistant",
                     "content": content,
+                    # A thinking model's reasoning behind the call goes back with it:
+                    # DeepSeek refuses the follow-up request when it is missing, and it
+                    # is only sent when the provider produced one.
+                    **({"reasoning_content": reasoning} if reasoning else {}),
                     "tool_calls": [
                         {
                             "id": tc.id,
@@ -452,7 +458,7 @@ async def run_agent_turn(
                 ),
             }
         )
-        content, _unused_calls, usage = await _call_provider_with_retry(
+        content, _unused_calls, usage, _unused_reasoning = await _call_provider_with_retry(
             profile,
             fallback_profile,
             conversation,

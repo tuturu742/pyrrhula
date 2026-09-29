@@ -13,6 +13,7 @@ import { MembersCard } from "./MembersCard";
 import { ClockCard } from "./ClockCard";
 import { McpServersCard } from "./McpServersCard";
 import { VisibilityCard } from "./VisibilityCard";
+import { KnowledgeBudgetCard } from "./KnowledgeBudgetCard";
 import { VocabularySwitcher } from "@/lib/vocabulary/VocabularySwitcher";
 import { relativeTime, sessionDisplayName } from "@/features/session/session-format";
 
@@ -234,6 +235,7 @@ export function WorkspaceDetailPage() {
           <InheritedSettingsCard workspaceId={workspaceId!} />
           <MembersCard workspaceId={workspaceId!} />
           <VisibilityCard workspaceId={workspaceId!} />
+          <KnowledgeBudgetCard workspaceId={workspaceId!} />
           <McpServersCard workspaceId={workspaceId!} />
           <div className="flex flex-wrap items-center gap-4">
             <VocabularySwitcher workspaceId={workspaceId!} />

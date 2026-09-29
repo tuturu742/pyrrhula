@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 import structlog
@@ -66,15 +67,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if applied:
             log.info("retrieval.override_applied", model=applied.get("embedding_model"))
 
-    await run_boot_hooks(
-        [
-            ("plugins.default_sync", ensure_default_synced),
-            ("admin_bootstrap", ensure_admin_account),
-            ("retrieval.override", _retrieval_override),
-        ]
+    # Behind the app, not in front of it. These retry until the database answers, which
+    # is what a fresh install needs -- the api routinely starts before Postgres does, and
+    # a one-shot attempt left deployments with no admin account. Awaited here, that same
+    # patience became the startup path: with no database reachable at all, each hook sat
+    # out its own deadline before the app served its first request, so the process took
+    # ten minutes to come up and a readiness probe failed for all of it. Serving
+    # immediately and bootstrapping behind it is strictly better -- the hooks still run,
+    # still retry, and still finish long before anyone needs what they write.
+    boot = asyncio.create_task(
+        run_boot_hooks(
+            [
+                ("plugins.default_sync", ensure_default_synced),
+                ("admin_bootstrap", ensure_admin_account),
+                ("retrieval.override", _retrieval_override),
+            ]
+        )
     )
     log.info("api.startup")
-    yield
+    try:
+        yield
+    finally:
+        # A shutdown mid-bootstrap is a shutdown, not a reason to wait out three
+        # deadlines: the hooks are idempotent and the next start runs them again.
+        boot.cancel()
+        with suppress(asyncio.CancelledError):
+            await boot
     await close_redis()
     # Symmetrical with Redis, and for the same reason: a shutdown that leaves its pool
     # open leaves Postgres connections for the server to reap. It is invisible in

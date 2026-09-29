@@ -100,3 +100,24 @@ async def test_rerank_preserves_entry_and_source_metadata() -> None:
     assert reranked[0].entry_key == "grappling"
     assert reranked[0].token_count == 42
     assert reranked[0].contributing_lists == ("dense", "sparse", "reranked")
+
+
+async def test_constant_entries_survive_the_rerank_caps_and_come_first() -> None:
+    """An always-on entry is the author's call, not the reranker's. Fused last, scoring
+    nothing against the query, and beyond top_k_in: it is still returned, and first."""
+    constant_id = uuid.uuid4()
+    fused = [_fused_hit(uuid.uuid4(), rank=i + 1) for i in range(TOP_K_IN + 5)]
+    fused.append(_fused_hit(constant_id, rank=len(fused) + 1, entry_key="calling_for_a_roll"))
+    chunk_texts = {h.chunk_id: "grapple check strength" for h in fused}
+    chunk_texts[constant_id] = "nothing in common with the query"
+
+    reranked = await rerank_bucket(
+        "grapple check strength",
+        fused,
+        StubReranker(),
+        chunk_texts,
+        constant_chunk_ids=frozenset({constant_id}),
+    )
+
+    assert reranked[0].chunk_id == constant_id
+    assert len(reranked) == TOP_K_OUT + 1

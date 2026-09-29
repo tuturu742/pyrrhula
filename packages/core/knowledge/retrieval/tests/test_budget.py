@@ -144,3 +144,132 @@ def test_to_budgeted_chunks_why_reflects_contributing_lists_when_not_constant() 
     fill_results = fill_all_buckets({"rules": [hit]}, {"rules": 100}, spill="none")
     chunks = to_budgeted_chunks(fill_results)
     assert chunks[0].why == "dense+sparse"
+
+
+# ── the constant share cap ──────────────────────────────────────────────────────────
+
+
+def _keyed(token_count: int, rank: int, *, key: str = "entry") -> FusedHit:
+    hit = _hit(token_count, rank, contributing=("keyed",))
+    return FusedHit(**{**hit.__dict__, "entry_key": key})
+
+
+def test_constants_stop_at_their_share_so_retrieval_keeps_room() -> None:
+    """The measured failure this cap exists for: always-on entries filled every class of
+    every phase of a shipped sample, and an attached source of seven hundred chunks
+    reached zero of thirty turns."""
+    constants = [_keyed(300, rank=1), _keyed(300, rank=2), _keyed(300, rank=3)]
+    retrieved = [_hit(200, rank=4), _hit(200, rank=5)]
+    ids = frozenset(h.chunk_id for h in constants)
+    order = {h.chunk_id: i for i, h in enumerate(constants)}
+
+    result = fill_bucket(constants + retrieved, 1000, constant_chunk_ids=ids, constant_order=order)
+
+    # 60% of 1000 = 600: two constants, not three, and the remaining 400 is retrieval's,
+    # which spends all of it -- so the third always-on entry stays out.
+    included = [h.chunk_id for h in result.included]
+    assert included[:2] == [constants[0].chunk_id, constants[1].chunk_id]
+    assert constants[2].chunk_id not in included
+    assert {h.chunk_id for h in retrieved} <= set(included)
+    assert result.tokens_used == 1000
+    assert constants[2].chunk_id in {h.chunk_id for h in result.leftover}
+
+
+def test_room_retrieval_declines_goes_back_to_the_held_back_constants() -> None:
+    """The share must not overcorrect: an always-on entry is not dropped to leave room
+    that nothing else then asks for."""
+    constants = [_keyed(300, rank=1), _keyed(300, rank=2), _keyed(300, rank=3)]
+    ids = frozenset(h.chunk_id for h in constants)
+    order = {h.chunk_id: i for i, h in enumerate(constants)}
+
+    result = fill_bucket(constants, 1000, constant_chunk_ids=ids, constant_order=order)
+
+    assert {h.chunk_id for h in result.included} == ids
+    assert result.tokens_used == 900
+    assert result.leftover == []
+
+
+def test_the_first_constant_is_admitted_even_above_the_share() -> None:
+    """An always-on entry that never appears is not one. One that fits the bucket at all
+    gets in, and the class is then simply full -- which the saturation report says."""
+    big = _keyed(900, rank=1)
+    small = _hit(50, rank=2)
+    result = fill_bucket([big, small], 1000, constant_chunk_ids=frozenset({big.chunk_id}))
+    assert [h.chunk_id for h in result.included] == [big.chunk_id, small.chunk_id]
+    assert result.tokens_used == 950
+
+
+def test_a_constant_larger_than_the_whole_bucket_is_not_partially_included() -> None:
+    big = _keyed(1200, rank=1)
+    small = _hit(100, rank=2)
+    result = fill_bucket([big, small], 1000, constant_chunk_ids=frozenset({big.chunk_id}))
+    assert [h.chunk_id for h in result.included] == [small.chunk_id]
+
+
+def test_constants_are_offered_in_the_authors_order_not_this_turns_ranking() -> None:
+    """Which always-on entries survive a bucket too small for all of them used to depend
+    on fused rank, which varies per turn -- so the set varied per turn. It is the
+    author's `insertion_order` that decides."""
+    first = _keyed(300, rank=9, key="first")  # last by rank, first by the author
+    second = _keyed(300, rank=1, key="second")
+    third = _keyed(300, rank=2, key="third")
+    ids = frozenset({first.chunk_id, second.chunk_id, third.chunk_id})
+    order = {first.chunk_id: 0, second.chunk_id: 1, third.chunk_id: 2}
+    # A retrieval candidate that wants the whole remainder, so only the share's worth of
+    # constants lands and the question "which two" is the one under test.
+    filler = _hit(400, rank=3)
+
+    result = fill_bucket(
+        [second, third, first, filler], 1000, constant_chunk_ids=ids, constant_order=order
+    )
+
+    assert [h.entry_key for h in result.included if h.chunk_id in ids] == ["first", "second"]
+
+
+def test_constant_allowance_is_the_floor_the_fill_guarantees() -> None:
+    """The saturation report runs this arithmetic without a retrieval pass behind it, so
+    the two must agree about which entries are certain of a place."""
+    from core.knowledge.retrieval.budget import constant_allowance
+
+    for budget, sizes in (
+        (1000, [300, 300, 300]),
+        (1000, [900, 50]),
+        (500, [600]),
+        (100, [10] * 20),
+    ):
+        constants = [_keyed(n, rank=i + 1) for i, n in enumerate(sizes)]
+        ids = frozenset(h.chunk_id for h in constants)
+        order = {h.chunk_id: i for i, h in enumerate(constants)}
+        admitted, tokens = constant_allowance(sizes, budget)
+
+        # With a retrieval candidate that takes exactly what the share left, the fill
+        # lands exactly on the floor -- nothing remains for the third pass to give back.
+        filler = [_hit(budget - tokens, rank=99)] if budget - tokens > 0 else []
+        exact = fill_bucket(
+            [*constants, *filler], budget, constant_chunk_ids=ids, constant_order=order
+        )
+        landed = [h for h in exact.included if h.chunk_id in ids]
+        assert landed == constants[:admitted], (budget, sizes)
+        assert sum(h.token_count for h in landed) == tokens, (budget, sizes)
+
+        # With nothing competing, the fill may exceed the floor but never fall below it.
+        alone = fill_bucket(constants, budget, constant_chunk_ids=ids, constant_order=order)
+        assert len(alone.included) >= admitted, (budget, sizes)
+
+
+def test_spill_offers_a_held_back_constant_the_extra_room_first() -> None:
+    """Spill is bonus budget, and an always-on entry the cap held back is exactly what it
+    is for -- so the cap does not apply again there."""
+    constants = [_keyed(300, rank=1), _keyed(300, rank=2), _keyed(300, rank=3)]
+    ids = frozenset(h.chunk_id for h in constants)
+    order = {h.chunk_id: i for i, h in enumerate(constants)}
+    # 700 holds two of the three (600) and cannot hold the third in the 100 that remain.
+    results = fill_all_buckets(
+        {"rules": constants, "lore": [_hit(10, rank=1)]},
+        {"rules": 700, "lore": 1000},
+        constant_chunk_ids_by_class={"rules": ids},
+        constant_order_by_class={"rules": order},
+    )
+    # lore used 10 of 1000 and has nothing waiting, so it donates; rules has something
+    # waiting, so it receives -- and the third always-on entry lands.
+    assert constants[2].chunk_id in {h.chunk_id for h in results["rules"].included}

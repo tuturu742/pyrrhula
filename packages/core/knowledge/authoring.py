@@ -23,6 +23,7 @@ from sqlalchemy import delete, select
 
 from core.knowledge.activation import validate_regex_keys
 from core.knowledge.hashing import compute_content_hash
+from core.knowledge.keys import derive_keys
 from core.knowledge.models import (
     KnowledgeEntry,
     KnowledgeSource,
@@ -30,6 +31,12 @@ from core.knowledge.models import (
     WorkspaceKnowledgeAttachment,
 )
 from core.tenancy.scope import tenant_scope
+
+# Which classes get keys derived from their titles. `rules` only, for now: a rulebook's
+# sections are named after the things they govern, so their titles are what a turn calls
+# them. Lore titles are proper nouns that dense search already finds, and misc is texture
+# nobody looks up by name.
+DERIVED_KEY_CLASSES = frozenset({"rules"})
 
 
 async def create_source(
@@ -139,6 +146,11 @@ async def upsert_draft_entry(
             existing.body_md = fields.body_md
             existing.class_ = fields.class_
             existing.scope_key = fields.scope_key
+            # Keys written to something else are the author's from now on. Clearing them
+            # is not that: it is "none, thank you", and it has to stick or the next
+            # publish would derive them again (core.knowledge.keys).
+            if fields.keys and list(fields.keys) != list(existing.keys):
+                existing.keys_derived = False
             existing.keys = fields.keys
             existing.secondary_keys = fields.secondary_keys
             existing.logic = fields.logic
@@ -252,8 +264,11 @@ async def publish_version(
     change_note: str | None = None,
     parent_version_override: uuid.UUID | None = None,
     ai_assisted: bool = False,
+    chunk: bool = True,
 ) -> KnowledgeSourceVersion:
-    """Snapshot the current draft into a new immutable version. The version row is
+    """Snapshot the current draft into a new immutable version, and chunk it for
+    retrieval. ``chunk=False`` is for the one caller that chunks on its own terms (a
+    character card's lore entry is one activation unit and must stay one chunk). The version row is
     INSERTed once, fully formed (content_hash included) — it is never created empty and
     updated later, since the app role has no UPDATE grant on ``knowledge_source_version``
     (CLAUDE.md rule 5).
@@ -281,6 +296,22 @@ async def publish_version(
             .scalars()
             .all()
         )
+
+        # An entry with no activation keys answers only to what a turn resembles, never
+        # to what it names -- and nothing that ingests a document writes keys, so a
+        # five-hundred-section handbook arrives with the keyed list empty. Fill them from
+        # the titles that are already there, once, into the draft, so the author sees them
+        # in the editor and can change or clear them (core.knowledge.keys).
+        derived_entries = 0
+        for draft in draft_entries:
+            if draft.class_ in DERIVED_KEY_CLASSES and not draft.keys and not draft.keys_derived:
+                derived = derive_keys(draft.title)
+                if derived:
+                    draft.keys = derived
+                    draft.keys_derived = True
+                    derived_entries += 1
+        if derived_entries:
+            await session.flush()
 
         content_hash = compute_content_hash(list(draft_entries))
         prior_max = await session.scalar(
@@ -316,6 +347,7 @@ async def publish_version(
                     class_=draft.class_,
                     scope_key=draft.scope_key,
                     keys=list(draft.keys),
+                    keys_derived=draft.keys_derived,
                     secondary_keys=list(draft.secondary_keys),
                     logic=draft.logic,
                     use_regex=draft.use_regex,
@@ -332,7 +364,18 @@ async def publish_version(
 
         source.current_version_id = version.id
         await session.flush()
-        return version
+
+    # Retrieval reads knowledge_chunk, never knowledge_entry -- so a version that is
+    # published but not chunked is visible in the UI and absent from every assembled
+    # context. That was the state of every entry authored in the product: only the
+    # ingestion, repo and bundle-import paths chunked, and this one, the path the editor
+    # uses, did not. Chunking here makes "published" and "retrievable" one step; the
+    # caller enqueues the embedding job, which core cannot do itself.
+    if chunk:
+        from core.knowledge.publish_chunks import chunk_published_entries
+
+        await chunk_published_entries(tenant_id, knowledge_source_id, version.id)
+    return version
 
 
 async def attach_source_to_workspace(

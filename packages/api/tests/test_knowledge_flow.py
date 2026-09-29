@@ -196,3 +196,102 @@ async def test_attach_same_source_to_two_workspaces_over_http(
 async def test_knowledge_endpoints_require_auth(client: TestClient, db_available: None) -> None:
     response = client.get("/knowledge/sources")
     assert response.status_code == 401
+
+
+async def test_saturation_endpoint_reports_which_always_on_entries_fit(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """The warning this endpoint exists for. Always-on entries take a share of a class's
+    slice before search gets any of it; more of them than the share holds means some are
+    absent from every turn, and nothing else in the product says which."""
+    from core.process.dsl.fixtures import MINIMAL_MVP_FLOW
+
+    slug = f"kn-sat-{uuid.uuid4().hex[:8]}"
+    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    token = _register_and_login(client, slug)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    source_id = client.post(
+        "/knowledge/sources",
+        json={"key": "house-rules", "name": "House Rules", "class": "rules"},
+        headers=headers,
+    ).json()["id"]
+    # MINIMAL_MVP_FLOW gives `resolve` all 2000 of its tokens to rules. Six entries of
+    # ~350 tokens each is more than the share holds. They are created in one order and
+    # prioritised in the opposite one, so the report has to use the author's field rather
+    # than anything incidental.
+    body = " ".join(f"word{i}" for i in range(200))
+    for index in range(6):
+        client.put(
+            f"/knowledge/sources/{source_id}/entries/always-{index}",
+            json={
+                "title": f"Always {index}",
+                "body_md": body,
+                "class": "rules",
+                "scope_key": "workspace_public",
+                "constant": True,
+                "insertion_order": 5 - index,
+            },
+            headers=headers,
+        )
+    version_id = client.post(
+        f"/knowledge/sources/{source_id}/publish", json={}, headers=headers
+    ).json()["id"]
+    client.post(
+        f"/knowledge/sources/{source_id}/attachments",
+        json={
+            "workspace_id": str(workspace_id),
+            "scope_key": "workspace_public",
+            "version_pin": version_id,
+        },
+        headers=headers,
+    )
+
+    flow_id = client.post(
+        "/process-definitions",
+        json={"key": "mvp", "name": "MVP", "definition": MINIMAL_MVP_FLOW},
+        headers=headers,
+    ).json()["id"]
+
+    resp = client.get(
+        f"/knowledge/workspaces/{workspace_id}/saturation",
+        params={"process_definition_id": flow_id},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    phases = {p["phase_key"]: p for p in resp.json()["phases"]}
+
+    # A phase with no budget retrieves nothing, so it cannot be saturated and is absent.
+    assert "player_act" not in phases
+
+    rules = next(c for c in phases["resolve"]["classes"] if c["class"] == "rules")
+    assert rules["constant_entries"] == 6
+    assert rules["constant_tokens"] > rules["bucket_tokens"]
+    # Some fit, some do not -- and the share kept room that search can still spend, which
+    # is the whole point of having one.
+    assert 0 < rules["admitted_constant_entries"] < 6
+    assert rules["dropped_constant_entries"] == 6 - rules["admitted_constant_entries"]
+    assert rules["retrievable_tokens"] > 0
+    assert rules["saturated"] is False
+    # Offered in the author's order, which here is the reverse of the creation order.
+    assert rules["constant_entry_keys"] == [f"always-{i}" for i in range(5, -1, -1)]
+
+    # Only a `rules` load, so the lore share in the other phase is untouched.
+    narrate = {c["class"]: c for c in phases["arbiter_narrate"]["classes"]}
+    assert narrate["lore"]["constant_tokens"] == 0
+    assert narrate["lore"]["dropped_constant_entries"] == 0
+    assert narrate["rules"]["constant_tokens"] > 0
+
+
+async def test_saturation_endpoint_404s_for_an_unknown_flow(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    slug = f"kn-sat404-{uuid.uuid4().hex[:8]}"
+    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    token = _register_and_login(client, slug)
+    resp = client.get(
+        f"/knowledge/workspaces/{workspace_id}/saturation",
+        params={"process_definition_id": str(uuid.uuid4())},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404

@@ -187,6 +187,10 @@ class KnowledgeEntry(Base):
         DateTime(timezone=True), nullable=True
     )
     keys: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
+    # Whether `keys` came from the title rather than from a person (core.knowledge.keys).
+    # It is what makes "this entry deliberately has no keys" expressible: clearing a
+    # derived set leaves this true, so publishing does not simply put them back.
+    keys_derived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     secondary_keys: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
     logic: Mapped[str] = mapped_column(String(8), nullable=False, default="AND")
     use_regex: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

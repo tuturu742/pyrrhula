@@ -79,6 +79,7 @@ async def search_and_budget(
 
     ranked_by_class = {}
     constant_by_class = {}
+    constant_order_by_class: dict[str, dict[uuid.UUID, int]] = {}
 
     for class_ in ratios:
         activated = (activated_entries_by_class or {}).get(class_, [])
@@ -87,6 +88,14 @@ async def search_and_budget(
         constant_by_class[class_] = frozenset(
             h.chunk_id for h in keyed_hits if h.entry_id in constant_entry_ids
         )
+        # The author's order, per chunk: which always-on entries survive a bucket too
+        # small for all of them is a decision they made, not one this turn's ranking makes.
+        order_by_entry = {a.entry_id: a.insertion_order for a in activated if a.why == "constant"}
+        constant_order_by_class[class_] = {
+            h.chunk_id: order_by_entry[h.entry_id]
+            for h in keyed_hits
+            if h.entry_id in order_by_entry
+        }
 
         cache_key = None
         fused = None
@@ -132,7 +141,13 @@ async def search_and_budget(
 
         if reranker is not None:
             chunk_texts = await fetch_chunk_texts(tenant_id, [h.chunk_id for h in fused])
-            fused = await rerank_bucket(query_text, fused, reranker, chunk_texts)
+            fused = await rerank_bucket(
+                query_text,
+                fused,
+                reranker,
+                chunk_texts,
+                constant_chunk_ids=constant_by_class[class_],
+            )
 
         ranked_by_class[class_] = fused
 
@@ -140,6 +155,7 @@ async def search_and_budget(
         ranked_by_class,
         bucket_tokens,
         constant_chunk_ids_by_class=constant_by_class,
+        constant_order_by_class=dict(constant_order_by_class),
         spill=spill,
     )
     return to_budgeted_chunks(fill_results, constant_chunk_ids_by_class=constant_by_class)

@@ -532,6 +532,10 @@ async def assemble(
     query_text: str,
     query_embedding: Sequence[float],
     history_max_tokens: int,
+    # What the phase's declared budget becomes for this turn's model. None keeps the
+    # phase's own number, which is what every caller without a connection in hand does.
+    # See core.assembler.knowledge_budget.
+    budget_tokens: int | None = None,
     entity_state_renderer: EntityStateRenderer = _default_entity_state_renderer,
     secrets_gate: SecretsGateHook = _noop_secrets_gate,
     reranker: Reranker | None = None,
@@ -596,7 +600,7 @@ async def assemble(
                     query_embedding=query_embedding,
                     query_text=query_text,
                     class_ratios=phase.budget.ratio,
-                    max_tokens=phase.budget.max_tokens - history_reserved_tokens,
+                    max_tokens=(budget_tokens or phase.budget.max_tokens) - history_reserved_tokens,
                     activated_entries_by_class=activated_entries_by_class,
                     # The phase's ratio says what this *kind of turn* wants; the weights say
                     # what this *workspace* attached and how much it is worth here. Both
@@ -699,6 +703,11 @@ async def assemble(
         for chunk in budgeted_chunks:
             token_counts[chunk.class_] = token_counts.get(chunk.class_, 0) + chunk.token_count
         token_counts["total"] = sum(token_counts.values())
+        # What this turn was allowed, beside what it used: the two numbers a reader of a
+        # manifest needs to tell "nothing matched" from "no room to put it".
+        token_counts["budget"] = (
+            (budget_tokens or phase.budget.max_tokens) if phase.budget is not None else 0
+        )
 
         manifest = ContextManifest(
             id=uuid.uuid4(),

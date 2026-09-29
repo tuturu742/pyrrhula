@@ -232,6 +232,14 @@ fi
 # Recreate the services that carry application code. The data services are deliberately
 # left alone: postgres and redis hold the deployment's state, restarting them costs
 # every open connection, and neither has code in this image.
+# Migrations first, from the image just built. `up` leaves a one-shot service that
+# already exited alone -- observed live: a new migration shipped, the api and worker
+# were recreated on the new image, and the migrate container that ran was yesterday's,
+# so the schema stayed where it was while the code assumed otherwise. `run` always
+# starts a fresh container from the current image and returns its exit code.
+say "running migrations with the image just built"
+"${COMPOSE[@]}" "${CARGS[@]}" run --rm --no-deps migrate
+
 say "recreating application containers so they run the image just built"
 "${COMPOSE[@]}" "${CARGS[@]}" up -d --force-recreate --no-deps api worker web
 

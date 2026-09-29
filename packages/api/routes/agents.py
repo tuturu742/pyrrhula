@@ -498,14 +498,9 @@ async def starter_team_endpoint(
     body: StarterTeamRequest, ctx: RequestContext = Depends(get_request_context)
 ) -> list[PersonaResponse]:
     """Onboarding shortcut: a working roster in one click -- Lead (supervisor) + two
-    participants, each with the workspace role agent personas need to act on entities
-    and take turns (supervisor->facilitator, participant->participant). Idempotent by
-    persona key; safe to call on a workspace that already has some of them."""
-    from sqlalchemy import select as _select
-
-    from core.tenancy.models import WorkspaceMembership
-    from core.tenancy.scope import tenant_scope
-
+    participants. Each gets the workspace role its type implies from ``create_persona``
+    itself, the same as a persona made any other way. Idempotent by persona key; safe to
+    call on a workspace that already has some of them."""
     roster = [
         (
             "lead",
@@ -527,7 +522,6 @@ async def starter_team_endpoint(
             "You are a detail-oriented reviewer. Probe edge cases and gaps in proposals.",
         ),
     ]
-    role_for = {"supervisor": "facilitator", "participant": "participant"}
     created: list[PersonaResponse] = []
     existing = {p.key for p in await list_personas(ctx.tenant_id, body.workspace_id)}
     for key, name, persona_type, persona_md in roster:
@@ -542,22 +536,6 @@ async def starter_team_endpoint(
             persona_type=persona_type,
             persona_md=persona_md,
         )
-        async with tenant_scope(ctx.tenant_id) as session:
-            has = await session.scalar(
-                _select(WorkspaceMembership.id).where(
-                    WorkspaceMembership.workspace_id == body.workspace_id,
-                    WorkspaceMembership.principal_id == persona.principal_id,
-                )
-            )
-            if has is None:
-                session.add(
-                    WorkspaceMembership(
-                        tenant_id=ctx.tenant_id,
-                        workspace_id=body.workspace_id,
-                        principal_id=persona.principal_id,
-                        role=role_for[persona_type],
-                    )
-                )
         created.append(_agent_response(persona))
     return created
 
