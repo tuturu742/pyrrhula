@@ -402,7 +402,17 @@ async def test_broken_resolution_chain_fails_import_with_location(
     assert len(open_bundle(result.data).read_jsonl(path)) == 3
 
     # Someone improves their luck on the middle roll and leaves the hashes alone.
-    records[1] = {**records[1], "total": 20, "outcome": "success"}
+    #
+    # The improvement has to be one the roll could not have produced. This used to write
+    # a flat total of 20, and `stealth` here is 1d20 + (dexterity - 10) / 2 = 1d20 + 2,
+    # so a middle roll of 18 already totalled 20 and already succeeded against a target
+    # of 12: the "doctored" record was byte-identical to the honest one, nothing was
+    # edited, no hash broke, and the import correctly did not raise. One run in twenty,
+    # twice per CI run because the whole tree also runs under the `test` job -- two of
+    # three consecutive main runs, red on a test that was right about the product.
+    honest = records[1]
+    records[1] = {**honest, "total": honest["total"] + 100, "outcome": "success"}
+    assert records[1] != honest, "the edit must be an edit, or this proves nothing"
     doctored = _rewrite_jsonl(result.data, path, records)
 
     with pytest.raises(ResolutionChainBrokenError) as exc:
