@@ -146,14 +146,36 @@ jobs:
   replay:
     runs-on: ubuntu-latest
     needs: lint
+    # Same reasoning as the leak job below: this suite skips itself without a database,
+    # so a job without one reported green while running none of its three tests, and
+    # INV-10 was being asserted by nobody. Give it the Postgres it needs.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: pyrrhula
+          POSTGRES_PASSWORD: pyrrhula
+          POSTGRES_DB: pyrrhula
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyrrhula"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
         with:
           version: ${{ env.UV_VERSION }}
       - run: uv sync --extra dev
+      - name: Apply migrations (creates pyrrhula_app + RLS policies)
+        run: uv run alembic upgrade head
+        env:
+          PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:pyrrhula@localhost:5432/pyrrhula
+          PYRRHULA_APP_DB_PASSWORD: ${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}
       - name: Context manifest replay — INV-10
         run: ./scripts/ci/run-blocking-suite.sh tests/replay
+        env:
+          PYRRHULA_APP_DATABASE_URL: >-
+            postgresql+asyncpg://pyrrhula_app:${{ secrets.PYRRHULA_APP_DB_PASSWORD_CI || 'pyrrhula_app_ci' }}@localhost:5432/pyrrhula
 
   leak:
     runs-on: ubuntu-latest
