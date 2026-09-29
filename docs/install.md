@@ -217,6 +217,19 @@ Everything lands in `./pyrrhula` (`PYRRHULA_DIR` to choose). The script generate
 same secrets the compose installer does, pulls, migrates, waits for the stack and prints
 the URL and the admin login. Rerunning it upgrades in place — the `.env` is kept.
 
+**Already running Pyrrhula on this host?** A release install claims the same container
+names, volumes and ports as a source install and would recreate it. To stand one beside
+the other — evaluating a release next to your working tree, or two deployments on one
+machine — give it its own name and ports:
+
+```bash
+PYRRHULA_COMPOSE_PROJECT=pyrrhula-rc PYRRHULA_WEB_PORT=5273 PYRRHULA_API_PORT=8100 \
+  curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
+```
+
+Container names, the exec-environment network and the volumes all follow that project
+name. Unset, nothing changes.
+
 **Without the script**, if you would rather read what you run:
 
 ```bash

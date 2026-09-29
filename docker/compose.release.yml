@@ -16,10 +16,22 @@
 #   PYRRHULA_ENCRYPTION_KEY      openssl rand -base64 32   <- back this up; losing it
 #                                                             orphans every stored credential
 # and may set PYRRHULA_VERSION to pull a different release than the one below.
+#
+# To stand this beside an existing Pyrrhula on the same host -- evaluating a release
+# next to a source install, or two deployments on one machine -- set
+# PYRRHULA_COMPOSE_PROJECT to something else and give it its own ports:
+#
+#   PYRRHULA_COMPOSE_PROJECT=pyrrhula-rc
+#   PYRRHULA_WEB_PORT=5273
+#   PYRRHULA_API_PORT=8100
+#
+# and pass the same name to compose: `-p pyrrhula-rc`. Container names, the exec-env
+# network and the volumes all follow it. Without it nothing changes: the names are the
+# ones they always were.
 
 services:
   postgres:
-    container_name: pyrrhula_postgres_1
+    container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_postgres_1
     image: docker.io/pgvector/pgvector:pg16
     restart: always
     environment:
@@ -35,7 +47,7 @@ services:
       retries: 10
 
   redis:
-    container_name: pyrrhula_redis_1
+    container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_redis_1
     image: docker.io/redis:7
     restart: always
     healthcheck:
@@ -59,7 +71,7 @@ services:
       PYRRHULA_REQUIRE_ENCRYPTION: "1"
       PYRRHULA_SINGLE_TENANT_UI: ${PYRRHULA_SINGLE_TENANT_UI:-true}
       PYRRHULA_BLOB_STORE_ROOT: /app/data/blobs
-      PYRRHULA_GIT_HTTP_BASE: ${PYRRHULA_GIT_HTTP_BASE:-http://pyrrhula_api_1:8000}
+      PYRRHULA_GIT_HTTP_BASE: ${PYRRHULA_GIT_HTTP_BASE:-http://${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_api_1:8000}
       PYRRHULA_PUBLIC_BASE_URL: ${PYRRHULA_PUBLIC_BASE_URL:-}
       # Unlike the build-from-source stack, this one defaults to ONLINE. The ~2.2GB
       # retrieval model is too large to bake into an image, so a freshly pulled
@@ -75,7 +87,7 @@ services:
         condition: service_healthy
 
   api:
-    container_name: pyrrhula_api_1
+    container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_api_1
     image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
     restart: always
     command: ["api"]
@@ -102,7 +114,7 @@ services:
         condition: service_completed_successfully
 
   worker:
-    container_name: pyrrhula_worker_1
+    container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_worker_1
     image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
     restart: always
     command: ["worker"]
@@ -131,7 +143,7 @@ services:
         condition: service_completed_successfully
 
   web:
-    container_name: pyrrhula_web
+    container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_web
     image: ghcr.io/tuturu742/pyrrhula-web:${PYRRHULA_VERSION:-0.1.0-rc1}
     restart: always
     ports:
@@ -151,7 +163,7 @@ services:
   # with nothing. A missing file here is loud instead: the container exits 127 saying
   # the settings are not a valid file.
   searxng:
-    container_name: pyrrhula_searxng
+    container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_searxng
     image: docker.io/searxng/searxng:latest
     restart: always
     environment:
@@ -163,7 +175,7 @@ services:
 networks:
   default: {}
   envs:
-    name: pyrrhula-envs
+    name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}-envs
 
 volumes:
   pyrrhula-postgres:
