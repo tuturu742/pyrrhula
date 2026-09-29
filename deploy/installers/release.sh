@@ -38,10 +38,14 @@ say "engine: $ENGINE ($COMPOSE), release: $VERSION"
 # --- the compose file ------------------------------------------------------------
 mkdir -p "$DIR"
 cd "$DIR"
-say "downloading the compose file for $VERSION"
-curl -fsSL -o compose.release.yml \
-  "https://raw.githubusercontent.com/$REPO/v$VERSION/docker/compose.release.yml" \
-  || fail "no compose file for v$VERSION -- check the tag at https://github.com/$REPO/releases"
+# Both files, from the same tag. The settings are SearXNG's, not ours to republish as
+# an image, and the compose file bind-mounts them by name -- a stack missing this file
+# exits 127 rather than running a search that answers with nothing.
+say "downloading the compose file and search settings for $VERSION"
+for f in compose.release.yml searxng-settings.yml; do
+  curl -fsSL -o "$f" "https://raw.githubusercontent.com/$REPO/v$VERSION/docker/$f" \
+    || fail "no $f for v$VERSION -- check the tag at https://github.com/$REPO/releases"
+done
 
 # --- secrets ---------------------------------------------------------------------
 # Generated once and never regenerated: postgres only applies its password on first

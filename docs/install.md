@@ -195,16 +195,18 @@ under **Admin → Models**.
 
 ## release images (no checkout, no build)
 
-For running the product rather than working on it. Three images are published per
-release to GitHub Container Registry, and one compose file wires them together:
+For running the product rather than working on it. Two images are published per release
+to GitHub Container Registry, and one compose file wires them together with two
+off-the-shelf ones:
 
 | image | what it runs |
 |---|---|
 | `ghcr.io/tuturu742/pyrrhula` | api, worker and the migration one-shot — one image, the entrypoint selects |
 | `ghcr.io/tuturu742/pyrrhula-web` | the built UI behind nginx |
-| `ghcr.io/tuturu742/pyrrhula-searxng` | agent web search, with this platform's settings baked in |
+| `docker.io/pgvector/pgvector:pg16`, `docker.io/redis:7` | the database and the cache, unmodified |
+| `docker.io/searxng/searxng:latest` | agent web search, with this release's settings file mounted beside it |
 
-linux/amd64. They are public: no `docker login`.
+Ours are linux/amd64 and public: no `docker login`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
@@ -218,7 +220,9 @@ the URL and the admin login. Rerunning it upgrades in place — the `.env` is ke
 **Without the script**, if you would rather read what you run:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/tuturu742/pyrrhula/v0.1.0-rc1/docker/compose.release.yml
+base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v0.1.0-rc1/docker
+curl -fsSLO $base/compose.release.yml
+curl -fsSLO $base/searxng-settings.yml     # the compose file mounts this by name
 cat > .env <<EOF
 PYRRHULA_VERSION=0.1.0-rc1
 PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)
@@ -243,6 +247,15 @@ Two things differ from a source install, both deliberate:
 - **Hand-placed workflow packs go in a volume**, not a directory beside the compose
   file — a file you downloaded on its own has nothing beside it. Use
   `docker cp <pack> pyrrhula_api_1:/app/plugins-local/`.
+
+**Why search needs a second file.** SearXNG runs from its own upstream image, and its
+82 lines of engine configuration are not something an environment variable can express —
+stock SearXNG answers `/search?format=json` with a 403, and the big web engines it ships
+enabled return HTTP 200 with zero results from an ordinary self-hosted address.
+Republishing 266 MB of someone else's project to ship 4 KB of configuration would also
+have frozen SearXNG at whatever it was on release day, so the settings travel as a file
+instead. If it is missing, the container exits 127 saying so rather than running a
+search that finds nothing.
 
 `GET /health` on the api reports the version it is running, which is the only reliable
 way to tell what a pulled deployment actually is:

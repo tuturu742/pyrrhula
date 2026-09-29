@@ -106,22 +106,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # SearXNG with the platform's settings baked in. Published so that a deployment
-      # assembled from pulled images needs no file from this repository -- the compose
-      # path otherwise bind-mounts docker/searxng-settings.yml, which a curl'd compose
-      # file has no way to provide.
-      - name: Search image (SearXNG with our settings)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/searxng.Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-searxng:${{ steps.version.outputs.image_tag }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.version.outputs.image_tag }}
-
       - name: GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -129,7 +113,9 @@ jobs:
           name: Pyrrhula ${{ steps.version.outputs.image_tag }}
           prerelease: ${{ contains(steps.version.outputs.image_tag, 'rc') }}
           generate_release_notes: true
-          files: docker/compose.release.yml
+          files: |
+            docker/compose.release.yml
+            docker/searxng-settings.yml
           body: |
             ## Install
 
@@ -153,6 +139,11 @@ jobs:
 
             - `ghcr.io/${{ github.repository }}:${{ steps.version.outputs.image_tag }}` — api, worker, migrate
             - `ghcr.io/${{ github.repository }}-web:${{ steps.version.outputs.image_tag }}` — the UI behind nginx
-            - `ghcr.io/${{ github.repository }}-searxng:${{ steps.version.outputs.image_tag }}` — agent web search
+
+            Agent web search runs the upstream `searxng/searxng` image with this
+            release's settings file, which the installer downloads beside the compose
+            file. Republishing 266MB of someone else's project to ship 4KB of our
+            configuration would also have frozen SearXNG at whatever it was on release
+            day.
 
             linux/amd64. `GET /health` on the api reports the version it is running.

@@ -1,13 +1,13 @@
 # The release stack: published images, pulled -- no checkout, no build, no toolchain.
 #
 #   curl -fsSLO https://raw.githubusercontent.com/tuturu742/pyrrhula/main/docker/compose.release.yml
+#   curl -fsSLO https://raw.githubusercontent.com/tuturu742/pyrrhula/main/docker/searxng-settings.yml
 #   # write a .env (see below), then:
 #   docker compose -p pyrrhula -f compose.release.yml up -d
 #
-# deploy/installers/release.sh does both of those for you, including generating the
-# secrets. Everything this file needs is either in the images or in .env; it references
-# no file from the repository on purpose, because a compose file downloaded on its own
-# cannot bind-mount one.
+# deploy/installers/release.sh does all of that for you, including generating the
+# secrets. The one file it needs beside it is searxng-settings.yml, above -- everything
+# else is in the images or in .env.
 #
 # .env must set, with no defaults offered here:
 #   PYRRHULA_POSTGRES_PASSWORD   openssl rand -hex 24
@@ -139,15 +139,26 @@ services:
     depends_on:
       - api
 
-  # Agent web search. The published image carries the settings file the source build
-  # bind-mounts, which is what lets this stack run with no repository beside it.
+  # Agent web search, upstream image plus this release's settings -- 82 lines of
+  # measured engine selection that no environment variable can express, and that stock
+  # SearXNG will not answer /search?format=json without.
+  #
+  # The settings travel as a file downloaded beside this one rather than baked into an
+  # image of our own: republishing 266MB of someone else's project to ship 4KB of
+  # configuration would also freeze SearXNG at whatever it was on release day. The
+  # inline `configs:` alternative was measured and rejected -- podman-compose accepts it
+  # and silently ignores it, leaving stock settings and a search that answers HTTP 200
+  # with nothing. A missing file here is loud instead: the container exits 127 saying
+  # the settings are not a valid file.
   searxng:
     container_name: pyrrhula_searxng
-    image: ghcr.io/tuturu742/pyrrhula-searxng:${PYRRHULA_VERSION:-0.1.0-rc1}
+    image: docker.io/searxng/searxng:latest
     restart: always
     environment:
       SEARXNG_SECRET: ${PYRRHULA_JWT_SECRET}
       SEARXNG_BASE_URL: http://searxng:8080/
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
 
 networks:
   default: {}
