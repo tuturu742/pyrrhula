@@ -73,9 +73,21 @@ A useful test when filing a source: *if the model contradicts this text, is that
   and they are offered in the author's `insertion_order`. A workspace's **Knowledge
   budget** card shows, per phase and class, what each gets and which always-on entries
   fit — worth a look after importing anything large.
+- **A phase can name its own share.** `budget.constant_share` (a fraction above 0 and at
+  most 1) overrides the platform's default for that phase alone. Phases differ in kind: a
+  briefing whose whole job is to put one fixed text in front of everyone can ask for most
+  of its slice, while a resolution phase wants room to look things up. Omit it and the
+  phase inherits the default, which is what every already-authored flow does.
 - **A `rules` entry with no activation keys gets them from its own title when published**,
   so an ingested handbook answers to what a turn *names* rather than only to what it
   resembles. The entry editor says when keys were derived; edit or clear them freely.
+- **Lore and misc entries are not keyed for you, and should be keyed by hand.** A reference
+  work's section titles *are* the names of the things they govern ("Goblin", "Saving
+  Throws"), so deriving from them works. A setting's entry titles are editorial labels
+  ("What Brought You Here", "Marta Fenn Sets Two Places") that no turn ever says aloud.
+  Measured on a real session: hand-written lore keys fired 27 times in 16 turns where
+  title-derived ones fired 5. Key a lore entry with the words a scene would use — the
+  place, the person, the rumour, the thing.
 - The [sample workspaces](https://github.com/tuturu742/pyrrhula-samples) that carry
   knowledge ship the classes their flow budgets, so an imported sample demonstrates the split
   end to end.

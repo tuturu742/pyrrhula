@@ -218,3 +218,29 @@ async def test_phases_without_a_budget_are_skipped(db_available: None) -> None:
         tenant_id, workspace_id, _dsl(resolve=_phase({"rules": 1.0}, 500), waiting=awaiting)
     )
     assert [p.phase_key for p in report] == ["resolve"]
+
+
+async def test_the_report_uses_the_phases_own_share(db_available: None) -> None:
+    """The report and the fill have to agree about which always-on entries land, so a
+    phase that names its own share must be read with that share."""
+    body = " ".join(f"word{i}" for i in range(60))
+    tenant_id, workspace_id = await _seed(
+        "sat-share", [(f"always-{i}", body, True) for i in range(3)]
+    )
+
+    def phase_with(share: float | None) -> PhaseSpec:
+        # Sized so the default share holds two of the three and a generous one holds all.
+        phase = _phase({"rules": 1.0}, 400)
+        return phase.model_copy(
+            update={"budget": phase.budget.model_copy(update={"constant_share": share})}
+        )
+
+    default = (await workspace_saturation(tenant_id, workspace_id, _dsl(resolve=phase_with(None))))[
+        0
+    ].classes[0]
+    generous = (
+        await workspace_saturation(tenant_id, workspace_id, _dsl(resolve=phase_with(0.95)))
+    )[0].classes[0]
+
+    assert generous.admitted_constant_entries > default.admitted_constant_entries
+    assert generous.retrievable_tokens < default.retrievable_tokens

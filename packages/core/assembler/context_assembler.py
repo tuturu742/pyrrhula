@@ -611,6 +611,7 @@ async def assemble(
                     # version at once -- and without it a superseded entry stays citable.
                     version_set=await effective_version_ids(tenant_id, workspace_id),
                     spill=phase.budget.spill,
+                    constant_share=phase.budget.constant_share,
                     reranker=reranker,
                     cache=cache,
                 )

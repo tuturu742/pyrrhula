@@ -166,6 +166,7 @@ def fill_all_buckets(
     *,
     constant_chunk_ids_by_class: dict[str, frozenset[uuid.UUID]] | None = None,
     constant_order_by_class: dict[str, Mapping[uuid.UUID, int]] | None = None,
+    constant_share: float | None = None,
     spill: str = DEFAULT_SPILL,
 ) -> dict[str, BucketFillResult]:
     """Fills each class's bucket independently, then — ``spill='proportional'`` (default)
@@ -183,6 +184,7 @@ def fill_all_buckets(
             budget,
             constant_chunk_ids=constant_by_class.get(cls, frozenset()),
             constant_order=order_by_class.get(cls),
+            constant_share=constant_share if constant_share is not None else CONSTANT_BUCKET_SHARE,
         )
         for cls, budget in bucket_tokens.items()
     }

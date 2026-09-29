@@ -66,6 +66,9 @@ async def search_and_budget(
     activated_entries_by_class: dict[str, list[ActivatedEntry]] | None = None,
     priority_weights: dict[str, float] | None = None,
     spill: str = DEFAULT_SPILL,
+    # How much of each slice the always-on entries may take. None keeps the platform
+    # default; a phase may name its own (core.process.dsl.schema.BudgetSpec).
+    constant_share: float | None = None,
     k_per_list: int = _DEFAULT_K_PER_LIST,
     wrrf_k: int = DEFAULT_WRRF_K,
     list_weights: dict[str, float] | None = None,
@@ -156,6 +159,7 @@ async def search_and_budget(
         bucket_tokens,
         constant_chunk_ids_by_class=constant_by_class,
         constant_order_by_class=dict(constant_order_by_class),
+        constant_share=constant_share,
         spill=spill,
     )
     return to_budgeted_chunks(fill_results, constant_chunk_ids_by_class=constant_by_class)

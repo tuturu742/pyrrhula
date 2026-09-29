@@ -273,3 +273,48 @@ def test_spill_offers_a_held_back_constant_the_extra_room_first() -> None:
     # lore used 10 of 1000 and has nothing waiting, so it donates; rules has something
     # waiting, so it receives -- and the third always-on entry lands.
     assert constants[2].chunk_id in {h.chunk_id for h in results["rules"].included}
+
+
+def test_a_phase_can_name_its_own_constant_share() -> None:
+    """Phases differ in kind. A briefing whose whole job is to put a fixed text in front
+    of everyone wants most of its slice; a resolution phase wants room to look things up.
+    The platform default is what a phase gets for saying nothing."""
+    constants = [_keyed(300, rank=1), _keyed(300, rank=2), _keyed(300, rank=3)]
+    # Retrieval candidates that take exactly what each share leaves, so the third pass
+    # has nothing to hand back and the share alone decides.
+    retrieved = [_hit(350, rank=4), _hit(350, rank=5)]
+    ids = frozenset(h.chunk_id for h in constants)
+    order = {h.chunk_id: i for i, h in enumerate(constants)}
+
+    generous = fill_bucket(
+        constants + retrieved,
+        1000,
+        constant_chunk_ids=ids,
+        constant_order=order,
+        constant_share=0.9,
+    )
+    assert len([h for h in generous.included if h.chunk_id in ids]) == 3
+
+    frugal = fill_bucket(
+        constants + retrieved,
+        1000,
+        constant_chunk_ids=ids,
+        constant_order=order,
+        constant_share=0.35,
+    )
+    assert len([h for h in frugal.included if h.chunk_id in ids]) == 1
+
+
+def test_fill_all_buckets_passes_the_share_through() -> None:
+    constants = [_keyed(300, rank=1), _keyed(300, rank=2), _keyed(300, rank=3)]
+    ids = frozenset(h.chunk_id for h in constants)
+    order = {h.chunk_id: i for i, h in enumerate(constants)}
+    results = fill_all_buckets(
+        {"rules": constants + [_hit(350, rank=9), _hit(350, rank=10)]},
+        {"rules": 1000},
+        constant_chunk_ids_by_class={"rules": ids},
+        constant_order_by_class={"rules": order},
+        constant_share=0.35,
+        spill="none",
+    )
+    assert len([h for h in results["rules"].included if h.chunk_id in ids]) == 1
