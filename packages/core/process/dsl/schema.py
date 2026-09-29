@@ -197,6 +197,14 @@ class BudgetSpec(BaseModel):
 
     Default ``0.0`` = no reservation, which is the behaviour of every phase that never
     declared one.
+
+    ``constant_share`` is how much of a class's slice the always-on entries may take
+    before retrieval gets the rest. It is a per-phase choice because phases differ in
+    kind: a briefing phase whose whole job is to put a fixed text in front of everyone
+    wants most of the slice, and a resolution phase wants room to look things up. Absent
+    means the platform's default (``core.knowledge.retrieval.budget``) rather than a
+    number written here, so the default can move without every pack being re-authored --
+    the same "absent means inherit" the settings chain uses.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -205,6 +213,16 @@ class BudgetSpec(BaseModel):
     max_tokens: int
     spill: Literal["proportional", "none"] = "proportional"
     history_ratio: float = 0.0
+    constant_share: float | None = None
+
+    @field_validator("constant_share")
+    @classmethod
+    def _constant_share_in_range(cls, value: float | None) -> float | None:
+        # Zero would mean "no always-on entry is ever placed", which is what omitting the
+        # flag already expresses; above one is not a share.
+        if value is not None and not 0.0 < value <= 1.0:
+            raise ValueError("constant_share must be greater than 0 and at most 1.0")
+        return value
 
     @field_validator("history_ratio")
     @classmethod

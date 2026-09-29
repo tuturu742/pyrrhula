@@ -181,6 +181,8 @@ async def workspace_saturation(
         buckets = split_budget(ratios, budget.max_tokens - history_reserved)
         visibility = getattr(phase, "visibility", None)
         scopes = set(getattr(visibility, "scopes", []) or [])
+        # The phase's own share when it names one, so the report and the fill agree.
+        share = getattr(budget, "constant_share", None)
 
         classes: list[ClassSaturation] = []
         for class_, bucket_tokens in buckets.items():
@@ -189,7 +191,9 @@ async def workspace_saturation(
             # names the same entries the fill will.
             in_play.sort(key=lambda c: (c.insertion_order, c.entry_key))
             admitted, admitted_tokens = constant_allowance(
-                [c.tokens for c in in_play], bucket_tokens
+                [c.tokens for c in in_play],
+                bucket_tokens,
+                **({} if share is None else {"constant_share": share}),
             )
             classes.append(
                 ClassSaturation(
