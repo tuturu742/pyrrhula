@@ -17,6 +17,10 @@ set -eu
 VERSION="${1:-${PYRRHULA_VERSION:-0.1.0-rc1}}"
 DIR="${PYRRHULA_DIR:-./pyrrhula}"
 REPO="tuturu742/pyrrhula"
+# Names every container, volume and network in this deployment. Change it (with
+# PYRRHULA_WEB_PORT and PYRRHULA_API_PORT) to stand a release beside an existing
+# Pyrrhula on the same host rather than on top of it.
+PROJECT="${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}"
 
 say()  { printf '\033[1m== %s\033[0m\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -33,7 +37,7 @@ else
 fi
 command -v curl >/dev/null    || fail "need curl"
 command -v openssl >/dev/null || fail "need openssl (it generates this deployment's secrets)"
-say "engine: $ENGINE ($COMPOSE), release: $VERSION"
+say "engine: $ENGINE ($COMPOSE), release: $VERSION, project: $PROJECT"
 
 # --- the compose file ------------------------------------------------------------
 mkdir -p "$DIR"
@@ -55,6 +59,7 @@ if [ ! -f .env ]; then
   say "generating .env (secrets)"
   {
     echo "PYRRHULA_VERSION=$VERSION"
+    echo "PYRRHULA_COMPOSE_PROJECT=$PROJECT"
     echo "PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)"
     echo "PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)"
     echo "PYRRHULA_JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')"
@@ -82,22 +87,29 @@ else
   if grep -q '^PYRRHULA_VERSION=' .env; then
     sed -i.bak "s/^PYRRHULA_VERSION=.*/PYRRHULA_VERSION=$VERSION/" .env && rm -f .env.bak
   else
-    echo "PYRRHULA_VERSION=$VERSION" >> .env
+    echo "PYRRHULA_VERSION=$VERSION"
+    echo "PYRRHULA_COMPOSE_PROJECT=$PROJECT" >> .env
   fi
 fi
 
 # --- start -----------------------------------------------------------------------
 say "pulling images"
-$COMPOSE -p pyrrhula -f compose.release.yml pull
+$COMPOSE -p "$PROJECT" -f compose.release.yml pull
 
 say "starting"
-$COMPOSE -p pyrrhula -f compose.release.yml up -d
+$COMPOSE -p "$PROJECT" -f compose.release.yml up -d
 
 # A one-shot service that already exited is left alone by `up`, so an upgrade would run
 # new code against the old schema. `run` always starts a fresh container from the image
 # now in place and returns its exit code.
+# `< /dev/null` is load-bearing, not tidiness. This script is meant to be run as
+# `curl ... | sh`, which puts the script itself on stdin; `compose run` attaches stdin
+# to the container by default, so without this the migrate container reads the rest of
+# this file, the shell hits EOF early, and the install stops silently right here --
+# after the stack is up, before it ever prints the URL or the admin password. Observed
+# doing exactly that.
 say "running migrations"
-$COMPOSE -p pyrrhula -f compose.release.yml run --rm --no-deps migrate
+$COMPOSE -p "$PROJECT" -f compose.release.yml run --rm --no-deps migrate < /dev/null
 
 WEB_PORT=$(sed -n 's/^PYRRHULA_WEB_PORT=//p' .env | head -1); WEB_PORT="${WEB_PORT:-5173}"
 say "waiting for the stack"
@@ -117,12 +129,16 @@ until [ "$i" -ge 60 ]; do
 done
 if [ "$i" -ge 60 ]; then
   echo "   the stack did not come up. What it says for itself:"
-  $COMPOSE -p pyrrhula -f compose.release.yml ps        2>&1 | sed 's/^/      /'
-  $COMPOSE -p pyrrhula -f compose.release.yml logs --tail=20 migrate api 2>&1 | sed 's/^/      /'
+  $COMPOSE -p "$PROJECT" -f compose.release.yml ps        2>&1 | sed 's/^/      /'
+  $COMPOSE -p "$PROJECT" -f compose.release.yml logs --tail=20 migrate api 2>&1 | sed 's/^/      /'
   fail "not ready after five minutes (see above; docs/install.md has the common causes)"
 fi
 
-VERSION_RUNNING=$(curl -fsS "http://localhost:${WEB_PORT}/api/health" 2>/dev/null || echo '')
+# The version the api reports, not the one we asked for: on an upgrade those differ
+# until the new containers are actually serving, and the second is the one worth
+# printing. Pull the field out rather than echoing the whole probe body at someone.
+VERSION_RUNNING=$(curl -fsS "http://localhost:${WEB_PORT}/api/health" 2>/dev/null \
+  | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
 say "ready"
 echo
 echo "   Pyrrhula ${VERSION_RUNNING:-$VERSION}"
@@ -135,4 +151,4 @@ echo "   credential -- provider keys, repository tokens, registry passwords."
 echo
 echo "   First start downloads the ~2.2GB retrieval model into a volume; until it"
 echo "   finishes, sessions run but retrieve nothing. Watch it with:"
-echo "     $COMPOSE -p pyrrhula -f compose.release.yml logs -f worker"
+echo "     $COMPOSE -p "$PROJECT" -f compose.release.yml logs -f worker"
