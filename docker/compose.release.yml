@@ -1,0 +1,161 @@
+# The release stack: published images, pulled -- no checkout, no build, no toolchain.
+#
+#   curl -fsSLO https://raw.githubusercontent.com/tuturu742/pyrrhula/main/docker/compose.release.yml
+#   # write a .env (see below), then:
+#   docker compose -p pyrrhula -f compose.release.yml up -d
+#
+# deploy/installers/release.sh does both of those for you, including generating the
+# secrets. Everything this file needs is either in the images or in .env; it references
+# no file from the repository on purpose, because a compose file downloaded on its own
+# cannot bind-mount one.
+#
+# .env must set, with no defaults offered here:
+#   PYRRHULA_POSTGRES_PASSWORD   openssl rand -hex 24
+#   PYRRHULA_APP_DB_PASSWORD     openssl rand -hex 24
+#   PYRRHULA_JWT_SECRET          openssl rand -base64 48
+#   PYRRHULA_ENCRYPTION_KEY      openssl rand -base64 32   <- back this up; losing it
+#                                                             orphans every stored credential
+# and may set PYRRHULA_VERSION to pull a different release than the one below.
+
+services:
+  postgres:
+    container_name: pyrrhula_postgres_1
+    image: docker.io/pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: pyrrhula
+      POSTGRES_PASSWORD: ${PYRRHULA_POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: pyrrhula
+    volumes:
+      - pyrrhula-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pyrrhula"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    container_name: pyrrhula_redis_1
+    image: docker.io/redis:7
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
+    command: ["migrate"]
+    environment: &app_env
+      PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:${PYRRHULA_POSTGRES_PASSWORD}@postgres:5432/pyrrhula
+      PYRRHULA_APP_DATABASE_URL: postgresql+asyncpg://pyrrhula_app:${PYRRHULA_APP_DB_PASSWORD}@postgres:5432/pyrrhula
+      PYRRHULA_APP_DB_PASSWORD: ${PYRRHULA_APP_DB_PASSWORD:?set in .env}
+      PYRRHULA_REDIS_URL: redis://redis:6379/0
+      PYRRHULA_JWT_SECRET: ${PYRRHULA_JWT_SECRET:?set in .env (openssl rand -base64 48)}
+      PYRRHULA_ADMIN_EMAIL: ${PYRRHULA_ADMIN_EMAIL:-}
+      PYRRHULA_ADMIN_PASSWORD: ${PYRRHULA_ADMIN_PASSWORD:-}
+      PYRRHULA_ENCRYPTION_KEY: ${PYRRHULA_ENCRYPTION_KEY:?set in .env (openssl rand -base64 32)}
+      PYRRHULA_REQUIRE_ENCRYPTION: "1"
+      PYRRHULA_SINGLE_TENANT_UI: ${PYRRHULA_SINGLE_TENANT_UI:-true}
+      PYRRHULA_BLOB_STORE_ROOT: /app/data/blobs
+      PYRRHULA_GIT_HTTP_BASE: ${PYRRHULA_GIT_HTTP_BASE:-http://pyrrhula_api_1:8000}
+      PYRRHULA_PUBLIC_BASE_URL: ${PYRRHULA_PUBLIC_BASE_URL:-}
+      # Unlike the build-from-source stack, this one defaults to ONLINE. The ~2.2GB
+      # retrieval model is too large to bake into an image, so a freshly pulled
+      # deployment has an empty cache volume and must fill it once. Starting offline
+      # against an empty cache is not a loud failure -- it is a deployment that runs,
+      # accepts turns, and retrieves nothing. Set PYRRHULA_HF_OFFLINE=1 after the first
+      # successful start if the host should never reach huggingface.co again.
+      HF_HUB_OFFLINE: ${PYRRHULA_HF_OFFLINE:-0}
+      TRANSFORMERS_OFFLINE: ${PYRRHULA_HF_OFFLINE:-0}
+      PYRRHULA_WEB_SEARCH_URL: ${PYRRHULA_WEB_SEARCH_URL:-http://searxng:8080}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    container_name: pyrrhula_api_1
+    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
+    restart: always
+    command: ["api"]
+    environment: *app_env
+    volumes:
+      - pyrrhula-blobs:/app/data/blobs
+      - pyrrhula-hf:/app/.cache/huggingface
+      # Hand-supplied workflow packs, for installs that cannot reach the pinned plugin
+      # repositories. A named volume rather than a bind mount: this file may be the only
+      # thing on the machine, so there is no ./plugins-local beside it to mount. Drop
+      # packs in with `docker cp <file> pyrrhula_api_1:/app/plugins-local/`.
+      - pyrrhula-plugins:/app/plugins-local
+    ports:
+      - "${PYRRHULA_API_PORT:-8000}:8000"
+    networks:
+      - default
+      - envs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    container_name: pyrrhula_worker_1
+    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
+    restart: always
+    command: ["worker"]
+    user: "0"
+    environment:
+      <<: *app_env
+      PYRRHULA_EXEC_SOCKET: /var/run/podman.sock
+      PYRRHULA_EXEC_ENGINES: >-
+        [{"key":"local","kind":"socket","socket":"/var/run/podman.sock",
+          "network":"pyrrhula-envs","label":"Local containers"}]
+    volumes:
+      - pyrrhula-blobs:/app/data/blobs
+      - pyrrhula-hf:/app/.cache/huggingface
+      - pyrrhula-plugins:/app/plugins-local
+      # Delegated coding agents build and test in isolated sibling containers, which
+      # needs the host engine's socket. Rootless podman:
+      #   systemctl --user enable --now podman.socket
+      # Docker hosts: set PYRRHULA_ENGINE_SOCKET=/var/run/docker.sock in .env.
+      - ${PYRRHULA_ENGINE_SOCKET:-/run/user/1000/podman/podman.sock}:/var/run/podman.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    container_name: pyrrhula_web
+    image: ghcr.io/tuturu742/pyrrhula-web:${PYRRHULA_VERSION:-0.1.0-rc1}
+    restart: always
+    ports:
+      - "${PYRRHULA_WEB_PORT:-5173}:80"
+    depends_on:
+      - api
+
+  # Agent web search. The published image carries the settings file the source build
+  # bind-mounts, which is what lets this stack run with no repository beside it.
+  searxng:
+    container_name: pyrrhula_searxng
+    image: ghcr.io/tuturu742/pyrrhula-searxng:${PYRRHULA_VERSION:-0.1.0-rc1}
+    restart: always
+    environment:
+      SEARXNG_SECRET: ${PYRRHULA_JWT_SECRET}
+      SEARXNG_BASE_URL: http://searxng:8080/
+
+networks:
+  default: {}
+  envs:
+    name: pyrrhula-envs
+
+volumes:
+  pyrrhula-postgres:
+  pyrrhula-blobs:
+  pyrrhula-hf:
+  pyrrhula-plugins:

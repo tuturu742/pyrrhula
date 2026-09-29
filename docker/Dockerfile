@@ -10,7 +10,9 @@ FROM python:3.12-slim AS builder
 RUN pip install --no-cache-dir uv==0.11.29
 
 WORKDIR /app
-COPY pyproject.toml uv.lock* ./
+# LICENSE because pyproject declares license-files = ["LICENSE"]: without it in the
+# build context the wheel is built without the notice MIT requires to travel with it.
+COPY pyproject.toml uv.lock* LICENSE ./
 COPY packages ./packages
 COPY migrations ./migrations
 
@@ -46,6 +48,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY packages ./packages
 COPY migrations ./migrations
 COPY alembic.ini ./alembic.ini
+COPY LICENSE ./LICENSE
 # Workflow packs come from the pinned plugin repos (deploy/plugins.json); run
 # scripts/fetch_plugins.py before building. In-image path stays /app/packs.
 COPY builtin-workflows ./builtin-workflows

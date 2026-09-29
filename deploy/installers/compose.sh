@@ -18,15 +18,29 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 CHECK_ONLY=0
 PURGE=0
 SINGLE_TENANT=true
+# Where the images come from. Building is the default because a checkout can always
+# build what it has checked out, and that stays true between releases. --from-registry
+# pulls the published images of a release instead: minutes instead of a first build, at
+# the cost of running the tagged code rather than the working tree's.
+FROM_REGISTRY=0
+RELEASE_VERSION=""
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
     --purge) PURGE=1 ;;
     --single-tenant) SINGLE_TENANT=true ;;
     --multi-tenant)  SINGLE_TENANT=false ;;
-    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --check | --purge)" ;;
+    --from-registry) FROM_REGISTRY=1 ;;
+    --from-registry=*) FROM_REGISTRY=1; RELEASE_VERSION="${arg#*=}" ;;
+    *) fail "unknown flag $arg (want: --single-tenant | --multi-tenant | --from-registry[=VERSION] | --check | --purge)" ;;
   esac
 done
+
+if [ "$FROM_REGISTRY" = 1 ]; then
+  COMPOSE_FILE=docker/compose.release.yml
+else
+  COMPOSE_FILE=docker/compose.selfhost.yml
+fi
 
 # --- prerequisites ----------------------------------------------------------------
 ENGINE=""
@@ -67,7 +81,7 @@ fi
 # fresh install silently mounting a stale postgres volume whose passwords no longer
 # matched the fresh .env.
 PROJECT="${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}"
-CARGS=(-p "$PROJECT" -f docker/compose.selfhost.yml)
+CARGS=(-p "$PROJECT" -f "$COMPOSE_FILE")
 
 if [ "$PURGE" = 1 ]; then
   # Everything this installer ever created: containers, networks, and the named volumes
@@ -163,12 +177,12 @@ if [ "$FRESH_ENV" = 1 ] && podman volume exists "${PROJECT}_pyrrhula-postgres" 2
   fail "a previous install's data exists (volume ${PROJECT}_pyrrhula-postgres) but .env was just
        generated with NEW secrets. Either restore the previous .env (backup:
        ~/.config/pyrrhula/compose.env.bak) or wipe the old install first:
-       ${COMPOSE[*]} -p $PROJECT -f docker/compose.selfhost.yml down -v"
+       ${COMPOSE[*]} -p $PROJECT -f $COMPOSE_FILE down -v"
 fi
 if [ "$FRESH_ENV" = 1 ] && command -v docker >/dev/null 2>&1 && [ "$ENGINE" = docker ] \
    && docker volume inspect "${PROJECT}_pyrrhula-postgres" >/dev/null 2>&1; then
   fail "a previous install's data exists (volume ${PROJECT}_pyrrhula-postgres); restore the old
-       .env or run: ${COMPOSE[*]} -p $PROJECT -f docker/compose.selfhost.yml down -v"
+       .env or run: ${COMPOSE[*]} -p $PROJECT -f $COMPOSE_FILE down -v"
 fi
 
 # --- up ---------------------------------------------------------------------------
@@ -198,10 +212,17 @@ if [ -z "${PYRRHULA_COMPOSE_DNS:-}" ] && grep -qs '^nameserver 127\.' /etc/resol
   fi
 fi
 
-say "fetching workflow plugins (deploy/plugins.json)"
-python3 scripts/fetch_plugins.py
+if [ "$FROM_REGISTRY" = 1 ]; then
+  # The published image already COPYs the packs, at the sha deploy/plugins.json pinned
+  # when that release was built. Fetching them here would put the working tree's pin
+  # beside a container that cannot see it.
+  say "using published images (no local build)"
+else
+  say "fetching workflow plugins (deploy/plugins.json)"
+  python3 scripts/fetch_plugins.py
+fi
 
-say "building and starting (first build takes a few minutes)"
+say "starting"
 if [ -n "${PYRRHULA_COMPOSE_DNS:-}" ]; then
   # compose has no portable "set a resolver" switch, so this goes in as an override file
   # rather than being edited into the shipped compose file.
@@ -222,7 +243,13 @@ YAML
   say "using DNS ${PYRRHULA_COMPOSE_DNS} inside the containers"
 fi
 
-"${COMPOSE[@]}" "${CARGS[@]}" up -d --build
+if [ "$FROM_REGISTRY" = 1 ]; then
+  [ -n "$RELEASE_VERSION" ] && export PYRRHULA_VERSION="$RELEASE_VERSION"
+  "${COMPOSE[@]}" "${CARGS[@]}" pull
+  "${COMPOSE[@]}" "${CARGS[@]}" up -d
+else
+  "${COMPOSE[@]}" "${CARGS[@]}" up -d --build
+fi
 
 # `up --build` builds the new image and then, depending on the compose implementation,
 # happily leaves the old container running on the old one. Observed here: an image built
@@ -237,10 +264,10 @@ fi
 # were recreated on the new image, and the migrate container that ran was yesterday's,
 # so the schema stayed where it was while the code assumed otherwise. `run` always
 # starts a fresh container from the current image and returns its exit code.
-say "running migrations with the image just built"
+say "running migrations with the image now in place"
 "${COMPOSE[@]}" "${CARGS[@]}" run --rm --no-deps migrate
 
-say "recreating application containers so they run the image just built"
+say "recreating application containers so they run the image now in place"
 "${COMPOSE[@]}" "${CARGS[@]}" up -d --force-recreate --no-deps api worker web
 
 say "waiting for the stack"
@@ -290,7 +317,7 @@ diagnose() {
     echo "      no longer match the existing volume can never connect. Restore the .env"
     echo "      this data was created with (backup: ~/.config/pyrrhula/compose.env.bak),"
     echo "      or wipe the old install:"
-    echo "        ${COMPOSE[*]} -p $PROJECT -f docker/compose.selfhost.yml down -v"
+    echo "        ${COMPOSE[*]} -p $PROJECT -f $COMPOSE_FILE down -v"
   fi
   if "${COMPOSE[@]}" "${CARGS[@]}" logs --tail=80 web api 2>&1 \
      | grep -qiE 'address already in use|bind: permission denied'; then

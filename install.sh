@@ -15,6 +15,12 @@
 #   ./install.sh compose                  # single-tenant (default)
 #   ./install.sh compose --multi-tenant   # host several organizations
 #
+# Images. The compose target builds them from this checkout by default. To run a
+# published release instead -- minutes rather than a first build:
+#
+#   ./install.sh compose --from-registry            # the release this checkout names
+#   ./install.sh compose --from-registry=0.1.0-rc1  # a specific one
+#
 # Each target's installer is deploy/installers/<target>.sh; the full walkthrough,
 # what gets created, and troubleshooting live in docs/install.md.
 set -euo pipefail
@@ -27,7 +33,7 @@ case "$TARGET" in
     exec "deploy/installers/$TARGET.sh" "$@"
     ;;
   *)
-    echo "usage: ./install.sh {compose|k8s} [--single-tenant|--multi-tenant] [--check] [--purge]"
+    echo "usage: ./install.sh {compose|k8s} [--single-tenant|--multi-tenant] [--from-registry[=VERSION]] [--check] [--purge]"
     echo
     echo "  compose  docker or podman on this machine (smallest footprint)"
     echo "  k8s      any Kubernetes cluster; one-command dev install on k3s"

@@ -39,6 +39,12 @@ managed by Pyrrhula. One product, one codebase.
 ./install.sh k8s       # a Kubernetes cluster (one-command dev install on k3s)
 ```
 
+Or run a published release — no checkout, no build, three pulled images:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
+```
+
 Each installer checks prerequisites (`--check` to only check), generates secrets,
 brings the stack up, and prints the URL — then you sign up in the browser and the
 setup checklist takes over — a built-in general discussion workflow ("Default") works

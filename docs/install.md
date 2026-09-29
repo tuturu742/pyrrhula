@@ -9,10 +9,22 @@ Two supported deployment targets, one entry point:
 
 Add `--check` to any target to verify prerequisites without changing anything.
 
+Both build the images from this checkout. A third path skips the build and pulls the
+images of a published release instead — no checkout, no toolchain, one compose file:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
+```
+
+See [release images](#release-images-no-checkout-no-build). Which to choose: pull a
+release to run the product, build from source to change it.
+
 ## Prerequisites
 
 Both installers build the images from source inside containers, so the host needs no
 Python or Node toolchain — the image builds bring their own (`uv`, Node 22, `pnpm`).
+The release path builds nothing at all: it needs only a container engine, `curl` and
+`openssl`.
 
 **compose**
 
@@ -168,6 +180,10 @@ under **Admin → Models**.
   `docker/compose.selfhost.yml`, or point connections at any cloud key.
 - **Upgrade**: `git pull && ./install.sh compose` (compose rebuilds; the migrate
   one-shot runs Alembic before api/worker start).
+- **Skip the build**: `./install.sh compose --from-registry` runs the same stack from
+  the published images — minutes instead of a first build. Add `=VERSION` to pin one
+  (`--from-registry=0.1.0-rc1`). Everything else on this page still applies; the
+  difference is that you are running the tagged code rather than your working tree.
 - **Offline model loads**: `PYRRHULA_HF_OFFLINE` defaults to `1`, so the runtime never
   reaches Hugging Face on its own; the admin-console download lifts that for its one
   fetch. This is not a preference — an unauthenticated hub check has no timeout and can
@@ -176,6 +192,64 @@ under **Admin → Models**.
   in-request fetch back.
 - **TLS**: terminate in front of the web port with any proxy (Caddy example in
   `docs/self-host.md`).
+
+## release images (no checkout, no build)
+
+For running the product rather than working on it. Three images are published per
+release to GitHub Container Registry, and one compose file wires them together:
+
+| image | what it runs |
+|---|---|
+| `ghcr.io/tuturu742/pyrrhula` | api, worker and the migration one-shot — one image, the entrypoint selects |
+| `ghcr.io/tuturu742/pyrrhula-web` | the built UI behind nginx |
+| `ghcr.io/tuturu742/pyrrhula-searxng` | agent web search, with this platform's settings baked in |
+
+linux/amd64. They are public: no `docker login`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
+curl -fsSL .../release.sh | sh -s -- 0.1.0-rc1          # a specific release
+```
+
+Everything lands in `./pyrrhula` (`PYRRHULA_DIR` to choose). The script generates the
+same secrets the compose installer does, pulls, migrates, waits for the stack and prints
+the URL and the admin login. Rerunning it upgrades in place — the `.env` is kept.
+
+**Without the script**, if you would rather read what you run:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/tuturu742/pyrrhula/v0.1.0-rc1/docker/compose.release.yml
+cat > .env <<EOF
+PYRRHULA_VERSION=0.1.0-rc1
+PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)
+PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)
+PYRRHULA_JWT_SECRET=$(openssl rand -base64 48)
+PYRRHULA_ENCRYPTION_KEY=$(openssl rand -base64 32)
+PYRRHULA_ADMIN_EMAIL=admin@example.com
+PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)
+EOF
+chmod 600 .env
+docker compose -p pyrrhula -f compose.release.yml up -d
+```
+
+Two things differ from a source install, both deliberate:
+
+- **The first start is online.** The ~2.2 GB retrieval model is too large to put in an
+  image, so a pulled deployment begins with an empty cache volume and fills it once.
+  `PYRRHULA_HF_OFFLINE` therefore defaults to `0` here rather than `1`. Set it to `1`
+  after the first successful start if the host should never reach Hugging Face again.
+  Until the model is cached the stack runs and accepts turns but retrieves nothing, so
+  give it those few minutes before judging a first session.
+- **Hand-placed workflow packs go in a volume**, not a directory beside the compose
+  file — a file you downloaded on its own has nothing beside it. Use
+  `docker cp <pack> pyrrhula_api_1:/app/plugins-local/`.
+
+`GET /health` on the api reports the version it is running, which is the only reliable
+way to tell what a pulled deployment actually is:
+
+```bash
+curl -s localhost:5173/api/health     # {"status":"ok","version":"0.1.0rc1"}
+```
 
 ## k8s (Kubernetes)
 
@@ -316,6 +390,11 @@ restart.
   container applies any new migrations before the api starts.
 - **k8s**: `git pull && ./install.sh k8s` — rebuilds the images, re-applies the
   overlay, and waits for the migration Job.
+- **release images**: rerun the installer with the newer version
+  (`curl -fsSL .../release.sh | sh -s -- 0.1.0`), or edit `PYRRHULA_VERSION` in `.env`,
+  then `docker compose -p pyrrhula -f compose.release.yml pull && ... up -d` and
+  `... run --rm --no-deps migrate`. Run that migration *from the new image*: `up` leaves
+  an already-exited one-shot alone, which would put new code on an old schema.
 
 Downgrading is not supported: some migrations carry data transformations whose
 `downgrade()` exists for development only. Take a backup before upgrading
@@ -329,6 +408,7 @@ credential (model keys, repo tokens). Losing it means re-entering them all.
 | target | where it lives | backup |
 |---|---|---|
 | compose | `.env` | `~/.config/pyrrhula/compose.env.bak` |
+| release images | `./pyrrhula/.env` | `~/.config/pyrrhula/release.env.bak` |
 | k8s | `deploy/k8s/overlays/dev/secrets.env` | make one (the installer prints a reminder) |
 
 ## Troubleshooting
