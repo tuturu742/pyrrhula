@@ -19,6 +19,7 @@ on:
 permissions:
   contents: write   # creating the GitHub release
   packages: write   # pushing to GHCR
+  actions: read     # reading the tagged commit's CI conclusion, and the buildx cache
 
 env:
   REGISTRY: ghcr.io
@@ -41,7 +42,8 @@ jobs:
         run: |
           sha=$(git rev-parse HEAD)
           conclusion=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=$sha&status=completed" \
-            --jq '[.workflow_runs[] | select(.name == "ci")] | first | .conclusion // "none"')
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")]
+                  | first | .conclusion // "none"')
           echo "ci on $sha: $conclusion"
           [ "$conclusion" = "success" ] || {
             echo "::error::no successful ci run for $sha (got: $conclusion). Tag a commit CI has passed."
@@ -54,18 +56,8 @@ jobs:
       - name: The tag must match the version in pyproject.toml
         id: version
         run: |
-          python3 -m pip install --quiet packaging
-          raw="${{ github.event.inputs.tag || github.ref_name }}"
-          image_tag="${raw#v}"
-          python3 - "$image_tag" <<'PY'
-          import re, sys, pathlib
-          from packaging.version import Version
-          tag = sys.argv[1]
-          declared = re.search(r'^version = "(.+)"', pathlib.Path("pyproject.toml").read_text(), re.M).group(1)
-          if Version(tag) != Version(declared):
-              sys.exit(f"::error::tag {tag} and pyproject version {declared} are different releases")
-          print(f"tag {tag} == pyproject {declared}")
-          PY
+          image_tag=$(python3 scripts/check_release_tag.py "${{ github.event.inputs.tag || github.ref_name }}")
+          echo "publishing $image_tag"
           echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
 
       # The image COPYs .plugins/default; without this the build fails, and with a stale
