@@ -279,6 +279,44 @@ def _unsupported_value_param(exc: Exception) -> str | None:
     return match.group(1).strip() if match else None
 
 
+# A parameter the endpoint refuses *under one name while naming another*. OpenAI's
+# newer chat-completions models answer `max_tokens` with "Unsupported parameter:
+# 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."
+# Neither matcher above fires on that sentence -- it is not "does not support
+# parameters: [...]" and not "Unsupported value:" -- so nothing repaired it and the turn
+# failed outright. Matched on the shape: a quoted name refused, a quoted name offered.
+_RENAMED_PARAM_RE = re.compile(
+    r"unsupported parameter:\s*'([^']+)'.*?use\s*'([^']+)'\s*instead", re.I | re.S
+)
+
+
+def _renamed_param(exc: Exception) -> tuple[str, str] | None:
+    """The parameter an endpoint refused and the one it said to use instead.
+
+    A rename rather than a drop, because the endpoint offered a replacement and the value
+    carries meaning: dropping `max_tokens` would make the call succeed while silently
+    discarding the completion budget -- usage metering, cost ceilings and the
+    empty-generation retry all read it. Only ever the two names the endpoint itself
+    spoke, which is the same honesty rule the other repairs follow.
+    """
+    match = _RENAMED_PARAM_RE.search(str(exc))
+    if not match:
+        return None
+    return match.group(1).strip(), match.group(2).strip()
+
+
+# One completion budget, two spellings. Once a rename has happened the budget lives under
+# the endpoint's name for it, and code that only ever looks for `max_tokens` stops
+# finding it -- which would have made the empty-generation retry quietly not fire for
+# exactly the models that need it most.
+_COMPLETION_BUDGET_KEYS = ("max_tokens", "max_completion_tokens")
+
+
+def _budget_key(call: dict[str, Any]) -> str:
+    """Whichever spelling of the completion budget this call is carrying."""
+    return next((key for key in _COMPLETION_BUDGET_KEYS if key in call), "max_tokens")
+
+
 def _rejects_tools_with_reasoning(exc: Exception) -> bool:
     """Some chat-completions endpoints (observed: gpt-5.6-luna, gpt-5.6-terra) refuse
     function tools while a reasoning_effort is in play and say to set it to 'none'.
@@ -309,6 +347,17 @@ def _repair_call(
     the caller chain them: real requests carry several knobs and an endpoint refuses them
     one at a time.
     """
+    # A parameter the endpoint refused while naming its replacement. Tried before the
+    # drops: when the endpoint has offered a name, moving the value is strictly better
+    # than throwing it away.
+    renamed = _renamed_param(exc)
+    if renamed:
+        refused, replacement = renamed
+        if refused in call and replacement not in call:
+            repaired = {key: value for key, value in call.items() if key != refused}
+            repaired[replacement] = call[refused]
+            return repaired
+
     # A parameter refused by name. Connection and persona params exist so ONE connection
     # can serve models with different knobs, and models genuinely differ -- refusing the
     # whole turn over a sampling nicety would make the feature a liability.
@@ -409,10 +458,19 @@ class LiteLLMModelProvider:
             **kwargs,
         )
 
+        # What the endpoint last ACCEPTED, repairs included. The empty-generation retry
+        # below used to rebuild from the original call, which threw away everything the
+        # first attempt had learned: against a model that refuses `max_tokens` by name,
+        # every retry re-sent the refused spelling and paid a second rejected round trip
+        # to rediscover the same repair. It recovered, so nothing failed -- it just cost
+        # an extra request per turn, for exactly the models most likely to need a retry.
+        accepted_call: dict[str, Any] = call
+
         async def _attempt(this_call: dict[str, Any]) -> AsyncIterator[tuple[Chunk, bool]]:
             """Stream one acompletion, tagging each yielded Chunk with whether it carried
             real output (text or tool calls). The caller uses the tag to decide whether an
             empty generation is worth one reasoning-free retry."""
+            nonlocal accepted_call
             # Repairs CHAIN. One rejected request can hide the next: a call carrying both
             # an unsupported sampling knob and a reasoning effort is refused for the knob
             # first, and the repaired call is then refused for the effort. Fixing one
@@ -428,6 +486,7 @@ class LiteLLMModelProvider:
                     if repaired is None:
                         raise
                     this_call = repaired
+            accepted_call = this_call
 
             pending_calls: dict[int, dict[str, Any]] = {}
             reasoning_parts: list[str] = []
@@ -532,7 +591,7 @@ class LiteLLMModelProvider:
             messages=len(call.get("messages") or ()),
             prompt_chars=sum(len(str(m.get("content") or "")) for m in call.get("messages") or ()),
             tools=len(call.get("tools") or ()),
-            max_tokens=call.get("max_tokens"),
+            max_tokens=call.get(_budget_key(call)),
             num_ctx=call.get("num_ctx"),
             reasoning_effort=call.get("reasoning_effort"),
         )
@@ -556,14 +615,15 @@ class LiteLLMModelProvider:
             # deliberate high-effort run stays high-effort, just with room to answer after
             # it thinks. Only when no budget was set (nothing to raise) does it fall back
             # to forcing effort off, and never over an effort the caller chose on purpose.
-            retry = dict(call)
+            retry = dict(accepted_call)
             requested_effort = str((req.params or {}).get("reasoning_effort", ""))
             # The budget may come from the request OR from connection/persona params --
             # read the merged call, not req.max_tokens, or a params-supplied budget
             # would dodge the raise.
-            budget = call.get("max_tokens")
+            budget_key = _budget_key(accepted_call)
+            budget = accepted_call.get(budget_key)
             if isinstance(budget, int) and budget > 0:
-                retry["max_tokens"] = max(
+                retry[budget_key] = max(
                     budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
                 )
                 _t1 = time.monotonic()
@@ -573,7 +633,7 @@ class LiteLLMModelProvider:
                     "provider.attempt_done",
                     which="retry_raised_budget",
                     seconds=round(time.monotonic() - _t1, 1),
-                    max_tokens=retry.get("max_tokens"),
+                    max_tokens=retry.get(budget_key),
                 )
             elif not requested_effort:
                 # No budget to raise and no effort chosen: forcing reasoning off is the

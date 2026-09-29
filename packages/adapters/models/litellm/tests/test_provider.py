@@ -1078,3 +1078,149 @@ async def test_reasoning_streamed_beside_a_tool_call_rides_on_the_tool_call_chun
     with_call = next(c for c in chunks if c.tool_calls)
     assert with_call.tool_calls[0].name == "randomizer"
     assert with_call.reasoning == "A reaction roll is 2d6."
+
+
+async def test_a_parameter_refused_under_one_name_is_renamed_not_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: OpenAI's newer chat-completions models answer `max_tokens` with
+    "Unsupported parameter: 'max_tokens' ... Use 'max_completion_tokens' instead." That
+    sentence matched neither existing repair, so nothing fired and configuring such a
+    model failed at the first turn with a raw BadRequestError.
+
+    Renamed rather than dropped: the endpoint offered a replacement, and the value is the
+    completion budget. Dropping it would make the call succeed while silently discarding
+    the budget that usage metering, cost ceilings and the empty-generation retry all read.
+    """
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "max_tokens" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.BadRequestError: OpenAIException - Unsupported parameter: "
+                "'max_tokens' is not supported with this model. Use "
+                "'max_completion_tokens' instead."
+            )
+
+        async def gen():  # noqa: ANN202
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="hello", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-6-astra",
+        messages=[{"role": "user", "content": "hello"}],
+        purpose="generation",
+        temperature=0.7,
+        max_tokens=4000,
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "hello"
+    assert len(calls) == 2, "the refusal should have been repaired once and retried"
+    assert "max_tokens" not in calls[1]
+    assert calls[1]["max_completion_tokens"] == 4000, (
+        "the budget must travel to the name the endpoint asked for, not be thrown away"
+    )
+    assert calls[1]["temperature"] == 0.7, "an unrelated parameter must survive the retry"
+
+
+def test_a_rename_repair_only_moves_the_names_the_endpoint_spoke() -> None:
+    """The honesty rule the other repairs follow: act only on names the endpoint itself
+    named, and never on a message that named nothing."""
+    from adapters.models.litellm.provider import _renamed_param
+
+    assert _renamed_param(
+        Exception(
+            "Unsupported parameter: 'max_tokens' is not supported with this model. "
+            "Use 'max_completion_tokens' instead."
+        )
+    ) == ("max_tokens", "max_completion_tokens")
+    assert _renamed_param(Exception("AuthenticationError: invalid api key")) is None
+    # A value refusal is a different repair and must not be mistaken for a rename.
+    assert (
+        _renamed_param(
+            Exception("Unsupported value: 'temperature' does not support 0.2 with this model.")
+        )
+        is None
+    )
+
+
+def test_the_completion_budget_is_found_under_either_spelling() -> None:
+    """Once a rename has happened the budget lives under the endpoint's name for it. Code
+    that only looked for `max_tokens` would stop finding it, and the empty-generation
+    retry would quietly not fire for exactly the reasoning models that need it."""
+    from adapters.models.litellm.provider import _budget_key
+
+    assert _budget_key({"max_tokens": 10}) == "max_tokens"
+    assert _budget_key({"max_completion_tokens": 10}) == "max_completion_tokens"
+    assert _budget_key({"temperature": 1}) == "max_tokens"
+
+
+async def test_the_budget_raise_still_fires_after_a_rename(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two repairs have to compose. A model that refuses `max_tokens` by name is
+    exactly the kind that then spends its whole budget on hidden reasoning and returns
+    nothing -- so the empty-generation retry must find the budget under the name the
+    rename moved it to. Looking only for `max_tokens` would leave it unable to see a
+    budget, fall through to forcing reasoning off, and lose the raise on the models that
+    need it most."""
+    import litellm
+
+    calls: list[dict] = []
+
+    def _delta(content, finish=None):  # noqa: ANN001, ANN202
+        part = MagicMock()
+        choice = MagicMock()
+        choice.delta = MagicMock(content=content, tool_calls=None)
+        choice.finish_reason = finish
+        part.choices = [choice]
+        part.usage = None
+        return part
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "max_tokens" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.BadRequestError: OpenAIException - Unsupported parameter: "
+                "'max_tokens' is not supported with this model. Use "
+                "'max_completion_tokens' instead."
+            )
+
+        async def gen():
+            # First accepted call spends the budget on reasoning and says nothing.
+            if len(calls) == 2:
+                yield _delta("", "stop")
+            else:
+                yield _delta("answered", "stop")
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+    req = GenerationRequest(
+        model="openai/gpt-6-astra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        max_tokens=500,
+    )
+    text = "".join([c.text async for c in provider.generate(req)])
+
+    assert text == "answered"
+    assert len(calls) == 3, "refused, renamed-but-empty, then raised"
+    assert calls[2]["max_completion_tokens"] == 2048, (
+        "the raise must land on the renamed budget, not resurrect max_tokens"
+    )
+    assert "max_tokens" not in calls[2]
