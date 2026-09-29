@@ -49,9 +49,12 @@ def test_only_one_application_dockerfile() -> None:
         for p in ROOT.glob("**/*Dockerfile*")
         if ".git" not in p.parts and "deploy" not in p.parts and "node_modules" not in p.parts
     ]
-    # ONE deployment's images, not application variants: the app itself, the static web
-    # bundle, and the bundled SearXNG used by the web-search preset.
+    # ONE deployment's images, not application variants: the app itself and the static
+    # web bundle. SearXNG is not ours to build -- the upstream image runs with our
+    # settings file mounted beside it (docker/compose.release.yml), and k8s inlines the
+    # same settings in a ConfigMap, so a Dockerfile whose whole content was that file
+    # would be a third copy of it.
     names = sorted(p.name for p in dockerfiles)
-    assert names == ["Dockerfile", "searxng.Dockerfile", "web.Dockerfile"], (
+    assert names == ["Dockerfile", "web.Dockerfile"], (
         f"unexpected application Dockerfiles: {[str(p) for p in dockerfiles]}"
     )
