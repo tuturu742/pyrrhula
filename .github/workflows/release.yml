@@ -1,0 +1,166 @@
+# Publishes the three images a deployment pulls, from an annotated `v*` tag.
+#
+#   git tag -a v0.1.0-rc1 -m 'Pyrrhula 0.1.0-rc1' && git push origin v0.1.0-rc1
+#
+# The tag is the only input: it names the image tag (minus the `v`) and is checked
+# against the version in pyproject.toml, so a tag and a build can never disagree about
+# what they are. Images go to GHCR under the repository owner.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v0.1.0-rc1"
+        required: true
+
+permissions:
+  contents: write   # creating the GitHub release
+  packages: write   # pushing to GHCR
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      # A tag says what to call the build; it does not say the build works. CI is what
+      # says that, and it runs on the commit, not on the tag. Refuse to publish images
+      # from a commit whose CI is red or absent rather than find out from an installer.
+      - name: The tagged commit must have a green CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          conclusion=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=$sha&status=completed" \
+            --jq '[.workflow_runs[] | select(.name == "ci")] | first | .conclusion // "none"')
+          echo "ci on $sha: $conclusion"
+          [ "$conclusion" = "success" ] || {
+            echo "::error::no successful ci run for $sha (got: $conclusion). Tag a commit CI has passed."
+            exit 1
+          }
+
+      # Three spellings of one version is how a release ships mislabelled: the git tag
+      # (v0.1.0-rc1), the image tag (0.1.0-rc1) and PEP 440 in pyproject (0.1.0rc1).
+      # Normalise and compare rather than trusting whoever typed the tag.
+      - name: The tag must match the version in pyproject.toml
+        id: version
+        run: |
+          python3 -m pip install --quiet packaging
+          raw="${{ github.event.inputs.tag || github.ref_name }}"
+          image_tag="${raw#v}"
+          python3 - "$image_tag" <<'PY'
+          import re, sys, pathlib
+          from packaging.version import Version
+          tag = sys.argv[1]
+          declared = re.search(r'^version = "(.+)"', pathlib.Path("pyproject.toml").read_text(), re.M).group(1)
+          if Version(tag) != Version(declared):
+              sys.exit(f"::error::tag {tag} and pyproject version {declared} are different releases")
+          print(f"tag {tag} == pyproject {declared}")
+          PY
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+
+      # The image COPYs .plugins/default; without this the build fails, and with a stale
+      # checkout it would bake the wrong packs. The pin in deploy/plugins.json is what
+      # makes the same tag produce the same pack content twice.
+      - name: Fetch the pinned workflow plugins
+        run: python3 scripts/fetch_plugins.py
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: App image (api / worker / migrate)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.version.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.image_tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Web image (built UI behind nginx)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web.Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}-web:${{ steps.version.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.image_tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # SearXNG with the platform's settings baked in. Published so that a deployment
+      # assembled from pulled images needs no file from this repository -- the compose
+      # path otherwise bind-mounts docker/searxng-settings.yml, which a curl'd compose
+      # file has no way to provide.
+      - name: Search image (SearXNG with our settings)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/searxng.Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}-searxng:${{ steps.version.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.image_tag }}
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Pyrrhula ${{ steps.version.outputs.image_tag }}
+          prerelease: ${{ contains(steps.version.outputs.image_tag, 'rc') }}
+          generate_release_notes: true
+          files: docker/compose.release.yml
+          body: |
+            ## Install
+
+            One compose file, three pulled images, no checkout and no build:
+
+            ```bash
+            curl -fsSLO https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.tag || github.ref_name }}/compose.release.yml
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.tag || github.ref_name }}/deploy/installers/release.sh | sh
+            ```
+
+            From a checkout, the same images instead of a local build:
+
+            ```bash
+            ./install.sh compose --from-registry
+            ```
+
+            `docs/install.md` has both paths in full, including what to do without the
+            script. Building from source is still supported and unchanged.
+
+            ## Images
+
+            - `ghcr.io/${{ github.repository }}:${{ steps.version.outputs.image_tag }}` — api, worker, migrate
+            - `ghcr.io/${{ github.repository }}-web:${{ steps.version.outputs.image_tag }}` — the UI behind nginx
+            - `ghcr.io/${{ github.repository }}-searxng:${{ steps.version.outputs.image_tag }}` — agent web search
+
+            linux/amd64. `GET /health` on the api reports the version it is running.

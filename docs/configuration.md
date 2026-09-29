@@ -105,7 +105,8 @@ application behaves.
 | `PYRRHULA_TLS_CERT_DIR` | — (**required for TLS**) | Directory holding `fullchain.pem` and `privkey.pem`, mounted read-only. |
 | `PYRRHULA_TLS_SERVER_NAME` | `localhost` | Server name nginx serves the certificate for. |
 | `PYRRHULA_API_PORT` | `8000` | Host port the API is published on in the self-host compose file. |
-| `PYRRHULA_HF_OFFLINE` | `1` | Retrieval models load strictly from the shared cache; the runtime never reaches Hugging Face on its own. A model that is not there is refused with a message pointing at Admin → Models, rather than fetched mid-request — an unauthenticated hub check has no timeout and has wedged the API's event loop. An admin-console download lifts this for that fetch alone. |
+| `PYRRHULA_VERSION` | the release the compose file ships with | Release-images path only (`docker/compose.release.yml`): the image tag every service pulls. Changing it and re-running `pull` + `up -d` + `run --rm migrate` is an upgrade. Ignored by the build-from-source stack, which runs what it built. |
+| `PYRRHULA_HF_OFFLINE` | `1` (`0` in `compose.release.yml`) | Retrieval models load strictly from the shared cache; the runtime never reaches Hugging Face on its own. A model that is not there is refused with a message pointing at Admin → Models, rather than fetched mid-request — an unauthenticated hub check has no timeout and has wedged the API's event loop. An admin-console download lifts this for that fetch alone. The release-images stack defaults to `0` instead, because a freshly pulled deployment has an empty cache and nothing to load strictly from. |
 
 ## Installer and verification only
 
@@ -116,6 +117,7 @@ Never read by the running product.
 | `PYRRHULA_SMOKE_WORKER_TIMEOUT` | Seconds the installer's post-install check waits for the worker to run its test job (default `90`). |
 | `PYRRHULA_K8S_REGISTRY` | Push images to a registry instead of importing into k3s — the no-sudo install path. |
 | `PYRRHULA_COMPOSE_PROJECT`, `PYRRHULA_WEB_PORT`, `PYRRHULA_API_UPSTREAM` | Compose naming and ports. |
+| `PYRRHULA_DIR` | Where `deploy/installers/release.sh` puts the compose file and `.env` (default `./pyrrhula`). |
 
 ---
 

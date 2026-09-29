@@ -1,6 +1,6 @@
 [project]
 name = "pyrrhula"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "Multi-tenant, multi-agent orchestration platform: tabletop RPG, enterprise discussion and software-development workflows on one engine"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -76,6 +76,11 @@ dev = [
   # the parser is proven against pypdf's actual extraction rather than hand-rolled bytes.
   "fpdf2>=2.8",
   "types-regex",
+  # The compose files are test fixtures: tests/architecture reads them to keep the
+  # release stack and the source stack the same deployment. It arrives transitively
+  # today, and a test that skips when its parser is missing proves nothing.
+  "pyyaml>=6.0",
+  "types-pyyaml",
 ]
 
 [build-system]

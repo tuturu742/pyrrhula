@@ -276,3 +276,20 @@ jobs:
           file: docker/Dockerfile
           push: false
           tags: pyrrhula:ci
+      # A release publishes three images; CI built one of them, so the web and search
+      # builds were only ever exercised by an installer on somebody's machine -- which
+      # is to say, found broken at install time. Build what we ship.
+      - name: Build image (web UI behind nginx)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web.Dockerfile
+          push: false
+          tags: pyrrhula-web:ci
+      - name: Build image (SearXNG with our settings)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/searxng.Dockerfile
+          push: false
+          tags: pyrrhula-searxng:ci

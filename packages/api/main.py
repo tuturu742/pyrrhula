@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import Any
@@ -175,8 +176,19 @@ app.include_router(overseer_routes.router)
 app.include_router(admin.router)
 
 
+# Read once at import: the answer cannot change while the process runs, and a probe
+# that is hit every few seconds should not pay for a metadata lookup each time.
+# "unknown" is for a source checkout that was never installed -- a released image always
+# has the distribution metadata, because the image installs the wheel.
+try:
+    VERSION = importlib.metadata.version("pyrrhula")
+except importlib.metadata.PackageNotFoundError:  # pragma: no cover - source checkout
+    VERSION = "unknown"
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Liveness/readiness probe. No DB round-trip on purpose — this is the process check,
-    not a dependency check."""
-    return {"status": "ok"}
+    not a dependency check. It carries the version because an operator running a pulled
+    image has no other way to tell which build answered."""
+    return {"status": "ok", "version": VERSION}
