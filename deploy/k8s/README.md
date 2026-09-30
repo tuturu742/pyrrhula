@@ -11,6 +11,42 @@ Two independent things live here:
 Both were built against a single-node [k3s](https://k3s.io) on a dev machine; anything
 conformant works with the caveats below.
 
+## A second instance on the same cluster
+
+For testing a change against Kubernetes without disturbing the deployment people are
+using. `overlays/second-instance` is a working template: copy it, replace the instance
+name, apply.
+
+```bash
+cp -r overlays/second-instance overlays/my-test
+sed -i 's/pyrrhula-ht/pyrrhula-my-test/g; s/ht\.pyrrhula/my-test.pyrrhula/g' \
+    overlays/my-test/kustomization.yaml
+# its own secrets, never the other instance's
+printf 'PYRRHULA_JWT_SECRET=%s\n' "$(openssl rand -base64 48)" > overlays/my-test/secrets.env
+kubectl apply -k overlays/my-test
+```
+
+It is a list of patches rather than kustomize's `namespace:` field, and that is not a
+style choice. The transformer renames the Namespace *objects* too, so both of ours become
+one name and it fails outright:
+
+```
+error: namespace transformation produces ID conflict: [... "name":"pyrrhula-ht"} ...]
+```
+
+The two-namespace split is the point of the design — agent-run code lives in one and can
+reach nothing in the other — so the transformer is the wrong tool for it.
+
+**The two references that are easy to miss** are both cross-namespace, and both fail
+*quietly* rather than loudly: the worker's RoleBinding subject (it would grant Job
+creation to a ServiceAccount in the other instance's namespace) and the egress
+NetworkPolicy's `namespaceSelector` (environments would be allowed to reach the other
+instance's api and denied their own). `tests/architecture/test_second_instance_overlay.py`
+fails if the base grows a third.
+
+`secrets.env` is generated per instance and is gitignored. Two deployments sharing a JWT
+secret would accept each other's tokens.
+
 ## Local cluster (k3s) + dashboard
 
 ```bash

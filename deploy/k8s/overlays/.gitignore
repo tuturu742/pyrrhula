@@ -1,0 +1,4 @@
+# Generated at apply time (dev-up.sh, or by hand for a second instance) and never
+# committed: these are this deployment's real credentials.
+secrets.env
+*/secrets.env
