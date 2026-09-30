@@ -210,6 +210,47 @@ def _named_paths(work_item: dict[str, Any], brief: str) -> list[str]:
     return ordered[:40]
 
 
+def _harness_task(work_item: dict[str, Any], brief: str, reworking: bool) -> str:
+    """What the harness is actually asked to do.
+
+    The brief alone is not it, and handing over the brief alone is what the first version
+    did. ``DelegationBrief.context`` is the *assembler's* rendered context -- the
+    surrounding knowledge and history, which on a young workspace is legitimately empty --
+    while the task itself lives in the work item's ``description``, written by the
+    facilitator precisely so that "a coding agent reads only this". The one-shot path has
+    always composed both (``codegen._prompt``); the harness path passed one and dropped the
+    other, so opencode was invoked with an empty argument and refused to start:
+
+        Error: You must provide a message or a command
+        PYR_HARNESS_RC=1
+
+    Six delegations in a row came back with a clean tree and a failing test suite because
+    of it.
+
+    On rework the brief carries the reviewer's comment and the test output, so it is the
+    task; the work item still comes first, because a rework that has forgotten what it was
+    building rewrites the wrong thing.
+    """
+    fields = work_item.get("fields") or {}
+    name = str(work_item.get("name") or "").strip()
+    description = str(fields.get("description") or fields.get("title") or "").strip()
+
+    parts: list[str] = []
+    if name:
+        parts.append(f"# {name}")
+    if description:
+        parts.append(description)
+    if reworking and brief.strip():
+        parts.append(
+            "## This is a rework\n\nA reviewer requested changes on your earlier commit, "
+            "and the test output below is what the branch actually produced. Address it "
+            "in place.\n\n" + brief.strip()
+        )
+    elif brief.strip():
+        parts.append("## Context from the session\n\n" + brief.strip())
+    return "\n\n".join(parts).strip()
+
+
 class GitMcpTransport:
     """``env_provider`` (an ``ExecEnvProvider``) turns delegation real: the work happens in
     an isolated per-(session, repo) environment -- clone from the store over the shared
@@ -502,7 +543,17 @@ class GitMcpTransport:
         harness = (env_cfg or {}).get("harness") if isinstance(env_cfg, dict) else None
         using_harness = bool(isinstance(harness, dict) and harness.get("command"))
 
+        harness_task = _harness_task(work_item, brief, reworking) if using_harness else ""
         if using_harness:
+            if not harness_task:
+                # Refuse loudly rather than start an agent with nothing to do. Invoked
+                # with an empty argument, opencode exits 1 before its first event, and the
+                # delegation then reports a clean tree and a failing test suite with no
+                # indication that the agent never had a task.
+                raise McpTransportError(
+                    "this work item carries neither a name nor a description, so there is "
+                    "nothing to hand a coding harness"
+                )
             files: Mapping[str, str | bytes] = {}
             deletes: frozenset[str] = frozenset()
             key = harness.get("key") if isinstance(harness, dict) else None
@@ -542,7 +593,7 @@ class GitMcpTransport:
                 envs,
                 base_branch=base_branch,
                 deletes=deletes,
-                harness_prompt=brief if using_harness else "",
+                harness_prompt=harness_task,
             )
         else:
             if using_harness:
