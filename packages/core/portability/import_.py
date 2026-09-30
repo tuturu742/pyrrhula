@@ -524,6 +524,26 @@ async def _import_personas(
                 persona_row = await session.get(Persona, persona.id)
                 if persona_row is not None:
                     persona_row.web_search = True
+        # A harness key names a capability of the *importing* deployment, so it is
+        # resolved here rather than trusted from the file -- a bundle cannot introduce a
+        # command to run. Naming one this deployment does not offer is reported instead of
+        # dropped: the persona still imports and still works, on the one-shot path, and
+        # the operator is told why the sample will not behave as its README describes.
+        harness_key = str(record.get("harness") or "").strip()
+        if harness_key:
+            from core.harness.registry import get_harness
+
+            if await get_harness(tenant_id, harness_key) is None:
+                report.skipped.append(
+                    f"harness:{record['key']} wanted {harness_key!r}, which this "
+                    "deployment does not offer -- delegated work will use the one-shot "
+                    "path instead of an agent with a shell"
+                )
+            else:
+                async with tenant_scope(tenant_id) as session:
+                    persona_row = await session.get(Persona, persona.id)
+                    if persona_row is not None:
+                        persona_row.harness = harness_key
         report.id_map[str(record["id"])] = str(persona.id)
         report.persona_principals[str(record["id"])] = persona.principal_id
         report.imported.append(f"persona:{record['key']}")
