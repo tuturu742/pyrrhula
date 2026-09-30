@@ -27,7 +27,16 @@ role-playing first, structured enterprise work second, software development thir
 - **Proper coding harnesses** — today a delegated agent emits file contents and the
   environment runs the tests. The next step is a real agent loop inside the container:
   read, edit, run, iterate, with the test output in front of it rather than the last
-  page of it.
+  page of it. Writing that loop well is most of a product on its own, so the likelier
+  route is to run somebody else's — Claude Code, opencode, Gemini CLI, Mistral's Vibe
+  CLI — inside the container, behind a port like every other cross-cutting dependency.
+  That trades the loop away for three problems it does not solve, and they are the
+  interesting part: a harness brings its own model access, so its calls never pass
+  through `ModelProvider` and are invisible both to `usage_record` and to the egress
+  check that lives inside that port; it wants a provider key *in* the container, where
+  `agent.credential_ref` exists precisely so one never lands; and each harness has its
+  own invocation, output shape and release cadence to pin. Worth proving against one
+  harness end to end — metering and credential handling settled — before a second.
 - **Agents free to act inside their container** — choosing their own commands (`rm`, a
   migration, a one-off script), which is ordinary work a human contributor does without
   asking. The container is already the boundary; what is missing is what a safe version
