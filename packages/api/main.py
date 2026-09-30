@@ -24,6 +24,7 @@ from api.routes import (
     entities,
     export,
     git_http,
+    inference,
     knowledge,
     manifests,
     mcp,
@@ -165,6 +166,9 @@ app.include_router(previews.router)
 # carries the tenant id -- so the handler still reads under a normal tenant_scope.
 app.include_router(previews.public_router)
 app.include_router(git_http.router)
+# Same shape as git_http above: its own bearer token, no session JWT -- a harness running
+# in a container cannot hold a session.
+app.include_router(inference.router)
 app.include_router(secrets.router)
 app.include_router(entities.router)
 app.include_router(export.router)
