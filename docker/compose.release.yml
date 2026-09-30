@@ -57,7 +57,7 @@ services:
       retries: 10
 
   migrate:
-    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
+    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
     command: ["migrate"]
     environment: &app_env
       PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:${PYRRHULA_POSTGRES_PASSWORD}@postgres:5432/pyrrhula
@@ -88,7 +88,7 @@ services:
 
   api:
     container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_api_1
-    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
+    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
     restart: always
     command: ["api"]
     environment: *app_env
@@ -115,7 +115,7 @@ services:
 
   worker:
     container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_worker_1
-    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc1}
+    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
     restart: always
     command: ["worker"]
     user: "0"
@@ -144,7 +144,7 @@ services:
 
   web:
     container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_web
-    image: ghcr.io/tuturu742/pyrrhula-web:${PYRRHULA_VERSION:-0.1.0-rc1}
+    image: ghcr.io/tuturu742/pyrrhula-web:${PYRRHULA_VERSION:-0.1.0-rc2}
     restart: always
     ports:
       - "${PYRRHULA_WEB_PORT:-5173}:80"
