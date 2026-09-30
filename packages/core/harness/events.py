@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import Any
 
 # The step marker the work script emits before the harness runs, and the fence after it.
 # Parsing between them keeps npm's install chatter and git's output from being mistaken
@@ -94,7 +95,7 @@ def _segment(output: str) -> str:
     return rest if cut == -1 else rest[:cut]
 
 
-def _detail(state: dict) -> str:
+def _detail(state: dict[str, Any]) -> str:
     """The most useful one line about a step: what was run, or what was touched."""
     payload = state.get("input")
     if not isinstance(payload, dict):
@@ -129,7 +130,8 @@ def summarise(output: str) -> HarnessRun:
         if not isinstance(event, dict):
             continue
         kind = str(event.get("type") or "")
-        part = event.get("part") if isinstance(event.get("part"), dict) else {}
+        raw_part = event.get("part")
+        part: dict[str, Any] = raw_part if isinstance(raw_part, dict) else {}
 
         if kind == "error":
             detail = event.get("error")
@@ -139,7 +141,8 @@ def summarise(output: str) -> HarnessRun:
                 message = str((data or {}).get("message") or detail.get("name") or "")
             errors.append(message[:_COMMAND_CHARS] or "the harness reported an error")
         elif kind == "tool_use":
-            state = part.get("state") if isinstance(part.get("state"), dict) else {}
+            raw_state = part.get("state")
+            state: dict[str, Any] = raw_state if isinstance(raw_state, dict) else {}
             steps.append(
                 HarnessStep(
                     tool=str(part.get("tool") or "tool"),
@@ -152,20 +155,20 @@ def summarise(output: str) -> HarnessRun:
             if text:
                 said.append(text)
         elif kind in ("step_finish", "step-finish"):
-            usage = part.get("tokens") if isinstance(part.get("tokens"), dict) else {}
+            raw_usage = part.get("tokens")
+            usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
             # Two shapes, both seen from opencode 1.18.33 in one run: a step that ends on
             # `stop` carries `total`, one that ends on `tool-calls` carries only the
             # components. Reading `total` alone counted a tool-calling run -- which is
             # every coding run -- as zero.
-            total = usage.get("total")
-            if not isinstance(total, int) or total <= 0:
-                total = sum(
-                    value
-                    for key in ("input", "output", "reasoning")
-                    if isinstance(value := usage.get(key), int)
-                )
-            if isinstance(total, int):
-                tokens += total
+            reported = usage.get("total")
+            if isinstance(reported, int) and reported > 0:
+                tokens += reported
+            else:
+                for key in ("input", "output", "reasoning"):
+                    part_count = usage.get(key)
+                    if isinstance(part_count, int):
+                        tokens += part_count
 
     # The last thing it said is its conclusion; earlier text is working-out.
     return HarnessRun(steps=steps, said=said[-1] if said else "", tokens=tokens, errors=errors)

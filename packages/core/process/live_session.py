@@ -61,6 +61,12 @@ from core.process.interpreter import (
     advance_session,
 )
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
+from core.process.session_container_tools import (
+    CONTAINER_ACTIVITY_DESCRIPTION,
+    CONTAINER_ACTIVITY_PARAMETERS,
+    CONTAINER_ACTIVITY_TOOL_NAME,
+    make_container_activity_handler,
+)
 from core.process.session_delegation_tools import (
     DELEGATE_TOOL_DESCRIPTION,
     DELEGATE_TOOL_NAME,
@@ -727,6 +733,20 @@ async def run_one_persona_turn(
                 parameters=DELEGATE_TOOL_PARAMETERS,
             ),
             make_delegate_handler(workspace_id=workspace_id, queue=job_queue),
+        )
+
+    # What happened in the environments assigned to THIS persona. Phase-gated like the
+    # resolution tools rather than actor-gated: a persona that never delegates has nothing
+    # to ask about, and silence in `tools:` means none -- the same reading
+    # `phase_resolution_tools` and `core.mcp.client.available_tools` use.
+    if CONTAINER_ACTIVITY_TOOL_NAME in (getattr(phase, "tools", None) or []):
+        tool_registry.register(
+            ToolSpec(
+                name=CONTAINER_ACTIVITY_TOOL_NAME,
+                description=CONTAINER_ACTIVITY_DESCRIPTION,
+                parameters=CONTAINER_ACTIVITY_PARAMETERS,
+            ),
+            make_container_activity_handler(),
         )
 
     # Registered REMOTE MCP servers (admin-attached tenant grants or pack-declared
