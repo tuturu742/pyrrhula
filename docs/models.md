@@ -61,7 +61,13 @@ everyone who shares it. They travel in `.pyr`, so a bundle carries its cast's vo
 Providers disagree about which parameters exist, and the adapter repairs what it can
 rather than failing a turn:
 
-- a parameter the endpoint names as unsupported is **dropped**, and the call retried;
+- a parameter the endpoint refuses **while naming a replacement** is **renamed**, and its
+  value carried over. OpenAI's newer chat-completions models answer `max_tokens` with
+  *"Unsupported parameter: 'max_tokens' … Use 'max_completion_tokens' instead"*; the
+  budget moves to the name they asked for rather than being thrown away, because usage
+  metering, cost ceilings and the empty-generation retry all read it;
+- a parameter the endpoint names as unsupported with no replacement is **dropped**, and
+  the call retried;
 - an endpoint that refuses function tools while a reasoning effort is set is retried with
   `reasoning_effort: "none"` — unless you chose an effort yourself, which is treated as
   deliberate;
@@ -70,7 +76,13 @@ rather than failing a turn:
   stays high-effort.
 
 Repairs chain: a request carrying both an unsupported penalty and a reasoning effort is
-refused twice, and repaired twice.
+refused twice, and repaired twice. What the endpoint accepted is then reused — a retry
+starts from the repaired call, not the original, so one rejected request per turn is not
+paid twice.
+
+A repair costs one rejected request the first time a connection is used in a process;
+the adapter learns from the endpoint rather than from a list of model names, which is
+what lets a model released after this version still work.
 
 ## Which model runs what
 

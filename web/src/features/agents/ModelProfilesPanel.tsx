@@ -106,11 +106,25 @@ export function ModelProfilesPanel() {
               </button>
               </ConfirmButton>
             </div>
-            <ModelProfileForm
-              existingProfile={profile}
-              existingProfiles={profiles}
-              onSaved={() => void queryClient.invalidateQueries({ queryKey: ["model-profiles"] })}
-            />
+            <details>
+              <summary className="cursor-pointer text-sm">
+                <span className="font-medium">{profile.name}</span>
+                <span className="text-muted-foreground">
+                  {profile.provider || profile.model
+                    ? ` — ${profile.provider}/${profile.model}`
+                    : " — no model set"}
+                </span>
+              </summary>
+              <div className="mt-2">
+                <ModelProfileForm
+                  existingProfile={profile}
+                  existingProfiles={profiles}
+                  onSaved={() =>
+                    void queryClient.invalidateQueries({ queryKey: ["model-profiles"] })
+                  }
+                />
+              </div>
+            </details>
           </li>
         ))}
       </ul>
@@ -508,6 +522,17 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
         <p className={`text-xs ${testResult.ok ? "text-green-600" : "text-destructive"}`}>
           {testResult.ok ? "✓ " : "✗ "}
           {testResult.detail}
+          {/* A test that passes reads like confirmation, and on a form that has never
+              been saved it is not: the probe uses the values in the fields, not a stored
+              connection. Observed -- a connection tested green, was never created, and
+              was reported missing from the list. Say so here rather than leave the tick
+              to be read as "done". */}
+          {testResult.ok && !isEditing && (
+            <span className="text-muted-foreground">
+              {" "}
+              — not saved yet. Press <strong>Create model profile</strong> to keep it.
+            </span>
+          )}
         </p>
       )}
       {testConnection.error !== null && (
