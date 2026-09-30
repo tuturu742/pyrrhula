@@ -183,6 +183,22 @@ def _chunk_payload(
     )
 
 
+def _completion_text(text_parts: list[str], calls: tuple[Any, ...]) -> str:
+    """What the model actually produced, for token counting.
+
+    Tool-call arguments count. Measured on the first real harness run: six proxied calls
+    reported 11,680 prompt tokens and *thirteen* completion tokens, because a coding
+    harness says almost nothing in prose -- its output is the arguments to read, write and
+    bash. Counting only text bills a harness as if it were free, which is precisely the
+    kind of blind spot this route exists to close.
+    """
+    parts = list(text_parts)
+    for call in calls:
+        parts.append(call.name)
+        parts.append(json.dumps(call.arguments))
+    return "".join(parts)
+
+
 def _tool_call_payload(index: int, call: Any) -> dict[str, Any]:
     return {
         "index": index,
@@ -251,7 +267,7 @@ async def chat_completions(request: Request) -> Any:
         except EgressDeniedError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         content = "".join(text_parts)
-        completion_tokens = provider.count_tokens(content, model_string)
+        completion_tokens = provider.count_tokens(_completion_text(text_parts, calls), model_string)
         await _meter(
             resolved,
             prompt_tokens,
@@ -288,6 +304,7 @@ async def chat_completions(request: Request) -> Any:
 
     async def stream() -> AsyncIterator[str]:
         text_parts: list[str] = []
+        made_calls: tuple[Any, ...] = ()
         cached = 0
         finish = "stop"
         yield sse({"role": "assistant"})
@@ -299,6 +316,7 @@ async def chat_completions(request: Request) -> Any:
                 cached = chunk.cached_tokens or cached
                 if chunk.tool_calls:
                     finish = "tool_calls"
+                    made_calls = chunk.tool_calls
                     calls = [_tool_call_payload(i, c) for i, c in enumerate(chunk.tool_calls)]
                     yield sse({"tool_calls": calls})
         except EgressDeniedError as exc:
@@ -308,11 +326,10 @@ async def chat_completions(request: Request) -> Any:
             log.warning("inference.egress_denied", tenant_id=str(grant.tenant_id))
             return
         finally:
-            content = "".join(text_parts)
             await _meter(
                 resolved,
                 prompt_tokens,
-                provider.count_tokens(content, model_string),
+                provider.count_tokens(_completion_text(text_parts, made_calls), model_string),
                 cached,
                 int((time.monotonic() - started) * 1000),
             )

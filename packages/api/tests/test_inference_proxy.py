@@ -86,6 +86,28 @@ async def _usage_rows(tenant_id: uuid.UUID) -> list[UsageRecordRow]:
         return list(rows)
 
 
+def test_tool_call_arguments_count_as_completion_tokens() -> None:
+    """Found on the first real harness run: six proxied calls metered 11,680 prompt tokens
+    and *thirteen* completion tokens, because a coding harness says almost nothing in
+    prose -- its output is the arguments to read, write and bash. Counting only text bills
+    a harness as very nearly free, which is the exact blind spot this route exists to
+    close. The same delegation measured 180 completion tokens once arguments counted."""
+    from api.routes.inference import _completion_text
+    from core.ports.model_provider import ToolCall
+
+    call = ToolCall(
+        id="call_1",
+        name="write",
+        arguments={"path": "src/greet.js", "content": "export function greet(name) {}"},
+    )
+    counted = _completion_text([], (call,))
+    assert "write" in counted
+    assert "src/greet.js" in counted
+    assert "export function greet" in counted
+    # And text still counts, when there is any.
+    assert "Done." in _completion_text(["Done."], ())
+
+
 def test_no_token_is_refused(client: TestClient) -> None:
     response = client.post("/inference/v1/chat/completions", json=_body())
     assert response.status_code == 401
