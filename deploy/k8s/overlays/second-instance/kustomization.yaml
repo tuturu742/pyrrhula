@@ -1,0 +1,113 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# A SECOND Pyrrhula on the same cluster, beside an existing one.
+#
+# For testing a change against Kubernetes without disturbing the deployment people are
+# using -- the k8s half of "run the feature branch on compose, then on k8s, alternating".
+# Copy this directory, replace every `ht` below with your own short instance name, and
+# apply it. Nothing in `base/` needs to change.
+#
+#   cp -r overlays/second-instance overlays/my-test
+#   sed -i 's/pyrrhula-ht/pyrrhula-my-test/g; s/ht\.pyrrhula/my-test.pyrrhula/g' \
+#       overlays/my-test/kustomization.yaml
+#   kubectl apply -k overlays/my-test
+#
+# **Why this is a list of patches and not `namespace:`.** Kustomize's namespace
+# transformer renames the Namespace *objects* too, so both of ours become the same name
+# and it fails outright:
+#
+#   error: namespace transformation produces ID conflict: [... "name":"pyrrhula-ht"}
+#                                                          ... "name":"pyrrhula-ht"}]
+#
+# The two-namespace split is the point of the design -- agent-run code lives in one and
+# can reach nothing in the other -- so the transformer is the wrong tool and the base says
+# so. These patches do the same job while keeping the split.
+#
+# **The two easy ones to miss** are both cross-namespace, and both silently wrong rather
+# than loudly broken: the worker's RoleBinding subject (it would grant Job creation to a
+# ServiceAccount in the *other* instance's namespace) and the egress NetworkPolicy's
+# namespaceSelector (environments would be allowed to reach the other instance's api and
+# not their own).
+
+resources:
+  - ../../base
+
+# Your own secrets, not the other instance's. Generate them the same way dev-up.sh does.
+secretGenerator:
+  - name: pyrrhula-secrets
+    namespace: pyrrhula-ht
+    envs:
+      - secrets.env
+
+images:
+  - name: localhost/pyrrhula
+    newTag: dev
+  - name: localhost/pyrrhula-web
+    newTag: dev
+
+patches:
+  # --- the namespaces themselves -------------------------------------------------
+  - target: {kind: Namespace, name: pyrrhula}
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: pyrrhula-ht
+  - target: {kind: Namespace, name: pyrrhula-envs}
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: pyrrhula-ht-envs
+
+  # --- everything that lives in them ---------------------------------------------
+  - target: {namespace: pyrrhula}
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: pyrrhula-ht
+  - target: {namespace: pyrrhula-envs}
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: pyrrhula-ht-envs
+
+  # --- the cross-namespace references --------------------------------------------
+  # The worker's permission to create Jobs in the envs namespace. Left alone, this
+  # instance's RoleBinding would name the OTHER instance's ServiceAccount.
+  - target: {kind: RoleBinding}
+    patch: |-
+      - op: replace
+        path: /subjects/0/namespace
+        value: pyrrhula-ht
+
+  # Which api an environment pod may reach. Left alone, these environments would be
+  # allowed to talk to the other instance's api and denied their own.
+  - target: {kind: NetworkPolicy, name: envs-egress}
+    patch: |-
+      - op: replace
+        path: /spec/egress/1/to/0/namespaceSelector/matchLabels/kubernetes.io~1metadata.name
+        value: pyrrhula-ht
+
+  # --- how people reach it --------------------------------------------------------
+  - target: {kind: Ingress}
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: ht.pyrrhula.localhost
+  # Preview and notification links are built from this; a mismatch sends people to the
+  # other instance.
+  - target: {kind: ConfigMap, name: pyrrhula-config}
+    patch: |-
+      - op: replace
+        path: /data/PYRRHULA_PUBLIC_BASE_URL
+        value: http://ht.pyrrhula.localhost
+  - target: {kind: Deployment}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target: {kind: Job, name: pyrrhula-migrate}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
