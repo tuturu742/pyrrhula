@@ -37,6 +37,18 @@ role-playing first, structured enterprise work second, software development thir
   `agent.credential_ref` exists precisely so one never lands; and each harness has its
   own invocation, output shape and release cadence to pin. Worth proving against one
   harness end to end — metering and credential handling settled — before a second.
+- **An image builder, and a registry to push to** — a delegated environment needs the
+  repo's toolchain and, now, a coding harness on top of it, and today both are installed
+  on every run. A warm socket container pays that once per session; k8s and ECS spawn a
+  fresh Job per run and pay it every time, rework rounds included. The repo's own setup is
+  usually the larger part of it, so this is not a harness feature — it is what makes
+  one-shot engines practical at all. It is also the only route for a deployment that
+  cannot reach the public internet, and it removes the question of whether we may
+  redistribute a given harness: the deployment builds into its own registry and we ship
+  nothing. The pull half exists already (`registry_credential_ref`, `registry_auth`,
+  `imagePullSecrets`); the missing half is a builder behind a port, with a
+  content-addressed tag so an unchanged recipe never rebuilds, and tenant-namespaced tags
+  so one tenant's image is never another's to pull.
 - **Agents free to act inside their container** — choosing their own commands (`rm`, a
   migration, a one-off script), which is ordinary work a human contributor does without
   asking. The container is already the boundary; what is missing is what a safe version
