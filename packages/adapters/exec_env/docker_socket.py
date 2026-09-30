@@ -21,18 +21,49 @@ from typing import Any
 import httpx
 
 from adapters.exec_env.shell import shell_command
+from core.exec_limits import ExecLimits, limits_for
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
 
 _API = "http://d/v1.40"
 
 
 class DockerSocketExecEnvProvider:
-    def __init__(self, socket_path: str, *, network: str | None = None) -> None:
+    def __init__(
+        self,
+        socket_path: str,
+        *,
+        network: str | None = None,
+        limits: ExecLimits | None = None,
+    ) -> None:
         # Optional engine-declared network for environments (e.g. a dedicated
         # 'pyrrhula-envs' network that carries the api -- for git smart-HTTP -- but NOT
         # the database). None = the engine's default network.
         self._network = network
         self._socket = socket_path
+        # What this container may consume. With a coding harness the commands inside are
+        # an agent's own choices, so "bounded" is what makes running them reasonable -- a
+        # wall-clock timeout stops a long run, not a greedy one.
+        self._limits = limits or limits_for(None)
+
+    def _host_limits(self) -> dict[str, Any]:
+        """The HostConfig fields that bound a container.
+
+        A declared zero means the operator chose unlimited, so the key is omitted rather
+        than sent as 0 -- which Docker reads as "no limit" for some fields and as an error
+        for others.
+        """
+        limits = self._limits
+        out: dict[str, Any] = {}
+        if limits.memory_mb > 0:
+            out["Memory"] = limits.memory_bytes
+            # Without this the kernel may swap instead of refusing, which turns a memory
+            # limit into a machine that thrashes rather than one that stops.
+            out["MemorySwap"] = limits.memory_bytes
+        if limits.cpus > 0:
+            out["NanoCpus"] = limits.nano_cpus
+        if limits.pids > 0:
+            out["PidsLimit"] = limits.pids
+        return out
 
     def _client(self, timeout: float = 600.0) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -106,6 +137,7 @@ class DockerSocketExecEnvProvider:
                 "HostConfig": {
                     "Binds": binds,
                     **({"NetworkMode": self._network} if self._network else {}),
+                    **self._host_limits(),
                 },
                 "Labels": {"pyrrhula.exec_env": "1"},
             },

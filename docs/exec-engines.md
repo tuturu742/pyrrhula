@@ -126,6 +126,37 @@ images and reach `git_http_base` without a NAT. Per-run `registry_auth` is not
 applicable — use ECR or a pre-registered task definition with
 `repositoryCredentials`.
 
+## What an environment may consume
+
+Every engine declaration accepts three bounds, and every engine applies them whether or
+not you declare any:
+
+| field | default | what it bounds |
+|---|---|---|
+| `memory_mb` | `4096` | memory, with swap pinned to the same figure so the kernel refuses rather than thrashes |
+| `cpus` | `2` | CPU, as a fraction of cores |
+| `pids` | `512` | processes, which is what stops a fork bomb |
+
+Declaring `0` means *unlimited* and is honoured — but it has to be typed on purpose, which
+absence is not. A value that is nonsense (a typo, a negative) falls back to the default
+rather than unbounding the container: a misconfiguration should not be more dangerous than
+having no limits feature at all.
+
+The defaults are deliberately generous. A Rust or JVM build is memory-hungry and a test
+suite is CPU-hungry, and a limit that fails honest work gets switched off within a week,
+which is worse than a loose one that stays on. They exist to bound a runaway, not to size
+the job.
+
+**Why this matters more than it used to.** A wall-clock timeout already existed, and it is
+a different control: it stops a *long* run, not a *greedy* one. With a coding harness the
+commands inside the container are an agent's own choices — the harness runs with its
+approvals on, because a loop that stops at the first edit waiting for a human who is not
+there is not a loop. Bounding the container is what makes that reasonable to intend.
+
+Kubernetes gets `requests` well below `limits` (a quarter of the memory, an eighth of the
+CPU): a build is bursty, and requesting its peak would leave it unschedulable on a busy
+cluster while reserving capacity nobody uses.
+
 ## Cloud engines (design, not yet implemented)
 
 The remaining clouds map onto `run_script` + label-based teardown the same way; each
