@@ -107,6 +107,9 @@ export function AgentEditor({
           entity_id: entityId.trim() === "" ? null : entityId.trim(),
           agent_id: modelProfileId,
           web_search: false,
+          // A new persona never starts on a harness: delegated work runs the one-shot
+          // path until someone opts this persona in on the roster.
+          harness: "",
           params: parsedParams(),
         },
       });
