@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Opt-in: agent-run code reaches only the hosts you name.
+#
+# The base already stops an environment pod reaching anything else in the CLUSTER --
+# no database, no redis, no other namespace (base/envs-networkpolicy.yaml). What it
+# does not restrict is the internet, because a delegation legitimately fetches
+# packages: "migrate this to Java 21" is a dependency change before it is anything
+# else, and the need appears mid-run, after the agent has decided.
+#
+# This component turns that last rule from "the internet" into "the proxy, which
+# permits the hosts in its allowlist". Enable it by adding to your overlay:
+#
+#   components:
+#     - ../../components/egress-allowlist
+#
+# then declare the matching engine fields so the pods are told to use it:
+#
+#   {"key": "k8s", "kind": "kubernetes", "namespace": "pyrrhula-envs",
+#    "egress_mode": "proxied", "egress_proxy": "http://pyr-egress.pyrrhula-envs:8888",
+#    "egress_allow": ["registry.npmjs.org", "pypi.org"]}
+#
+# Both halves are needed and neither is sufficient. The NetworkPolicy without the
+# engine fields leaves pods trying to reach the internet directly and failing; the
+# engine fields without the NetworkPolicy set proxy variables an agent with a shell
+# can simply ignore. Pyrrhula's own api stays reachable directly either way -- it is
+# the one destination a delegation cannot work without, and the git job token has no
+# business passing through a proxy.
+
+resources:
+  - proxy.yaml
+
+patches:
+  # Replace the base policy's "anywhere except the cluster" egress rule with "the proxy
+  # and DNS". Wholesale rather than by index: a JSON-patch path into a list is exactly
+  # the kind of edit that silently targets the wrong rule when the base gains one.
+  - target:
+      kind: NetworkPolicy
+      name: envs-egress
+    path: egress-policy.yaml

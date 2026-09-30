@@ -31,6 +31,7 @@ from typing import Any
 import httpx
 
 from adapters.exec_env.shell import shell_command
+from core.exec_limits import limits_for
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
 
 _SA_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
@@ -52,6 +53,29 @@ class KubernetesExecEnvProvider:
         self._pull_secret = str(engine.get("image_pull_secret") or "")
         self._job_ttl = int(engine.get("job_ttl_seconds") or 3600)
         self._timeout = int(engine.get("run_timeout_seconds") or 1800)
+        self._limits = limits_for(engine)
+
+    def _resources(self) -> dict[str, Any]:
+        """Requests and limits for the work container.
+
+        Requests sit well under the limits on purpose. A build is bursty -- it wants many
+        cores for a minute and almost none afterwards -- and requesting the peak would
+        make it unschedulable on a busy cluster while reserving capacity nobody uses.
+        A declared zero means the operator chose unlimited, and the field is omitted.
+        """
+        limits: dict[str, str] = {}
+        requests: dict[str, str] = {}
+        if self._limits.memory_mb > 0:
+            limits["memory"] = f"{self._limits.memory_mb}Mi"
+            requests["memory"] = f"{max(self._limits.memory_mb // 4, 128)}Mi"
+        if self._limits.cpus > 0:
+            limits["cpu"] = f"{self._limits.cpus}"
+            requests["cpu"] = f"{max(int(self._limits.cpus * 250), 100)}m"
+        out: dict[str, Any] = {}
+        if limits:
+            out["limits"] = limits
+            out["requests"] = requests
+        return out
 
     def _resolve_auth(self) -> tuple[str, str, bool | str]:
         api_base, token, verify = self._api_base, self._token, self._verify
@@ -122,6 +146,13 @@ class KubernetesExecEnvProvider:
                                 "name": "work",
                                 "image": image,
                                 "command": shell_command(script),
+                                # A Job with no resources block is scheduled anywhere and
+                                # bounded by nothing -- one runaway suite is the node's
+                                # problem, and with a coding harness the commands inside
+                                # are an agent's own choices. Requests are deliberately
+                                # far below limits: a build is bursty, and requesting its
+                                # peak would leave it unschedulable on a busy cluster.
+                                "resources": self._resources(),
                             }
                         ],
                         **(

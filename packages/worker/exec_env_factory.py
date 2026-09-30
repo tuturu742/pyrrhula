@@ -15,6 +15,7 @@ from typing import Any
 
 from adapters.exec_env.docker_socket import DockerSocketExecEnvProvider
 from core.exec_engines import engine_by_key
+from core.exec_limits import limits_for
 from core.ports.exec_env import ExecEnvProvider, NullExecEnvProvider
 
 
@@ -24,7 +25,9 @@ def _build(engine: dict[str, Any]) -> ExecEnvProvider:
         socket = str(engine.get("socket") or os.environ.get("PYRRHULA_EXEC_SOCKET", ""))
         if socket and os.path.exists(socket):
             return DockerSocketExecEnvProvider(
-                socket, network=str(engine.get("network") or "") or None
+                socket,
+                network=str(engine.get("network") or "") or None,
+                limits=limits_for(engine),
             )
         return NullExecEnvProvider()
     if kind == "kubernetes":

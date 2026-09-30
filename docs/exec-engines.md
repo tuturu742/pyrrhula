@@ -126,6 +126,94 @@ images and reach `git_http_base` without a NAT. Per-run `registry_auth` is not
 applicable — use ECR or a pre-registered task definition with
 `repositoryCredentials`.
 
+## What an environment may consume
+
+Every engine declaration accepts three bounds, and every engine applies them whether or
+not you declare any:
+
+| field | default | what it bounds |
+|---|---|---|
+| `memory_mb` | `4096` | memory, with swap pinned to the same figure so the kernel refuses rather than thrashes |
+| `cpus` | `2` | CPU, as a fraction of cores |
+| `pids` | `512` | processes, which is what stops a fork bomb |
+
+Declaring `0` means *unlimited* and is honoured — but it has to be typed on purpose, which
+absence is not. A value that is nonsense (a typo, a negative) falls back to the default
+rather than unbounding the container: a misconfiguration should not be more dangerous than
+having no limits feature at all.
+
+The defaults are deliberately generous. A Rust or JVM build is memory-hungry and a test
+suite is CPU-hungry, and a limit that fails honest work gets switched off within a week,
+which is worse than a loose one that stays on. They exist to bound a runaway, not to size
+the job.
+
+**Why this matters more than it used to.** A wall-clock timeout already existed, and it is
+a different control: it stops a *long* run, not a *greedy* one. With a coding harness the
+commands inside the container are an agent's own choices — the harness runs with its
+approvals on, because a loop that stops at the first edit waiting for a human who is not
+there is not a loop. Bounding the container is what makes that reasonable to intend.
+
+Kubernetes gets `requests` well below `limits` (a quarter of the memory, an eighth of the
+CPU): a build is bursty, and requesting its peak would leave it unschedulable on a busy
+cluster while reserving capacity nobody uses.
+
+## What an environment may reach
+
+Deny-by-default is not "no network". A delegation **must** reach Pyrrhula — it clones the
+hosted store over git smart-HTTP and, with a harness, calls models through the inference
+proxy — and it very often must reach a package registry, because *changing what a project
+depends on is ordinary work*. "Migrate this to Java 21" is a dependency change before it
+is anything else, and the need appears mid-run, after the agent has decided. Baking
+dependencies at build time cannot answer it.
+
+So the control is an allowlist you configure:
+
+```json
+{"key": "local", "kind": "socket", "socket": "/run/user/1000/podman/podman.sock",
+ "network": "pyrrhula-envs-internal",
+ "egress_mode": "proxied",
+ "egress_proxy": "http://pyr-egress:8888",
+ "egress_allow": ["registry.npmjs.org", "repo.maven.apache.org", "pypi.org"],
+ "egress_direct": ["nexus.internal:8081"]}
+```
+
+| field | what it does |
+|---|---|
+| `egress_mode` | `open` (default) or `proxied` |
+| `egress_proxy` | the forward proxy every non-exempt request goes through |
+| `egress_allow` | the hostnames that proxy permits |
+| `egress_direct` | extra hosts reached directly, beside Pyrrhula |
+
+**Pyrrhula is exempt automatically.** Its host goes into `no_proxy` without you naming it:
+it is the one destination a delegation cannot work without, and routing it through a proxy
+would put the git job token in front of something that has no need to see it.
+
+`no_proxy` entries are **hosts, not host:port** — measured, not assumed. With a port in the
+entry, curl ignores it and sends the request to the proxy, which refuses it as an unlisted
+domain; the delegation then fails at its clone with the proxy log as the only clue.
+
+**Two halves, and both are needed.** Setting proxy variables in a container that can still
+reach the internet directly is a suggestion, not a control — an agent with a shell can
+ignore an environment variable. The other half is a network where the proxy is the only
+way out.
+
+On **Kubernetes** that half ships: add `components/egress-allowlist` to your overlay. The
+base already stops an environment pod reaching anything else in the *cluster* — no
+database, no redis, no other namespace (`base/envs-networkpolicy.yaml`) — and the
+component replaces its remaining "and the internet" rule with "and the proxy", bringing
+the proxy with it. The allowlist is a ConfigMap you edit.
+
+On **compose** it is yours to build: put the environments on an internal network and run
+a forward proxy on it. `pyrrhula-envs` as shipped has a route out, so declaring
+`egress_mode: proxied` alone restricts nothing.
+
+Until that half exists a deployment is honestly unrestricted, which is why `open` is the
+default rather than a half-configured `proxied`.
+
+Verified with tinyproxy (`FilterDefaultDeny Yes`): an allowlisted host answers 200, an
+unlisted one is refused with *"Proxying refused on filtered domain"*, and the api answers
+200 without the proxy seeing it.
+
 ## Cloud engines (design, not yet implemented)
 
 The remaining clouds map onto `run_script` + label-based teardown the same way; each

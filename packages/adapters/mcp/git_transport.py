@@ -831,11 +831,19 @@ class GitMcpTransport:
         remote = urlunsplit(parts._replace(netloc=f"job:{token}@{parts.netloc}"))
         q = shlex.quote
 
+        # Egress, before anything runs: setup commands fetch packages too, so the proxy
+        # has to be in place before the first `apt-get`. Pyrrhula itself is in no_proxy --
+        # the clone below must not route a job token through a proxy that has no need to
+        # see it, and the api is the one destination a delegation cannot work without.
+        from core.exec_network import plan_for
+
+        egress = plan_for(env_cfg, api_base=base)
         lines = [
             "set -e",
             # Custom images are arbitrary; without git nothing below can work.
             "echo PYR_STEP=preflight; command -v git >/dev/null || "
             "{ echo PYR_ERR=image-lacks-git; exit 90; }",
+            *[f"export {name}={q(value)}" for name, value in egress.env().items()],
             "echo PYR_STEP=setup",
             *[str(c) for c in env_cfg.get("setup_cmds") or []],
             "echo PYR_STEP=clone",
