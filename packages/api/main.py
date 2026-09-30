@@ -24,6 +24,7 @@ from api.routes import (
     entities,
     export,
     git_http,
+    harnesses,
     inference,
     knowledge,
     manifests,
@@ -160,6 +161,7 @@ app.include_router(assist.router)
 app.include_router(vocabulary.router)
 app.include_router(workflows.router)
 app.include_router(repos.router)
+app.include_router(harnesses.router)
 app.include_router(previews.router)
 # The preview share link: deliberately unauthenticated (it is meant to be sent to a
 # tester who has no account). Its authorization is the signed token in the path, which

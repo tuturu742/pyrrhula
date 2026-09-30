@@ -101,6 +101,17 @@ set of placeholders, and the wire format it speaks — so a tailored enterprise 
 harness this project has never heard of needs no code from anyone. The command is
 operator-scoped: a persona may only select a key, never supply one.
 
+**Where you do it.** `GET /harnesses` lists what this tenant may use (built-ins plus its
+own, withheld ones absent rather than flagged); `PUT /harnesses/{key}` registers or
+overrides one, `POST /harnesses/{key}/withhold` masks one, and `DELETE /harnesses/{key}`
+forgets the entry — which is also how a withholding is undone, since a built-in lives in
+code and cannot be deleted. The three writes need `manage_tenant`. Selecting one is the
+`harness` field on a persona (the dropdown beside Web search on the workspace's persona
+roster, or `harness` on `POST /agents` / `PATCH /agents/{id}`), and naming one the tenant
+does not have is refused with 422 there and then. A harness *withdrawn* later is a
+different case: that is not the persona's mistake, so the delegation degrades to the
+one-shot path and says so rather than failing.
+
 **How it reaches a model.** Not with your provider key. The container is handed a
 short-lived inference token and points its base URL at Pyrrhula's own
 `/inference/v1/chat/completions`, which re-issues the call through the same

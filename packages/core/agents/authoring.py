@@ -177,6 +177,29 @@ WORKSPACE_ROLE_FOR_PERSONA_TYPE: dict[str, str] = {
 }
 
 
+async def _checked_harness(tenant_id: uuid.UUID, key: str) -> str:
+    """The harness key a persona may be given, or a refusal.
+
+    Selection is checked here and resolution happens again at delegation time
+    (``core.harness.registry.get_harness``), and the two disagree on purpose. Choosing a
+    harness the tenant does not have is a mistake worth saying out loud, now, to the
+    person making it; a harness *withdrawn* after the fact is not that persona's mistake,
+    so the worker degrades to the one-shot path instead of failing the delegation.
+
+    An empty key means "no harness", which is the default and always allowed.
+    """
+    key = key.strip()
+    if not key:
+        return ""
+    from core.harness.registry import InvalidHarnessError, resolved_harnesses
+
+    available = await resolved_harnesses(tenant_id)
+    if key not in available:
+        offered = ", ".join(sorted(available)) or "none"
+        raise InvalidHarnessError(f"no harness {key!r} available to this tenant (has: {offered})")
+    return key
+
+
 async def create_persona(
     tenant_id: uuid.UUID,
     workspace_id: uuid.UUID,
@@ -188,8 +211,10 @@ async def create_persona(
     persona_md: str = "",
     entity_id: uuid.UUID | None = None,
     web_search: bool = False,
+    harness: str = "",
     params: dict[str, object] | None = None,
 ) -> Persona:
+    harness = await _checked_harness(tenant_id, harness)
     async with tenant_scope(tenant_id) as session:
         agent_principal = Principal(tenant_id=tenant_id, kind="agent", display_name=name)
         session.add(agent_principal)
@@ -206,6 +231,7 @@ async def create_persona(
             persona_md=persona_md,
             entity_id=entity_id,
             web_search=web_search,
+            harness=harness,
             params=dict(params or {}),
         )
         session.add(agent)
@@ -232,12 +258,18 @@ async def update_persona(
     entity_id: uuid.UUID | None | object = ...,
     agent_id: uuid.UUID | None = None,
     web_search: bool | None = None,
+    harness: str | None = None,
     params: dict[str, object] | None = None,
 ) -> Persona:
     """``entity_id``'s default is the sentinel ``...`` (not ``None``), the same "was this
     field even sent" distinction every other update function here needs: ``None`` is a
     legal *value* (unlink the entity), not "leave it alone" -- an omitted field must be
-    spelled differently from an explicit clear."""
+    spelled differently from an explicit clear.
+
+    The harness key is checked *before* the session opens: ``_checked_harness`` reads the
+    tenant row itself, and a second scope nested inside this one would be a second
+    connection waiting on the first."""
+    checked_harness = None if harness is None else await _checked_harness(tenant_id, harness)
     async with tenant_scope(tenant_id) as session:
         agent = await session.get(Persona, persona_id)
         if agent is None:
@@ -248,6 +280,8 @@ async def update_persona(
             agent.params = dict(params)
         if web_search is not None:
             agent.web_search = web_search
+        if checked_harness is not None:
+            agent.harness = checked_harness
         if persona_type is not None and persona_type != agent.persona_type:
             agent.persona_type = persona_type
             # The role follows the type: a participant promoted to supervisor gets to

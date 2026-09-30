@@ -39,6 +39,7 @@ from core.agents.editing import apply_persona_edit_proposal, propose_persona_edi
 from core.agents.models import Agent, Persona
 from core.behavior.capabilities import list_capabilities_for_model
 from core.behavior.repo import list_axis_definitions
+from core.harness.registry import InvalidHarnessError
 from core.ports.model_provider import EgressDeniedError, GenerationRequest
 from core.tenancy.context import RequestContext
 
@@ -468,6 +469,9 @@ class PersonaResponse(BaseModel):
     entity_id: uuid.UUID | None
     agent_id: uuid.UUID
     web_search: bool = False
+    # Which registered coding harness this persona's delegated work runs through; "" is
+    # the default and means the one-shot codegen path.
+    harness: str = ""
     # Per-persona generation overrides, merged over the connection's params -- distinct
     # voices on a shared connection without cloning it.
     params: dict[str, object] = {}
@@ -484,6 +488,7 @@ def _agent_response(row: Persona) -> PersonaResponse:
         entity_id=row.entity_id,
         agent_id=row.agent_id,
         web_search=row.web_search,
+        harness=row.harness,
         params=dict(row.params or {}),
     )
 
@@ -551,6 +556,9 @@ class CreatePersonaRequest(BaseModel):
     # Per-persona internet-search switch. Enabling it also registers the workspace's
     # `web_search` MCP server (the allowlist row is the egress control).
     web_search: bool = False
+    # A key from GET /harnesses. Refused with 422 if this tenant does not have it --
+    # a persona may only *select* from what an operator registered, never introduce one.
+    harness: str = ""
     params: dict[str, object] = {}
 
 
@@ -561,6 +569,7 @@ class UpdatePersonaRequest(BaseModel):
     entity_id: uuid.UUID | None = None
     agent_id: uuid.UUID | None = None
     web_search: bool | None = None
+    harness: str | None = None
     params: dict[str, object] | None = None
 
 
@@ -589,18 +598,22 @@ async def _ensure_web_search_server(tenant_id: uuid.UUID, workspace_id: uuid.UUI
 async def create_persona_endpoint(
     body: CreatePersonaRequest, ctx: RequestContext = Depends(get_request_context)
 ) -> PersonaResponse:
-    agent = await create_persona(
-        ctx.tenant_id,
-        body.workspace_id,
-        body.key,
-        body.name,
-        body.agent_id,
-        persona_type=body.persona_type,
-        persona_md=body.persona_md,
-        entity_id=body.entity_id,
-        web_search=body.web_search,
-        params=body.params,
-    )
+    try:
+        agent = await create_persona(
+            ctx.tenant_id,
+            body.workspace_id,
+            body.key,
+            body.name,
+            body.agent_id,
+            persona_type=body.persona_type,
+            persona_md=body.persona_md,
+            entity_id=body.entity_id,
+            web_search=body.web_search,
+            harness=body.harness,
+            params=body.params,
+        )
+    except InvalidHarnessError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if body.web_search:
         await _ensure_web_search_server(ctx.tenant_id, body.workspace_id)
     return _agent_response(agent)
@@ -646,10 +659,13 @@ async def update_persona_endpoint(
             entity_id=entity_id_arg,
             agent_id=body.agent_id,
             web_search=body.web_search,
+            harness=body.harness,
             params=body.params,
         )
     except PersonaNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidHarnessError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if body.web_search:
         await _ensure_web_search_server(ctx.tenant_id, agent.workspace_id)
     return _agent_response(agent)

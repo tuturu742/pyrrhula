@@ -40,6 +40,23 @@ export function AgentManagementPage() {
       queryClient.invalidateQueries({ queryKey: ["agents", workspaceId] }),
   });
 
+  // Which coding harness a persona's delegated work runs through. The list is what the
+  // *tenant* has -- an operator can withhold one, and a deployment may serve none at all,
+  // in which case the control is absent rather than offering something that would be
+  // refused.
+  const setHarness = useMutation({
+    onError: () => toast.error("That didn't save — please try again."),
+    mutationFn: async ({ personaId, harness }: { personaId: string; harness: string }) => {
+      const { error } = await apiClient.PATCH("/agents/{persona_id}", {
+        params: { path: { persona_id: personaId } },
+        body: { harness },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["agents", workspaceId] }),
+  });
+
   const archive = useMutation({
     onError: () => toast.error("That didn't save — please try again."),
     mutationFn: async (agentId: string) => {
@@ -77,6 +94,15 @@ export function AgentManagementPage() {
       return data;
     },
     enabled: !!workspaceId,
+  });
+
+  const { data: harnesses } = useQuery({
+    queryKey: ["harnesses"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/harnesses");
+      if (error) throw error;
+      return data;
+    },
   });
 
   const { data: modelProfiles } = useQuery({
@@ -210,6 +236,29 @@ export function AgentManagementPage() {
                   />
                   Web search
                 </label>
+                {(harnesses?.length ?? 0) > 0 && agent.key !== "assistant" && (
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    title="Delegated coding work for this persona runs through this harness — an agent loop with a shell, inside its container. Off means the one-shot path: the model emits whole files once."
+                  >
+                    Harness
+                    <select
+                      className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs"
+                      value={agent.harness ?? ""}
+                      disabled={setHarness.isPending}
+                      onChange={(e) =>
+                        setHarness.mutate({ personaId: agent.id, harness: e.target.value })
+                      }
+                    >
+                      <option value="">none</option>
+                      {harnesses?.map((h) => (
+                        <option key={h.key} value={h.key}>
+                          {h.key}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <button
                   type="button"
                   onClick={() =>

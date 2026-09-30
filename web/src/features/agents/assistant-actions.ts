@@ -70,6 +70,9 @@ export async function applyAssistantAction(
           agent_id: s(args.agent_id),
           persona_type: args.persona_type ? s(args.persona_type) : "participant",
           persona_md: s(args.persona_md ?? ""),
+          // Not the assistant's to choose: a harness runs a shell in a container, and
+          // the only place that is selected is the roster, by a person.
+          harness: "",
           web_search: false,
           params: {},
         },

@@ -575,3 +575,78 @@ async def test_a_persona_without_the_switch_does_not_gain_it_on_import(
             )
         ).scalar_one()
         assert landed.web_search is False
+
+
+@pytest.mark.asyncio
+async def test_a_persona_keeps_its_coding_harness_after_importing(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """The harness selection has to travel, for the reason this whole file exists.
+
+    A sample built around a developer that reads, edits and runs the tests imports a
+    developer that can do none of those if this is dropped -- and says nothing, because a
+    persona with no harness does not fail, it falls back to answering with whole files.
+    The README then describes behaviour the bundle cannot produce.
+    """
+    tenant_a, tenant_b = two_tenants
+    workspace_a, referee, persona_a = await _case_workspace(tenant_a)
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    importer = await _member(tenant_b, workspace_b, "facilitator")
+
+    async with tenant_scope(tenant_a) as session:
+        row = await session.get(Persona, persona_a.id)
+        row.harness = "opencode"
+
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    await _import_into(result.data, tenant_b, workspace_b, importer.id)
+
+    async with tenant_scope(tenant_b) as session:
+        landed = (
+            await session.execute(
+                select(Persona).where(Persona.workspace_id == workspace_b, Persona.key == "elin")
+            )
+        ).scalar_one()
+        assert landed.harness == "opencode", "the imported developer has no harness"
+
+
+@pytest.mark.asyncio
+async def test_a_harness_the_importing_deployment_lacks_is_reported_not_dropped(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """A bundle names a key, never a command, and the key is resolved against the
+    *importing* deployment -- so a bundle cannot introduce something to run.
+
+    When that resolution fails the persona still imports and still works, on the one-shot
+    path; what must not happen is silence, because the operator would then follow a README
+    describing an agent with a shell and watch something else entirely.
+    """
+    tenant_a, tenant_b = two_tenants
+    workspace_a, referee, persona_a = await _case_workspace(tenant_a)
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    importer = await _member(tenant_b, workspace_b, "facilitator")
+
+    async with tenant_scope(tenant_a) as session:
+        row = await session.get(Persona, persona_a.id)
+        # Straight onto the column: this deployment has no such harness either, and the
+        # selection API would rightly refuse it.
+        row.harness = "acme-agent"
+
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    report = await _import_into(result.data, tenant_b, workspace_b, importer.id)
+
+    async with tenant_scope(tenant_b) as session:
+        landed = (
+            await session.execute(
+                select(Persona).where(Persona.workspace_id == workspace_b, Persona.key == "elin")
+            )
+        ).scalar_one()
+        assert landed.harness == "", "a harness this deployment does not offer must not be set"
+    assert any("acme-agent" in note for note in report.skipped), (
+        f"the import said nothing about the missing harness: {report.skipped}"
+    )

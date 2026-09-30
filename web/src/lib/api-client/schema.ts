@@ -2367,6 +2367,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/harnesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Harnesses Endpoint
+         * @description Every harness a persona in this tenant may be pointed at.
+         *
+         *     Withheld ones are absent rather than listed with a flag: a caller asking "what may I
+         *     use" should not have to remember to filter, which is how a forbidden capability ends
+         *     up offered in a dropdown.
+         */
+        get: operations["list_harnesses_endpoint_harnesses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/harnesses/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register Harness Endpoint
+         * @description Register (or replace) one of this tenant's harnesses.
+         *
+         *     This is the path an enterprise build arrives by -- a tailored Claude Code behind an
+         *     internal registry needs no code from us, only a spec. Naming a built-in's key
+         *     overrides it for this tenant.
+         */
+        put: operations["register_harness_endpoint_harnesses__key__put"];
+        post?: never;
+        /**
+         * Remove Harness Endpoint
+         * @description Forget one of this tenant's entries, mask included. A built-in of the same name
+         *     becomes available again, which is how a withholding is undone.
+         */
+        delete: operations["remove_harness_endpoint_harnesses__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/harnesses/{key}/withhold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withhold Harness Endpoint
+         * @description Make a harness unavailable here, built-in included -- the "internal policy forbids
+         *     it" case. Personas already naming it degrade to the one-shot codegen path and say so
+         *     in the transcript; they are not broken by this.
+         */
+        post: operations["withhold_harness_endpoint_harnesses__key__withhold_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/previews": {
         parameters: {
             query?: never;
@@ -2553,6 +2628,52 @@ export interface paths {
          *     stays optional so an artifact uploaded before this existed is still addressable.
          */
         post: operations["upload_artifact_git__store_key__artifact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inference/v1/chat/completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat Completions
+         * @description OpenAI chat-completions, re-issued through ``ModelProvider``.
+         *
+         *     Streaming and non-streaming both supported because harnesses differ; opencode streams.
+         */
+        post: operations["chat_completions_inference_v1_chat_completions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inference/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Models
+         * @description The one model this token may use.
+         *
+         *     Harnesses list models to validate their configuration; answering with the whole
+         *     provider catalogue would invite one to pick something the persona is not configured
+         *     for, which this route would then ignore anyway.
+         */
+        get: operations["models_inference_v1_models_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4103,7 +4224,8 @@ export interface paths {
         /**
          * Health
          * @description Liveness/readiness probe. No DB round-trip on purpose — this is the process check,
-         *     not a dependency check.
+         *     not a dependency check. It carries the version because an operator running a pulled
+         *     image has no other way to tell which build answered.
          */
         get: operations["health_health_get"];
         put?: never;
@@ -4788,6 +4910,11 @@ export interface components {
              * @default false
              */
             web_search: boolean;
+            /**
+             * Harness
+             * @default
+             */
+            harness: string;
             /**
              * Params
              * @default {}
@@ -5506,6 +5633,41 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HarnessResponse */
+        HarnessResponse: {
+            /** Key */
+            key: string;
+            /**
+             * Image
+             * @default
+             */
+            image: string;
+            /**
+             * Setup Cmds
+             * @default []
+             */
+            setup_cmds: string[];
+            /**
+             * Wire Format
+             * @default openai
+             */
+            wire_format: string;
+            /**
+             * Licence
+             * @default
+             */
+            licence: string;
+            /**
+             * Redistributable
+             * @default false
+             */
+            redistributable: boolean;
+            /**
+             * Tenant Owned
+             * @default false
+             */
+            tenant_owned: boolean;
         };
         /** HistoryEntryResponse */
         HistoryEntryResponse: {
@@ -6282,6 +6444,54 @@ export interface components {
             ahead: number;
             /** Detail */
             detail: string;
+        };
+        /**
+         * RegisterHarnessRequest
+         * @description A harness spec, as data. ``command`` is a template over a fixed placeholder
+         *     whitelist (``core.harness.registry.PLACEHOLDERS``), never an expression language.
+         */
+        RegisterHarnessRequest: {
+            /** Command */
+            command: string;
+            /**
+             * Image
+             * @default
+             */
+            image: string;
+            /**
+             * Setup Cmds
+             * @default []
+             */
+            setup_cmds: string[];
+            /**
+             * Env
+             * @default {}
+             */
+            env: {
+                [key: string]: string;
+            };
+            /**
+             * Config Files
+             * @default {}
+             */
+            config_files: {
+                [key: string]: string;
+            };
+            /**
+             * Wire Format
+             * @default openai
+             */
+            wire_format: string;
+            /**
+             * Licence
+             * @default
+             */
+            licence: string;
+            /**
+             * Redistributable
+             * @default false
+             */
+            redistributable: boolean;
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -7132,6 +7342,8 @@ export interface components {
             agent_id?: string | null;
             /** Web Search */
             web_search?: boolean | null;
+            /** Harness */
+            harness?: string | null;
             /** Params */
             params?: {
                 [key: string]: unknown;
@@ -7558,6 +7770,11 @@ export interface components {
              * @default false
              */
             web_search: boolean;
+            /**
+             * Harness
+             * @default
+             */
+            harness: string;
             /**
              * Params
              * @default {}
@@ -12977,6 +13194,148 @@ export interface operations {
             };
         };
     };
+    list_harnesses_endpoint_harnesses_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarnessResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_harness_endpoint_harnesses__key__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterHarnessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarnessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_harness_endpoint_harnesses__key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withhold_harness_endpoint_harnesses__key__withhold_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_previews_endpoint_previews_get: {
         parameters: {
             query?: {
@@ -13357,6 +13716,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_completions_inference_v1_chat_completions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    models_inference_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

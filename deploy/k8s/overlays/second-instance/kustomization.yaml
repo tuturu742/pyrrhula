@@ -88,6 +88,34 @@ patches:
         path: /spec/egress/1/to/0/namespaceSelector/matchLabels/kubernetes.io~1metadata.name
         value: pyrrhula-ht
 
+  # Where delegated work actually runs, and what it clones from. The engine declaration
+  # names both by hand -- the namespace the worker creates Jobs in, and the api those
+  # Jobs fetch the repository from -- so neither follows the namespace patches above.
+  # Left alone, this instance's worker creates env pods in the OTHER instance's envs
+  # namespace (where its RoleBinding grants it nothing) and points them at the other
+  # instance's git endpoint. Found by deploying a second instance and reading the env
+  # off the running Deployment, which is the only place it shows.
+  # Merged by container and variable name rather than by index: a JSON patch on
+  # `env/0` would quietly rewrite whatever env var happens to be first the day someone
+  # adds a second one.
+  - target: {kind: Deployment, name: pyrrhula-worker}
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: pyrrhula-worker
+      spec:
+        template:
+          spec:
+            containers:
+              - name: worker
+                env:
+                  - name: PYRRHULA_EXEC_ENGINES
+                    value: >-
+                      [{"key":"k8s","kind":"kubernetes","namespace":"pyrrhula-ht-envs",
+                        "label":"Kubernetes",
+                        "git_http_base":"http://pyrrhula-api.pyrrhula-ht.svc.cluster.local:8000"}]
+
   # --- how people reach it --------------------------------------------------------
   - target: {kind: Ingress}
     patch: |-

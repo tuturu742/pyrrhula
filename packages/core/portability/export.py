@@ -515,6 +515,13 @@ async def _add_agents(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: 
                 # research is the whole sample missing -- and silently, since a persona
                 # with no search tool simply writes from memory.
                 "web_search": bool(agent.web_search),
+                # Which registered coding harness this persona's delegated work runs
+                # through. Same reasoning as web_search, and the same failure if it is
+                # left out: a sample built around an agent that reads, edits and runs the
+                # tests imports a developer that can do none of those, and says nothing
+                # about it. The *key* travels, never a command -- what it names is
+                # resolved against the importing deployment's own registry.
+                "harness": agent.harness,
                 "model_profile_ref": str(agent.agent_id),
                 "behavior_profile_versions": [
                     {

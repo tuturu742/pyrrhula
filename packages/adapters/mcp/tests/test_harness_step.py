@@ -15,7 +15,7 @@ import contextlib
 from pathlib import Path
 
 from adapters.mcp.git_store import GitStore
-from adapters.mcp.git_transport import GitMcpTransport
+from adapters.mcp.git_transport import GitMcpTransport, _harness_task
 from core.harness.registry import BUILTIN_HARNESSES
 from core.harness.tokens import verify_inference_job_token
 
@@ -179,3 +179,51 @@ def test_the_clone_does_not_go_through_the_proxy(tmp_path: Path) -> None:
     # Host, no port: curl ignores a no_proxy entry that carries one, and the clone would
     # then go through a proxy that refuses it as an unlisted domain.
     assert no_proxy == "export NO_PROXY=api"
+
+
+# ── what the harness is actually asked to do ──────────────────────────────────────────
+#
+# These cover the seam every test above misses: they all pass a prompt in by hand, so a
+# caller that composed the wrong prompt -- or none -- stayed invisible. Which is what
+# happened. Six delegations in a row invoked opencode with an empty argument; it exited 1
+# before its first event ("Error: You must provide a message or a command"), and the
+# transcript showed a clean tree and a failing test suite with no reason given.
+
+_ITEM = {
+    "id": "0e3a",
+    "name": "Implement the password gate",
+    "fields": {
+        "title": "Implement the password gate",
+        "description": "Add lib/password-gate.js exporting checkPassword(input, expected).",
+    },
+}
+
+
+def test_the_task_carries_the_work_item_not_just_the_session_context() -> None:
+    """The work item's description *is* the task -- the facilitator writes it so that a
+    coding agent can read only that. The brief is the surrounding context, not the job."""
+    task = _harness_task(_ITEM, "The workspace is building a toddler toy.", False)
+    assert "Implement the password gate" in task
+    assert "lib/password-gate.js" in task
+    assert "toddler toy" in task
+
+
+def test_an_empty_brief_still_yields_a_usable_task() -> None:
+    """The failure exactly: on a young workspace the assembler's rendered context is
+    legitimately empty, and handing that over alone left the harness with nothing."""
+    task = _harness_task(_ITEM, "", False)
+    assert task, "a work item with a description is always a task"
+    assert "lib/password-gate.js" in task
+
+
+def test_a_rework_says_it_is_one_and_still_names_the_work() -> None:
+    """A rework that has forgotten what it was building rewrites the wrong thing, so the
+    item comes first and the reviewer's comment follows it."""
+    task = _harness_task(_ITEM, "The diff contains no changed files.", True)
+    assert task.index("Implement the password gate") < task.index("no changed files")
+    assert "rework" in task.lower()
+
+
+def test_an_item_with_nothing_in_it_is_not_a_task() -> None:
+    """And the caller refuses rather than starting an agent with nothing to do."""
+    assert _harness_task({"fields": {}}, "", False) == ""
