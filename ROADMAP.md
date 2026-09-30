@@ -49,6 +49,18 @@ role-playing first, structured enterprise work second, software development thir
   `imagePullSecrets`); the missing half is a builder behind a port, with a
   content-addressed tag so an unchanged recipe never rebuilds, and tenant-namespaced tags
   so one tenant's image is never another's to pull.
+
+  Whether a registry is needed at all depends on the engine, and the answer is not
+  uniform. A socket engine needs **none**: the build lands in the same local image store
+  the engine pulls from, which is the common self-host case. k8s and cloud engines need
+  one their nodes can reach. `PYRRHULA_K8S_REGISTRY` is *not* it — that names a registry
+  the operator already runs, pushes with `--tls-verify=false`, and carries install images
+  that are identical for every tenant. A built delegation image carries **tenant source**,
+  so its registry has to be authenticated and namespaced per tenant; sharing the
+  install-time one would make repository contents readable across tenants. One property
+  helps: the container never pulls — the kubelet or the engine does — so the registry
+  belongs off the `pyrrhula-envs` network entirely, out of reach of the agent-chosen
+  commands running inside.
 - **Agents free to act inside their container** — choosing their own commands (`rm`, a
   migration, a one-off script), which is ordinary work a human contributor does without
   asking. The container is already the boundary; what is missing is what a safe version
