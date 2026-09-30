@@ -29,7 +29,13 @@ from typing import Any
 # Parsing between them keeps npm's install chatter and git's output from being mistaken
 # for harness events.
 _START = "PYR_STEP=harness"
-_END_MARKERS = ("PYR_HARNESS_RC=", "PYR_STEP=")
+_RC_MARKER = "PYR_HARNESS_RC="
+_END_MARKERS = (_RC_MARKER, "PYR_STEP=")
+
+# How much of a silent harness's own output to keep as the reason it said nothing. A
+# crash before the first JSON line is plain text on stdout, and a couple of lines of it
+# is the difference between "the harness did nothing" and knowing why.
+_NOISE_CHARS = 300
 
 # One line of a command, in the summary. Enough to recognise `npm test` or a `sed` that
 # went wrong; not enough to paste a whole heredoc into someone's transcript.
@@ -55,6 +61,13 @@ class HarnessRun:
     said: str = ""
     tokens: int = 0
     errors: list[str] = field(default_factory=list)
+    # What the harness exited with, and whatever it printed that was not an event. A
+    # harness that dies before its first JSON line -- a bad config, a provider it cannot
+    # reach, a crash on startup -- otherwise leaves nothing at all: no steps, no text, no
+    # error event, and a summary of "". That happened on the first real multi-item run
+    # here, and the only way to find out why was to read the container by hand.
+    exit_code: int | None = None
+    noise: str = ""
 
     @property
     def tool_counts(self) -> Counter[str]:
@@ -68,7 +81,7 @@ class HarnessRun:
         reads as one.
         """
         if not self.steps and not self.said and not self.errors:
-            return ""
+            return self._silent()
         parts: list[str] = []
         if self.steps:
             counts = self.tool_counts
@@ -83,6 +96,22 @@ class HarnessRun:
         text = f"{head}\n\n{body}".strip() if head else body
         return text[:_SUMMARY_CHARS] + ("…" if len(text) > _SUMMARY_CHARS else "")
 
+    def _silent(self) -> str:
+        """A run that reported nothing at all.
+
+        Saying nothing here is the wrong answer: the transcript then shows a delegation
+        that touched no files and failed its tests, with no indication that the agent
+        never ran. The exit code and whatever it printed are both in the output already.
+        """
+        if self.exit_code is None:
+            return ""
+        if self.exit_code == 0:
+            head = "The harness ran and reported nothing -- no edits, no commands."
+        else:
+            head = f"⚠ The harness exited {self.exit_code} without reporting a single step."
+        text = f"{head}\n\n{self.noise}".strip() if self.noise else head
+        return text[:_SUMMARY_CHARS] + ("…" if len(text) > _SUMMARY_CHARS else "")
+
 
 def _segment(output: str) -> str:
     """Just the harness's own stdout, between its step marker and whatever came next."""
@@ -93,6 +122,25 @@ def _segment(output: str) -> str:
     ends = [rest.find(marker) for marker in _END_MARKERS]
     cut = min((index for index in ends if index != -1), default=-1)
     return rest if cut == -1 else rest[:cut]
+
+
+def _exit_code(output: str) -> int | None:
+    """What the harness exited with, from the marker the work script prints after it.
+
+    None means the marker is absent, which is not the same as a clean run: the script
+    never reached that line (the clone failed, the container died), and claiming an exit
+    code for it would be an invention.
+    """
+    index = output.rfind(_RC_MARKER)
+    if index == -1:
+        return None
+    tail = output[index + len(_RC_MARKER) :].split(maxsplit=1)
+    if not tail:
+        return None
+    try:
+        return int(tail[0].strip().strip('"'))
+    except ValueError:
+        return None
 
 
 def _detail(state: dict[str, Any]) -> str:
@@ -117,11 +165,14 @@ def summarise(output: str) -> HarnessRun:
     steps: list[HarnessStep] = []
     said: list[str] = []
     errors: list[str] = []
+    noise: list[str] = []
     tokens = 0
 
     for line in _segment(output).splitlines():
         line = line.strip()
         if not line.startswith("{"):
+            if line:
+                noise.append(line)
             continue
         try:
             event = json.loads(line)
@@ -171,4 +222,12 @@ def summarise(output: str) -> HarnessRun:
                         tokens += part_count
 
     # The last thing it said is its conclusion; earlier text is working-out.
-    return HarnessRun(steps=steps, said=said[-1] if said else "", tokens=tokens, errors=errors)
+    return HarnessRun(
+        steps=steps,
+        said=said[-1] if said else "",
+        tokens=tokens,
+        errors=errors,
+        exit_code=_exit_code(output),
+        # The *last* lines, not the first: a crash ends with the reason.
+        noise="\n".join(noise[-4:])[-_NOISE_CHARS:],
+    )

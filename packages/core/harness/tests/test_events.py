@@ -105,3 +105,37 @@ def test_rubbish_is_skipped_rather_than_raised_on() -> None:
     trade."""
     run = summarise('PYR_STEP=harness\nnot json\n{"type":"nonsense"}\n{broken\n')
     assert run.steps == [] and run.said == ""
+
+
+def test_a_harness_that_dies_before_saying_anything_still_reports() -> None:
+    """The failure that cost an afternoon: six delegations that each touched no files,
+    with an empty summary and nothing in the transcript to say the agent never ran. The
+    exit code was in the script's own output the whole time."""
+    run = summarise(
+        "PYR_STEP=harness\n"
+        "node:internal/modules/cjs/loader:1215\n"
+        "Error: Cannot find module '@ai-sdk/openai-compatible'\n"
+        "PYR_HARNESS_RC=1\n"
+        "PYR_STEP=test\n"
+    )
+    assert run.steps == [] and run.said == "" and run.errors == []
+    assert run.exit_code == 1
+    summary = run.summary()
+    assert "exited 1" in summary, "a silent failure must not summarise to silence"
+    assert "@ai-sdk/openai-compatible" in summary, "the reason it printed is the reason"
+
+
+def test_a_harness_that_exits_clean_having_done_nothing_says_so() -> None:
+    """Different from a crash and worth telling apart: the agent ran, decided there was
+    nothing to do, and left the branch as it found it."""
+    run = summarise("PYR_STEP=harness\nPYR_HARNESS_RC=0\nPYR_STEP=test\n")
+    assert run.exit_code == 0
+    assert "reported nothing" in run.summary()
+
+
+def test_no_exit_marker_means_no_claim_about_one() -> None:
+    """The script never reached that line -- the clone failed, the container died. An
+    invented exit code would be worse than none."""
+    run = summarise("PYR_STEP=harness\nsomething broke\n")
+    assert run.exit_code is None
+    assert run.summary() == ""
