@@ -523,6 +523,7 @@ class GitMcpTransport:
 
         ci_status = "pending"
         test_tail = ""
+        harness_run: Any = None
         envs = None
         if isinstance(env_cfg, dict):
             # Tenant-chosen engine when a factory is wired; else the fixed provider.
@@ -532,7 +533,7 @@ class GitMcpTransport:
                 else self._envs
             )
         if envs is not None and isinstance(env_cfg, dict):
-            ci_status, test_tail = await self._work_in_env(
+            ci_status, test_tail, harness_run = await self._work_in_env(
                 repo,
                 branch,
                 files,
@@ -599,6 +600,17 @@ class GitMcpTransport:
                 # label. The rework agent is handed this: it cannot run the suite
                 # itself, so this is its only sight of the failure it must fix.
                 "test_output": test_tail,
+                # What the harness itself did, for the persona to speak about later and
+                # for `container_activity` to answer from. Empty on the one-shot path.
+                "harness_summary": harness_run.summary() if harness_run else "",
+                "harness_steps": (
+                    [
+                        {"tool": s.tool, "detail": s.detail, "outcome": s.outcome}
+                        for s in harness_run.steps
+                    ]
+                    if harness_run
+                    else []
+                ),
                 "html_url": remote_pr["html_url"] if remote_pr else None,
                 # Which work item this pull request IS. Without it the record is a
                 # dead end: anything later asking "the host closed this PR, whose
@@ -957,7 +969,7 @@ class GitMcpTransport:
         base_branch: str = "main",
         deletes: frozenset[str] = frozenset(),
         harness_prompt: str = "",
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, Any]:
         """The environment path: run the whole delegation script via the engine's
         ``run_script`` (warm container for socket engines, one-shot Job elsewhere).
         Returns (ci_status, test-output tail). Only pyr/* branches are ever pushed --
@@ -1020,7 +1032,13 @@ class GitMcpTransport:
                 # larger tail carries both.
                 raw = result.output[idx + len(marker) : end if end != -1 else None]
                 test_tail = _both_ends(_strip_build_noise(raw), _TEST_OUTPUT_CHARS)
-        return ci_status, test_tail
+        # The harness's own event stream is in this same output -- it wrote it to stdout,
+        # and run_script hands back everything the script printed. So there is no callback
+        # endpoint and nothing talking to us mid-run: the container stays a container, and
+        # we read what it said once it stopped.
+        from core.harness.events import summarise
+
+        return ci_status, test_tail, (summarise(result.output) if harness_prompt else None)
 
     async def _get_branch(self, repo: str, branch: str) -> McpToolResult:
         exists = await self._store.branch_exists(repo, branch)

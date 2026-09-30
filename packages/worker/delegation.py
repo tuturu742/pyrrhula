@@ -45,6 +45,23 @@ async def _store_key_for(tenant_id: uuid.UUID, repo_id: str | None) -> str | Non
     return store_key(tenant_id, repo.key) if repo is not None else None
 
 
+async def _harness_note(skey: str | None, branch: str) -> str:
+    """The bounded account of what the harness did, if a harness did it.
+
+    Bounded on purpose: this lands in the same ``history_char_budget`` the conversation
+    uses, so a chatty harness would evict the discussion it is meant to inform. The full
+    per-step detail stays in the pull-request record for ``container_activity`` to answer
+    on demand -- two audiences, two shapes.
+    """
+    if skey is None:
+        return ""
+    try:
+        pr = await GitStore(default_git_root()).get_pr(skey, branch) or {}
+    except GitStoreError:
+        return ""
+    return str(pr.get("harness_summary") or "")
+
+
 async def _pr_summary_line(skey: str | None, branch: str) -> str:
     """'PR #1 (url) — 3 files changed, +120 −4, CI: passed' from the store's records.
     Best-effort: a note with fewer numbers beats a failed job."""
@@ -559,11 +576,16 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                 await store.record_pr(skey, result.branch, record)
     try:
         summary = await _pr_summary_line(skey, result.branch)
+        # What the harness itself did, in the persona's own voice. This note is authored
+        # by the assignee's principal, so `_load_conversation` replays it to that persona
+        # as something IT said -- which is what lets it answer "what did you do?" on a
+        # later turn instead of having the work be a gap in its own history.
+        worked = await _harness_note(skey, result.branch)
         await post_note(
             tenant_id,
             session_id,
             author_principal,
-            f"🔀 **{title}**: Opened {summary}",
+            f"🔀 **{title}**: Opened {summary}" + (f"\n\n{worked}" if worked else ""),
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("delegation.note_failed", branch=result.branch, error=str(exc))

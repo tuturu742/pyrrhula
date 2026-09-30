@@ -11,6 +11,7 @@ holds.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -195,6 +196,29 @@ async def test_streaming_answers_in_the_dialect_a_harness_expects(
     assert "chat.completion.chunk" in body
     assert body.rstrip().endswith("data: [DONE]")
     assert len(await _usage_rows(harness_grant["tenant_id"])) == 1, "a stream must meter too"
+
+
+async def test_a_stream_reports_what_it_cost(client: TestClient, harness_grant) -> None:  # noqa: ANN001
+    """OpenAI streams a final frame carrying `usage`, with choices empty. Without it a
+    harness has no idea what anything cost -- measured: opencode read zeroes off this
+    stream and displayed a whole delegation as free. That mis-report would have been
+    ours, not the provider's."""
+    response = client.post(
+        "/inference/v1/chat/completions",
+        json=_body(stream=True),
+        headers={"Authorization": f"Bearer {harness_grant['token']}"},
+    )
+    frames = [
+        json.loads(line.removeprefix("data: "))
+        for line in response.text.splitlines()
+        if line.startswith("data: ") and not line.endswith("[DONE]")
+    ]
+    usage_frames = [f for f in frames if "usage" in f]
+    assert len(usage_frames) == 1, "exactly one usage frame, as the API specifies"
+    usage = usage_frames[0]["usage"]
+    assert usage["prompt_tokens"] > 0
+    assert usage["total_tokens"] == usage["prompt_tokens"] + usage["completion_tokens"]
+    assert usage_frames[0]["choices"] == [], "the usage frame carries no delta"
 
 
 async def test_the_tenants_egress_policy_still_applies(client: TestClient, harness_grant) -> None:  # noqa: ANN001

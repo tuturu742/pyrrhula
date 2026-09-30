@@ -334,6 +334,32 @@ async def chat_completions(request: Request) -> Any:
                 int((time.monotonic() - started) * 1000),
             )
         yield sse({}, finish)
+        # A final usage frame, choices empty, as the OpenAI streaming API sends it.
+        # Without it a harness has no idea what anything cost: opencode read zeroes off
+        # this stream and reported a whole delegation as free, which is exactly the sort
+        # of quiet mis-reporting this proxy exists to prevent -- and it would be ours,
+        # not the provider's.
+        usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": provider.count_tokens(
+                _completion_text(text_parts, made_calls), model_string
+            ),
+        }
+        usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": resolved.model,
+                    "choices": [],
+                    "usage": usage,
+                }
+            )
+            + "\n\n"
+        )
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
