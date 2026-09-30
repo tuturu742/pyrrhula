@@ -149,3 +149,33 @@ def test_a_harness_entry_without_a_command_is_ignored(tmp_path: Path) -> None:
     it must mean 'no harness', never a half-configured run."""
     script = _script(tmp_path, _env(harness={"key": "opencode", "enabled": False}))
     assert "PYR_STEP=harness" not in script
+
+
+def test_an_unrestricted_engine_adds_no_proxy_variables(tmp_path: Path) -> None:
+    """The default. A deployment is honestly open until an operator configures a proxy."""
+    assert "HTTP_PROXY" not in _script(tmp_path, _env())
+
+
+def test_a_proxied_engine_exports_the_proxy_before_setup_runs(tmp_path: Path) -> None:
+    """Setup commands fetch packages too, so the proxy has to be in place before the
+    first apt-get -- not just before the harness."""
+    script = _script(
+        tmp_path,
+        _env(
+            egress_mode="proxied",
+            egress_proxy="http://squid:3128",
+            egress_allow=["registry.npmjs.org"],
+        ),
+    )
+    assert "export HTTP_PROXY=" in script
+    assert script.index("HTTP_PROXY") < script.index("PYR_STEP=setup")
+
+
+def test_the_clone_does_not_go_through_the_proxy(tmp_path: Path) -> None:
+    """The git job token must not be handed to something with no need to see it, and
+    Pyrrhula is the one destination a delegation cannot work without."""
+    script = _script(tmp_path, _env(egress_mode="proxied", egress_proxy="http://squid:3128"))
+    no_proxy = next(ln for ln in script.splitlines() if ln.startswith("export NO_PROXY="))
+    # Host, no port: curl ignores a no_proxy entry that carries one, and the clone would
+    # then go through a proxy that refuses it as an unlisted domain.
+    assert no_proxy == "export NO_PROXY=api"

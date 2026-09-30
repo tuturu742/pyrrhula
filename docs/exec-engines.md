@@ -157,6 +157,52 @@ Kubernetes gets `requests` well below `limits` (a quarter of the memory, an eigh
 CPU): a build is bursty, and requesting its peak would leave it unschedulable on a busy
 cluster while reserving capacity nobody uses.
 
+## What an environment may reach
+
+Deny-by-default is not "no network". A delegation **must** reach Pyrrhula — it clones the
+hosted store over git smart-HTTP and, with a harness, calls models through the inference
+proxy — and it very often must reach a package registry, because *changing what a project
+depends on is ordinary work*. "Migrate this to Java 21" is a dependency change before it
+is anything else, and the need appears mid-run, after the agent has decided. Baking
+dependencies at build time cannot answer it.
+
+So the control is an allowlist you configure:
+
+```json
+{"key": "local", "kind": "socket", "socket": "/run/user/1000/podman/podman.sock",
+ "network": "pyrrhula-envs-internal",
+ "egress_mode": "proxied",
+ "egress_proxy": "http://pyr-egress:8888",
+ "egress_allow": ["registry.npmjs.org", "repo.maven.apache.org", "pypi.org"],
+ "egress_direct": ["nexus.internal:8081"]}
+```
+
+| field | what it does |
+|---|---|
+| `egress_mode` | `open` (default) or `proxied` |
+| `egress_proxy` | the forward proxy every non-exempt request goes through |
+| `egress_allow` | the hostnames that proxy permits |
+| `egress_direct` | extra hosts reached directly, beside Pyrrhula |
+
+**Pyrrhula is exempt automatically.** Its host goes into `no_proxy` without you naming it:
+it is the one destination a delegation cannot work without, and routing it through a proxy
+would put the git job token in front of something that has no need to see it.
+
+`no_proxy` entries are **hosts, not host:port** — measured, not assumed. With a port in the
+entry, curl ignores it and sends the request to the proxy, which refuses it as an unlisted
+domain; the delegation then fails at its clone with the proxy log as the only clue.
+
+**Two halves, and Pyrrhula only supplies one.** Setting proxy variables in a container that
+can still reach the internet directly is a suggestion, not a control — an agent with a
+shell can ignore an environment variable. Enforcement is the operator's: put the
+environments on a network with no external route and run the proxy on it, so the proxy is
+the only way out. Until that is done a deployment is honestly unrestricted, which is why
+`open` is the default rather than a half-configured `proxied`.
+
+Verified with tinyproxy (`FilterDefaultDeny Yes`): an allowlisted host answers 200, an
+unlisted one is refused with *"Proxying refused on filtered domain"*, and the api answers
+200 without the proxy seeing it.
+
 ## Cloud engines (design, not yet implemented)
 
 The remaining clouds map onto `run_script` + label-based teardown the same way; each
