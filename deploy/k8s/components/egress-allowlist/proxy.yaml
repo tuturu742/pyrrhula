@@ -1,0 +1,109 @@
+# The allowlisting forward proxy. Edit the filter below -- it is the allowlist, and the
+# only place a hostname needs to be added when a project takes a new dependency.
+#
+# tinyproxy with FilterDefaultDeny: the filter is a permit list, not a block list, which
+# is the right way round for this. The entries are extended regular expressions anchored
+# at both ends, so `^pypi\.org$` matches that host and not `evil-pypi.org.attacker.net`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pyr-egress-config
+  namespace: pyrrhula-envs
+data:
+  tinyproxy.conf: |
+    Port 8888
+    Listen 0.0.0.0
+    Timeout 600
+    Allow 0.0.0.0/0
+    Filter "/etc/tinyproxy/filter"
+    FilterDefaultDeny Yes
+    FilterExtended On
+    ConnectPort 443
+    LogLevel Info
+  filter: |
+    ^registry\.npmjs\.org$
+    ^pypi\.org$
+    ^files\.pythonhosted\.org$
+    ^crates\.io$
+    ^static\.crates\.io$
+    ^proxy\.golang\.org$
+    ^repo\.maven\.apache\.org$
+    ^deb\.debian\.org$
+    ^security\.debian\.org$
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyr-egress
+  namespace: pyrrhula-envs
+  labels:
+    app: pyr-egress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pyr-egress
+  template:
+    metadata:
+      labels:
+        app: pyr-egress
+    spec:
+      containers:
+        - name: tinyproxy
+          image: docker.io/vimagick/tinyproxy:latest
+          ports:
+            - containerPort: 8888
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tinyproxy
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 25m
+            limits:
+              memory: 128Mi
+              cpu: 500m
+      volumes:
+        - name: config
+          configMap:
+            name: pyr-egress-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyr-egress
+  namespace: pyrrhula-envs
+spec:
+  selector:
+    app: pyr-egress
+  ports:
+    - port: 8888
+      targetPort: 8888
+---
+# The proxy itself must reach the internet and DNS -- it is the one pod in this namespace
+# that may. The base policy selects every pod, so without this the proxy would be denied
+# by the very rule it exists to satisfy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pyr-egress-outbound
+  namespace: pyrrhula-envs
+spec:
+  podSelector:
+    matchLabels:
+      app: pyr-egress
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16 # k3s default pod CIDR
+              - 10.43.0.0/16 # k3s default service CIDR

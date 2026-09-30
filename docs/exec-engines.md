@@ -192,12 +192,23 @@ would put the git job token in front of something that has no need to see it.
 entry, curl ignores it and sends the request to the proxy, which refuses it as an unlisted
 domain; the delegation then fails at its clone with the proxy log as the only clue.
 
-**Two halves, and Pyrrhula only supplies one.** Setting proxy variables in a container that
-can still reach the internet directly is a suggestion, not a control — an agent with a
-shell can ignore an environment variable. Enforcement is the operator's: put the
-environments on a network with no external route and run the proxy on it, so the proxy is
-the only way out. Until that is done a deployment is honestly unrestricted, which is why
-`open` is the default rather than a half-configured `proxied`.
+**Two halves, and both are needed.** Setting proxy variables in a container that can still
+reach the internet directly is a suggestion, not a control — an agent with a shell can
+ignore an environment variable. The other half is a network where the proxy is the only
+way out.
+
+On **Kubernetes** that half ships: add `components/egress-allowlist` to your overlay. The
+base already stops an environment pod reaching anything else in the *cluster* — no
+database, no redis, no other namespace (`base/envs-networkpolicy.yaml`) — and the
+component replaces its remaining "and the internet" rule with "and the proxy", bringing
+the proxy with it. The allowlist is a ConfigMap you edit.
+
+On **compose** it is yours to build: put the environments on an internal network and run
+a forward proxy on it. `pyrrhula-envs` as shipped has a route out, so declaring
+`egress_mode: proxied` alone restricts nothing.
+
+Until that half exists a deployment is honestly unrestricted, which is why `open` is the
+default rather than a half-configured `proxied`.
 
 Verified with tinyproxy (`FilterDefaultDeny Yes`): an allowlisted host answers 200, an
 unlisted one is refused with *"Proxying refused on filtered domain"*, and the api answers

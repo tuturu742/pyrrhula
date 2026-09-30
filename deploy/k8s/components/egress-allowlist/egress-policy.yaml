@@ -1,0 +1,42 @@
+# The whole egress list, replacing the base's. Stated in full rather than patched by
+# index: a JSON-patch path into a list silently targets the wrong rule the moment the
+# base gains one, and the wrong rule here is an open door.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: envs-egress
+  namespace: pyrrhula-envs
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    # DNS. Without it the proxy's own hostname does not resolve and nothing works.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Pyrrhula's api: git smart-HTTP and, for a harness, the inference proxy. Direct,
+    # never through the egress proxy -- it is the one destination a delegation cannot
+    # work without, and it carries the job token.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pyrrhula
+          podSelector:
+            matchLabels:
+              app: pyrrhula-api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # The allowlisting proxy, and nothing else. No ipBlock rule: this is what turns the
+    # proxy from a suggestion an agent may ignore into the only way out.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: pyr-egress
+      ports:
+        - protocol: TCP
+          port: 8888
