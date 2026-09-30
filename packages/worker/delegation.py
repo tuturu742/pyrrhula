@@ -45,6 +45,23 @@ async def _store_key_for(tenant_id: uuid.UUID, repo_id: str | None) -> str | Non
     return store_key(tenant_id, repo.key) if repo is not None else None
 
 
+async def _harness_note(skey: str | None, branch: str) -> str:
+    """The bounded account of what the harness did, if a harness did it.
+
+    Bounded on purpose: this lands in the same ``history_char_budget`` the conversation
+    uses, so a chatty harness would evict the discussion it is meant to inform. The full
+    per-step detail stays in the pull-request record for ``container_activity`` to answer
+    on demand -- two audiences, two shapes.
+    """
+    if skey is None:
+        return ""
+    try:
+        pr = await GitStore(default_git_root()).get_pr(skey, branch) or {}
+    except GitStoreError:
+        return ""
+    return str(pr.get("harness_summary") or "")
+
+
 async def _pr_summary_line(skey: str | None, branch: str) -> str:
     """'PR #1 (url) — 3 files changed, +120 −4, CI: passed' from the store's records.
     Best-effort: a note with fewer numbers beats a failed job."""
@@ -312,6 +329,78 @@ async def _load_assignee(tenant_id: uuid.UUID, persona_id: str | None) -> Any | 
         return persona
 
 
+def _run_timeout(engine: dict[str, Any] | None = None) -> int:
+    """How long the environment may run, and so how long its inference token is good for.
+
+    Matches the exec-env adapters' own default (``run_timeout_seconds``, 1800) so a token
+    does not expire while the container that holds it is still working -- and does not
+    outlive it either.
+    """
+    return int((engine or {}).get("run_timeout_seconds") or 1800)
+
+
+async def _harness_config(
+    tenant_id: uuid.UUID, assignee: Any | None, run_timeout_seconds: int
+) -> dict[str, Any]:
+    """What the environment needs to run this persona's harness, or ``{}`` for none.
+
+    Resolved here rather than trusted from the persona row: a persona names a *key*, and
+    a tenant that has withheld that harness -- internal policy, a licence it may not
+    use -- must stop getting it without anyone editing personas. Same reading as
+    ``core.mcp.client.available_tools``, which re-derives rather than believing what was
+    offered earlier.
+
+    Falling back to no harness (and so to the one-shot codegen path) is deliberate: a
+    withdrawn harness should degrade the work, not fail the delegation.
+    """
+    if assignee is None or not getattr(assignee, "harness", ""):
+        return {}
+    from core.agents.authoring import get_agent
+    from core.harness.registry import get_harness
+
+    spec = await get_harness(tenant_id, assignee.harness)
+    if spec is None:
+        log.warning(
+            "delegation.harness_unavailable",
+            harness=assignee.harness,
+            persona=str(assignee.id),
+            detail="not registered for this tenant, or withheld -- falling back to codegen",
+        )
+        return {}
+    profile = await get_agent(tenant_id, assignee.agent_id)
+    if profile is None:
+        return {}
+    return {
+        "harness": {"key": assignee.harness, **spec},
+        # The connection the inference token will bind to, and the model the proxy will
+        # actually call. The harness is told this name; the proxy uses it regardless.
+        "harness_agent_id": str(profile.id),
+        "harness_model": profile.model,
+        # The token must not outlive the container that holds it.
+        "harness_ttl_seconds": run_timeout_seconds,
+    }
+
+
+def _apply_harness(environment: dict[str, Any], harness_cfg: dict[str, Any]) -> None:
+    """Fold a harness into an environment recipe, in place.
+
+    Its setup commands are APPENDED, never substituted: the repo still needs its own
+    toolchain, because the harness has to run that repo's tests. Its image, when the spec
+    names one, does win -- that is the pre-baked variant an operator built precisely so a
+    one-shot engine stops reinstalling the harness on every run.
+    """
+    if not harness_cfg:
+        return
+    spec = harness_cfg.get("harness") or {}
+    environment.update(harness_cfg)
+    if spec.get("image"):
+        environment["image"] = spec["image"]
+    environment["setup_cmds"] = [
+        *(environment.get("setup_cmds") or []),
+        *(spec.get("setup_cmds") or []),
+    ]
+
+
 async def _codegen_profile_for(tenant_id: uuid.UUID, assignee: Any | None) -> dict[str, Any] | None:
     """The assigned persona's model connection as the codegen -- the model that writes
     the code is tenant data (a persona's connection), never deployment config. Only the
@@ -422,6 +511,7 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                 "task_name": entity.name if entity is not None else "",
             }
         )
+        _apply_harness(environment, await _harness_config(tenant_id, assignee, _run_timeout()))
         extra["environment"] = environment
     codegen_profile = await _codegen_profile_for(tenant_id, assignee)
     if codegen_profile is None:
@@ -486,11 +576,16 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                 await store.record_pr(skey, result.branch, record)
     try:
         summary = await _pr_summary_line(skey, result.branch)
+        # What the harness itself did, in the persona's own voice. This note is authored
+        # by the assignee's principal, so `_load_conversation` replays it to that persona
+        # as something IT said -- which is what lets it answer "what did you do?" on a
+        # later turn instead of having the work be a gap in its own history.
+        worked = await _harness_note(skey, result.branch)
         await post_note(
             tenant_id,
             session_id,
             author_principal,
-            f"🔀 **{title}**: Opened {summary}",
+            f"🔀 **{title}**: Opened {summary}" + (f"\n\n{worked}" if worked else ""),
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("delegation.note_failed", branch=result.branch, error=str(exc))
@@ -600,6 +695,11 @@ async def handle_rework_work_item(payload: dict[str, Any]) -> dict[str, Any]:
                 "actor_label": rework_assignee.name if rework_assignee else "(supervisor)",
                 "task_name": entity.name,
             }
+        )
+        # Rework runs through the same harness the first attempt did -- resolved again
+        # rather than remembered, so a harness withdrawn between rounds stops being used.
+        _apply_harness(
+            environment, await _harness_config(tenant_id, rework_assignee, _run_timeout())
         )
         arguments["environment"] = environment
     codegen_profile = await _codegen_profile_for(tenant_id, rework_assignee)

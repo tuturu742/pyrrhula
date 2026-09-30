@@ -33,7 +33,12 @@ _EXEMPT_PATHS = {"/health", "/openapi.json", "/docs", "/redoc", "/docs/oauth2-re
 # account, so requiring a session would defeat the feature. Authenticated inside the
 # handler by a signed token in the path that carries its own tenant id, which the handler
 # uses to open a normal tenant_scope (core/previews/tokens.py); RLS applies as usual.
-_EXEMPT_PREFIXES = ("/auth", "/git/", "/p/")
+# /inference/: the model proxy a coding harness calls from inside an exec environment.
+# Same reason as /git/ -- a third-party harness speaks "OpenAI-compatible endpoint plus an
+# API key" and cannot be taught a session cookie. Authenticated inside the handler by the
+# inference job token (core/harness/tokens.py), which carries its own tenant id and the
+# connection it may spend on; the handler opens a normal tenant_scope from it.
+_EXEMPT_PREFIXES = ("/auth", "/git/", "/p/", "/inference/")
 
 # Routes gated by an authenticator other than get_request_context. require_platform_admin
 # resolves a normal admin-tenant JWT (calling get_request_context itself, outside the

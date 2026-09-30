@@ -82,7 +82,46 @@ one that does fix its own test.
 The reviewer is required to list the failing tests it was given and say which of the two
 kinds each one is, so the attribution is on the record rather than implied.
 
+## Coding harnesses: an agent with a shell
+
+Everything below describes the **default** path, where a model answers with whole file
+contents and never runs anything. A persona can instead work through a *coding harness* —
+an existing agent loop (opencode first) running inside the same execution environment,
+which reads, edits, runs the tests and iterates before anything is committed. Most of
+"what a delegation cannot do" stops applying, because the agent can run the generator
+rather than impersonate it.
+
+It is off unless chosen. `persona.harness` names a registered harness or is empty, and
+empty is the default, so an existing deployment behaves exactly as this page describes.
+
+**Registering one.** Harnesses are a tenant capability, like runtimes: the deployment
+ships built-ins and a tenant adds its own, overrides one by key, or withholds one it may
+not use. A spec is data — an image, setup commands, an invocation template over a fixed
+set of placeholders, and the wire format it speaks — so a tailored enterprise build of a
+harness this project has never heard of needs no code from anyone. The command is
+operator-scoped: a persona may only select a key, never supply one.
+
+**How it reaches a model.** Not with your provider key. The container is handed a
+short-lived inference token and points its base URL at Pyrrhula's own
+`/inference/v1/chat/completions`, which re-issues the call through the same
+`ModelProvider` every other caller uses. So delegated spend lands in `usage_record`, the
+tenant's egress policy applies, and daily caps bite — none of which is true of a harness
+calling a vendor directly. The key never leaves the server.
+
+**What it reports.** The harness's own event stream is read back after the run. A bounded
+summary is posted as the assignee persona's own note, so the persona can say what it did
+on a later turn rather than having the work be a gap in its own history; the
+`container_activity` tool answers the follow-ups, scoped by SQL to that persona's own
+environments.
+
+**What it costs.** The harness installs into the runtime image on every run unless a
+pre-baked image is named — about a minute for opencode. A warm socket container pays that
+once per session; a one-shot engine (k8s, ECS) pays it every run. See `ROADMAP.md` on the
+image builder that fixes this.
+
 ## What a delegation cannot do
+
+*(This section describes the default path. A harness lifts most of it — see above.)*
 
 The agent does not have a shell. It receives the repository's files and the work item,
 and it answers with **whole file contents**; the environment then commits them, runs the

@@ -139,6 +139,14 @@ class Persona(Base):
     web_search: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Which registered coding harness this persona's delegated work runs through, or ""
+    # for none -- the default, which keeps the one-shot codegen path. A key, not a spec:
+    # what it names is resolved against core.harness.registry at delegation time, so
+    # withdrawing a harness from a tenant takes effect without editing every persona.
+    # Migration d3e4f5a6b7c8.
+    harness: Mapped[str] = mapped_column(
+        String(63), nullable=False, default="", server_default=text("''")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Soft-delete (migration c4f2a7e1b9d3): NULL = live, a timestamp = archived. An archived
     # agent is filtered from list_personas AND from the scheduler's candidate resolver, so it

@@ -492,22 +492,38 @@ class GitMcpTransport:
 
         base_branch = str(args.get("base_branch") or "main")
         reworking = await self._store.branch_exists(repo, branch)
-        codegen_override = await self._codegen_from_profile(args.get("codegen_profile"))
-        files, deletes, generated_by = await self._produce_files(
-            repo,
-            branch,
-            work_item,
-            brief,
-            reworking,
-            codegen_override=codegen_override,
-            base_branch=base_branch,
-        )
+
+        env_cfg = args.get("environment")
+        # A harness replaces codegen rather than running beside it: it edits the working
+        # tree in the environment, so asking a model for whole files first would produce
+        # writes the harness would then be working against. Only the environment path can
+        # run one -- there is nowhere to run a command without an environment, so the
+        # direct-store fallback keeps the one-shot behaviour.
+        harness = (env_cfg or {}).get("harness") if isinstance(env_cfg, dict) else None
+        using_harness = bool(isinstance(harness, dict) and harness.get("command"))
+
+        if using_harness:
+            files: Mapping[str, str | bytes] = {}
+            deletes: frozenset[str] = frozenset()
+            key = harness.get("key") if isinstance(harness, dict) else None
+            generated_by = f"harness:{key or 'unknown'}"
+        else:
+            codegen_override = await self._codegen_from_profile(args.get("codegen_profile"))
+            files, deletes, generated_by = await self._produce_files(
+                repo,
+                branch,
+                work_item,
+                brief,
+                reworking,
+                codegen_override=codegen_override,
+                base_branch=base_branch,
+            )
         verb = "Address review" if reworking else "Implement"
         message = f"{verb}: {work_item.get('name') or branch} [{generated_by}]"
 
-        env_cfg = args.get("environment")
         ci_status = "pending"
         test_tail = ""
+        harness_run: Any = None
         envs = None
         if isinstance(env_cfg, dict):
             # Tenant-chosen engine when a factory is wired; else the fixed provider.
@@ -517,7 +533,7 @@ class GitMcpTransport:
                 else self._envs
             )
         if envs is not None and isinstance(env_cfg, dict):
-            ci_status, test_tail = await self._work_in_env(
+            ci_status, test_tail, harness_run = await self._work_in_env(
                 repo,
                 branch,
                 files,
@@ -526,8 +542,16 @@ class GitMcpTransport:
                 envs,
                 base_branch=base_branch,
                 deletes=deletes,
+                harness_prompt=brief if using_harness else "",
             )
         else:
+            if using_harness:
+                # Nothing was generated and there is no environment to run the harness in,
+                # so an empty commit would report success over an untouched branch.
+                raise McpTransportError(
+                    "this persona works through a harness, which needs an execution "
+                    "environment; none is configured for this engine"
+                )
             await self._store.commit_on_branch(
                 repo, branch, files, message, base=base_branch, deletes=deletes
             )
@@ -576,6 +600,17 @@ class GitMcpTransport:
                 # label. The rework agent is handed this: it cannot run the suite
                 # itself, so this is its only sight of the failure it must fix.
                 "test_output": test_tail,
+                # What the harness itself did, for the persona to speak about later and
+                # for `container_activity` to answer from. Empty on the one-shot path.
+                "harness_summary": harness_run.summary() if harness_run else "",
+                "harness_steps": (
+                    [
+                        {"tool": s.tool, "detail": s.detail, "outcome": s.outcome}
+                        for s in harness_run.steps
+                    ]
+                    if harness_run
+                    else []
+                ),
                 "html_url": remote_pr["html_url"] if remote_pr else None,
                 # Which work item this pull request IS. Without it the record is a
                 # dead end: anything later asking "the host closed this PR, whose
@@ -680,6 +715,89 @@ class GitMcpTransport:
             )
             return None
 
+    def _harness_lines(
+        self,
+        harness: dict[str, Any],
+        env_cfg: dict[str, Any],
+        prompt: str,
+        q: Any,
+    ) -> list[str]:
+        """The ``write`` step, when a harness is doing the writing.
+
+        A harness needs no protocol: it edits the working tree in place, and the ``git add
+        -A`` below picks up whatever it left. That is the whole reason this is a command
+        and not a format -- the one-shot path has to parse ``===FILE:`` blocks out of a
+        model's prose, and this does not.
+
+        The model call goes back to Pyrrhula's inference proxy, so spend is metered and the
+        egress policy applies. Its token is minted HERE rather than passed in, for the same
+        reason the git job token is: everything in ``env_cfg`` arrives as MCP tool
+        arguments and is persisted in ``action_record.arguments``, which is no place for a
+        credential.
+        """
+        import base64
+        import uuid as _uuid
+
+        from core.config import get_settings
+        from core.harness.registry import render
+        from core.harness.tokens import mint_inference_job_token
+
+        base = str(env_cfg.get("git_http_base") or get_settings().git_http_base).rstrip("/")
+
+        def _id(key: str) -> _uuid.UUID:
+            value = env_cfg.get(key)
+            return _uuid.UUID(str(value)) if value else _uuid.UUID(int=0)
+
+        # As long as the container may run, and no longer: a token that outlives its
+        # container is a spending credential nobody is watching.
+        ttl = int(env_cfg.get("harness_ttl_seconds") or 1800)
+        token = mint_inference_job_token(
+            _id("tenant_id"),
+            _id("session_id"),
+            _id("actor_persona_id"),
+            _id("harness_agent_id"),
+            ttl_seconds=ttl,
+        )
+        values = {
+            "prompt_file": "/tmp/pyr_task.md",
+            "model": str(env_cfg.get("harness_model") or ""),
+            "workdir": "/work",
+            "inference_base_url": f"{base}/inference/v1",
+            "inference_token": token,
+        }
+
+        lines: list[str] = []
+        for path, content in (harness.get("config_files") or {}).items():
+            encoded = base64.b64encode(render(str(content), values).encode()).decode()
+            lines.append(f"mkdir -p $(dirname {q(path)}) && echo {encoded} | base64 -d > {q(path)}")
+        for name, value in (harness.get("env") or {}).items():
+            lines.append(f"export {name}={q(render(str(value), values))}")
+        prompt_b64 = base64.b64encode(prompt.encode()).decode()
+        lines.append(f"echo {prompt_b64} | base64 -d > {q(values['prompt_file'])}")
+
+        # Everything untracked BEFORE the harness runs is not the harness's work. The
+        # one-shot path is protected by staging before the tests run; a harness runs the
+        # tests itself, inside its own loop, so that ordering cannot help here. Without
+        # this, a repo whose suite writes artifacts on failure (loxia's insta `.snap.new`
+        # files) hands the reviewer junk it will keep asking to have removed, and the
+        # rework loop cannot converge.
+        lines.append(
+            "git status --porcelain --untracked-files=all | "
+            "awk '$1==\"??\"{print $2}' > /tmp/pyr_pre_untracked || true"
+        )
+        lines.append("echo PYR_STEP=harness")
+        # Not fatal: a harness that fails still leaves diagnostics worth collecting, and
+        # the test step below reports what the tree actually does.
+        command = render(str(harness["command"]), values)
+        lines.append(f"set +e; {command}; PYR_HARNESS_RC=$?; set -e")
+        lines.append('echo "PYR_HARNESS_RC=$PYR_HARNESS_RC"')
+        lines.append("git add -A -- .")
+        lines.append(
+            'while read -r p; do git reset -q -- "$p" 2>/dev/null || true; '
+            "done < /tmp/pyr_pre_untracked || true"
+        )
+        return lines
+
     def _build_work_script(
         self,
         repo: str,
@@ -689,6 +807,7 @@ class GitMcpTransport:
         env_cfg: dict[str, Any],
         base_branch: str = "main",
         deletes: frozenset[str] = frozenset(),
+        harness_prompt: str = "",
     ) -> str:
         """The whole delegation as ONE self-contained shell script -- the shape every
         engine can run (a warm socket container, a k8s Job, a cloud task). Steps echo
@@ -735,6 +854,9 @@ class GitMcpTransport:
             f"|| git checkout -q -B {q(branch)} origin/{q(base_branch)}",
             "echo PYR_STEP=write",
         ]
+        harness = env_cfg.get("harness")
+        if isinstance(harness, dict) and harness.get("command"):
+            lines.extend(self._harness_lines(harness, env_cfg, harness_prompt, q))
         for path, content in files.items():
             # Content is already base64'd into the script, so binary needs no special
             # casing here beyond not calling .encode() on it -- which is what a committed
@@ -846,7 +968,8 @@ class GitMcpTransport:
         envs: Any,
         base_branch: str = "main",
         deletes: frozenset[str] = frozenset(),
-    ) -> tuple[str, str]:
+        harness_prompt: str = "",
+    ) -> tuple[str, str, Any]:
         """The environment path: run the whole delegation script via the engine's
         ``run_script`` (warm container for socket engines, one-shot Job elsewhere).
         Returns (ci_status, test-output tail). Only pyr/* branches are ever pushed --
@@ -854,7 +977,14 @@ class GitMcpTransport:
         session8 = branch.removeprefix("pyr/").split("-")[0]
         name = f"pyr-env-{session8}-{repo}"[:60].rstrip("-")
         script = self._build_work_script(
-            repo, branch, files, message, env_cfg, base_branch=base_branch, deletes=deletes
+            repo,
+            branch,
+            files,
+            message,
+            env_cfg,
+            base_branch=base_branch,
+            deletes=deletes,
+            harness_prompt=harness_prompt,
         )
         await self._track_env("start", env_cfg, name, None)
         exit_code: int | None = None
@@ -902,7 +1032,13 @@ class GitMcpTransport:
                 # larger tail carries both.
                 raw = result.output[idx + len(marker) : end if end != -1 else None]
                 test_tail = _both_ends(_strip_build_noise(raw), _TEST_OUTPUT_CHARS)
-        return ci_status, test_tail
+        # The harness's own event stream is in this same output -- it wrote it to stdout,
+        # and run_script hands back everything the script printed. So there is no callback
+        # endpoint and nothing talking to us mid-run: the container stays a container, and
+        # we read what it said once it stopped.
+        from core.harness.events import summarise
+
+        return ci_status, test_tail, (summarise(result.output) if harness_prompt else None)
 
     async def _get_branch(self, repo: str, branch: str) -> McpToolResult:
         exists = await self._store.branch_exists(repo, branch)
