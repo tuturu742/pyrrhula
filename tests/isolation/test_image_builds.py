@@ -305,6 +305,51 @@ async def test_the_registry_credential_is_lent_only_for_the_callers_own_images(
         assert await registry_pull_auth(s.tenant_id, elsewhere, encryptor=enc) is None, elsewhere
 
 
+async def test_a_github_actions_builder_is_declared_as_data(setup: Setup) -> None:
+    from core.images.builders import InvalidBuilderError, set_builder_credential
+
+    registry_key = "r" + setup.builder_key[1:]
+    key = f"gh{uuid.uuid4().hex[:8]}"
+    with pytest.raises(InvalidBuilderError, match="owner"):
+        await create_builder(
+            key,
+            "github_actions",
+            {
+                "registry_key": registry_key,
+                "config": {"owner": "a b", "repo": "r", "workflow": "w"},
+            },
+        )
+    with pytest.raises(InvalidBuilderError, match="api_base"):
+        await create_builder(
+            key,
+            "github_actions",
+            {
+                "registry_key": registry_key,
+                "config": {
+                    "owner": "acme",
+                    "repo": "builds",
+                    "workflow": "w.yml",
+                    "api_base": "https://user:pw@ghes.example/api/v3",
+                },
+            },
+        )
+    builder = await create_builder(
+        key,
+        "github_actions",
+        {
+            "registry_key": registry_key,
+            "config": {"owner": "acme", "repo": "builds", "workflow": "pyrrhula-image-build.yml"},
+        },
+    )
+    try:
+        assert builder.config["ref"] == "main"
+        assert builder.config["api_base"] == "https://api.github.com"
+        with pytest.raises(InvalidBuilderError, match="token"):
+            await set_builder_credential(key, {"token": "short"}, encryptor=IdentityEncryptor())
+    finally:
+        await delete_builder(key)
+
+
 async def test_a_harness_is_appended_by_the_platform_and_only_claimed(setup: Setup) -> None:
     s = setup
     await _define(s, dockerfile="FROM node:20-bookworm\n", harness="opencode")

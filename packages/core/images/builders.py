@@ -27,7 +27,8 @@ from core.tenancy.scope import unscoped_session
 _KEY = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 # The kinds this deployment can drive. The table admits the ones later phases add; a kind
 # is only accepted here once its adapter exists.
-SUPPORTED_KINDS = frozenset({"webhook"})
+SUPPORTED_KINDS = frozenset({"webhook", "github_actions"})
+_GH_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 MUTABLE_FIELDS = frozenset(
     {"label", "config", "registry_key", "allowed_tenants", "isolation_ack", "enabled"}
 )
@@ -110,6 +111,21 @@ def validate_config(kind: str, raw: Any) -> dict[str, Any]:
             ),
             "insecure": insecure,
         }
+    if kind == "github_actions":
+        unknown = set(raw) - {"owner", "repo", "workflow", "ref", "api_base"}
+        if unknown:
+            raise InvalidBuilderError(f"config: unknown field(s) {sorted(unknown)}")
+        out: dict[str, Any] = {}
+        for name in ("owner", "repo", "workflow", "ref"):
+            value = str(raw.get(name) or ("main" if name == "ref" else "")).strip()
+            if not _GH_NAME.match(value):
+                raise InvalidBuilderError(f"config.{name}: letters, digits, '.', '_' and '-' only")
+            out[name] = value
+        # GitHub Enterprise Server is the same API under another base.
+        out["api_base"] = _url(
+            raw.get("api_base") or "https://api.github.com", "config.api_base", insecure=False
+        ).rstrip("/")
+        return out
     raise InvalidBuilderError(f"kind {kind!r} is not supported by this deployment")
 
 
@@ -240,6 +256,14 @@ def _credential_fields(kind: str, raw: dict[str, Any]) -> dict[str, str]:
                 "refuse anyone who is not this deployment"
             )
         return {"signing_secret": secret, "token": str(raw.get("token") or "")}
+    if kind == "github_actions":
+        token = str(raw.get("token") or "")
+        if len(token) < 20:
+            raise InvalidBuilderError(
+                "token: a fine-grained token with Actions read and write on the build "
+                "repository only"
+            )
+        return {"token": token}
     raise InvalidBuilderError(f"kind {kind!r} is not supported by this deployment")
 
 

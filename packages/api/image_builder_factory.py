@@ -31,4 +31,23 @@ async def load_image_builder(key: str, *, encryptor: Encryptor) -> ImageBuilder:
             signing_secret=secrets["signing_secret"],
             token=secrets.get("token", ""),
         )
+    if builder.kind == "github_actions":
+        from adapters.image_builder.github_actions import (
+            GitHubActionsConfig,
+            GitHubActionsImageBuilder,
+        )
+
+        if not secrets.get("token"):
+            raise BuilderError(f"builder {key!r} has no token")
+        config = builder.config
+        return GitHubActionsImageBuilder(
+            GitHubActionsConfig(
+                owner=str(config["owner"]),
+                repo=str(config["repo"]),
+                workflow=str(config["workflow"]),
+                ref=str(config.get("ref") or "main"),
+                api_base=str(config.get("api_base") or "https://api.github.com"),
+            ),
+            token=secrets["token"],
+        )
     raise BuilderError(f"this deployment cannot drive a {builder.kind!r} builder")

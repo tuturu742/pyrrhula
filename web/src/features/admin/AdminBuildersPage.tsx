@@ -243,18 +243,24 @@ function BuilderCard({
         <span className="text-muted-foreground">
           Credential {builder.has_credential ? "(set — replace)" : "(required)"}:
         </span>
+        {builder.kind === "webhook" && (
+          <input
+            className={input}
+            type="password"
+            placeholder="signing secret (16+ chars)"
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+            autoComplete="new-password"
+          />
+        )}
         <input
           className={input}
           type="password"
-          placeholder="signing secret (16+ chars)"
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
-          autoComplete="new-password"
-        />
-        <input
-          className={input}
-          type="password"
-          placeholder="bearer token (optional)"
+          placeholder={
+            builder.kind === "github_actions"
+              ? "fine-grained token (Actions: read & write)"
+              : "bearer token (optional)"
+          }
           value={token}
           onChange={(e) => setToken(e.target.value)}
           autoComplete="new-password"
@@ -262,7 +268,10 @@ function BuilderCard({
         <button
           type="button"
           className={btnPrimary}
-          disabled={secret.length < 16 || saveCredential.isPending}
+          disabled={
+            (builder.kind === "webhook" ? secret.length < 16 : token.length < 20) ||
+            saveCredential.isPending
+          }
           onClick={() => saveCredential.mutate()}
         >
           Save credential
@@ -281,6 +290,7 @@ function AddBuilderForm({
   onAdded: () => void;
   onError: (message: string | null) => void;
 }) {
+  const [kind, setKind] = useState<"webhook" | "github_actions">("github_actions");
   const [key, setKey] = useState("");
   const [label, setLabel] = useState("");
   const [registry, setRegistry] = useState(registries[0] ?? "");
@@ -288,22 +298,23 @@ function AddBuilderForm({
   const [statusUrl, setStatusUrl] = useState("");
   const [cancelUrl, setCancelUrl] = useState("");
   const [insecure, setInsecure] = useState(false);
+  const [owner, setOwner] = useState("");
+  const [repo, setRepo] = useState("");
+  const [workflow, setWorkflow] = useState("pyrrhula-image-build.yml");
+  const [ref, setRef] = useState("main");
+  const [apiBase, setApiBase] = useState("https://api.github.com");
+
+  const ready =
+    kind === "webhook" ? !!submitUrl && !!statusUrl : !!owner && !!repo && !!workflow;
 
   const add = useMutation({
     mutationFn: async () => {
+      const config =
+        kind === "webhook"
+          ? { submit_url: submitUrl, status_url: statusUrl, cancel_url: cancelUrl, insecure }
+          : { owner, repo, workflow, ref, api_base: apiBase };
       const { error } = await apiClient.POST("/admin/image-builders", {
-        body: {
-          key,
-          kind: "webhook",
-          label,
-          registry_key: registry,
-          config: {
-            submit_url: submitUrl,
-            status_url: statusUrl,
-            cancel_url: cancelUrl,
-            insecure,
-          },
-        },
+        body: { key, kind, label, registry_key: registry, config },
       });
       if (error) throw error;
     },
@@ -318,11 +329,19 @@ function AddBuilderForm({
 
   return (
     <section className="flex flex-col gap-3 rounded-md border border-dashed border-border p-4">
-      <h2 className="font-medium">Declare a webhook builder</h2>
+      <h2 className="font-medium">Declare a builder</h2>
+      <div className="flex gap-4 text-sm">
+        {(["github_actions", "webhook"] as const).map((k) => (
+          <label key={k} className="flex items-center gap-2">
+            <input type="radio" checked={kind === k} onChange={() => setKind(k)} />
+            {k === "github_actions" ? "GitHub Actions" : "Webhook"}
+          </label>
+        ))}
+      </div>
       <p className="text-xs text-muted-foreground">
-        Your receiver gets a signed JSON request with the Dockerfile base64-encoded and
-        the exact image reference to push; Pyrrhula polls its status URL. See
-        docs/builders/webhook.md for the contract.
+        {kind === "github_actions"
+          ? "Pyrrhula dispatches a workflow in a repository you control and follows the run. Start from docs/builders/github-actions.yml; the push credential stays in your CI."
+          : "Your receiver gets a signed JSON request with the Dockerfile base64-encoded and the exact image reference to push; Pyrrhula polls its status URL. See docs/builders/webhook.md."}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
@@ -343,28 +362,57 @@ function AddBuilderForm({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Submit URL
-          <input className={input} value={submitUrl} onChange={(e) => setSubmitUrl(e.target.value)} placeholder="https://builds.example/submit" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Status URL
-          <input className={input} value={statusUrl} onChange={(e) => setStatusUrl(e.target.value)} placeholder="https://builds.example/status" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Cancel URL (optional)
-          <input className={input} value={cancelUrl} onChange={(e) => setCancelUrl(e.target.value)} />
-        </label>
+        {kind === "webhook" ? (
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              Submit URL
+              <input className={input} value={submitUrl} onChange={(e) => setSubmitUrl(e.target.value)} placeholder="https://builds.example/submit" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Status URL
+              <input className={input} value={statusUrl} onChange={(e) => setStatusUrl(e.target.value)} placeholder="https://builds.example/status" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Cancel URL (optional)
+              <input className={input} value={cancelUrl} onChange={(e) => setCancelUrl(e.target.value)} />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              Owner
+              <input className={input} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="acme" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Repository
+              <input className={input} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="pyrrhula-builds" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Workflow file
+              <input className={input} value={workflow} onChange={(e) => setWorkflow(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Branch
+              <input className={input} value={ref} onChange={(e) => setRef(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              API base (GitHub Enterprise Server)
+              <input className={input} value={apiBase} onChange={(e) => setApiBase(e.target.value)} />
+            </label>
+          </>
+        )}
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={insecure} onChange={(e) => setInsecure(e.target.checked)} />
-        Allow plain HTTP (a receiver on a trusted private network only)
-      </label>
+      {kind === "webhook" && (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={insecure} onChange={(e) => setInsecure(e.target.checked)} />
+          Allow plain HTTP (a receiver on a trusted private network only)
+        </label>
+      )}
       <div>
         <button
           type="button"
           className={btnPrimary}
-          disabled={!key || !registry || !submitUrl || !statusUrl || add.isPending}
+          disabled={!key || !registry || !ready || add.isPending}
           onClick={() => add.mutate()}
         >
           Declare builder
