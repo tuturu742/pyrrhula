@@ -107,3 +107,37 @@ def test_no_workflow_pack_declares_registries_or_an_allowlist() -> None:
                 offenders.append(str(path.relative_to(ROOT)))
     assert scanned, "no pack json was scanned; run scripts/fetch_plugins.py first"
     assert not offenders, f"pack content declaring registry policy: {offenders}"
+
+
+# An organization's images: what every delegation may end up running. People change them
+# through the Images API (manage_tenant) or a .pyr import; a model never does.
+_IMAGE_MUTATORS = {
+    "import_image",
+    "promote_build",
+    "remove_image",
+    "recheck_image",
+    "cancel_build",
+    "run_verification",
+}
+
+
+def test_no_model_facing_code_can_change_an_organizations_images() -> None:
+    offenders = {
+        p.name: sorted(_names_used(p) & _IMAGE_MUTATORS)
+        for p in _MODEL_FACING
+        if p.is_file() and _names_used(p) & _IMAGE_MUTATORS
+    }
+    assert not offenders, f"model-facing code that can change images: {offenders}"
+
+
+def test_a_built_runtime_is_written_only_by_promotion() -> None:
+    """``write_built_runtime`` is what makes an image a runtime. Its only caller is
+    ``promote_build``, which refuses anything not verified and smoke-tested -- a second
+    caller would be a way to run an image nobody checked."""
+    callers = []
+    for path in PACKAGES.rglob("*.py"):
+        if "/tests/" in str(path) or path == PACKAGES / "core" / "repos" / "runtimes.py":
+            continue
+        if "write_built_runtime" in _names_used(path):
+            callers.append(str(path.relative_to(ROOT)))
+    assert callers == ["packages/core/images/service.py"], callers

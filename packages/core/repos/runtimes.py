@@ -111,11 +111,23 @@ def _tenant_entries(settings: dict[str, Any] | None) -> dict[str, dict[str, obje
         if not isinstance(value, dict) or not value.get("image"):
             continue  # a malformed entry is ignored, never raised on a read path
         setup = value.get("setup")
-        out[str(key)] = {
+        entry: dict[str, object] = {
             "image": str(value["image"]),
             "setup": [str(c) for c in setup] if isinstance(setup, list) else [],
         }
+        # A runtime made from one of the tenant's images (core.images.service) carries
+        # where it came from and what its smoke test proved. Dropping these on read was
+        # how a promoted image would have turned back into an ordinary, editable entry.
+        if isinstance(value.get("built"), dict):
+            entry["built"] = dict(value["built"])
+        if isinstance(value.get("baked_harness"), dict) and value["baked_harness"]:
+            entry["baked_harness"] = dict(value["baked_harness"])
+        out[str(key)] = entry
     return out
+
+
+def is_built(entry: dict[str, object] | None) -> bool:
+    return bool(entry and isinstance(entry.get("built"), dict))
 
 
 async def resolved_runtimes(tenant_id: uuid.UUID) -> dict[str, dict[str, object]]:
@@ -151,6 +163,11 @@ async def register_runtime(
         if tenant is None:
             raise InvalidRuntimeError("no such tenant")
         existing = _tenant_entries(tenant.settings)
+        if is_built(existing.get(key.strip())):
+            raise InvalidRuntimeError(
+                f"runtime {key!r} is one of this organization's images; change it from "
+                "Images, where a new image is verified before anything runs in it"
+            )
         if key.strip() not in existing and len(existing) >= _MAX_RUNTIMES:
             raise InvalidRuntimeError(f"a tenant may register at most {_MAX_RUNTIMES} runtimes")
         tenant.settings = {
@@ -158,6 +175,58 @@ async def register_runtime(
             SETTING_KEY: {**existing, key.strip(): entry},
         }
     return entry
+
+
+async def write_built_runtime(
+    tenant_id: uuid.UUID,
+    key: str,
+    *,
+    image: str,
+    built: dict[str, object],
+    baked_harness: dict[str, object] | None,
+) -> None:
+    """Point runtime ``key`` at a verified image.
+
+    Called only by ``core.images.service.promote_build``, which is what makes "verified and
+    smoke-tested before anything runs in it" true for every built entry -- an architecture
+    test holds that line. ``image`` is digest-pinned there, so the runtime can never drift
+    to whatever a tag points at later.
+    """
+    async with tenant_scope(tenant_id) as session:
+        tenant = await session.scalar(
+            select(Tenant).where(Tenant.id == tenant_id).with_for_update()
+        )
+        if tenant is None:
+            raise InvalidRuntimeError("no such tenant")
+        existing = _tenant_entries(tenant.settings)
+        current = existing.get(key)
+        if current is not None and not is_built(current):
+            raise InvalidRuntimeError(
+                f"this organization already registered a runtime called {key!r}; remove it "
+                "or give the image another name"
+            )
+        if key not in existing and len(existing) >= _MAX_RUNTIMES:
+            raise InvalidRuntimeError(f"a tenant may register at most {_MAX_RUNTIMES} runtimes")
+        entry: dict[str, object] = {"image": image, "setup": [], "built": dict(built)}
+        if baked_harness:
+            entry["baked_harness"] = dict(baked_harness)
+        tenant.settings = {**(tenant.settings or {}), SETTING_KEY: {**existing, key: entry}}
+
+
+async def drop_built_runtime(tenant_id: uuid.UUID, key: str) -> bool:
+    """Forget a built entry, leaving a runtime the tenant registered by hand alone."""
+    async with tenant_scope(tenant_id) as session:
+        tenant = await session.scalar(
+            select(Tenant).where(Tenant.id == tenant_id).with_for_update()
+        )
+        if tenant is None:
+            return False
+        existing = _tenant_entries(tenant.settings)
+        if not is_built(existing.get(key)):
+            return False
+        remaining = {k: v for k, v in existing.items() if k != key}
+        tenant.settings = {**(tenant.settings or {}), SETTING_KEY: remaining}
+    return True
 
 
 async def remove_runtime(tenant_id: uuid.UUID, key: str) -> bool:
@@ -173,6 +242,10 @@ async def remove_runtime(tenant_id: uuid.UUID, key: str) -> bool:
         existing = _tenant_entries(tenant.settings)
         if key not in existing:
             return False
+        if is_built(existing[key]):
+            raise InvalidRuntimeError(
+                f"runtime {key!r} is one of this organization's images; remove it from Images"
+            )
         remaining = {k: v for k, v in existing.items() if k != key}
         tenant.settings = {**(tenant.settings or {}), SETTING_KEY: remaining}
     return True

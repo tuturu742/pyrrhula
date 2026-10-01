@@ -22,6 +22,8 @@ operator configuration, never something a persona or a workflow pack can introdu
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import uuid
 from typing import Any
@@ -65,6 +67,11 @@ BUILTIN_HARNESSES: dict[str, dict[str, Any]] = {
         # install on every k8s Job overrides this entry with a pre-baked image.
         "image": "",
         "setup_cmds": ["npm i -g opencode-ai@1.18.33"],
+        # What an image claiming to carry this harness must print, and the command that
+        # makes it. An image's smoke test runs it; only a match lets a delegation skip
+        # the install above (core.images.smoke).
+        "version": "1.18.33",
+        "smoke_cmd": "opencode --version",
         # --auto: approve permissions not explicitly denied; without it the loop stops at
         # the first edit waiting for a human who is not there.
         # --format json: a parsed event stream, not screen-scraping.
@@ -151,9 +158,15 @@ def validate_spec(key: str, spec: dict[str, Any]) -> dict[str, Any]:
                 f"{sorted(unknown)}; this deployment supplies {sorted(PLACEHOLDERS)}"
             )
 
+    smoke_cmd = str(spec.get("smoke_cmd") or "").strip()
+    if len(smoke_cmd) > _MAX_CMD_LEN:
+        raise InvalidHarnessError(f"harness {key!r}: smoke_cmd is longer than {_MAX_CMD_LEN} chars")
+
     return {
         "image": str(spec.get("image") or "").strip(),
         "setup_cmds": setup,
+        "version": str(spec.get("version") or "").strip()[:64],
+        "smoke_cmd": smoke_cmd,
         "command": command,
         "env": env,
         "config_files": config_files,
@@ -282,3 +295,14 @@ def render(text: str, values: dict[str, str]) -> str:
     handed. This walks the same regex that validation checked.
     """
     return _PLACEHOLDER_RE.sub(lambda match: values.get(match.group(1), match.group(0)), text)
+
+
+def harness_fingerprint(spec: dict[str, Any]) -> str:
+    """What a baked harness has to match for its install to be skipped.
+
+    The setup commands are what the install would have run, so an image baked against
+    different ones -- an operator bumped the version, or replaced the package -- no
+    longer counts as carrying this harness, and the install comes back.
+    """
+    setup = [str(c) for c in (spec.get("setup_cmds") or [])]
+    return hashlib.sha256(json.dumps(setup).encode()).hexdigest()

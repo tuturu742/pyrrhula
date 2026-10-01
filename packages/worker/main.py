@@ -29,6 +29,8 @@ from worker.delegation import (
 from worker.embedding import handle_embed_chunks, handle_reembed_stale
 from worker.export import handle_export_workspace
 from worker.history_summary import handle_summarise_history
+from worker.images import handle_verify_image_build
+from worker.images import sweep as sweep_image_builds
 from worker.ingestion import handle_knowledge_ingest
 from worker.notifications import handle_notify_await_opened, handle_send_digest
 from worker.pr_sync import sync_pull_requests
@@ -69,6 +71,7 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
     "download_retrieval_models": handle_download_retrieval_models,
     "stop_preview": handle_stop_preview,
     "advance_session": handle_advance_session,
+    "verify_image_build": handle_verify_image_build,
 }
 
 # Previews are the only thing here with a wall-clock deadline, and this deployment has no
@@ -165,6 +168,14 @@ async def main() -> None:
                         log.info("worker.work_items_followed_prs", count=followed)
                 except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
                     log.warning("worker.pr_sync_failed", error=str(exc))
+                # Images waiting to be checked with no job yet (a bundle import has no
+                # queue to hand), and checks whose worker died.
+                try:
+                    started, failed = await sweep_image_builds(queue)
+                    if started or failed:
+                        log.info("worker.image_builds_swept", started=started, failed=failed)
+                except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
+                    log.warning("worker.image_sweep_failed", error=str(exc))
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=_IDLE_POLL_INTERVAL)
             continue

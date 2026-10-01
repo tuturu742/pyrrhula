@@ -106,6 +106,9 @@ EXPORT_SECTIONS = frozenset(
         # game: without this a bundle's rolls resolve against whatever the importing tenant
         # happened to have.
         "rules",
+        # The organization's verified runtime images, as exact digest-pinned references
+        # with their Dockerfile as provenance. Never a builder, a credential or history.
+        "images",
     }
 )
 DEFAULT_SECTIONS = EXPORT_SECTIONS - {"connections"}
@@ -255,6 +258,8 @@ async def export_workspace(
         await _add_vocabulary(writer, tenant_id, workspace_id)
     if opts.include_sessions and "sessions" in opts.sections:
         await _add_sessions(writer, tenant_id, workspace_id)
+    if "images" in opts.sections:
+        await _add_images(writer, tenant_id)
 
     manifest = writer.build_manifest()
     data = writer.seal()
@@ -263,6 +268,37 @@ async def export_workspace(
 
         data = encrypt_bundle(data, opts.password)
     return ExportResult(data=data, manifest=manifest)
+
+
+async def _add_images(writer: BundleWriter, tenant_id: uuid.UUID) -> None:
+    """Each image whose current build is verified, as the exact reference that was
+    checked. A tag never travels: the importer would be trusting whatever it points at
+    on the day they import.
+
+    Organization-wide rather than per workspace, like the runtimes they become -- a repo
+    picks a runtime, not a workspace. The harness travels as a *claim* only; the importer's
+    own smoke test decides whether it is believed.
+    """
+    from core.images.service import list_images
+
+    for image in await list_images(tenant_id):
+        current = image.get("current")
+        if not current or current.get("status") != "ready" or not current.get("pinned_ref"):
+            continue
+        baked = current.get("baked_harness") or {}
+        writer.add_json(
+            f"images/{image['name']}.json",
+            {
+                "name": image["name"],
+                "image": current["pinned_ref"],
+                "dockerfile": image.get("dockerfile") or current.get("dockerfile") or "",
+                "harness_claim": (
+                    {"key": baked["key"], "version": baked.get("version", "")}
+                    if baked.get("key")
+                    else None
+                ),
+            },
+        )
 
 
 # ── knowledge ───────────────────────────────────────────────────────────────────────

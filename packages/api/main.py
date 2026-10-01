@@ -26,6 +26,7 @@ from api.routes import (
     export,
     git_http,
     harnesses,
+    images,
     inference,
     knowledge,
     manifests,
@@ -182,6 +183,7 @@ app.include_router(overseer_routes.router)
 # not by get_request_context alone like the tenant routes above.
 app.include_router(admin.router)
 app.include_router(admin_images.router)
+app.include_router(images.router)
 
 
 # Read once at import: the answer cannot change while the process runs, and a probe

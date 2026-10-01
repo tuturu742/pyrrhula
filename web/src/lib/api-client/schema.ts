@@ -4307,6 +4307,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Images Endpoint */
+        get: operations["list_images_endpoint_images_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Image Endpoint
+         * @description Start using a published image by its exact digest. Answers at once; the check --
+         *     the registry's digest, then a smoke test on this organization's engine -- runs in the
+         *     worker, and the image becomes a runtime when it passes.
+         */
+        post: operations["import_image_endpoint_images_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/builds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Builds Endpoint */
+        get: operations["list_builds_endpoint_images__name__builds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recheck Image Endpoint */
+        post: operations["recheck_image_endpoint_images__name__recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Build Endpoint */
+        post: operations["cancel_build_endpoint_images__name__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/builds/{build_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Build Endpoint
+         * @description Make an earlier verified build current again -- the rollback.
+         */
+        post: operations["promote_build_endpoint_images__name__builds__build_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Image Endpoint */
+        delete: operations["remove_image_endpoint_images__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -4754,6 +4881,53 @@ export interface components {
         Body_upload_retrieval_cache_endpoint_admin_retrieval_models_upload_post: {
             /** File */
             file: string;
+        };
+        /** BuildOut */
+        BuildOut: {
+            /** Id */
+            id: string;
+            /** Origin */
+            origin: string;
+            /** Status */
+            status: string;
+            /** Target Ref */
+            target_ref: string;
+            /** Digest */
+            digest: string;
+            /** Pinned Ref */
+            pinned_ref: string;
+            /** Registry Key */
+            registry_key: string | null;
+            /** Builder Key */
+            builder_key: string | null;
+            /** External Url */
+            external_url: string;
+            /** Harness Claim */
+            harness_claim: {
+                [key: string]: unknown;
+            };
+            /** Baked Harness */
+            baked_harness: {
+                [key: string]: unknown;
+            };
+            /** Smoke */
+            smoke: string;
+            /** Error */
+            error: string;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Current
+             * @default false
+             */
+            current: boolean;
         };
         /** BundleInspectionResponse */
         BundleInspectionResponse: {
@@ -5767,6 +5941,16 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HarnessClaim */
+        HarnessClaim: {
+            /** Key */
+            key: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
         /** HarnessResponse */
         HarnessResponse: {
             /** Key */
@@ -5822,6 +6006,39 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ImageOut */
+        ImageOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Origin */
+            origin: string;
+            /** Harness Key */
+            harness_key: string;
+            /** Dockerfile */
+            dockerfile: string;
+            current: components["schemas"]["BuildOut"] | null;
+            latest: components["schemas"]["BuildOut"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ImportImageRequest */
+        ImportImageRequest: {
+            /** Name */
+            name: string;
+            /** Image */
+            image: string;
+            /**
+             * Dockerfile
+             * @default
+             */
+            dockerfile: string;
+            harness_claim?: components["schemas"]["HarnessClaim"] | null;
         };
         /** ImportResponse */
         ImportResponse: {
@@ -7031,6 +7248,10 @@ export interface components {
              * @default false
              */
             tenant_owned: boolean;
+            /** Built Origin */
+            built_origin?: string | null;
+            /** Baked Harness */
+            baked_harness?: string | null;
         };
         /** SatisfyAwaitRequest */
         SatisfyAwaitRequest: {
@@ -17572,6 +17793,255 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AllowlistBody"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_images_endpoint_images_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_image_endpoint_images_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportImageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_builds_endpoint_images__name__builds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recheck_image_endpoint_images__name__recheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_build_endpoint_images__name__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_build_endpoint_images__name__builds__build_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+                build_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_image_endpoint_images__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

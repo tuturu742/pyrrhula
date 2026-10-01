@@ -225,6 +225,10 @@ class RuntimeResponse(BaseModel):
     # True: what runs is the tenant's image, and a catalog that hid that would be lying
     # about which image a build uses.
     tenant_owned: bool = False
+    # One of the organization's own verified images ("built" or "imported"), changed
+    # from Images rather than here. None for an ordinary runtime.
+    built_origin: str | None = None
+    baked_harness: str | None = None
 
 
 class RegisterRuntimeRequest(BaseModel):
@@ -247,6 +251,16 @@ async def list_runtimes_endpoint(
             image=str(v["image"]),
             setup=[str(c) for c in cast("list[object]", v.get("setup") or [])],
             tenant_owned=BUILTIN_RUNTIMES.get(k) != v,
+            built_origin=(
+                str(cast("dict[str, object]", v["built"]).get("origin") or "built")
+                if isinstance(v.get("built"), dict)
+                else None
+            ),
+            baked_harness=(
+                str(cast("dict[str, object]", v["baked_harness"]).get("key") or "") or None
+                if isinstance(v.get("baked_harness"), dict)
+                else None
+            ),
         )
         for k, v in sorted(effective.items())
     ]
@@ -290,10 +304,14 @@ async def remove_runtime_endpoint(
     Repos already pinned to the key keep the name and resolve to whatever it means now,
     which for a removed non-built-in is nothing: that build is refused with an unknown
     runtime rather than silently running on some other image."""
-    from core.repos.runtimes import remove_runtime
+    from core.repos.runtimes import InvalidRuntimeError, remove_runtime
 
     await require_tenant_permission(ctx, "repo:manage")
-    if not await remove_runtime(ctx.tenant_id, key):
+    try:
+        removed = await remove_runtime(ctx.tenant_id, key)
+    except InvalidRuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not removed:
         raise HTTPException(status_code=404, detail=f"this tenant has no runtime {key!r}")
 
 

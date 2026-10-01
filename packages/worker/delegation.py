@@ -192,6 +192,10 @@ async def _environment_config(
         # (not host-bound) credential only when the operator typed the image, never when
         # a file inside the repository did.
         "image_source": recipe.sources.get("image"),
+        # One of the tenant's own verified images, and what its smoke test proved is in
+        # it -- read by _apply_harness.
+        "image_built": recipe.image_built,
+        "baked_harness": recipe.baked_harness,
         "setup_cmds": recipe.setup_cmds,
         "test_cmd": recipe.test_cmd,
         "build_cmd": recipe.build_cmd,
@@ -402,16 +406,34 @@ def _apply_harness(environment: dict[str, Any], harness_cfg: dict[str, Any]) -> 
     """Fold a harness into an environment recipe, in place.
 
     Its setup commands are APPENDED, never substituted: the repo still needs its own
-    toolchain, because the harness has to run that repo's tests. Its image, when the spec
-    names one, does win -- that is the pre-baked variant an operator built precisely so a
-    one-shot engine stops reinstalling the harness on every run.
+    toolchain, because the harness has to run that repo's tests -- unless the image's
+    smoke test proved this exact harness is already inside (same key, same install
+    fingerprint), in which case reinstalling it on every run is the cost the image was
+    made to remove.
+
+    A harness image wins only over a catalog runtime. An image somebody named for this
+    repo -- on the repo row, in its manifest, or one of the tenant's own verified images --
+    was chosen for this code; a harness default must not quietly replace it.
     """
     if not harness_cfg:
         return
+    from core.harness.registry import harness_fingerprint
+
     spec = harness_cfg.get("harness") or {}
     environment.update(harness_cfg)
-    if spec.get("image"):
+    explicit = environment.get("image_built") or environment.get("image_source") in (
+        "repo",
+        "manifest",
+    )
+    if spec.get("image") and not explicit:
         environment["image"] = spec["image"]
+        # A different image: whatever the old one proved is not in this one.
+        environment["baked_harness"] = {}
+    baked = environment.get("baked_harness") or {}
+    if baked.get("key") == (spec.get("key") or "") and baked.get(
+        "fingerprint"
+    ) == harness_fingerprint(spec):
+        return
     environment["setup_cmds"] = [
         *(environment.get("setup_cmds") or []),
         *(spec.get("setup_cmds") or []),

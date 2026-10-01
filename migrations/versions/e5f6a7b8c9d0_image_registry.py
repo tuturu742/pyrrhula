@@ -38,20 +38,14 @@ def upgrade() -> None:
         sa.Column(
             "path_prefix", sa.String(120), nullable=False, server_default=sa.text("'pyrrhula'")
         ),
-        sa.Column(
-            "path_style", sa.String(8), nullable=False, server_default=sa.text("'nested'")
-        ),
+        sa.Column("path_style", sa.String(8), nullable=False, server_default=sa.text("'nested'")),
         sa.Column("insecure", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("credential_ref", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "credential_username", sa.String(255), nullable=False, server_default=sa.text("''")
         ),
-        sa.Column(
-            "k8s_pull_secret", sa.String(253), nullable=False, server_default=sa.text("''")
-        ),
-        sa.Column(
-            "supports_delete", sa.Boolean(), nullable=False, server_default=sa.text("false")
-        ),
+        sa.Column("k8s_pull_secret", sa.String(253), nullable=False, server_default=sa.text("''")),
+        sa.Column("supports_delete", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
             "public_by_default_ack",
             sa.Boolean(),

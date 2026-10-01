@@ -204,3 +204,28 @@ async def test_the_allowlist_bites_at_the_repo_form_and_can_be_lifted(
             "/admin/runtime-image-allowlist", json={"prefixes": []}, headers=platform_admin_headers
         )
     assert make("python:3.12") == 201, "an empty allowlist restores today's behaviour"
+
+
+async def test_an_owner_imports_a_pinned_image_and_a_tag_is_refused(
+    client: TestClient, db_available: None
+) -> None:
+    slug = f"img-{uuid.uuid4().hex[:8]}"
+    await seed_dev_tenant(slug=slug)
+    owner = await _owner(client, slug)
+    digest = "sha256:" + "a" * 64
+    tagged = client.post(
+        "/images/import", json={"name": "godot-node", "image": "ghcr.io/x/godot:4"}, headers=owner
+    )
+    assert tagged.status_code == 422 and "digest" in tagged.text
+    pinned = client.post(
+        "/images/import",
+        json={"name": "godot-node", "image": f"ghcr.io/x/godot@{digest}"},
+        headers=owner,
+    )
+    assert pinned.status_code == 202, pinned.text
+    assert pinned.json()["status"] == "verifying"
+    listing = client.get("/images", headers=owner).json()
+    assert [i["name"] for i in listing] == ["godot-node"]
+    # Not a runtime until the worker's check passes.
+    runtimes = client.get("/repos/runtimes", headers=owner).json()
+    assert "godot-node" not in {r["key"] for r in runtimes}

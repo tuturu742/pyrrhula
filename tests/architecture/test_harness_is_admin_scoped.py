@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import json
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / "packages" / "core" / "harness" / "registry.py"
@@ -104,7 +105,18 @@ def test_the_registry_is_the_only_writer_of_the_setting() -> None:
         if path == REGISTRY or "/tests/" in str(path):
             continue
         text = path.read_text()
-        if "SETTING_KEY: " in text and "harness" in text.lower():
+        # A module whose SETTING_KEY *is* the harness key -- imported from the registry or
+        # spelled out -- writing it. Other modules have SETTING_KEYs of their own
+        # (runtimes' records a baked harness, which mentions the word without writing
+        # this setting), so the word alone was matching the wrong thing.
+        harness_key_bound = (
+            re.search(r"from core\.harness\.registry import[^\n]*\bSETTING_KEY\b", text)
+            or re.search(rf'^SETTING_KEY\s*=\s*"{SETTING_KEY}"', text, re.MULTILINE)
+            or "registry.SETTING_KEY" in text
+        )
+        if "SETTING_KEY: " in text and harness_key_bound:
+            writers.append(str(path.relative_to(ROOT)))
+        if re.search(rf'"{SETTING_KEY}"\s*:', text) and "settings" in text:
             writers.append(str(path.relative_to(ROOT)))
         if f'"{SETTING_KEY}"]' in text and "settings" in text:
             writers.append(str(path.relative_to(ROOT)))

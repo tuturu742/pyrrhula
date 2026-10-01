@@ -369,7 +369,67 @@ async def import_bundle(
             moderation_provider=moderation_provider,
             embedding_provider=embedding_provider,
         )
+    if _do("images"):
+        await _import_images(
+            files,
+            tenant_id,
+            report,
+            importing_principal_id=importing_principal_id,
+            permission_service=permission_service,
+        )
     return report
+
+
+async def _import_images(
+    files: dict[str, bytes],
+    tenant_id: uuid.UUID,
+    report: ImportReport,
+    *,
+    importing_principal_id: uuid.UUID | None,
+    permission_service: PermissionService | None,
+) -> None:
+    """Each image starts being checked; none is usable until that check passes.
+
+    A refused image does not fail the import -- the rest of the bundle is still what the
+    person asked for. The report names the image and why, and a Dockerfile that came with
+    it is kept so an operator who forbids its registry can rebuild it on their own builder.
+    Changing an organization's runtimes is ``manage_tenant``; an importer without it gets
+    everything else and a line saying so.
+    """
+    paths = sorted(p for p in files if p.startswith("images/") and p.endswith(".json"))
+    if not paths:
+        return
+    allowed = (
+        importing_principal_id is not None
+        and permission_service is not None
+        and await permission_service.check(
+            tenant_id, importing_principal_id, "manage_tenant", "tenant", tenant_id
+        )
+    )
+    from core.images.service import ImageError, import_image
+
+    for path in paths:
+        record = _json(files[path])
+        name = str(record.get("name") or "")
+        if not allowed:
+            report.skipped.append(
+                f"image:{name} (adding runtime images needs the organization-admin role)"
+            )
+            continue
+        try:
+            await import_image(
+                tenant_id,
+                name=name,
+                image=str(record.get("image") or ""),
+                dockerfile=str(record.get("dockerfile") or ""),
+                harness_claim=record.get("harness_claim") or None,
+                requested_by=importing_principal_id,
+            )
+        except ImageError as exc:
+            note = " -- its Dockerfile is in the bundle" if record.get("dockerfile") else ""
+            report.skipped.append(f"image:{name} ({exc}){note}")
+            continue
+        report.imported.append(f"image:{name} (being checked; usable once it passes)")
 
 
 PLACEHOLDER_CONNECTION_NAME = "missing-connection"

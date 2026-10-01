@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
+import { ImagesCard } from "./ImagesCard";
 import { RuntimesCard } from "./RuntimesCard";
 import {
   usePreviewActions,
@@ -474,7 +475,7 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
 export function ReposPage() {
   const queryClient = useQueryClient();
   const [identitiesFor, setIdentitiesFor] = useState<string | null>(null);
-  const [tab, setTab] = useState<"repositories" | "runtimes">("repositories");
+  const [tab, setTab] = useState<"repositories" | "runtimes" | "images">("repositories");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RepoRowData | null>(null);
 
@@ -551,7 +552,7 @@ export function ReposPage() {
           setup task, while the repositories themselves are the daily one. A tab keeps
           it reachable without it being the first thing between you and the repos. */}
       <div className="flex gap-1 border-b border-border">
-        {(["repositories", "runtimes"] as const).map((key) => (
+        {(["repositories", "runtimes", "images"] as const).map((key) => (
           <button
             key={key}
             type="button"
@@ -563,12 +564,17 @@ export function ReposPage() {
                 : "text-muted-foreground hover:text-foreground")
             }
           >
-            {key === "repositories" ? "Repositories" : "Build runtimes"}
+            {key === "repositories"
+              ? "Repositories"
+              : key === "runtimes"
+                ? "Build runtimes"
+                : "Images"}
           </button>
         ))}
       </div>
 
       {tab === "runtimes" && <RuntimesCard />}
+      {tab === "images" && <ImagesCard />}
 
       {tab === "repositories" && (
         <>

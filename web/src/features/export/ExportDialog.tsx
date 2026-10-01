@@ -62,6 +62,11 @@ const SECTIONS: { key: string; label: string; hint: string }[] = [
   { key: "vocabulary", label: "Vocabulary", hint: "the display overlay" },
   { key: "sessions", label: "Sessions", hint: "transcripts + resolution records" },
   {
+    key: "images",
+    label: "Runtime images",
+    hint: "the organization's verified images, pinned by digest, with their Dockerfile",
+  },
+  {
     key: "connections",
     label: "Model connections + credentials",
     hint: "provider API keys travel INSIDE the bundle — forces password encryption",
