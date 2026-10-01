@@ -175,6 +175,10 @@ async def _environment_config(
     engine = engine_by_key(engine_key) or {}
     return {
         "image": recipe.image,
+        # Which layer chose the image. The registry credential is offered to a legacy
+        # (not host-bound) credential only when the operator typed the image, never when
+        # a file inside the repository did.
+        "image_source": recipe.sources.get("image"),
         "setup_cmds": recipe.setup_cmds,
         "test_cmd": recipe.test_cmd,
         "build_cmd": recipe.build_cmd,

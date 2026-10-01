@@ -77,11 +77,15 @@ def validate_entry(key: str, image: str, setup: list[str]) -> dict[str, object]:
     if not key.replace("-", "").replace("_", "").replace(".", "").isalnum():
         raise InvalidRuntimeError("runtime key may contain letters, digits, '-', '_' and '.' only")
 
-    image = (image or "").strip()
-    if not image:
+    from core.repos.image_ref import ImageRefError, normalise_image_ref
+
+    try:
+        normalised = normalise_image_ref(image)
+    except ImageRefError as exc:
+        raise InvalidRuntimeError(f"runtime {key!r}: {exc}") from exc
+    if not normalised:
         raise InvalidRuntimeError(f"runtime {key!r}: image is required")
-    if " " in image:
-        raise InvalidRuntimeError(f"runtime {key!r}: image must be a single reference")
+    image = normalised
 
     if len(setup) > _MAX_SETUP_CMDS:
         raise InvalidRuntimeError(f"runtime {key!r}: at most {_MAX_SETUP_CMDS} setup commands")

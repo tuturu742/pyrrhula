@@ -37,30 +37,22 @@ role-playing first, structured enterprise work second, software development thir
   `agent.credential_ref` exists precisely so one never lands; and each harness has its
   own invocation, output shape and release cadence to pin. Worth proving against one
   harness end to end — metering and credential handling settled — before a second.
-- **An image builder, and a registry to push to** — a delegated environment needs the
-  repo's toolchain and, now, a coding harness on top of it, and today both are installed
-  on every run. A warm socket container pays that once per session; k8s and ECS spawn a
-  fresh Job per run and pay it every time, rework rounds included. The repo's own setup is
-  usually the larger part of it, so this is not a harness feature — it is what makes
-  one-shot engines practical at all. It is also the only route for a deployment that
-  cannot reach the public internet, and it removes the question of whether we may
-  redistribute a given harness: the deployment builds into its own registry and we ship
-  nothing. The pull half exists already (`registry_credential_ref`, `registry_auth`,
-  `imagePullSecrets`); the missing half is a builder behind a port, with a
-  content-addressed tag so an unchanged recipe never rebuilds, and tenant-namespaced tags
-  so one tenant's image is never another's to pull.
+- **Image builds through external builders** — a delegated environment needs the repo's
+  toolchain and, now, a coding harness on top of it, and today both are installed on every
+  run. A warm socket container pays that once per session; k8s and ECS spawn a fresh Job per
+  run and pay it every time, rework rounds included. Planned shape: Pyrrhula **orchestrates**
+  builds on builders the admin already governs — Portainer, GitHub Actions, a generic
+  webhook — rather than running tenant `RUN` steps on infrastructure it controls; verifies
+  the pushed digest itself; smoke-tests the image on the tenant's own engine; and promotes it
+  to a runtime pinned by digest. Images are toolchain-only (the build input is the
+  Dockerfile, never repository files), and a `.pyr` can carry an exact, digest-pinned image
+  so a sample runs with no builder at all.
 
-  Whether a registry is needed at all depends on the engine, and the answer is not
-  uniform. A socket engine needs **none**: the build lands in the same local image store
-  the engine pulls from, which is the common self-host case. k8s and cloud engines need
-  one their nodes can reach. `PYRRHULA_K8S_REGISTRY` is *not* it — that names a registry
-  the operator already runs, pushes with `--tls-verify=false`, and carries install images
-  that are identical for every tenant. A built delegation image carries **tenant source**,
-  so its registry has to be authenticated and namespaced per tenant; sharing the
-  install-time one would make repository contents readable across tenants. One property
-  helps: the container never pulls — the kubelet or the engine does — so the registry
-  belongs off the `pyrrhula-envs` network entirely, out of reach of the agent-chosen
-  commands running inside.
+  Two corrections to what this entry used to say. A socket engine **does** need a registry:
+  the engine is asked to pull every image before it provisions, so a locally built image is
+  not usable by name. And a built image no longer carries tenant source — toolchain-only is
+  the design — though images stay namespaced per tenant, because a Dockerfile can still bake
+  in something its author should not have.
 - **Agents free to act inside their container** — choosing their own commands (`rm`, a
   migration, a one-off script), which is ordinary work a human contributor does without
   asking. The container is already the boundary; what is missing is what a safe version

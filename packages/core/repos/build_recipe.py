@@ -79,10 +79,17 @@ def parse_manifest(text: str) -> dict[str, Any]:
     if "runtime" in raw:
         out["runtime"] = str(raw["runtime"]).strip()
     if "image" in raw:
-        image = str(raw["image"]).strip()
-        if " " in image:
-            raise BuildRecipeError("image must be a single reference")
-        out["image"] = image
+        # Through the same validator as a typed image. This file lives in the repository,
+        # so anyone who can commit to it chooses the image -- and, before this, it was only
+        # checked for spaces, while the repo's registry credential followed it anywhere.
+        from core.repos.image_ref import ImageRefError, normalise_image_ref
+
+        try:
+            image = normalise_image_ref(str(raw["image"]))
+        except ImageRefError as exc:
+            raise BuildRecipeError(f"image: {exc}") from exc
+        if image:
+            out["image"] = image
     for key in ("test_cmd", "build_cmd"):
         if key in raw:
             out[key] = _clean_cmd(raw[key], key)

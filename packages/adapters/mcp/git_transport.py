@@ -320,16 +320,17 @@ class GitMcpTransport:
             raw = await self._token_resolver(env_cfg.get("tenant_id"), str(ref))
             if not raw:
                 return None
-            import base64
             import json as _json
 
-            creds = _json.loads(raw)
-            payload = {
-                "username": str(creds.get("username") or ""),
-                "password": str(creds.get("password") or ""),
-                "serveraddress": str(env_cfg.get("image", "")).split("/")[0],
-            }
-            return base64.b64encode(_json.dumps(payload).encode()).decode()
+            from core.repos.registry_auth import x_registry_auth
+
+            # Sent only to the registry the credential was issued for -- see
+            # core/repos/registry_auth.py for why `image.split("/")[0]` was not enough.
+            return x_registry_auth(
+                _json.loads(raw),
+                str(env_cfg.get("image") or ""),
+                image_source=env_cfg.get("image_source"),
+            )
         except Exception:  # noqa: BLE001 -- unauthenticated pull + its error is clearer
             return None
 

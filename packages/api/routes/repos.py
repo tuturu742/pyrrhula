@@ -343,15 +343,30 @@ def _checked_image(value: str | None, *, field: str) -> str | None:
 
 
 async def _seal_registry_credentials(
-    tenant_id: uuid.UUID, username: str | None, token: str | None
+    tenant_id: uuid.UUID, username: str | None, token: str | None, image: str | None
 ) -> uuid.UUID | None:
     """Registry credentials (for private runtime images) sealed as one encrypted JSON
-    payload -- same store and write-only discipline as repo access tokens."""
+    payload -- same store and write-only discipline as repo access tokens.
+
+    The payload records **which registry** the credential is for. Without that, the
+    credential was sent to whatever registry the delegation's image named -- and the image
+    can come from ``pyrrhula-build.json`` inside the repository, so a commit could redirect
+    the repo's registry password to a host of its choosing.
+    """
     if not token:
         return None
+    if not image:
+        raise HTTPException(
+            status_code=422,
+            detail="registry credentials need the image they are for: set runtime_image too",
+        )
     import json as _json
 
-    payload = _json.dumps({"username": username or "", "password": token})
+    from core.repos.image_ref import registry_host
+
+    payload = _json.dumps(
+        {"username": username or "", "password": token, "serveraddress": registry_host(image)}
+    )
     return await store_provider_credential(tenant_id, payload, encryptor=get_encryptor())
 
 
@@ -368,7 +383,7 @@ async def create_repo_endpoint(
             ctx.tenant_id, body.access_token, encryptor=get_encryptor()
         )
     registry_credential_ref = await _seal_registry_credentials(
-        ctx.tenant_id, body.registry_username, body.registry_token
+        ctx.tenant_id, body.registry_username, body.registry_token, body.runtime_image
     )
 
     try:
@@ -514,8 +529,12 @@ async def update_repo_endpoint(
         credential_ref = await store_provider_credential(
             ctx.tenant_id, body.access_token, encryptor=get_encryptor()
         )
+    credential_image = body.runtime_image
+    if body.registry_token and not credential_image:
+        existing = await get_repo(ctx.tenant_id, repo_id)
+        credential_image = existing.runtime_image if existing is not None else None
     registry_credential_ref = await _seal_registry_credentials(
-        ctx.tenant_id, body.registry_username, body.registry_token
+        ctx.tenant_id, body.registry_username, body.registry_token, credential_image
     )
 
     from core.tenancy.scope import tenant_scope

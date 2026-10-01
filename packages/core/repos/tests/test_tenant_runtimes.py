@@ -44,7 +44,8 @@ def test_a_registration_needs_an_image() -> None:
 
 
 def test_an_image_is_one_reference_not_a_command() -> None:
-    with pytest.raises(InvalidRuntimeError, match="single reference"):
+    # Refused by the shared image validator, the same one every other image goes through.
+    with pytest.raises(InvalidRuntimeError, match="spaces"):
         validate_entry("rust", "docker.io/library/rust:1.97 sh -c evil", [])
 
 

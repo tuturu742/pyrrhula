@@ -128,8 +128,9 @@ applicable — use ECR or a pre-registered task definition with
 
 ## What an environment may consume
 
-Every engine declaration accepts three bounds, and every engine applies them whether or
-not you declare any:
+Every engine declaration accepts three bounds. The socket and Kubernetes engines apply
+them whether or not you declare any; the experimental ECS engine does not use them — it
+takes only its own `cpu`/`memory` strings and has no process limit:
 
 | field | default | what it bounds |
 |---|---|---|
@@ -235,3 +236,25 @@ cloud accounts, spot handling, cost attribution beyond the existing usage record
 ## See also
 
 * [`docs/delegation.md`](delegation.md) — the delegate / review / rework loop these engines run work for
+
+## Images: what is pulled, and when a credential goes with it
+
+Every engine **pulls the image before it runs anything** — the socket engine included. An
+image that exists only in the host's local store, built by hand and never pushed, is not
+usable by name: put it in a registry the engine can reach.
+
+- **A tag or digest is required.** An untagged reference made the engine pull every tag of
+  the repository; references are now refused without one where they are typed, and older
+  stored rows are pulled as `:latest`.
+- **A repo's registry credential goes only to the registry it was entered for.** It records
+  that registry when sealed, and is sent only when the image being pulled lives there. The
+  image can come from `pyrrhula-build.json` inside the repository, so a commit could
+  otherwise have pointed it at a host of its choosing and received the password. A
+  credential stored before this change has no registry recorded; it is offered only for an
+  image typed on the repo row, never one a repository file chose — re-enter it to bind it.
+- **A warm socket container is replaced when its image or limits change.** Environments are
+  found again by name, and the name never said which image they ran.
+- **Kubernetes environment pods** get no service-account token and no service links, the
+  `RuntimeDefault` seccomp profile, `NET_RAW` dropped, and an `activeDeadlineSeconds` so the
+  cluster stops a run even if the worker stops watching. Digest-pinned images use
+  `IfNotPresent`, since a digest cannot change underneath a cached copy.

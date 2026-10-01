@@ -14,12 +14,14 @@ stdout/stderr concatenated in arrival order.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 from typing import Any
 
 import httpx
 
+from adapters.exec_env.engine_images import ensure_image
 from adapters.exec_env.shell import shell_command
 from core.exec_limits import ExecLimits, limits_for
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
@@ -89,23 +91,19 @@ class DockerSocketExecEnvProvider:
             raise ExecEnvUnavailableError(f"engine socket unreachable: {exc}") from exc
 
     async def _ensure_image(self, image: str, registry_auth: str | None = None) -> None:
-        # X-Registry-Auth: the Docker-API convention for per-pull registry credentials
-        # (base64 JSON) -- podman's compat API honors it too.
-        headers = {"X-Registry-Auth": registry_auth} if registry_auth else None
-        resp = await self._request(
-            "POST", "/images/create", params={"fromImage": image}, headers=headers
-        )
-        if resp.status_code >= 400:
-            raise ExecEnvUnavailableError(f"could not pull {image!r}: {resp.text[:200]}")
-        # The pull endpoint streams progress JSON; an error mid-stream still returns 200
-        # with an {"error": ...} line -- surface it.
-        for line in resp.text.splitlines():
-            try:
-                obj = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(obj, dict) and obj.get("error"):
-                raise ExecEnvUnavailableError(f"pull {image!r} failed: {obj['error'][:200]}")
+        await ensure_image(self._request, image, registry_auth, unavailable=ExecEnvUnavailableError)
+
+    def _identity_labels(self, image: str) -> dict[str, str]:
+        """What a reusable container was created *for*.
+
+        Environments are found again by name, and the name says which session and repo
+        they belong to -- not which image or limits they run with. So a rebuilt image, or
+        limits an operator tightened, were silently ignored for the rest of the session:
+        the old container answered to the name. These labels let reuse notice.
+        """
+        limits = self._host_limits()
+        digest = hashlib.sha256(json.dumps(limits, sort_keys=True).encode()).hexdigest()[:12]
+        return {"pyrrhula.image": image, "pyrrhula.limits": digest}
 
     async def provision(
         self,
@@ -116,13 +114,20 @@ class DockerSocketExecEnvProvider:
         setup_cmds: list[str],
         registry_auth: str | None = None,
     ) -> str:
-        # Reuse a live environment of the same (deterministic) name.
+        # Reuse a live environment of the same (deterministic) name -- but only if it was
+        # made for this image and these limits. Otherwise it is replaced: the work script
+        # re-clones into a fresh /work, so nothing is lost but the warm-up.
+        wanted = self._identity_labels(image)
         inspect = await self._request("GET", f"/containers/{name}/json", timeout=30)
         if inspect.status_code == 200:
-            if inspect.json().get("State", {}).get("Running"):
+            details = inspect.json()
+            labels = (details.get("Config") or {}).get("Labels") or {}
+            if all(labels.get(k) == v for k, v in wanted.items()):
+                if details.get("State", {}).get("Running"):
+                    return name
+                await self._request("POST", f"/containers/{name}/start", timeout=60)
                 return name
-            await self._request("POST", f"/containers/{name}/start", timeout=60)
-            return name
+            await self.teardown(name)
 
         await self._ensure_image(image, registry_auth)
         create = await self._request(
@@ -139,7 +144,7 @@ class DockerSocketExecEnvProvider:
                     **({"NetworkMode": self._network} if self._network else {}),
                     **self._host_limits(),
                 },
-                "Labels": {"pyrrhula.exec_env": "1"},
+                "Labels": {"pyrrhula.exec_env": "1", **wanted},
             },
         )
         if create.status_code == 409:  # raced another provision of the same name

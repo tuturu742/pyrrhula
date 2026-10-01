@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from adapters.exec_env.engine_images import ensure_image
 from core.ports.preview import (
     PREVIEW_PORT,
     PreviewHandle,
@@ -57,19 +58,8 @@ class DockerSocketPreviewProvider:
             raise PreviewUnavailableError(f"engine socket unreachable: {exc}") from exc
 
     async def _ensure_image(self, image: str, registry_auth: str | None = None) -> None:
-        headers = {"X-Registry-Auth": registry_auth} if registry_auth else None
-        resp = await self._request(
-            "POST", "/images/create", params={"fromImage": image}, headers=headers, timeout=600
-        )
-        if resp.status_code >= 400:
-            raise PreviewUnavailableError(f"could not pull {image!r}: {resp.text[:200]}")
-        for line in resp.text.splitlines():
-            try:
-                obj = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(obj, dict) and obj.get("error"):
-                raise PreviewUnavailableError(f"pull {image!r} failed: {obj['error'][:200]}")
+        # The same pull as the execution-environment adapter, not a copy of it.
+        await ensure_image(self._request, image, registry_auth, unavailable=PreviewUnavailableError)
 
     async def start(
         self,
