@@ -29,7 +29,7 @@ from worker.delegation import (
 from worker.embedding import handle_embed_chunks, handle_reembed_stale
 from worker.export import handle_export_workspace
 from worker.history_summary import handle_summarise_history
-from worker.images import handle_verify_image_build
+from worker.images import handle_advance_image_build, handle_verify_image_build
 from worker.images import sweep as sweep_image_builds
 from worker.ingestion import handle_knowledge_ingest
 from worker.notifications import handle_notify_await_opened, handle_send_digest
@@ -72,6 +72,7 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
     "stop_preview": handle_stop_preview,
     "advance_session": handle_advance_session,
     "verify_image_build": handle_verify_image_build,
+    "advance_image_build": handle_advance_image_build,
 }
 
 # Previews are the only thing here with a wall-clock deadline, and this deployment has no
@@ -79,6 +80,8 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
 # idle branch doubles as the tick. Kubernetes also enforces its own deadline
 # (activeDeadlineSeconds), which covers the case where the worker itself is down.
 _REAP_INTERVAL = 60.0
+# A build at an external builder is followed by polling; someone is usually watching it.
+_IMAGE_SWEEP_INTERVAL = 20.0
 # Far below the queue's claim lease, so a working worker never looks silent.
 _HEARTBEAT_SECONDS = 30.0
 
@@ -146,6 +149,7 @@ async def main() -> None:
 
     queue: JobQueue = PostgresJobQueue()
     next_reap = asyncio.get_running_loop().time()
+    next_image_sweep = next_reap
 
     while not stop.is_set():
         job = await queue.claim_one(kinds=list(_HANDLERS))
@@ -168,8 +172,11 @@ async def main() -> None:
                         log.info("worker.work_items_followed_prs", count=followed)
                 except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
                     log.warning("worker.pr_sync_failed", error=str(exc))
-                # Images waiting to be checked with no job yet (a bundle import has no
-                # queue to hand), and checks whose worker died.
+            if now >= next_image_sweep:
+                next_image_sweep = now + _IMAGE_SWEEP_INTERVAL
+                # Builds waiting on an external builder (submit, poll, cancel), images
+                # waiting to be checked with no job yet (a bundle import has no queue to
+                # hand), and checks whose worker died.
                 try:
                     started, failed = await sweep_image_builds(queue)
                     if started or failed:

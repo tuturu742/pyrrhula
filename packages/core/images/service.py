@@ -89,6 +89,7 @@ def build_view(row: ImageBuildRow) -> dict[str, Any]:
         "harness_claim": dict(row.harness_claim or {}),
         "baked_harness": dict(row.baked_harness or {}),
         "smoke": row.smoke,
+        "log_tail": row.log_tail,
         "error": row.error,
         "cancel_requested": row.cancel_requested,
         "created_at": row.created_at,
@@ -149,6 +150,39 @@ async def _registry_for(ref: str) -> Any | None:
         if registry.enabled and host in registry.namespace().hosts():
             return registry
     return None
+
+
+async def _own_namespace_auth(
+    tenant_id: uuid.UUID, ref: str, *, encryptor: Encryptor
+) -> RegistryAuth | None:
+    """The declared registry's read credential -- but only for a reference inside the
+    caller's *own* namespace there.
+
+    The credential is the operator's, and it can usually read everything in that
+    registry. Lending it to any reference on the host would let one organization read,
+    through the platform, whatever else the operator keeps there: a path outside every
+    managed root passes the namespace check when no allowlist is set. Inside its own
+    namespace an organization can only reach its own images.
+    """
+    from core.images.namespace import own_roots
+
+    registry = await _registry_for(ref)
+    if registry is None or not registry.has_credential:
+        return None
+    full = canonical(ref)
+    if not any(full.startswith(root) for root in own_roots(registry.namespace(), tenant_id)):
+        return None
+    from core.images.registries import registry_read_credential
+
+    cred = await registry_read_credential(registry.key, encryptor=encryptor)
+    return RegistryAuth(cred["username"], cred["password"]) if cred else None
+
+
+async def registry_pull_auth(tenant_id: uuid.UUID, ref: str, *, encryptor: Encryptor) -> str | None:
+    """``X-Registry-Auth`` for an engine pulling one of this organization's own images
+    from a declared registry, or None. Same rule as verification: own namespace only."""
+    auth = await _own_namespace_auth(tenant_id, ref, encryptor=encryptor)
+    return _x_registry_auth(auth, ref)
 
 
 async def _audit(
@@ -429,13 +463,7 @@ async def run_verification(
         return await _fail(tenant_id, build_id, str(exc))
 
     registry = await _registry_for(target_ref)
-    auth: RegistryAuth | None = None
-    if registry is not None and registry.has_credential:
-        from core.images.registries import registry_read_credential
-
-        cred = await registry_read_credential(registry.key, encryptor=encryptor)
-        if cred:
-            auth = RegistryAuth(cred["username"], cred["password"])
+    auth = await _own_namespace_auth(tenant_id, target_ref, encryptor=encryptor)
     try:
         digest = await registry_client.resolve_digest(
             target_ref, insecure=bool(registry and registry.insecure), auth=auth
@@ -563,8 +591,9 @@ async def promote_build(
 async def cancel_build(
     tenant_id: uuid.UUID, name: str, *, actor: uuid.UUID | None
 ) -> dict[str, Any] | None:
-    """Stop the active build of ``name``. A check in progress finishes its current step and
-    then stops; one that has not started stops now."""
+    """Stop the active build of ``name``. One that has not reached anything external stops
+    now; one at a builder is cancelled there by the sweep (``core.images.builds``); a
+    check in progress finishes its current step and then stops."""
     async with tenant_scope(tenant_id) as session:
         definition = await _definition(session, tenant_id, name)
         row = await session.scalar(
@@ -578,7 +607,10 @@ async def cancel_build(
         if row is None:
             return None
         row.cancel_requested = True
-        if row.job_id is None:
+        nothing_started = (row.status == "queued" and not row.external_ref) or (
+            row.status == "verifying" and row.job_id is None
+        )
+        if nothing_started:
             row.status = "cancelled"
             row.finished_at = datetime.now(UTC)
         build_id = row.id
@@ -676,3 +708,11 @@ async def sweep_image_builds(queue: JobQueue) -> tuple[int, int]:
             await _fail(tenant_id, build_id, "the check stopped responding; check the image again")
             failed += 1
     return enqueued, failed
+
+
+async def _requeue_for_verification(
+    queue: JobQueue, tenant_id: uuid.UUID, build_id: uuid.UUID
+) -> None:
+    """A builder finished: the same check an import gets, from the top."""
+    await _set(tenant_id, build_id, status="verifying", job_id=None)
+    await _enqueue(queue, tenant_id, build_id)

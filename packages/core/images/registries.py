@@ -224,11 +224,18 @@ async def update_registry(key: str, fields: dict[str, Any]) -> Registry:
 
 
 async def delete_registry(key: str) -> None:
-    async with unscoped_session() as session:
-        row = await session.get(ImageRegistryRow, key)
-        if row is None:
-            raise RegistryNotFoundError(key)
-        await session.delete(row)
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        async with unscoped_session() as session:
+            row = await session.get(ImageRegistryRow, key)
+            if row is None:
+                raise RegistryNotFoundError(key)
+            await session.delete(row)
+    except IntegrityError as exc:
+        raise InvalidRegistryError(
+            f"a builder still pushes to {key!r}; remove or repoint it first"
+        ) from exc
     invalidate_cache()
 
 

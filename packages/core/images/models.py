@@ -1,8 +1,8 @@
 """ORM rows for the image tables.
 
-``image_registry`` is deployment-level: no tenant, no RLS, written only through the admin
-API. ``image_definition`` and ``image_build`` are tenant-scoped behind FORCE RLS (see the
-migrations' docstrings)."""
+``image_registry`` and ``image_builder`` are deployment-level: no tenant, no RLS, written
+only through the admin API. ``image_definition`` and ``image_build`` are tenant-scoped
+behind FORCE RLS (see the migrations' docstrings)."""
 
 from __future__ import annotations
 
@@ -119,3 +119,29 @@ class ImageBuildRow(Base):
     )
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ImageBuilderRow(Base):
+    __tablename__ = "image_builder"
+
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    # Validated per kind in core.images.builders; data only, never executed.
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # The builder's API credential (and, for a webhook, its signing secret), sealed on
+    # ADMIN_TENANT_ID. Never returned by the API.
+    credential_ref: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    registry_key: Mapped[str] = mapped_column(
+        String(40), ForeignKey("image_registry.key", ondelete="RESTRICT"), nullable=False
+    )
+    # None: every organization may build here. A list: only these tenant ids.
+    allowed_tenants: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    isolation_ack: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

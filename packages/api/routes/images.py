@@ -60,11 +60,14 @@ class BuildOut(BaseModel):
     harness_claim: dict[str, Any]
     baked_harness: dict[str, Any]
     smoke: str
+    log_tail: str = ""
     error: str
     cancel_requested: bool
     created_at: datetime
     finished_at: datetime | None
     current: bool = False
+    # A build request whose recipe was already built here: the stored digest is reused.
+    reused: bool = False
 
 
 class ImageOut(BaseModel):
@@ -108,6 +111,101 @@ async def import_image_endpoint(
             dockerfile=body.dockerfile,
             harness_claim=body.harness_claim.model_dump() if body.harness_claim else None,
             requested_by=ctx.principal_id,
+            queue=get_job_queue(),
+        )
+    except (ImageError, ImageNotFoundError) as exc:
+        raise _http(exc) from exc
+    return BuildOut.model_validate(build)
+
+
+class BuilderChoice(BaseModel):
+    key: str
+    label: str
+    kind: str
+    registry_key: str
+
+
+class DockerfileBody(BaseModel):
+    dockerfile: str
+
+
+class DockerfileCheck(BaseModel):
+    errors: list[str]
+    warnings: list[str]
+
+
+class SaveDefinitionRequest(BaseModel):
+    dockerfile: str
+    harness_key: str = ""
+
+
+class BuildRequest(BaseModel):
+    builder_key: str
+    # Same recipe, new bytes: base images move and RUN steps are not reproducible.
+    rebuild: bool = False
+
+
+@router.get("/builders")
+async def list_available_builders_endpoint(
+    ctx: RequestContext = Depends(get_request_context),
+) -> list[BuilderChoice]:
+    """The builders the operator made available to this organization. Empty means
+    Build is unavailable here -- imports still work."""
+    from core.images.builders import builders_for_tenant
+
+    await require_tenant_permission(ctx, "repo:manage")
+    return [
+        BuilderChoice(key=b.key, label=b.label or b.key, kind=b.kind, registry_key=b.registry_key)
+        for b in await builders_for_tenant(ctx.tenant_id)
+    ]
+
+
+@router.post("/validate")
+async def validate_dockerfile_endpoint(
+    body: DockerfileBody, ctx: RequestContext = Depends(get_request_context)
+) -> DockerfileCheck:
+    from core.images.builds import check_dockerfile
+
+    await require_tenant_permission(ctx, "repo:manage")
+    return DockerfileCheck(**await check_dockerfile(ctx.tenant_id, body.dockerfile))
+
+
+@router.put("/{name}")
+async def save_definition_endpoint(
+    name: str, body: SaveDefinitionRequest, ctx: RequestContext = Depends(get_request_context)
+) -> DockerfileCheck:
+    """Save an image this organization builds. Builds nothing; answers with what the
+    validator thinks of it, so the editor can show it next to the save."""
+    from core.images.builds import check_dockerfile, save_definition
+
+    await require_tenant_permission(ctx, "manage_tenant")
+    try:
+        await save_definition(
+            ctx.tenant_id,
+            name,
+            dockerfile=body.dockerfile,
+            harness_key=body.harness_key,
+            actor=ctx.principal_id,
+        )
+    except (ImageError, ImageNotFoundError) as exc:
+        raise _http(exc) from exc
+    return DockerfileCheck(**await check_dockerfile(ctx.tenant_id, body.dockerfile))
+
+
+@router.post("/{name}/build", status_code=202)
+async def build_endpoint(
+    name: str, body: BuildRequest, ctx: RequestContext = Depends(get_request_context)
+) -> BuildOut:
+    from core.images.builds import request_build
+
+    await require_tenant_permission(ctx, "manage_tenant")
+    try:
+        build = await request_build(
+            ctx.tenant_id,
+            name,
+            builder_key=body.builder_key,
+            requested_by=ctx.principal_id,
+            rebuild=body.rebuild,
             queue=get_job_queue(),
         )
     except (ImageError, ImageNotFoundError) as exc:

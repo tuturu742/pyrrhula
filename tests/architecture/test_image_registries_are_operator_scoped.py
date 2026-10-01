@@ -23,6 +23,14 @@ _MUTATORS = {
     "clear_registry_credential",
     "registry_read_credential",
     "set_runtime_image_allowlist",
+    # Builders: which external systems run tenants' RUN steps, with whose credential.
+    "create_builder",
+    "update_builder",
+    "delete_builder",
+    "set_builder_credential",
+    "clear_builder_credential",
+    "builder_secrets",
+    "set_image_build_limits",
 }
 
 _MODEL_FACING = [
@@ -35,7 +43,7 @@ _MODEL_FACING = [
     PACKAGES / "core" / "admin" / "assistant.py",
 ]
 
-_PACK_KEYS = {"image_registries", "runtime_image_allowlist"}
+_PACK_KEYS = {"image_registries", "runtime_image_allowlist", "image_builders", "dockerfile"}
 
 
 def _names_used(path: pathlib.Path) -> set[str]:
@@ -67,6 +75,8 @@ def test_only_the_admin_routes_call_the_mutators_outside_core_images() -> None:
     the platform-admin check."""
     allowed = {
         PACKAGES / "api" / "routes" / "admin_images.py",
+        # Reads a builder's credential at the moment of use and hands it to the adapter.
+        PACKAGES / "api" / "image_builder_factory.py",
     }
     offenders: dict[str, list[str]] = {}
     for path in PACKAGES.rglob("*.py"):
@@ -86,9 +96,15 @@ def test_only_core_images_writes_the_registry_table() -> None:
         if "/tests/" in str(path) or path.is_relative_to(PACKAGES / "core" / "images"):
             continue
         text = path.read_text()
-        if "ImageRegistryRow(" in text or "INTO image_registry" in text:
+        tokens = (
+            "ImageRegistryRow(",
+            "INTO image_registry",
+            "ImageBuilderRow(",
+            "INTO image_builder",
+        )
+        if any(token in text for token in tokens):
             writers.append(str(path.relative_to(ROOT)))
-    assert not writers, f"modules writing image_registry directly: {writers}"
+    assert not writers, f"modules writing image_registry or image_builder directly: {writers}"
 
 
 def test_no_workflow_pack_declares_registries_or_an_allowlist() -> None:
@@ -118,6 +134,9 @@ _IMAGE_MUTATORS = {
     "recheck_image",
     "cancel_build",
     "run_verification",
+    "save_definition",
+    "request_build",
+    "advance_build",
 }
 
 

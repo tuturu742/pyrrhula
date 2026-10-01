@@ -5,6 +5,7 @@ import { apiClient } from "@/lib/api-client/client";
 import type { components } from "@/lib/api-client/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DockerfileEditor, STARTER, type EditorState } from "./ImageEditor";
 
 type Image = components["schemas"]["ImageOut"];
 type Build = components["schemas"]["BuildOut"];
@@ -44,6 +45,7 @@ export function ImagesCard() {
   const [image, setImage] = useState("");
   const [harness, setHarness] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<EditorState | null>(null);
 
   const images = useQuery({
     queryKey: ["images"],
@@ -114,7 +116,18 @@ export function ImagesCard() {
             it appears as a build runtime, pinned so it can never change underneath you.
           </p>
         </div>
-        {!adding && (
+        {!adding && !editing && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setEditing({ name: "", dockerfile: STARTER, harness: "", isNew: true })
+            }
+          >
+            Write a Dockerfile
+          </Button>
+        )}
+        {!adding && !editing && (
           <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
             Add a published image
           </Button>
@@ -173,6 +186,15 @@ export function ImagesCard() {
         </div>
       )}
 
+      {editing && (
+        <DockerfileEditor
+          key={editing.name || "new"}
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onChanged={invalidate}
+        />
+      )}
+
       {images.isLoading ? (
         <p className="text-xs text-muted-foreground">Loading…</p>
       ) : list.length === 0 ? (
@@ -190,6 +212,14 @@ export function ImagesCard() {
               onAction={(kind) => act.mutate({ kind, imageName: i.name })}
               busy={act.isPending}
               onPromoted={invalidate}
+              onEdit={() =>
+                setEditing({
+                  name: i.name,
+                  dockerfile: i.dockerfile,
+                  harness: i.harness_key,
+                  isNew: false,
+                })
+              }
             />
           ))}
         </ul>
@@ -221,6 +251,7 @@ function ImageRow({
   onAction,
   busy,
   onPromoted,
+  onEdit,
 }: {
   image: Image;
   open: boolean;
@@ -228,6 +259,7 @@ function ImageRow({
   onAction: (kind: "recheck" | "cancel" | "remove") => void;
   busy: boolean;
   onPromoted: () => void;
+  onEdit: () => void;
 }) {
   const latest = image.latest;
   const current = image.current;
@@ -254,6 +286,21 @@ function ImageRow({
           <Button size="sm" variant="ghost" onClick={onToggle}>
             {open ? "Hide" : "History"}
           </Button>
+          {image.origin === "built" && !active && (
+            <Button size="sm" variant="ghost" onClick={onEdit}>
+              Edit / build
+            </Button>
+          )}
+          {latest?.external_url && (
+            <a
+              className="self-center px-2 text-xs underline"
+              href={latest.external_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              builder log
+            </a>
+          )}
           {active ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => onAction("cancel")}>
               Cancel
@@ -349,6 +396,14 @@ function History({
             </pre>
           )}
           {b.error && <div className="text-destructive">{b.error}</div>}
+          {b.log_tail && (
+            <details>
+              <summary className="cursor-pointer text-muted-foreground">Builder output</summary>
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px]">
+                {b.log_tail}
+              </pre>
+            </details>
+          )}
         </div>
       ))}
       {dockerfile && (

@@ -56,3 +56,57 @@ async def set_runtime_image_allowlist(entries: list[str]) -> list[str]:
         )
     invalidate_cache()
     return cleaned
+
+
+# Ceilings on how much of the operator's build infrastructure one organization may use.
+# Builds run on machines the operator pays for; a tenant that could queue without limit
+# could starve every other one.
+BUILD_LIMITS_KEY = "image_builds"
+DEFAULT_BUILD_LIMITS: dict[str, int] = {
+    "max_concurrent_per_tenant": 1,
+    "max_per_day_per_tenant": 10,
+    "timeout_seconds": 3600,
+}
+_LIMIT_BOUNDS = {
+    "max_concurrent_per_tenant": (1, 20),
+    "max_per_day_per_tenant": (1, 500),
+    "timeout_seconds": (300, 6 * 3600),
+}
+
+
+async def get_image_build_limits() -> dict[str, int]:
+    try:
+        async with unscoped_session() as session:
+            value = await session.scalar(
+                text("SELECT value FROM deployment_setting WHERE key = :k").bindparams(
+                    k=BUILD_LIMITS_KEY
+                )
+            )
+    except ProgrammingError:
+        value = None
+    out = dict(DEFAULT_BUILD_LIMITS)
+    if isinstance(value, dict):
+        for name, (low, high) in _LIMIT_BOUNDS.items():
+            if isinstance(value.get(name), int):
+                out[name] = max(low, min(high, int(value[name])))
+    return out
+
+
+async def set_image_build_limits(values: dict[str, int]) -> dict[str, int]:
+    unknown = set(values) - set(_LIMIT_BOUNDS)
+    if unknown:
+        raise ValueError(f"unknown limit(s): {sorted(unknown)}")
+    merged = await get_image_build_limits()
+    for name, raw in values.items():
+        low, high = _LIMIT_BOUNDS[name]
+        if not isinstance(raw, int) or not low <= raw <= high:
+            raise ValueError(f"{name}: an integer from {low} to {high}")
+        merged[name] = raw
+    async with unscoped_session() as session:
+        await session.execute(
+            text(
+                "INSERT INTO deployment_setting (key, value) VALUES (:k, CAST(:v AS jsonb)) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()"
+            ).bindparams(k=BUILD_LIMITS_KEY, v=json.dumps(merged))
+        )
+    return merged

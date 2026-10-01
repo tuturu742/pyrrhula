@@ -148,6 +148,8 @@ async def delete_registry_endpoint(key: str) -> None:
         await delete_registry(key)
     except RegistryNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f"no registry {key!r}") from exc
+    except InvalidRegistryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     await _audit_admin(ADMIN_TENANT_ID, "image.registry.delete", "deployment", {"key": key})
 
 
@@ -219,3 +221,199 @@ async def set_allowlist_endpoint(body: AllowlistBody) -> AllowlistBody:
         {"prefixes": stored},
     )
     return AllowlistBody(prefixes=stored)
+
+
+# ── builders ────────────────────────────────────────────────────────────────────────
+
+
+class BuilderOut(BaseModel):
+    key: str
+    kind: str
+    label: str
+    config: dict[str, Any]
+    registry_key: str
+    # None: every organization. A list: only these.
+    allowed_tenants: list[str] | None
+    isolation_ack: bool
+    enabled: bool
+    has_credential: bool
+
+
+def _builder_out(builder: Any) -> BuilderOut:
+    return BuilderOut(
+        key=builder.key,
+        kind=builder.kind,
+        label=builder.label,
+        config=dict(builder.config),
+        registry_key=builder.registry_key,
+        allowed_tenants=(
+            list(builder.allowed_tenants) if builder.allowed_tenants is not None else None
+        ),
+        isolation_ack=builder.isolation_ack,
+        enabled=builder.enabled,
+        has_credential=builder.has_credential,
+    )
+
+
+class BuilderFields(BaseModel):
+    label: str | None = None
+    config: dict[str, Any] | None = None
+    registry_key: str | None = None
+    allowed_tenants: list[str] | None = None
+    isolation_ack: bool | None = None
+    enabled: bool | None = None
+
+    def given(self) -> dict[str, Any]:
+        return {k: v for k, v in self.model_dump().items() if k in self.model_fields_set}
+
+
+class CreateBuilderRequest(BuilderFields):
+    key: str
+    kind: str
+
+
+class BuilderCredentialRequest(BaseModel):
+    # webhook: signing_secret (+ optional token). Write-only; never returned.
+    signing_secret: str = ""
+    token: str = ""
+
+
+class BuilderProbeOut(BaseModel):
+    ok: bool
+    detail: str
+
+
+class BuildLimits(BaseModel):
+    max_concurrent_per_tenant: int
+    max_per_day_per_tenant: int
+    timeout_seconds: int
+
+
+def _builder_http(exc: Exception, key: str) -> HTTPException:
+    from core.images.builders import BuilderNotFoundError
+
+    if isinstance(exc, BuilderNotFoundError):
+        return HTTPException(status_code=404, detail=f"no builder {key!r}")
+    return HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/image-builders")
+async def list_builders_endpoint() -> list[BuilderOut]:
+    from core.images.builders import list_builders
+
+    return [_builder_out(b) for b in await list_builders()]
+
+
+@router.post("/image-builders", status_code=201)
+async def create_builder_endpoint(body: CreateBuilderRequest) -> BuilderOut:
+    from core.images.builders import InvalidBuilderError, create_builder
+
+    fields = body.given()
+    fields.pop("key", None)
+    fields.pop("kind", None)
+    try:
+        builder = await create_builder(body.key, body.kind, fields)
+    except InvalidBuilderError as exc:
+        raise _builder_http(exc, body.key) from exc
+    await _audit_admin(
+        ADMIN_TENANT_ID,
+        "image.builder.create",
+        "deployment",
+        {"key": builder.key, "kind": builder.kind},
+    )
+    return _builder_out(builder)
+
+
+@router.patch("/image-builders/{key}")
+async def update_builder_endpoint(key: str, body: BuilderFields) -> BuilderOut:
+    from core.images.builders import BuilderNotFoundError, InvalidBuilderError, update_builder
+
+    try:
+        builder = await update_builder(key, body.given())
+    except (InvalidBuilderError, BuilderNotFoundError) as exc:
+        raise _builder_http(exc, key) from exc
+    await _audit_admin(
+        ADMIN_TENANT_ID,
+        "image.builder.update",
+        "deployment",
+        {"key": key, "fields": sorted(body.given())},
+    )
+    return _builder_out(builder)
+
+
+@router.delete("/image-builders/{key}", status_code=204)
+async def delete_builder_endpoint(key: str) -> None:
+    from core.images.builders import BuilderNotFoundError, delete_builder
+
+    try:
+        await delete_builder(key)
+    except BuilderNotFoundError as exc:
+        raise _builder_http(exc, key) from exc
+    await _audit_admin(ADMIN_TENANT_ID, "image.builder.delete", "deployment", {"key": key})
+
+
+@router.put("/image-builders/{key}/credential")
+async def set_builder_credential_endpoint(key: str, body: BuilderCredentialRequest) -> BuilderOut:
+    from core.images.builders import (
+        BuilderNotFoundError,
+        InvalidBuilderError,
+        set_builder_credential,
+    )
+
+    try:
+        builder = await set_builder_credential(key, body.model_dump(), encryptor=get_encryptor())
+    except (InvalidBuilderError, BuilderNotFoundError) as exc:
+        raise _builder_http(exc, key) from exc
+    # The audit row says that it changed, never what to.
+    await _audit_admin(ADMIN_TENANT_ID, "image.builder.credential_set", "deployment", {"key": key})
+    return _builder_out(builder)
+
+
+@router.delete("/image-builders/{key}/credential")
+async def clear_builder_credential_endpoint(key: str) -> BuilderOut:
+    from core.images.builders import BuilderNotFoundError, clear_builder_credential
+
+    try:
+        builder = await clear_builder_credential(key)
+    except BuilderNotFoundError as exc:
+        raise _builder_http(exc, key) from exc
+    await _audit_admin(
+        ADMIN_TENANT_ID, "image.builder.credential_clear", "deployment", {"key": key}
+    )
+    return _builder_out(builder)
+
+
+@router.post("/image-builders/{key}/test")
+async def test_builder_endpoint(key: str) -> BuilderProbeOut:
+    """Reachable, and does it accept this deployment's credential. Builds nothing."""
+    from api.image_builder_factory import load_image_builder
+    from core.images.builders import BuilderNotFoundError
+    from core.ports.image_builder import BuilderError
+
+    try:
+        builder = await load_image_builder(key, encryptor=get_encryptor())
+    except BuilderNotFoundError as exc:
+        raise _builder_http(exc, key) from exc
+    except BuilderError as exc:
+        return BuilderProbeOut(ok=False, detail=str(exc))
+    probe = await builder.probe()
+    return BuilderProbeOut(ok=probe.ok, detail=probe.detail)
+
+
+@router.get("/image-build-limits")
+async def get_build_limits_endpoint() -> BuildLimits:
+    from core.images.policy import get_image_build_limits
+
+    return BuildLimits(**await get_image_build_limits())
+
+
+@router.put("/image-build-limits")
+async def set_build_limits_endpoint(body: BuildLimits) -> BuildLimits:
+    from core.images.policy import set_image_build_limits
+
+    try:
+        stored = await set_image_build_limits(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await _audit_admin(ADMIN_TENANT_ID, "image.build_limits.set", "deployment", dict(stored))
+    return BuildLimits(**stored)
