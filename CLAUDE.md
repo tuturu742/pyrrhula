@@ -28,7 +28,7 @@ is enforced by the system, not requested of the model.**
    (INV-4): required, defaultless, pushed down as a SQL predicate — post-filtering is forbidden.
 4. **Tenancy.** Every tenant-scoped table gets `tenant_id` + RLS with `FORCE`. Database
    sessions are opened **only** through `core.tenancy.scope.tenant_scope()` (or, for tables
-   that aren't tenant-isolated at all — `tenant`, `role_permission`, `plugin_repository` (deployment-level, admin-writable only), and `job` (a worker must
+   that aren't tenant-isolated at all — `tenant`, `role_permission`, `plugin_repository` and `image_registry` (deployment-level, admin-writable only), and `job` (a worker must
    claim work across every tenant) — `unscoped_session()`), which sets `app.tenant_id` with
    `set_config(..., is_local => true)` (transaction-local —
    session-level GUCs leak through connection poolers). RLS policies compare against

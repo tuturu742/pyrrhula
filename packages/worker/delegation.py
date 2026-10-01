@@ -169,6 +169,19 @@ async def _environment_config(
             sources=recipe.sources,
         )
 
+    # At use time, whatever layer chose it. The repo row and runtime registrations are
+    # checked when they are written, but the manifest is a file in the repository and the
+    # registries and allowlist can change after anything was written.
+    from core.images.namespace import check_image_ref_for_tenant
+    from core.repos.image_ref import ImageRefError
+
+    try:
+        await check_image_ref_for_tenant(tenant_id, recipe.image)
+    except ImageRefError as exc:
+        raise BuildRecipeError(
+            f"image {recipe.image!r} (from {recipe.sources.get('image')}): {exc}"
+        ) from exc
+
     from core.exec_engines import engine_by_key, get_tenant_engine_key
 
     engine_key = await get_tenant_engine_key(tenant_id)

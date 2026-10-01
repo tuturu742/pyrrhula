@@ -214,6 +214,16 @@ async def get_harness(tenant_id: uuid.UUID, key: str | None) -> dict[str, Any] |
 async def register_harness(tenant_id: uuid.UUID, key: str, spec: dict[str, Any]) -> dict[str, Any]:
     """Add or replace one of this tenant's harnesses."""
     entry = validate_spec(key, spec)
+    if entry.get("image"):
+        # A harness image replaces the runtime image, so it answers to the same rules.
+        from core.images.namespace import check_image_ref_for_tenant
+        from core.repos.image_ref import ImageRefError, normalise_image_ref
+
+        try:
+            entry["image"] = normalise_image_ref(str(entry["image"])) or ""
+            await check_image_ref_for_tenant(tenant_id, str(entry["image"]))
+        except ImageRefError as exc:
+            raise InvalidHarnessError(f"harness {key!r}: image: {exc}") from exc
     async with tenant_scope(tenant_id) as session:
         tenant = await session.scalar(select(Tenant).where(Tenant.id == tenant_id))
         if tenant is None:

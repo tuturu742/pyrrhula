@@ -137,6 +137,15 @@ async def register_runtime(
 ) -> dict[str, object]:
     """Add or replace one of this tenant's runtimes."""
     entry = validate_entry(key, image, list(setup or []))
+    # Here in core, not only at the route: any path that registers a runtime must be held
+    # to the same rule -- not another organization's image, and within the allowlist.
+    from core.images.namespace import check_image_ref_for_tenant
+    from core.repos.image_ref import ImageRefError
+
+    try:
+        await check_image_ref_for_tenant(tenant_id, str(entry["image"]))
+    except ImageRefError as exc:
+        raise InvalidRuntimeError(f"runtime {key!r}: {exc}") from exc
     async with tenant_scope(tenant_id) as session:
         tenant = await session.scalar(select(Tenant).where(Tenant.id == tenant_id))
         if tenant is None:

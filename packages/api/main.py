@@ -17,6 +17,7 @@ from api.overseer import routes as overseer_routes
 from api.redis_client import close_redis
 from api.routes import (
     admin,
+    admin_images,
     agents,
     assist,
     auth,
@@ -180,6 +181,7 @@ app.include_router(overseer_routes.router)
 # Platform admin, gated by require_platform_admin (ops token OR admin-tenant JWT) --
 # not by get_request_context alone like the tenant routes above.
 app.include_router(admin.router)
+app.include_router(admin_images.router)
 
 
 # Read once at import: the answer cannot change while the process runs, and a probe

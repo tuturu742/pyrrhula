@@ -31,6 +31,7 @@ import { DisclosureTimelinePage } from "@/features/director-view/DisclosureTimel
 import { AgentBeliefsPage } from "@/features/director-view/AgentBeliefsPage";
 import { AdminTenantsPage } from "@/features/admin/AdminTenantsPage";
 import { AdminPluginReposPage } from "@/features/admin/AdminPluginReposPage";
+import { AdminRegistriesPage } from "@/features/admin/AdminRegistriesPage";
 import { AdminModelsPage } from "@/features/admin/AdminModelsPage";
 import { AdminAssistantPage } from "@/features/admin/AdminAssistantPage";
 import { useMe } from "@/features/admin/useMe";
@@ -118,6 +119,7 @@ export function App() {
                 <Route index element={<AdminIndexRoute />} />
                 <Route path="tenants" element={<AdminTenantsPage />} />
                 <Route path="plugins" element={<AdminPluginReposPage />} />
+                <Route path="registries" element={<AdminRegistriesPage />} />
                 <Route path="models" element={<AdminModelsPage />} />
                 {/* The page was "Retrieval models" before it also held the assistant's
                     connection; keep old links working rather than 404 a bookmark. */}

@@ -329,15 +329,20 @@ class CreateRepoRequest(BaseModel):
     preview_env: dict[str, str] = {}
 
 
-def _checked_image(value: str | None, *, field: str) -> str | None:
+async def _checked_image(value: str | None, *, field: str, tenant_id: uuid.UUID) -> str | None:
     """Refuse an unusable image reference here, rather than at pull time inside a job.
 
     A registry web page pasted from the address bar is the common case and looks
-    plausible in the form; the engine's failure for it surfaces far from this field."""
+    plausible in the form; the engine's failure for it surfaces far from this field. The
+    reference must also be one this organization may use at all: not another tenant's
+    image, and from a source the operator's allowlist admits."""
+    from core.images.namespace import check_image_ref_for_tenant
     from core.repos.image_ref import ImageRefError, normalise_image_ref
 
     try:
-        return normalise_image_ref(value)
+        ref = normalise_image_ref(value)
+        await check_image_ref_for_tenant(tenant_id, ref)
+        return ref
     except ImageRefError as exc:
         raise HTTPException(status_code=422, detail=f"{field}: {exc}") from exc
 
@@ -396,13 +401,17 @@ async def create_repo_endpoint(
             provider=body.provider,
             credential_ref=credential_ref,
             runtime=body.runtime,
-            runtime_image=_checked_image(body.runtime_image, field="runtime_image"),
+            runtime_image=await _checked_image(
+                body.runtime_image, field="runtime_image", tenant_id=ctx.tenant_id
+            ),
             registry_credential_ref=registry_credential_ref,
             setup_cmds=body.setup_cmds,
             test_cmd=body.test_cmd,
             build_cmd=body.build_cmd,
             artifact_name=body.artifact_name,
-            preview_image=_checked_image(body.preview_image, field="preview_image"),
+            preview_image=await _checked_image(
+                body.preview_image, field="preview_image", tenant_id=ctx.tenant_id
+            ),
             preview_cmd=body.preview_cmd,
             preview_port=body.preview_port,
             preview_env=body.preview_env,
@@ -537,6 +546,17 @@ async def update_repo_endpoint(
         ctx.tenant_id, body.registry_username, body.registry_token, credential_image
     )
 
+    checked_runtime_image = (
+        await _checked_image(body.runtime_image, field="runtime_image", tenant_id=ctx.tenant_id)
+        if body.runtime_image is not None
+        else None
+    )
+    checked_preview_image = (
+        await _checked_image(body.preview_image, field="preview_image", tenant_id=ctx.tenant_id)
+        if body.preview_image is not None and not body.clear_preview
+        else None
+    )
+
     from core.tenancy.scope import tenant_scope
 
     async with tenant_scope(ctx.tenant_id) as session:
@@ -560,7 +580,7 @@ async def update_repo_endpoint(
         if body.runtime is not None:
             live.runtime = body.runtime
         if body.runtime_image is not None:
-            live.runtime_image = _checked_image(body.runtime_image, field="runtime_image")
+            live.runtime_image = checked_runtime_image
         if body.setup_cmds is not None:
             live.setup_cmds = list(body.setup_cmds)
         if body.clear_test_cmd:
@@ -582,7 +602,7 @@ async def update_repo_endpoint(
             live.preview_env = {}
         else:
             if body.preview_image is not None:
-                live.preview_image = _checked_image(body.preview_image, field="preview_image")
+                live.preview_image = checked_preview_image
             if body.preview_cmd is not None:
                 live.preview_cmd = body.preview_cmd.strip() or None
             if body.preview_port is not None:

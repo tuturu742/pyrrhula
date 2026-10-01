@@ -5,6 +5,7 @@ const TABS: Array<{ to: string; label: string }> = [
   { to: "/admin/models", label: "Models" },
   { to: "/admin/assistant", label: "Assistant" },
   { to: "/admin/plugins", label: "Plugin repositories" },
+  { to: "/admin/registries", label: "Registries" },
   { to: "/admin/tenants", label: "Tenants" },
 ];
 
