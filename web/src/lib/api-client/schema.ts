@@ -4381,6 +4381,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/image-builders/{key}/isolation-probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Isolation Probe Endpoint
+         * @description Build a throwaway image whose RUN step reports what it can reach -- what any
+         *     organization's RUN step on this engine will reach. Shown so the operator can decide,
+         *     and then acknowledge (``isolation_ack``), before organizations may build here.
+         */
+        post: operations["isolation_probe_endpoint_admin_image_builders__key__isolation_probe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/image-build-limits": {
         parameters: {
             query?: never;
@@ -5133,6 +5155,21 @@ export interface components {
              * @default
              */
             token: string;
+            /**
+             * Api Key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Push Username
+             * @default
+             */
+            push_username: string;
+            /**
+             * Push Password
+             * @default
+             */
+            push_password: string;
         };
         /** BuilderFields */
         BuilderFields: {
@@ -6391,6 +6428,19 @@ export interface components {
             behavioral_directive: string | null;
             /** Disclosure State */
             disclosure_state: string;
+        };
+        /** IsolationProbeOut */
+        IsolationProbeOut: {
+            /** Lines */
+            lines: string[];
+        };
+        /** IsolationProbeRequest */
+        IsolationProbeRequest: {
+            /**
+             * Extra Targets
+             * @default []
+             */
+            extra_targets: string[];
         };
         /** JobStatusResponse */
         JobStatusResponse: {
@@ -18338,6 +18388,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuilderProbeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    isolation_probe_endpoint_admin_image_builders__key__isolation_probe_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IsolationProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsolationProbeOut"];
                 };
             };
             /** @description Validation Error */

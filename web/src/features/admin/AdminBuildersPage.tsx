@@ -102,7 +102,12 @@ function BuilderCard({
 }) {
   const [secret, setSecret] = useState("");
   const [token, setToken] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [pushUser, setPushUser] = useState("");
+  const [pushPassword, setPushPassword] = useState("");
   const [probe, setProbe] = useState<string | null>(null);
+  const [isolation, setIsolation] = useState<string[] | null>(null);
+  const needsAck = builder.kind === "portainer";
   const [allowed, setAllowed] = useState(
     builder.allowed_tenants === null ? "" : builder.allowed_tenants.join("\n"),
   );
@@ -113,13 +118,21 @@ function BuilderCard({
     mutationFn: async () => {
       const { error } = await apiClient.PUT("/admin/image-builders/{key}/credential", {
         ...path,
-        body: { signing_secret: secret, token },
+        body: {
+          signing_secret: secret,
+          token,
+          api_key: apiKey,
+          push_username: pushUser,
+          push_password: pushPassword,
+        },
       });
       if (error) throw error;
     },
     onSuccess: () => {
       setSecret("");
       setToken("");
+      setApiKey("");
+      setPushPassword("");
       onError(null);
       onChange();
     },
@@ -148,6 +161,19 @@ function BuilderCard({
     onError: (e) => setProbe(`✗ ${detailOf(e)}`),
   });
 
+  const runIsolationProbe = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await apiClient.POST("/admin/image-builders/{key}/isolation-probe", {
+        ...path,
+        body: { extra_targets: [] },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (r) => setIsolation(r.lines),
+    onError: (e) => onError(detailOf(e)),
+  });
+
   const remove = useMutation({
     mutationFn: async () => {
       const { error } = await apiClient.DELETE("/admin/image-builders/{key}", path);
@@ -168,6 +194,11 @@ function BuilderCard({
           <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">{builder.kind}</span>
           {!builder.enabled && (
             <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">disabled</span>
+          )}
+          {needsAck && !builder.isolation_ack && (
+            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
+              isolation not acknowledged — unavailable
+            </span>
           )}
           {!builder.has_credential && (
             <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
@@ -211,6 +242,39 @@ function BuilderCard({
       </dl>
       {probe && <p className="text-sm">{probe}</p>}
 
+      {needsAck && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
+          <span className="text-muted-foreground">
+            Organizations' RUN steps execute on this engine. Run the probe to see what a
+            RUN step there can reach, then decide whether that is acceptable.
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={btn}
+              disabled={runIsolationProbe.isPending}
+              onClick={() => runIsolationProbe.mutate()}
+            >
+              {runIsolationProbe.isPending ? "Probing… (builds a throwaway image)" : "Run isolation probe"}
+            </button>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={builder.isolation_ack}
+                disabled={!builder.isolation_ack && isolation === null}
+                onChange={(e) => patch.mutate({ isolation_ack: e.target.checked })}
+              />
+              I have seen what a build here can reach, and organizations may build here
+            </label>
+          </div>
+          {isolation && (
+            <pre className="max-h-48 overflow-auto rounded bg-muted/40 p-2 font-mono text-xs">
+              {isolation.join("\n")}
+            </pre>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
         <span className="text-muted-foreground">
           Which organizations may build here — one organization id per line; empty means
@@ -253,24 +317,55 @@ function BuilderCard({
             autoComplete="new-password"
           />
         )}
-        <input
-          className={input}
-          type="password"
-          placeholder={
-            builder.kind === "github_actions"
-              ? "fine-grained token (Actions: read & write)"
-              : "bearer token (optional)"
-          }
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          autoComplete="new-password"
-        />
+        {builder.kind === "portainer" ? (
+          <>
+            <input
+              className={input}
+              type="password"
+              placeholder="Portainer API key (non-admin user)"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoComplete="new-password"
+            />
+            <input
+              className={input}
+              placeholder="registry push user"
+              value={pushUser}
+              onChange={(e) => setPushUser(e.target.value)}
+              autoComplete="off"
+            />
+            <input
+              className={input}
+              type="password"
+              placeholder="registry push password"
+              value={pushPassword}
+              onChange={(e) => setPushPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </>
+        ) : (
+          <input
+            className={input}
+            type="password"
+            placeholder={
+              builder.kind === "github_actions"
+                ? "fine-grained token (Actions: read & write)"
+                : "bearer token (optional)"
+            }
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            autoComplete="new-password"
+          />
+        )}
         <button
           type="button"
           className={btnPrimary}
           disabled={
-            (builder.kind === "webhook" ? secret.length < 16 : token.length < 20) ||
-            saveCredential.isPending
+            (builder.kind === "webhook"
+              ? secret.length < 16
+              : builder.kind === "portainer"
+                ? apiKey.length < 20 || !pushPassword
+                : token.length < 20) || saveCredential.isPending
           }
           onClick={() => saveCredential.mutate()}
         >
@@ -290,7 +385,12 @@ function AddBuilderForm({
   onAdded: () => void;
   onError: (message: string | null) => void;
 }) {
-  const [kind, setKind] = useState<"webhook" | "github_actions">("github_actions");
+  const [kind, setKind] = useState<"webhook" | "github_actions" | "portainer">("github_actions");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [endpointId, setEndpointId] = useState("");
+  const [pushHost, setPushHost] = useState("");
+  const [networkMode, setNetworkMode] = useState("");
+  const [tlsVerify, setTlsVerify] = useState(true);
   const [key, setKey] = useState("");
   const [label, setLabel] = useState("");
   const [registry, setRegistry] = useState(registries[0] ?? "");
@@ -305,14 +405,26 @@ function AddBuilderForm({
   const [apiBase, setApiBase] = useState("https://api.github.com");
 
   const ready =
-    kind === "webhook" ? !!submitUrl && !!statusUrl : !!owner && !!repo && !!workflow;
+    kind === "webhook"
+      ? !!submitUrl && !!statusUrl
+      : kind === "portainer"
+        ? !!baseUrl && !!endpointId
+        : !!owner && !!repo && !!workflow;
 
   const add = useMutation({
     mutationFn: async () => {
       const config =
         kind === "webhook"
           ? { submit_url: submitUrl, status_url: statusUrl, cancel_url: cancelUrl, insecure }
-          : { owner, repo, workflow, ref, api_base: apiBase };
+          : kind === "portainer"
+            ? {
+                base_url: baseUrl,
+                endpoint_id: Number(endpointId),
+                push_host: pushHost,
+                network_mode: networkMode,
+                tls_verify: tlsVerify,
+              }
+            : { owner, repo, workflow, ref, api_base: apiBase };
       const { error } = await apiClient.POST("/admin/image-builders", {
         body: { key, kind, label, registry_key: registry, config },
       });
@@ -331,17 +443,19 @@ function AddBuilderForm({
     <section className="flex flex-col gap-3 rounded-md border border-dashed border-border p-4">
       <h2 className="font-medium">Declare a builder</h2>
       <div className="flex gap-4 text-sm">
-        {(["github_actions", "webhook"] as const).map((k) => (
+        {(["github_actions", "portainer", "webhook"] as const).map((k) => (
           <label key={k} className="flex items-center gap-2">
             <input type="radio" checked={kind === k} onChange={() => setKind(k)} />
-            {k === "github_actions" ? "GitHub Actions" : "Webhook"}
+            {k === "github_actions" ? "GitHub Actions" : k === "portainer" ? "Portainer" : "Webhook"}
           </label>
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
         {kind === "github_actions"
           ? "Pyrrhula dispatches a workflow in a repository you control and follows the run. Start from docs/builders/github-actions.yml; the push credential stays in your CI."
-          : "Your receiver gets a signed JSON request with the Dockerfile base64-encoded and the exact image reference to push; Pyrrhula polls its status URL. See docs/builders/webhook.md."}
+          : kind === "portainer"
+            ? "Builds run on a Docker environment you manage in Portainer, with the Dockerfile as the only build input. Use an API key of a non-admin user with access to that environment only. Organizations can use it once you have run the isolation probe and acknowledged the result."
+            : "Your receiver gets a signed JSON request with the Dockerfile base64-encoded and the exact image reference to push; Pyrrhula polls its status URL. See docs/builders/webhook.md."}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
@@ -362,7 +476,30 @@ function AddBuilderForm({
             ))}
           </select>
         </label>
-        {kind === "webhook" ? (
+        {kind === "portainer" ? (
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              Portainer URL
+              <input className={input} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://portainer.example:9443" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Environment id
+              <input className={input} value={endpointId} onChange={(e) => setEndpointId(e.target.value)} placeholder="3" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Push host (optional — how the engine reaches the registry)
+              <input className={input} value={pushHost} onChange={(e) => setPushHost(e.target.value)} placeholder="127.0.0.1:5002" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Build network (optional)
+              <input className={input} value={networkMode} onChange={(e) => setNetworkMode(e.target.value)} placeholder="default bridge" />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={tlsVerify} onChange={(e) => setTlsVerify(e.target.checked)} />
+              Verify Portainer's TLS certificate
+            </label>
+          </>
+        ) : kind === "webhook" ? (
           <>
             <label className="flex flex-col gap-1 text-sm">
               Submit URL

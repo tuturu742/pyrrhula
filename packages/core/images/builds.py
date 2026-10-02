@@ -46,7 +46,7 @@ from core.images.service import (
     get_build,
     promote_build,
 )
-from core.ports.image_builder import BuilderError, BuildSpec, ImageBuilder
+from core.ports.image_builder import BuilderError, BuildSpec, ImageBuilder, Progress
 from core.ports.job_queue import JobQueue
 from core.repos.image_ref import ImageRefError
 from core.tenancy.scope import tenant_scope, unscoped_session
@@ -305,8 +305,11 @@ async def request_build(
         {"name": name, "builder": builder.key, "target_ref": target_ref},
     )
     if queue is not None:
+        from core.images.builders import STREAM_KINDS
+
+        kind = RUN_JOB_KIND if builder.kind in STREAM_KINDS else ADVANCE_JOB_KIND
         await queue.enqueue(
-            tenant_id, ADVANCE_JOB_KIND, {"tenant_id": str(tenant_id), "build_id": str(build_id)}
+            tenant_id, kind, {"tenant_id": str(tenant_id), "build_id": str(build_id)}
         )
     return {**(await get_build(tenant_id, build_id)), "reused": False}
 
@@ -325,6 +328,9 @@ async def advance_build(
     asked to stop. Returns the status it left the build in. Safe to call from the job and
     the sweep at once -- every transition is claimed under the row lock."""
     from core.images.policy import get_image_build_limits
+
+    if await _is_stream(tenant_id, build_id):
+        return await _watch_stream(tenant_id, build_id)
 
     limits = await get_image_build_limits()
     async with tenant_scope(tenant_id) as session:
@@ -406,6 +412,13 @@ async def advance_build(
         # must not fail a build that is still running there.
         await _set(tenant_id, build_id, error=f"last check: {exc}"[:1000])
         return status
+    return await _finish(tenant_id, build_id, progress, queue)
+
+
+async def _finish(
+    tenant_id: uuid.UUID, build_id: uuid.UUID, progress: Progress, queue: JobQueue
+) -> str:
+    """Record what a builder reported. Shared by the poll and the stream paths."""
     values: dict[str, Any] = {"heartbeat_at": datetime.now(UTC), "error": ""}
     if progress.log_tail:
         values["log_tail"] = progress.log_tail
@@ -430,6 +443,124 @@ async def advance_build(
     await _requeue_for_verification(queue, tenant_id, build_id)
     log.info("image.build.built", tenant_id=str(tenant_id), build_id=str(build_id))
     return "verifying"
+
+
+# ── stream builders ─────────────────────────────────────────────────────────────────
+#
+# A stream builder holds one connection for the whole build, so the build runs inside a
+# single ``run_image_build`` job rather than being stepped by the sweep. The sweep's only
+# part is noticing a job that went silent.
+
+RUN_JOB_KIND = "run_image_build"
+# The running job refreshes the heartbeat at least this often while output arrives, and
+# the engine's own idle timeout ends a silent stream long before the stale limit.
+_STREAM_HEARTBEAT = timedelta(seconds=15)
+_STREAM_STALE_AFTER = timedelta(minutes=15)
+_STREAM_UNCLAIMED_AFTER = timedelta(hours=1)
+
+
+async def _is_stream(tenant_id: uuid.UUID, build_id: uuid.UUID) -> bool:
+    from core.images.builders import STREAM_KINDS, BuilderNotFoundError, get_builder
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(ImageBuildRow, build_id)
+        key = row.builder_key if row is not None else None
+    if not key:
+        return False
+    try:
+        return (await get_builder(key)).kind in STREAM_KINDS
+    except BuilderNotFoundError:
+        return False
+
+
+async def _watch_stream(tenant_id: uuid.UUID, build_id: uuid.UUID) -> str:
+    """The sweep's view of a stream build: leave it to its job unless the job is gone."""
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(ImageBuildRow, build_id)
+        if row is None:
+            return "missing"
+        status = row.status
+        beat = row.heartbeat_at or row.created_at
+    if status in ("submitted", "building") and datetime.now(UTC) - beat > _STREAM_STALE_AFTER:
+        return await _fail(tenant_id, build_id, "the build stopped reporting; build again")
+    if status == "queued" and datetime.now(UTC) - beat > _STREAM_UNCLAIMED_AFTER:
+        return await _fail(
+            tenant_id,
+            build_id,
+            "no worker picked this build up -- is a worker with the image-builder role running?",
+        )
+    return status
+
+
+async def run_stream_build(
+    tenant_id: uuid.UUID,
+    build_id: uuid.UUID,
+    *,
+    builder_for: BuilderFor,
+    queue: JobQueue,
+) -> str:
+    """Run one build on a stream builder from start to finish. Returns its status."""
+    from core.images.policy import get_image_build_limits
+
+    limits = await get_image_build_limits()
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(ImageBuildRow, build_id, with_for_update=True)
+        if row is None:
+            return "missing"
+        if row.status != "queued":
+            # Already run, or running: a retried job must not build it twice.
+            return row.status
+        if row.cancel_requested:
+            row.status = "cancelled"
+            row.finished_at = datetime.now(UTC)
+            return "cancelled"
+        row.status = "building"
+        row.external_ref = f"stream-{row.id.hex[:12]}"
+        row.heartbeat_at = datetime.now(UTC)
+        builder_key = row.builder_key or ""
+        spec = BuildSpec(
+            build_id=str(row.id),
+            dockerfile=row.dockerfile,
+            target_ref=row.target_ref,
+            labels={"pyrrhula.build": str(row.id), "pyrrhula.content-hash": row.content_hash},
+        )
+
+    try:
+        builder: Any = await builder_for(builder_key)
+    except Exception as exc:  # noqa: BLE001 -- a builder that vanished fails this build
+        return await _fail(tenant_id, build_id, f"the builder is not available: {exc}")
+    if getattr(builder, "mode", "") != "stream" or not hasattr(builder, "run"):
+        return await _fail(tenant_id, build_id, "the builder cannot run a streamed build")
+
+    buffered: list[str] = []
+    last_write = datetime.now(UTC)
+
+    async def on_log(text: str) -> None:
+        nonlocal last_write
+        buffered.append(text)
+        if len(buffered) > 400:
+            del buffered[:200]
+        if datetime.now(UTC) - last_write > _STREAM_HEARTBEAT:
+            last_write = datetime.now(UTC)
+            await _set(
+                tenant_id, build_id, log_tail="".join(buffered)[-4000:], heartbeat_at=last_write
+            )
+
+    async def should_cancel() -> bool:
+        async with tenant_scope(tenant_id) as session:
+            current = await session.get(ImageBuildRow, build_id)
+            return current is None or current.cancel_requested
+
+    try:
+        progress = await builder.run(
+            spec,
+            on_log=on_log,
+            should_cancel=should_cancel,
+            timeout_seconds=limits["timeout_seconds"],
+        )
+    except BuilderError as exc:
+        return await _fail(tenant_id, build_id, f"the builder refused the build: {exc}")
+    return await _finish(tenant_id, build_id, progress, queue)
 
 
 async def sweep_builder_builds(queue: JobQueue, builder_for: BuilderFor) -> int:

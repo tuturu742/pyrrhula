@@ -22,6 +22,7 @@ every message they return through ``adapters.image_builder.redact``.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -71,6 +72,29 @@ class ImageBuilder(Protocol):
     async def poll(self, external_ref: str) -> Progress: ...
 
     async def cancel(self, external_ref: str) -> None: ...
+
+    async def probe(self) -> BuilderProbe: ...
+
+
+class StreamImageBuilder(Protocol):
+    """A builder that holds a connection for the whole build (``mode == "stream"``).
+
+    ``run`` builds and pushes, calling ``on_log`` with scrubbed output as it arrives and
+    asking ``should_cancel`` between lines; returning ends the build in a terminal state
+    (``succeeded`` with the pushed digest, ``failed`` or ``cancelled``). Closing the
+    connection is what cancels the build on the engine.
+    """
+
+    mode: Literal["poll", "stream"]
+
+    async def run(
+        self,
+        spec: BuildSpec,
+        *,
+        on_log: Callable[[str], Awaitable[None]],
+        should_cancel: Callable[[], Awaitable[bool]],
+        timeout_seconds: int,
+    ) -> Progress: ...
 
     async def probe(self) -> BuilderProbe: ...
 

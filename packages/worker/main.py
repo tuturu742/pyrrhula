@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import signal
 import uuid
 from collections.abc import Awaitable, Callable
@@ -29,7 +30,11 @@ from worker.delegation import (
 from worker.embedding import handle_embed_chunks, handle_reembed_stale
 from worker.export import handle_export_workspace
 from worker.history_summary import handle_summarise_history
-from worker.images import handle_advance_image_build, handle_verify_image_build
+from worker.images import (
+    handle_advance_image_build,
+    handle_run_image_build,
+    handle_verify_image_build,
+)
 from worker.images import sweep as sweep_image_builds
 from worker.ingestion import handle_knowledge_ingest
 from worker.notifications import handle_notify_await_opened, handle_send_digest
@@ -73,7 +78,27 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
     "advance_session": handle_advance_session,
     "verify_image_build": handle_verify_image_build,
     "advance_image_build": handle_advance_image_build,
+    "run_image_build": handle_run_image_build,
 }
+
+# A streamed image build holds this worker for the whole build, and the worker runs one
+# job at a time. A deployment with a stream builder can run a second worker with
+# PYRRHULA_WORKER_ROLE=image-builder (only those builds) and give the first
+# PYRRHULA_WORKER_ROLE=general (everything else), so a build never delays a delegation.
+# Unset ("all") keeps the single-worker behaviour: everything, builds included.
+_BUILDER_KINDS = frozenset({"run_image_build"})
+
+
+def claimable_kinds(role: str | None) -> list[str]:
+    role = (role or "all").strip().lower()
+    if role == "image-builder":
+        return sorted(_BUILDER_KINDS)
+    if role == "general":
+        return sorted(set(_HANDLERS) - _BUILDER_KINDS)
+    if role != "all":
+        raise SystemExit(f"PYRRHULA_WORKER_ROLE={role!r}: expected all, general or image-builder")
+    return sorted(_HANDLERS)
+
 
 # Previews are the only thing here with a wall-clock deadline, and this deployment has no
 # scheduler -- every other recurring-looking job is enqueued by an HTTP request. So the
@@ -148,11 +173,13 @@ async def main() -> None:
         loop.add_signal_handler(sig, stop.set)
 
     queue: JobQueue = PostgresJobQueue()
+    kinds = claimable_kinds(os.environ.get("PYRRHULA_WORKER_ROLE"))
+    log.info("worker.role", kinds=len(kinds))
     next_reap = asyncio.get_running_loop().time()
     next_image_sweep = next_reap
 
     while not stop.is_set():
-        job = await queue.claim_one(kinds=list(_HANDLERS))
+        job = await queue.claim_one(kinds=kinds)
         if job is None:
             now = asyncio.get_running_loop().time()
             if now >= next_reap:

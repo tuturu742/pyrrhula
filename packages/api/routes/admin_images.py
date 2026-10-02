@@ -273,9 +273,22 @@ class CreateBuilderRequest(BuilderFields):
 
 
 class BuilderCredentialRequest(BaseModel):
-    # webhook: signing_secret (+ optional token). Write-only; never returned.
+    # Write-only; never returned. webhook: signing_secret (+ optional token);
+    # github_actions: token; portainer: api_key + the registry push credential.
     signing_secret: str = ""
     token: str = ""
+    api_key: str = ""
+    push_username: str = ""
+    push_password: str = ""
+
+
+class IsolationProbeRequest(BaseModel):
+    # Addresses the operator wants checked too: their own services, the registry, …
+    extra_targets: list[str] = []
+
+
+class IsolationProbeOut(BaseModel):
+    lines: list[str]
 
 
 class BuilderProbeOut(BaseModel):
@@ -398,6 +411,31 @@ async def test_builder_endpoint(key: str) -> BuilderProbeOut:
         return BuilderProbeOut(ok=False, detail=str(exc))
     probe = await builder.probe()
     return BuilderProbeOut(ok=probe.ok, detail=probe.detail)
+
+
+@router.post("/image-builders/{key}/isolation-probe")
+async def isolation_probe_endpoint(key: str, body: IsolationProbeRequest) -> IsolationProbeOut:
+    """Build a throwaway image whose RUN step reports what it can reach -- what any
+    organization's RUN step on this engine will reach. Shown so the operator can decide,
+    and then acknowledge (``isolation_ack``), before organizations may build here."""
+    from api.image_builder_factory import load_image_builder
+    from core.images.builders import BuilderNotFoundError
+    from core.ports.image_builder import BuilderError
+
+    try:
+        builder = await load_image_builder(key, encryptor=get_encryptor())
+    except BuilderNotFoundError as exc:
+        raise _builder_http(exc, key) from exc
+    except BuilderError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    probe = getattr(builder, "isolation_probe", None)
+    if probe is None:
+        raise HTTPException(
+            status_code=422, detail="this kind of builder runs on infrastructure you probe yourself"
+        )
+    lines = await probe(body.extra_targets[:10])
+    await _audit_admin(ADMIN_TENANT_ID, "image.builder.isolation_probe", "deployment", {"key": key})
+    return IsolationProbeOut(lines=lines)
 
 
 @router.get("/image-build-limits")

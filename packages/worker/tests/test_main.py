@@ -63,3 +63,18 @@ async def test_run_one_fails_job_on_handler_exception(monkeypatch) -> None:  # n
     assert len(queue.failed) == 1
     assert queue.failed[0][0] == job.id
     assert "boom" in queue.failed[0][1]
+
+
+def test_worker_roles_split_long_builds_from_everything_else() -> None:
+    import pytest
+
+    from worker.main import _HANDLERS, claimable_kinds
+
+    assert claimable_kinds(None) == sorted(_HANDLERS), "unset: one worker does everything"
+    assert claimable_kinds("image-builder") == ["run_image_build"]
+    general = claimable_kinds("general")
+    assert "run_image_build" not in general and "delegate_work_item" in general
+    # Quick builder steps stay with the general worker; only the long stream moves.
+    assert "advance_image_build" in general and "verify_image_build" in general
+    with pytest.raises(SystemExit):
+        claimable_kinds("builder")

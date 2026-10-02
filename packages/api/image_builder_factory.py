@@ -50,4 +50,24 @@ async def load_image_builder(key: str, *, encryptor: Encryptor) -> ImageBuilder:
             ),
             token=secrets["token"],
         )
+    if builder.kind == "portainer":
+        from adapters.image_builder.portainer import PortainerConfig, PortainerImageBuilder
+
+        if not secrets.get("api_key"):
+            raise BuilderError(f"builder {key!r} has no API key")
+        config = builder.config
+        return PortainerImageBuilder(
+            PortainerConfig(
+                base_url=str(config["base_url"]),
+                endpoint_id=int(config["endpoint_id"]),
+                push_host=str(config.get("push_host") or ""),
+                tls_verify=bool(config.get("tls_verify", True)),
+                network_mode=str(config.get("network_mode") or ""),
+                memory_mb=int(config.get("memory_mb") or 4096),
+                cpus=float(config.get("cpus") or 2),
+            ),
+            api_key=secrets["api_key"],
+            push_username=secrets.get("push_username", ""),
+            push_password=secrets.get("push_password", ""),
+        )
     raise BuilderError(f"this deployment cannot drive a {builder.kind!r} builder")

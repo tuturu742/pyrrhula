@@ -50,6 +50,20 @@ async def handle_advance_image_build(payload: dict[str, Any]) -> dict[str, Any]:
     return {"status": status}
 
 
+async def handle_run_image_build(payload: dict[str, Any]) -> dict[str, Any]:
+    """A whole build on a stream builder (Portainer). Long: see PYRRHULA_WORKER_ROLE."""
+    from adapters.queue.postgres.queue import PostgresJobQueue
+    from core.images.builds import run_stream_build
+
+    status = await run_stream_build(
+        uuid.UUID(str(payload["tenant_id"])),
+        uuid.UUID(str(payload["build_id"])),
+        builder_for=_builder_for,
+        queue=PostgresJobQueue(),
+    )
+    return {"status": status}
+
+
 async def sweep(queue: JobQueue) -> tuple[int, int]:
     """(started or moved, failed) across both halves."""
     moved = await sweep_builder_builds(queue, _builder_for)

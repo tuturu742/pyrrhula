@@ -359,3 +359,160 @@ async def test_a_harness_is_appended_by_the_platform_and_only_claimed(setup: Set
     assert sent.rstrip().endswith("RUN npm i -g opencode-ai@1.18.33")
     assert build["harness_claim"] == {"key": "opencode", "version": "1.18.33"}
     assert build["baked_harness"] == {}, "a claim, until the smoke test proves it"
+
+
+# ── stream builders (Portainer) ─────────────────────────────────────────────────────
+
+
+@dataclass
+class FakeStream:
+    result: str = "succeeded"
+    runs: int = 0
+    mode: str = "stream"
+
+    async def run(
+        self, spec: BuildSpec, *, on_log: Any, should_cancel: Any, timeout_seconds: int
+    ) -> Progress:
+        self.runs += 1
+        await on_log("Step 1/2 : FROM debian\n")
+        if await should_cancel():
+            return Progress("cancelled")
+        if self.result == "failed":
+            return Progress("failed", error="RUN returned 100")
+        return Progress("succeeded", digest=DIGEST)
+
+    async def probe(self) -> Any:
+        raise NotImplementedError
+
+
+async def _portainer_builder(s: Setup, *, ack: bool) -> str:
+    from core.images.builders import update_builder
+
+    registry_key = "r" + s.builder_key[1:]
+    key = f"pt{uuid.uuid4().hex[:8]}"
+    await create_builder(
+        key,
+        "portainer",
+        {
+            "registry_key": registry_key,
+            "config": {"base_url": "https://portainer.lan:9443", "endpoint_id": 3},
+        },
+    )
+    await set_builder_credential(
+        key,
+        {"api_key": "ptr_" + "k" * 40, "push_username": "u", "push_password": "p"},
+        encryptor=IdentityEncryptor(),
+    )
+    if ack:
+        await update_builder(key, {"isolation_ack": True})
+    return key
+
+
+async def test_a_portainer_builder_needs_its_isolation_acknowledged(setup: Setup) -> None:
+    from core.images.builders import builders_for_tenant, update_builder
+
+    key = await _portainer_builder(setup, ack=False)
+    try:
+        assert key not in {b.key for b in await builders_for_tenant(setup.tenant_id)}
+        await update_builder(key, {"isolation_ack": True})
+        assert key in {b.key for b in await builders_for_tenant(setup.tenant_id)}
+        # A different engine is a different answer; the acknowledgement does not carry over.
+        await update_builder(
+            key, {"config": {"base_url": "https://other.lan:9443", "endpoint_id": 4}}
+        )
+        assert key not in {b.key for b in await builders_for_tenant(setup.tenant_id)}
+    finally:
+        await delete_builder(key)
+
+
+async def test_a_stream_build_runs_once_in_its_job_and_the_sweep_leaves_it_alone(
+    setup: Setup,
+) -> None:
+    from core.images.builds import run_stream_build
+
+    s = setup
+    key = await _portainer_builder(s, ack=True)
+    stream = FakeStream()
+
+    async def builder_for(_key: str) -> Any:
+        return stream
+
+    try:
+        await _define(s)
+        build = await request_build(
+            s.tenant_id,
+            "godot-node",
+            builder_key=key,
+            requested_by=s.owner,
+            queue=s.queue,  # type: ignore[arg-type]
+        )
+        assert s.queue.jobs[-1][0] == "run_image_build"
+        # The sweep must not try to submit or poll a stream build.
+        assert (
+            await advance_build(
+                s.tenant_id,
+                uuid.UUID(build["id"]),
+                builder_for=builder_for,
+                queue=s.queue,  # type: ignore[arg-type]
+            )
+            == "queued"
+        )
+        assert stream.runs == 0
+        status = await run_stream_build(
+            s.tenant_id,
+            uuid.UUID(build["id"]),
+            builder_for=builder_for,
+            queue=s.queue,  # type: ignore[arg-type]
+        )
+        assert status == "verifying" and stream.runs == 1
+        assert s.queue.jobs[-1][0] == "verify_image_build"
+        again = await run_stream_build(
+            s.tenant_id,
+            uuid.UUID(build["id"]),
+            builder_for=builder_for,
+            queue=s.queue,  # type: ignore[arg-type]
+        )
+        assert again == "verifying" and stream.runs == 1, "a retried job builds nothing twice"
+    finally:
+        await delete_builder(key)
+
+
+async def test_a_stream_build_whose_worker_went_silent_fails(setup: Setup) -> None:
+    s = setup
+    key = await _portainer_builder(s, ack=True)
+    try:
+        await _define(s)
+        build = await request_build(
+            s.tenant_id,
+            "godot-node",
+            builder_key=key,
+            requested_by=s.owner,
+            queue=s.queue,  # type: ignore[arg-type]
+        )
+        async with tenant_scope(s.tenant_id) as session:
+            await session.execute(
+                update(ImageBuildRow)
+                .where(ImageBuildRow.id == uuid.UUID(build["id"]))
+                .values(status="building", heartbeat_at=datetime.now(UTC) - timedelta(hours=1))
+            )
+        assert await s.advance(build["id"]) == "failed"
+    finally:
+        await delete_builder(key)
+
+
+async def test_host_networking_is_refused_for_a_build(setup: Setup) -> None:
+    from core.images.builders import InvalidBuilderError
+
+    with pytest.raises(InvalidBuilderError, match="host"):
+        await create_builder(
+            f"pt{uuid.uuid4().hex[:8]}",
+            "portainer",
+            {
+                "registry_key": "r" + setup.builder_key[1:],
+                "config": {
+                    "base_url": "https://portainer.lan:9443",
+                    "endpoint_id": 3,
+                    "network_mode": "host",
+                },
+            },
+        )

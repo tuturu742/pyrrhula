@@ -27,8 +27,14 @@ from core.tenancy.scope import unscoped_session
 _KEY = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 # The kinds this deployment can drive. The table admits the ones later phases add; a kind
 # is only accepted here once its adapter exists.
-SUPPORTED_KINDS = frozenset({"webhook", "github_actions"})
+SUPPORTED_KINDS = frozenset({"webhook", "github_actions", "portainer"})
+# Builders that hold a connection for the whole build (core.ports.image_builder).
+STREAM_KINDS = frozenset({"portainer"})
+# Builders whose RUN steps execute on infrastructure the operator runs directly, where an
+# acknowledged isolation probe is required before any organization may use them.
+ACK_KINDS = frozenset({"portainer"})
 _GH_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+_HOST = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$")
 MUTABLE_FIELDS = frozenset(
     {"label", "config", "registry_key", "allowed_tenants", "isolation_ack", "enabled"}
 )
@@ -126,6 +132,50 @@ def validate_config(kind: str, raw: Any) -> dict[str, Any]:
             raw.get("api_base") or "https://api.github.com", "config.api_base", insecure=False
         ).rstrip("/")
         return out
+    if kind == "portainer":
+        allowed = {
+            "base_url",
+            "endpoint_id",
+            "push_host",
+            "tls_verify",
+            "network_mode",
+            "memory_mb",
+            "cpus",
+        }
+        unknown = set(raw) - allowed
+        if unknown:
+            raise InvalidBuilderError(f"config: unknown field(s) {sorted(unknown)}")
+        base_url = _url(raw.get("base_url"), "config.base_url", insecure=False).rstrip("/")
+        try:
+            endpoint_id = int(str(raw.get("endpoint_id")))
+        except (TypeError, ValueError) as exc:
+            raise InvalidBuilderError("config.endpoint_id: the Portainer environment id") from exc
+        push_host = str(raw.get("push_host") or "").strip().lower()
+        if push_host and not _HOST.match(push_host):
+            raise InvalidBuilderError("config.push_host: host[:port], e.g. 127.0.0.1:5002")
+        network_mode = str(raw.get("network_mode") or "").strip()
+        if network_mode and not _GH_NAME.match(network_mode):
+            raise InvalidBuilderError("config.network_mode: a Docker network name")
+        if network_mode == "host":
+            # RUN steps on the host's network would see every loopback service on the
+            # engine host -- the opposite of what a build network is for.
+            raise InvalidBuilderError("config.network_mode: 'host' is not allowed")
+        try:
+            memory_mb = int(raw.get("memory_mb") or 4096)
+            cpus = float(raw.get("cpus") or 2)
+        except (TypeError, ValueError) as exc:
+            raise InvalidBuilderError("config.memory_mb / cpus: numbers") from exc
+        if not 256 <= memory_mb <= 65536 or not 0.25 <= cpus <= 64:
+            raise InvalidBuilderError("config: memory_mb 256-65536, cpus 0.25-64")
+        return {
+            "base_url": base_url,
+            "endpoint_id": endpoint_id,
+            "push_host": push_host,
+            "tls_verify": bool(raw.get("tls_verify", True)),
+            "network_mode": network_mode,
+            "memory_mb": memory_mb,
+            "cpus": cpus,
+        }
     raise InvalidBuilderError(f"kind {kind!r} is not supported by this deployment")
 
 
@@ -168,8 +218,9 @@ async def get_builder(key: str) -> Builder:
 
 
 async def builders_for_tenant(tenant_id: uuid.UUID) -> list[Builder]:
-    """Builders this organization may use right now: enabled, allowed, credentialed, and
-    pushing to an enabled registry."""
+    """Builders this organization may use right now: enabled, allowed, credentialed,
+    pushing to an enabled registry -- and, for an engine the operator runs directly, with
+    its isolation probe acknowledged."""
     from core.images.registries import list_registries
 
     enabled_registries = {r.key for r in await list_registries() if r.enabled}
@@ -180,6 +231,7 @@ async def builders_for_tenant(tenant_id: uuid.UUID) -> list[Builder]:
         and b.has_credential
         and b.allows(tenant_id)
         and b.registry_key in enabled_registries
+        and (b.kind not in ACK_KINDS or b.isolation_ack)
     ]
 
 
@@ -226,7 +278,12 @@ async def update_builder(key: str, fields: dict[str, Any]) -> Builder:
         if "label" in fields:
             row.label = str(fields["label"] or "").strip()[:120]
         if "config" in fields:
-            row.config = validate_config(row.kind, fields["config"])
+            new_config = validate_config(row.kind, fields["config"])
+            if row.kind in ACK_KINDS and new_config != row.config and "isolation_ack" not in fields:
+                # A different engine or network is a different answer to "what can a
+                # tenant's RUN step reach"; the old acknowledgement does not cover it.
+                row.isolation_ack = False
+            row.config = new_config
         if "registry_key" in fields:
             await _check_registry(session, str(fields["registry_key"] or ""))
             row.registry_key = str(fields["registry_key"])
@@ -264,6 +321,24 @@ def _credential_fields(kind: str, raw: dict[str, Any]) -> dict[str, str]:
                 "repository only"
             )
         return {"token": token}
+    if kind == "portainer":
+        api_key = str(raw.get("api_key") or "")
+        if len(api_key) < 20:
+            raise InvalidBuilderError(
+                "api_key: a Portainer API key for a user with access to this environment "
+                "only (not an administrator)"
+            )
+        password = str(raw.get("push_password") or "")
+        if not password:
+            raise InvalidBuilderError(
+                "push_password: the engine pushes to the registry with this; it is sent "
+                "on the push request only"
+            )
+        return {
+            "api_key": api_key,
+            "push_username": str(raw.get("push_username") or ""),
+            "push_password": password,
+        }
     raise InvalidBuilderError(f"kind {kind!r} is not supported by this deployment")
 
 
