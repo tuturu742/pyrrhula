@@ -277,6 +277,41 @@ async def test_a_colliding_flow_key_forks_instead_of_replacing(
 
 
 @pytest.mark.asyncio
+async def test_a_flow_exactly_as_the_pack_ships_it_does_not_travel(
+    two_tenants: tuple[uuid.UUID, uuid.UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The importer gets a pack's flows from the same pack. Carrying them too made the
+    import fork every one -- the mice-invaders sample's picker showed "Plan, Implement,
+    Review, Merge" twice. A pack flow the workspace changed is its own and still goes."""
+    from core.portability import export as export_module
+
+    tenant_a, _ = two_tenants
+    workspace_a, referee, _ = await _case_workspace(tenant_a)
+    shipped = {
+        row.key: row.definition
+        for row in await list_definitions(tenant_a, workspace_id=workspace_a)
+    }
+
+    async def pack_flows(_tenant_id: uuid.UUID) -> dict[str, object]:
+        return shipped
+
+    monkeypatch.setattr(export_module, "_pack_flows", pack_flows)
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    assert not any(p.startswith("process/") for p in open_bundle(result.data).files)
+
+    async def changed(_tenant_id: uuid.UUID) -> dict[str, object]:
+        return {key: {"something": "else"} for key in shipped}
+
+    monkeypatch.setattr(export_module, "_pack_flows", changed)
+    result = await export_workspace(
+        referee, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    assert any(p.startswith("process/") for p in open_bundle(result.data).files)
+
+
+@pytest.mark.asyncio
 async def test_vocabulary_binds_to_the_overlay_already_here_rather_than_cloning_it(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
