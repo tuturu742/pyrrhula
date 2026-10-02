@@ -37,22 +37,11 @@ role-playing first, structured enterprise work second, software development thir
   `agent.credential_ref` exists precisely so one never lands; and each harness has its
   own invocation, output shape and release cadence to pin. Worth proving against one
   harness end to end — metering and credential handling settled — before a second.
-- **Image builds through external builders** — a delegated environment needs the repo's
-  toolchain and, now, a coding harness on top of it, and today both are installed on every
-  run. A warm socket container pays that once per session; k8s and ECS spawn a fresh Job per
-  run and pay it every time, rework rounds included. Planned shape: Pyrrhula **orchestrates**
-  builds on builders the admin already governs — Portainer, GitHub Actions, a generic
-  webhook — rather than running tenant `RUN` steps on infrastructure it controls; verifies
-  the pushed digest itself; smoke-tests the image on the tenant's own engine; and promotes it
-  to a runtime pinned by digest. Images are toolchain-only (the build input is the
-  Dockerfile, never repository files), and a `.pyr` can carry an exact, digest-pinned image
-  so a sample runs with no builder at all.
-
-  Two corrections to what this entry used to say. A socket engine **does** need a registry:
-  the engine is asked to pull every image before it provisions, so a locally built image is
-  not usable by name. And a built image no longer carries tenant source — toolchain-only is
-  the design — though images stay namespaced per tenant, because a Dockerfile can still bake
-  in something its author should not have.
+- **What image builds still lack** — builds through external builders (GitHub Actions,
+  Portainer, a webhook), verified and smoke-tested before use, shipped; see
+  `docs/image-builds.md`. Still open: a declared registry's `k8s_pull_secret` is not yet
+  passed to Kubernetes pods (the engine's own secret is used); no garbage collection of
+  superseded images on GHCR or Docker Hub; no build secrets; `linux/amd64` only.
 - **Agents free to act inside their container** — choosing their own commands (`rm`, a
   migration, a one-off script), which is ordinary work a human contributor does without
   asking. The container is already the boundary; what is missing is what a safe version

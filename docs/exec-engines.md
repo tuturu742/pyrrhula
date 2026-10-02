@@ -241,7 +241,8 @@ cloud accounts, spot handling, cost attribution beyond the existing usage record
 
 Every engine **pulls the image before it runs anything** — the socket engine included. An
 image that exists only in the host's local store, built by hand and never pushed, is not
-usable by name: put it in a registry the engine can reach.
+usable by name: put it in a registry the engine can reach. Building, importing and verifying
+an organization's own images: `docs/image-builds.md`.
 
 - **A tag or digest is required.** An untagged reference made the engine pull every tag of
   the repository; references are now refused without one where they are typed, and older

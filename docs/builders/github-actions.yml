@@ -83,5 +83,8 @@ jobs:
           tags: ${{ inputs.target_ref }}
           push: true
           provenance: false
+          # The source label links the package to this repository on GitHub, so anyone
+          # looking at the image can see the workflow that built it.
           labels: |
             pyrrhula.build=${{ inputs.build_id }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
