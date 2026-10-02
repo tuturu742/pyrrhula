@@ -145,6 +145,108 @@ class BuildRequest(BaseModel):
     rebuild: bool = False
 
 
+class TemplateOut(BaseModel):
+    key: str
+    label: str
+    description: str
+    dockerfile: str
+    harness_key: str
+
+
+class ProposeRequest(BaseModel):
+    repo_id: uuid.UUID
+    # The model connection to draft with -- one of the organization's own.
+    agent_id: uuid.UUID
+    harness_key: str = ""
+
+
+class ProposalOut(BaseModel):
+    dockerfile: str
+    rationale: str
+    errors: list[str]
+    warnings: list[str]
+
+
+@router.get("/templates")
+async def list_templates_endpoint(
+    ctx: RequestContext = Depends(get_request_context),
+) -> list[TemplateOut]:
+    from core.images.templates import list_templates
+
+    await require_tenant_permission(ctx, "repo:manage")
+    return [TemplateOut.model_validate(t) for t in list_templates()]
+
+
+@router.post("/propose")
+async def propose_endpoint(
+    body: ProposeRequest, ctx: RequestContext = Depends(get_request_context)
+) -> ProposalOut:
+    """A draft Dockerfile for a repository, from its files and manifests. Writes nothing:
+    the draft goes back to the editor, and a person saves and builds it."""
+    from adapters.mcp.git_store import GitStore, GitStoreError, default_git_root
+    from api.encryptor_factory import get_encryptor
+    from api.model_provider_factory import get_model_provider
+    from core.agents.authoring import get_agent, resolve_connection_api_key
+    from core.harness.registry import get_harness
+    from core.images.propose import MANIFESTS, propose_dockerfile, repository_context
+    from core.repos.build_recipe import BuildRecipeError, read_repo_manifest
+    from core.repos.service import get_repo, store_key
+    from core.usage_limits import UsageLimitExceededError
+
+    await require_tenant_permission(ctx, "manage_tenant")
+    repo = await get_repo(ctx.tenant_id, body.repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="no such repository")
+    agent = await get_agent(ctx.tenant_id, body.agent_id)
+    if agent is None or not agent.provider:
+        raise HTTPException(status_code=422, detail="choose a configured model connection")
+    spec = None
+    if body.harness_key:
+        found = await get_harness(ctx.tenant_id, body.harness_key)
+        if found is None:
+            raise HTTPException(status_code=422, detail=f"no harness {body.harness_key!r}")
+        spec = {"key": body.harness_key, **found}
+
+    skey = store_key(ctx.tenant_id, repo.key)
+    branch = repo.default_branch or "main"
+    try:
+        tree = await GitStore(default_git_root()).read_tree(
+            skey, ref=branch, max_files=len(MANIFESTS), prefer=MANIFESTS, max_file_bytes=8000
+        )
+    except GitStoreError as exc:
+        raise HTTPException(status_code=422, detail=f"cannot read the repository: {exc}") from exc
+    try:
+        manifest = await read_repo_manifest(skey, ref=branch)
+    except BuildRecipeError:
+        manifest = {}
+    context = repository_context(
+        tree,
+        test_cmd=repo.test_cmd,
+        setup_cmds=list(repo.setup_cmds or []),
+        manifest=manifest,
+    )
+    try:
+        proposal = await propose_dockerfile(
+            ctx.tenant_id,
+            context=context,
+            harness_spec=spec,
+            agent=agent,
+            provider=get_model_provider(agent.provider),
+            api_key=await resolve_connection_api_key(
+                ctx.tenant_id, agent.credential_ref, encryptor=get_encryptor()
+            ),
+            principal_id=ctx.principal_id,
+        )
+    except UsageLimitExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return ProposalOut(
+        dockerfile=proposal.dockerfile,
+        rationale=proposal.rationale,
+        errors=proposal.errors,
+        warnings=proposal.warnings,
+    )
+
+
 @router.get("/builders")
 async def list_available_builders_endpoint(
     ctx: RequestContext = Depends(get_request_context),

@@ -4460,6 +4460,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/images/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates Endpoint */
+        get: operations["list_templates_endpoint_images_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Endpoint
+         * @description A draft Dockerfile for a repository, from its files and manifests. Writes nothing:
+         *     the draft goes back to the editor, and a person saves and builds it.
+         */
+        post: operations["propose_endpoint_images_propose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/images/builders": {
         parameters: {
             query?: never;
@@ -6960,6 +6998,17 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** ProposalOut */
+        ProposalOut: {
+            /** Dockerfile */
+            dockerfile: string;
+            /** Rationale */
+            rationale: string;
+            /** Errors */
+            errors: string[];
+            /** Warnings */
+            warnings: string[];
+        };
         /** ProposeEntryEditRequest */
         ProposeEntryEditRequest: {
             /**
@@ -6979,6 +7028,24 @@ export interface components {
             agent_id: string;
             /** Instruction */
             instruction: string;
+        };
+        /** ProposeRequest */
+        ProposeRequest: {
+            /**
+             * Repo Id
+             * Format: uuid
+             */
+            repo_id: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /**
+             * Harness Key
+             * @default
+             */
+            harness_key: string;
         };
         /** ProposeSchemaEditRequest */
         ProposeSchemaEditRequest: {
@@ -7901,6 +7968,19 @@ export interface components {
         SubmitMessageRequest: {
             /** Content */
             content: string;
+        };
+        /** TemplateOut */
+        TemplateOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Dockerfile */
+            dockerfile: string;
+            /** Harness Key */
+            harness_key: string;
         };
         /** TenantOut */
         TenantOut: {
@@ -18569,6 +18649,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_endpoint_images_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_endpoint_images_propose_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
                 };
             };
             /** @description Validation Error */

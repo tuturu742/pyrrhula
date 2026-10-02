@@ -137,6 +137,10 @@ _IMAGE_MUTATORS = {
     "save_definition",
     "request_build",
     "advance_build",
+    "run_stream_build",
+    # Not a write, but a model drafting a Dockerfile for itself is a step toward choosing
+    # its own image; the proposal is for a person to read.
+    "propose_dockerfile",
 }
 
 

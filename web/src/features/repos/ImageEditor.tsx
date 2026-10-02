@@ -59,6 +59,51 @@ export function DockerfileEditor({
   });
   const chosenBuilder = builder || builders.data?.[0]?.key || "";
 
+  const templates = useQuery({
+    queryKey: ["images", "templates"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/images/templates");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const repos = useQuery({
+    queryKey: ["repos", "for-propose"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/repos");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const connections = useQuery({
+    queryKey: ["model-profiles", "for-propose"],
+    queryFn: async () => {
+      const { data, error } = await apiClient.GET("/model-profiles");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const [proposeRepo, setProposeRepo] = useState("");
+  const [proposeWith, setProposeWith] = useState("");
+  const [rationale, setRationale] = useState<string | null>(null);
+
+  const propose = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await apiClient.POST("/images/propose", {
+        body: { repo_id: proposeRepo, agent_id: proposeWith, harness_key: harness },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (result) => {
+      setDockerfile(result.dockerfile);
+      setRationale(result.rationale);
+      setCheck({ errors: result.errors, warnings: result.warnings });
+      setSaved(false);
+    },
+    onError: (e) => toast.error(describe(e, "Could not draft a Dockerfile")),
+  });
+
   const validate = useMutation({
     mutationFn: async () => {
       const { data, error } = await apiClient.POST("/images/validate", { body: { dockerfile } });
@@ -143,6 +188,70 @@ export function DockerfileEditor({
           </select>
         </label>
       </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Start from:</span>
+        <select
+          aria-label="Template"
+          className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+          value=""
+          onChange={(e) => {
+            const t = (templates.data ?? []).find((x) => x.key === e.target.value);
+            if (!t) return;
+            setDockerfile(t.dockerfile);
+            setHarness(t.harness_key);
+            setRationale(t.description);
+            setCheck(null);
+            setSaved(false);
+          }}
+        >
+          <option value="">a template…</option>
+          {(templates.data ?? []).map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-muted-foreground">or propose from</span>
+        <select
+          aria-label="Repository to propose from"
+          className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+          value={proposeRepo}
+          onChange={(e) => setProposeRepo(e.target.value)}
+        >
+          <option value="">a repository…</option>
+          {(repos.data ?? []).map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Model to draft with"
+          className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+          value={proposeWith}
+          onChange={(e) => setProposeWith(e.target.value)}
+        >
+          <option value="">with model…</option>
+          {(connections.data ?? [])
+            .filter((c) => c.provider)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </select>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!proposeRepo || !proposeWith || propose.isPending}
+          onClick={() => propose.mutate()}
+        >
+          {propose.isPending ? "Drafting…" : "Propose"}
+        </Button>
+      </div>
+      {rationale && (
+        <p className="rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground">{rationale}</p>
+      )}
       <p className="rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300">
         Tools only: the build sees this file and nothing else — not your repository. Never
         put a secret here; anyone who can pull the image can read every layer of it.
