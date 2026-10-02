@@ -51,7 +51,10 @@ async def get_request_context(
         raise HTTPException(status_code=401, detail="token has been revoked")
 
     async with tenant_scope(claims.tenant_id) as session:
-        if x_pyrrhula_tenant is not None:
+        # An empty header names no tenant -- the same as no header. Browsers on a
+        # single-tenant deployment store no slug, and code that stamped `slug ?? ""`
+        # sent one, which then "did not match" every token.
+        if x_pyrrhula_tenant:
             tenant = await session.scalar(select(Tenant).where(Tenant.slug == x_pyrrhula_tenant))
             if tenant is None or tenant.id != claims.tenant_id:
                 raise HTTPException(

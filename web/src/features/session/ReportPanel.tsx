@@ -91,7 +91,7 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
     const response = await fetch(`/api/reports/${current!.id}/artifacts/${format}`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        "X-Pyrrhula-Tenant": tenantSlug ?? "",
+        ...(tenantSlug ? { "X-Pyrrhula-Tenant": tenantSlug } : {}),
       },
     });
     if (!response.ok) {

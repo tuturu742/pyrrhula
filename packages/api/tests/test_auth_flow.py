@@ -292,6 +292,20 @@ async def test_an_explicit_header_still_wins_in_single_tenant_mode(
     assert response.status_code == 200, response.text
 
 
+async def test_an_empty_tenant_header_names_no_tenant(
+    client: TestClient, db_available: None
+) -> None:
+    """Found importing a bundle on a single-tenant install: the browser stores no slug
+    there, the upload stamped `slug ?? ""`, and every request was refused as "token tenant
+    does not match". Empty means absent; a wrong slug is still refused."""
+    slug = await _new_tenant_slug()
+    token = _register(client, slug, f"empty-{slug}@example.com")
+    auth = {"Authorization": f"Bearer {token}"}
+    assert client.get("/me", headers={**auth, "X-Pyrrhula-Tenant": ""}).status_code == 200
+    other = await _new_tenant_slug()
+    assert client.get("/me", headers={**auth, "X-Pyrrhula-Tenant": other}).status_code == 403
+
+
 async def _platform_admin(email: str, password: str) -> None:
     """What PYRRHULA_ADMIN_EMAIL/PASSWORD bootstrap: an owner in the reserved admin org."""
     from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider

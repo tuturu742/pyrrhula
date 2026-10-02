@@ -69,7 +69,12 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
     extra?.(form);
     const response = await fetch(path, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "X-Pyrrhula-Tenant": tenantSlug ?? "" },
+      // Only when there is one: single-tenant deployments store no slug, and an empty
+      // header named a tenant "" that never matched the token.
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(tenantSlug ? { "X-Pyrrhula-Tenant": tenantSlug } : {}),
+      },
       body: form,
     });
     if (!response.ok) throw new Error((await response.text()).slice(0, 300));
