@@ -15,7 +15,9 @@
 #   PYRRHULA_JWT_SECRET          openssl rand -base64 48
 #   PYRRHULA_ENCRYPTION_KEY      openssl rand -base64 32   <- back this up; losing it
 #                                                             orphans every stored credential
-# and may set PYRRHULA_VERSION to pull a different release than the one below.
+# and may set PYRRHULA_VERSION to pull a different release than the one below, and
+# PYRRHULA_REGISTRY to pull the same images from a mirror (e.g. registry.internal/pyrrhula)
+# instead of ghcr.io/tuturu742 -- an air-gapped site, or a build that is not published.
 #
 # To stand this beside an existing Pyrrhula on the same host -- evaluating a release
 # next to a source install, or two deployments on one machine -- set
@@ -57,7 +59,7 @@ services:
       retries: 10
 
   migrate:
-    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
+    image: ${PYRRHULA_REGISTRY:-ghcr.io/tuturu742}/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
     command: ["migrate"]
     environment: &app_env
       PYRRHULA_DATABASE_URL: postgresql+asyncpg://pyrrhula:${PYRRHULA_POSTGRES_PASSWORD}@postgres:5432/pyrrhula
@@ -88,7 +90,7 @@ services:
 
   api:
     container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_api_1
-    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
+    image: ${PYRRHULA_REGISTRY:-ghcr.io/tuturu742}/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
     restart: always
     command: ["api"]
     environment: *app_env
@@ -115,7 +117,7 @@ services:
 
   worker:
     container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_worker_1
-    image: ghcr.io/tuturu742/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
+    image: ${PYRRHULA_REGISTRY:-ghcr.io/tuturu742}/pyrrhula:${PYRRHULA_VERSION:-0.1.0-rc2}
     restart: always
     command: ["worker"]
     user: "0"
@@ -144,7 +146,7 @@ services:
 
   web:
     container_name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_web
-    image: ghcr.io/tuturu742/pyrrhula-web:${PYRRHULA_VERSION:-0.1.0-rc2}
+    image: ${PYRRHULA_REGISTRY:-ghcr.io/tuturu742}/pyrrhula-web:${PYRRHULA_VERSION:-0.1.0-rc2}
     restart: always
     ports:
       - "${PYRRHULA_WEB_PORT:-5173}:80"

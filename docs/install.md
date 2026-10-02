@@ -277,6 +277,39 @@ way to tell what a pulled deployment actually is:
 curl -s localhost:5173/api/health     # {"status":"ok","version":"0.1.0rc2"}
 ```
 
+## Portainer (a Docker host you manage in Portainer)
+
+The release images, as a Portainer stack — no shell on the host needed.
+
+1. Generate the stack file from a checkout (it is derived from `docker/compose.release.yml`,
+   so it never drifts from it):
+
+   ```sh
+   python deploy/installers/portainer_stack.py > pyrrhula-stack.yml
+   ```
+
+2. Portainer → your Docker environment → **Stacks → Add stack → Web editor**, name it
+   `pyrrhula`, paste the file.
+3. Under **Environment variables** add the four secrets the release file requires
+   (`PYRRHULA_POSTGRES_PASSWORD`, `PYRRHULA_APP_DB_PASSWORD`, `PYRRHULA_JWT_SECRET`,
+   `PYRRHULA_ENCRYPTION_KEY` — generate them as in [release images](#release-images-no-checkout-no-build))
+   plus `PYRRHULA_ENGINE_SOCKET=/var/run/docker.sock`, and — to have an administrator from
+   the start — `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD`. Optional:
+   `PYRRHULA_WEB_PORT` (default 5173), `PYRRHULA_API_PORT` (default 8000),
+   `PYRRHULA_REGISTRY` and `PYRRHULA_VERSION` to pull from a mirror or another build.
+4. **Deploy the stack.** `migrate` may exit and restart once or twice while Postgres starts;
+   that is expected. Open `http://<host>:5173`.
+
+What differs from the release file, and why (the generator's docstring has the detail):
+SearXNG's settings are inline (a Portainer stack has no files beside it); the
+`${VAR:?…}` guards are plain `${VAR}` (Portainer validates before it applies variables —
+**so a missing secret is not caught for you; set all four**); and `depends_on` is the list
+form Portainer accepts, with restarts standing in for the health conditions.
+
+The worker mounts the Docker socket, which is how delegated work gets its containers. If
+your Portainer refuses bind mounts for non-administrators, deploy the stack as an
+administrator or allow them for the environment.
+
 ## k8s (Kubernetes)
 
 No cluster yet? Single-node [k3s](https://k3s.io) is one command:
