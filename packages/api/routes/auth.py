@@ -336,14 +336,58 @@ async def _audit_auth(tenant_id: uuid.UUID, principal_id: uuid.UUID, action: str
         structlog.get_logger().warning("audit.auth_failed", action=action, error=str(exc)[:200])
 
 
+async def _login_tenants(
+    x_pyrrhula_tenant: str | None,
+) -> tuple[list[Tenant], HTTPException | None]:
+    """Where a login may land, in the order to try.
+
+    Named organization: that one. Single-tenant mode with no organization named: the sole
+    organization, then the reserved admin organization. The second is not a convenience --
+    the single-tenant login form sends no organization, and the sole-organization rule
+    rightly ignores the admin one, so an administrator bootstrapped from
+    ``PYRRHULA_ADMIN_EMAIL`` could otherwise never sign in through the UI (and on a fresh
+    install, with no organization yet, nobody could). The credential check is the same
+    for both, and so is the failure, so this reveals nothing a login did not already.
+
+    Also returns why the sole organization could not be chosen, so a login that matches
+    nowhere still says so ("more than one organization") rather than a bare 401.
+    """
+    if x_pyrrhula_tenant or not get_settings().single_tenant_ui:
+        return [await resolve_tenant_for_auth(x_pyrrhula_tenant)], None
+    from core.tenancy.admin import ADMIN_TENANT_SLUG
+
+    tenants: list[Tenant] = []
+    refusal: HTTPException | None = None
+    try:
+        tenants.append(await resolve_tenant_for_auth(None))
+    except HTTPException as exc:  # no organization yet, or more than one
+        refusal = exc
+    async with unscoped_session() as session:
+        admin = await session.scalar(select(Tenant).where(Tenant.slug == ADMIN_TENANT_SLUG))
+    if admin is not None and admin.deactivated_at is None and admin not in tenants:
+        tenants.append(admin)
+    if not tenants and refusal is not None:
+        raise refusal
+    return tenants, refusal
+
+
 @router.post("/login", dependencies=[Depends(rate_limit_by_ip)])
 async def login(
     body: LoginRequest,
     response: Response,
-    tenant: Tenant = Depends(resolve_tenant_for_auth),
+    x_pyrrhula_tenant: str | None = Header(default=None),
 ) -> TokenResponse:
-    identity = await _identity_provider.verify_local(tenant.id, body.email, body.password)
-    if identity is None:
+    tenant: Tenant | None = None
+    identity = None
+    candidates, refusal = await _login_tenants(x_pyrrhula_tenant)
+    for candidate in candidates:
+        identity = await _identity_provider.verify_local(candidate.id, body.email, body.password)
+        if identity is not None:
+            tenant = candidate
+            break
+    if identity is None or tenant is None:
+        if refusal is not None:
+            raise refusal
         raise HTTPException(status_code=401, detail="invalid email or password")
 
     lifetime = await session_lifetime_seconds(tenant.id)
