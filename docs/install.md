@@ -326,6 +326,15 @@ The worker mounts the Docker socket, which is how delegated work gets its contai
 your Portainer refuses bind mounts for non-administrators, deploy the stack as an
 administrator or allow them for the environment.
 
+**Starting over.** Deleting the stack in Portainer does **not** delete its volumes, and
+for a non-administrator they then vanish from **Volumes** while still existing. A new
+stack with the same name silently mounts them again: the old database, with the new
+stack's freshly generated passwords, so sign-in fails with a server error and the api
+log says `password authentication failed for user "pyrrhula_app"`. To start clean, first
+**Stop** the stack, delete the `pyrrhula_*` volumes while the stack still owns them, then
+**Start** it (or delete and re-add it). Redeploying with new values over an existing stack
+is fine; only the passwords must match the database they created.
+
 ## k8s (Kubernetes)
 
 No cluster yet? Single-node [k3s](https://k3s.io) is one command:
