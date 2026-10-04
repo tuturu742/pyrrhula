@@ -155,10 +155,17 @@ async def _call_provider_with_retry(
     egress_policy: dict[str, list[str]] | None = None,
     persona_params: dict[str, object] | None = None,
     limits: GenerationLimits = DEFAULT_LIMITS,
+    allow_empty: bool = False,
 ) -> tuple[str, list[ToolCall], _UsagePoint, str]:
     """Tries ``profile`` up to ``max_retries`` times with exponential backoff; on total
     failure, tries ``fallback_profile`` once (if set). Raises
-    ``AllRetriesExhaustedError`` if every attempt failed."""
+    ``AllRetriesExhaustedError`` if every attempt failed.
+
+    ``allow_empty`` is for the follow-up call after a turn has already acted through a
+    tool: a model that created the work item and then has nothing to add returns an
+    empty reply (seen live with gpt-5.6-luna, twice, on two deployments). That is a
+    finished turn, and retrying cannot change it -- failing it paused the session over
+    work already done."""
     with _tracer.start_as_current_span("runtime.call_provider_with_retry") as span:
         candidates: list[Agent] = [profile] * max_retries
         if fallback_profile is not None:
@@ -217,7 +224,7 @@ async def _call_provider_with_retry(
                     tool_calls=len(tool_calls),
                     max_tokens=req.params.get("max_tokens"),
                 )
-                if not content.strip() and not tool_calls:
+                if not content.strip() and not tool_calls and not allow_empty:
                     structlog.get_logger().info("runtime.empty_content", raw=repr(content[:200]))
                     raise EmptyGenerationError(f"{model_string} returned an empty generation")
                 prompt_tokens = sum(
@@ -366,6 +373,7 @@ async def run_agent_turn(
                 egress_policy,
                 persona_params=persona_params,
                 limits=generation_limits,
+                allow_empty=tool_calls_made > 0,
             )
             usage_points.append(usage)
 

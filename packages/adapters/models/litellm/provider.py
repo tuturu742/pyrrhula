@@ -63,6 +63,12 @@ _PROMPT_CACHING_MARKERS = ("claude", "gpt-4", "gpt-5", "gemini-1.5", "gemini-2")
 # `num_ctx` param says otherwise.
 _OLLAMA_NUM_CTX = 16384
 
+# Ollama's server shifts its context window instead of stopping when the output fills
+# it, so a request with no output ceiling and a model caught in a repetition loop never
+# returns: observed, 3,300+ tokens of one repeated sentence and still going (newsroom
+# sweep, 2026-10-04). A connection's own max_tokens or num_predict overrides this.
+_OLLAMA_MAX_OUTPUT_TOKENS = 4096
+
 
 def _tool_specs_to_litellm(req: GenerationRequest) -> list[dict[str, Any]] | None:
     if not req.tools:
@@ -295,8 +301,10 @@ def _unsupported_value_param(exc: Exception) -> str | None:
 #    (With "Use 'x' instead" it is a rename, which _renamed_param handles first.)
 # A bundle's persona carrying a sampling knob -- the Hägnaryd inspector's temperature
 # 0.4, its presence_penalty -- failed every turn on these models until both were matched.
+# LiteLLM's pre-flight for OpenAI gpt-5.x says "gpt-5 models (including gpt-5-codex)
+# don't support temperature=0.4" -- "don't", not "does not" -- so every negation matches.
 _NAMED_REFUSAL_RES = (
-    re.compile(r"does not support\s+([a-z_]+)\s*=", re.I),
+    re.compile(r"(?:does not|doesn't|do not|don't)\s+support\s+([a-z_]+)\s*=", re.I),
     re.compile(r"unsupported parameter:\s*'([^']+)'\s*is not supported", re.I),
 )
 
@@ -477,6 +485,16 @@ class LiteLLMModelProvider:
         # whose hardware justified setting it.
         for key, value in extra.items():
             kwargs.setdefault(key, value)
+        # A platform ceiling, not a budget anyone chose: the empty-generation retry below
+        # must not treat it as one and "raise" it instead of turning reasoning off.
+        platform_budget = False
+        if (
+            req.model.startswith(("ollama/", "ollama_chat/"))
+            and kwargs.get("max_tokens") is None
+            and "num_predict" not in kwargs
+        ):
+            kwargs["max_tokens"] = _OLLAMA_MAX_OUTPUT_TOKENS
+            platform_budget = True
         call = dict(
             model=_dispatch_model(req.model, bool(tools)),
             messages=messages,
@@ -652,7 +670,7 @@ class LiteLLMModelProvider:
             # would dodge the raise.
             budget_key = _budget_key(accepted_call)
             budget = accepted_call.get(budget_key)
-            if isinstance(budget, int) and budget > 0:
+            if isinstance(budget, int) and budget > 0 and not platform_budget:
                 retry[budget_key] = max(
                     budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
                 )
