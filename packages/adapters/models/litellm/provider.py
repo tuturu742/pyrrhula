@@ -152,18 +152,25 @@ def _first_json_object(raw: str) -> str:
     `response_format` the endpoint refused would have done for us.
     """
     text = (raw or "").strip()
+    decoder = json.JSONDecoder()
+    # The reply as given comes first, fences only after: a fence can sit INSIDE the
+    # object -- a review comment suggesting a fix in ```gdscript -- and cutting at the
+    # first fence handed the validator the code instead of the verdict around it.
+    chunks = [text]
     if "```" in text:
-        fenced = text.split("```")
-        if len(fenced) >= 3:
-            text = fenced[1].removeprefix("json").strip()
-    start = text.find("{")
-    if start == -1:
-        return text
-    try:
-        obj, _end = json.JSONDecoder().raw_decode(text, start)
-    except json.JSONDecodeError:
-        return text
-    return json.dumps(obj)
+        chunks += [block.removeprefix("json").strip() for block in text.split("```")[1::2]]
+    for chunk in chunks:
+        start = chunk.find("{")
+        while start != -1:
+            try:
+                obj, _end = decoder.raw_decode(chunk, start)
+            except json.JSONDecodeError:
+                start = chunk.find("{", start + 1)
+                continue
+            if isinstance(obj, dict):
+                return json.dumps(obj)
+            start = chunk.find("{", start + 1)
+    return text
 
 
 def _parse_streamed_arguments(raw: str) -> dict[str, Any]:

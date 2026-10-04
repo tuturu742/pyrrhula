@@ -212,6 +212,21 @@ def test_first_json_object_tolerates_fences_and_prose() -> None:
     assert _first_json_object("no json here") == "no json here"
 
 
+def test_a_fence_inside_the_object_is_part_of_it() -> None:
+    """A review verdict whose comment suggests code: the fence is inside a JSON string.
+    Cutting at the first fence used to hand the validator the code, and the review of a
+    pull request failed with "Invalid JSON ... input_value='gdscript\\nreturn ...'"."""
+    reply = json.dumps(
+        {
+            "verdict": "request_changes",
+            "comments": "Clamp it:\n```gdscript\nreturn BASE_SPEED * n\n```\nThen rerun.",
+        }
+    )
+    assert json.loads(_first_json_object(reply))["verdict"] == "request_changes"
+    fenced = f"Here is my verdict:\n```json\n{reply}\n```"
+    assert json.loads(_first_json_object(fenced))["verdict"] == "request_changes"
+
+
 def test_rejects_schema_constrained_output_matches_the_parameter_not_a_vendor() -> None:
     assert _rejects_schema_constrained_output(
         Exception("OpenAIException - This response_format type is unavailable now")
