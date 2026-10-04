@@ -98,11 +98,22 @@ if [ "$PURGE" = 1 ]; then
   # exactly that. Finish by name -- every container, volume and network this project
   # creates carries the project prefix -- and refuse to continue if the database
   # volume is still there, because "purged" has to mean purged.
-  "$ENGINE" ps -a --format '{{.Names}}' | while read -r name; do
-    case "$name" in "${PROJECT}_"*) "$ENGINE" rm -f "$name" >/dev/null ;; esac
+  # In passes: podman refuses to remove a container another one depends on (postgres,
+  # while the exited migrate one-shot still names it), and the listing comes back in no
+  # useful order. Each pass removes whatever has nothing depending on it any more.
+  for _pass in 1 2 3 4; do
+    left=0
+    while read -r name; do
+      case "$name" in
+        "${PROJECT}_"*) "$ENGINE" rm -f "$name" >/dev/null 2>&1 || left=1 ;;
+      esac
+    done < <("$ENGINE" ps -a --format '{{.Names}}')
+    [ "$left" = 0 ] && break
   done
   "$ENGINE" volume ls --format '{{.Name}}' | while read -r vol; do
-    case "$vol" in "${PROJECT}_"*) "$ENGINE" volume rm -f "$vol" >/dev/null ;; esac
+    # A failure here is reported by the database-volume check below, by name, rather
+    # than ending the script on the engine's own message.
+    case "$vol" in "${PROJECT}_"*) "$ENGINE" volume rm -f "$vol" >/dev/null 2>&1 || true ;; esac
   done
   "$ENGINE" network ls --format '{{.Name}}' | while read -r net; do
     case "$net" in "${PROJECT}_"*) "$ENGINE" network rm -f "$net" >/dev/null 2>&1 || true ;; esac
