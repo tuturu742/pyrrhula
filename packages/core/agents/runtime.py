@@ -355,6 +355,7 @@ async def run_agent_turn(
         conversation = list(messages)
         usage_points: list[_UsagePoint] = []
         tool_calls_made = 0
+        tools_called: list[str] = []
         resolution_record_ids: list[str] = []
         tools = tool_registry.specs()
 
@@ -378,6 +379,18 @@ async def run_agent_turn(
             usage_points.append(usage)
 
             if not tool_calls:
+                if not content.strip() and tools_called:
+                    # The turn acted and then said nothing. An empty message hides the
+                    # turn from the transcript (a plan phase with no visible plan); say
+                    # what it did instead.
+                    counted = sorted(
+                        {name: tools_called.count(name) for name in tools_called}.items()
+                    )
+                    content = (
+                        "(acted through "
+                        + ", ".join(f"{name} ×{n}" if n > 1 else name for name, n in counted)
+                        + ")"
+                    )
                 if finalize_reply is not None:
                     content = await finalize_reply(content)
                 return await _commit_turn(
@@ -422,6 +435,7 @@ async def run_agent_turn(
             )
             for tool_call in tool_calls:
                 tool_calls_made += 1
+                tools_called.append(tool_call.name)
                 tool_result = await _dispatch_tool_idempotent(
                     tenant_id=tenant_id,
                     idempotency_key=f"{idempotency_key}:tool:{tool_call.id}",
