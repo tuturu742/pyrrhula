@@ -36,7 +36,12 @@ class DockerSocketExecEnvProvider:
         *,
         network: str | None = None,
         limits: ExecLimits | None = None,
+        run_timeout_seconds: int = 1800,
     ) -> None:
+        # How long one script may run: the engine's own run timeout, the same bound the
+        # one-shot engines enforce. The exec stream used to share the 600-second timeout
+        # of every other call, so a harness working past ten minutes was cut off mid-run.
+        self._run_timeout = run_timeout_seconds
         # Optional engine-declared network for environments (e.g. a dedicated
         # 'pyrrhula-envs' network that carries the api -- for git smart-HTTP -- but NOT
         # the database). None = the engine's default network.
@@ -87,8 +92,17 @@ class DockerSocketExecEnvProvider:
                 return await client.request(
                     method, f"{_API}{path}", json=json_body, params=params, headers=headers
                 )
+        except httpx.TimeoutException as exc:
+            # Not "unreachable": the engine answered, and then took longer than allowed.
+            # A timeout's own message is empty, which made this read as a dead socket.
+            raise ExecEnvUnavailableError(
+                f"the engine did not finish {method} {path} within {int(timeout)} seconds "
+                f"({type(exc).__name__})"
+            ) from exc
         except httpx.HTTPError as exc:
-            raise ExecEnvUnavailableError(f"engine socket unreachable: {exc}") from exc
+            raise ExecEnvUnavailableError(
+                f"engine socket unreachable: {type(exc).__name__}: {exc}"
+            ) from exc
 
     async def _ensure_image(self, image: str, registry_auth: str | None = None) -> None:
         await ensure_image(self._request, image, registry_auth, unavailable=ExecEnvUnavailableError)
@@ -191,8 +205,13 @@ class DockerSocketExecEnvProvider:
                 f"exec create in {env_ref!r} failed: {created.text[:200]}"
             )
         exec_id = created.json()["Id"]
+        # The response is the command's whole output, so this call lasts as long as the
+        # command does: bounded by the run timeout, plus room for the engine to answer.
         started = await self._request(
-            "POST", f"/exec/{exec_id}/start", json_body={"Detach": False, "Tty": False}
+            "POST",
+            f"/exec/{exec_id}/start",
+            json_body={"Detach": False, "Tty": False},
+            timeout=float(self._run_timeout + 120),
         )
         if started.status_code >= 400:
             raise ExecEnvUnavailableError(f"exec start failed: {started.text[:200]}")
