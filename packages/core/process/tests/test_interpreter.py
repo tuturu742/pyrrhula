@@ -568,3 +568,119 @@ async def test_on_event_fires_for_phase_transition_and_message(db_available: Non
     message_payload = next(p for _s, k, p in published if k == "message")
     assert message_payload["role"] == "assistant"
     assert "id" in message_payload
+
+
+async def test_a_paused_session_stops_advancing_at_the_next_step(db_available: None) -> None:
+    """A pause taken while the loop runs must stop it. The status was never re-read: a
+    paused newsroom session ran four more turns and its terminal transition then
+    overwrote 'paused' with 'completed' (sweep 2026-10-04)."""
+    tenant_id, _workspace_id, principal_id, session_id = await _setup("interp-paused")
+    definition = ProcessDefinitionDSL.model_validate(MINIMAL_MVP_FLOW)
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(SessionRow, session_id)
+        assert row is not None
+        row.status = "paused"
+
+    async def eager(_ctx: InterpreterContext) -> ActorRef | None:
+        return ActorRef(principal_id=principal_id, mode="generate")
+
+    result = await advance_session(
+        tenant_id, session_id, definition, next_actor_fn=eager, execute_turn=_stub_execute_turn
+    )
+
+    assert result.status == "paused"
+    assert not [e for e in await _get_events(tenant_id, session_id) if e.kind == "message"]
+    assert (await _get_session(tenant_id, session_id)).status == "paused"
+
+
+async def test_a_faulted_turn_puts_the_actor_cursor_back(db_available: None) -> None:
+    """The scheduler persists the advanced cursor before the turn runs. A turn that then
+    faults left it advanced, so a resume skipped that actor: the Hägnaryd inspector's
+    whole opening phase vanished after a resume (sweep 2026-10-04)."""
+    from core.process.interpreter import InterpreterFaultError
+
+    tenant_id, _workspace_id, principal_id, session_id = await _setup("interp-cursor")
+    definition = ProcessDefinitionDSL.model_validate(MINIMAL_MVP_FLOW)
+    before = {"phase_key": "opening", "entry_index": 0, "entry": None}
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(SessionRow, session_id)
+        assert row is not None
+        row.actor_cursor = dict(before)
+
+    async def advancing(ctx: InterpreterContext) -> ActorRef | None:
+        async with tenant_scope(ctx.tenant_id) as session:
+            row = await session.get(SessionRow, ctx.session_id)
+            assert row is not None
+            row.actor_cursor = {"phase_key": ctx.phase_key, "entry_index": 1, "entry": None}
+        return ActorRef(principal_id=principal_id, mode="generate")
+
+    async def faulting(_actor: ActorRef, _ctx: InterpreterContext) -> ActorTurnResult:
+        raise InterpreterFaultError("the model returned an empty generation")
+
+    result = await advance_session(
+        tenant_id, session_id, definition, next_actor_fn=advancing, execute_turn=faulting
+    )
+
+    assert result.status == "paused"
+    assert (await _get_session(tenant_id, session_id)).actor_cursor == before
+
+
+async def test_a_personas_own_tool_results_stay_in_its_history(db_available: None) -> None:
+    """A remote tool's answer used to exist only inside the turn that fetched it: the
+    Hägnaryd inspector spent her second lab request repeating the first and told the
+    table the radio had produced nothing (sweep 2026-10-04). Her own results now ride
+    along in her history, at the seq they arrived; nobody else's do."""
+    from core.process.live_session import _load_conversation
+
+    tenant_id, _workspace_id, principal_id, session_id = await _setup("interp-tools")
+    async with tenant_scope(tenant_id) as session:
+        persona_name = await session.scalar(
+            select(Persona.name).where(Persona.principal_id == principal_id)
+        )
+        assert persona_name
+        session.add(
+            MessageRow(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                event_seq=1,
+                author_principal_id=principal_id,
+                role="assistant",
+                content_md="Lab, recover the speech file.",
+            )
+        )
+        session.add(
+            SessionEventRow(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                event_seq=2,
+                kind="tool_call",
+                payload={
+                    "server_key": "evidence",
+                    "tool_name": "evidence_check",
+                    "arguments": {"request": "recover_speech_file"},
+                    "author": persona_name,
+                    "outcome": "completed",
+                    "result": "Page six names the heir.",
+                },
+            )
+        )
+        session.add(
+            MessageRow(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                event_seq=3,
+                author_principal_id=principal_id,
+                role="assistant",
+                content_md="Noted.",
+            )
+        )
+
+    own = await _load_conversation(tenant_id, session_id, viewer_principal_id=principal_id)
+    assert [m["content"][:12] for m in own] == ["Lab, recover", "[Result of y", "Noted."]
+    assert "Page six names the heir." in own[1]["content"]
+    assert own[1]["role"] == "user"
+
+    someone_else = await _load_conversation(tenant_id, session_id, viewer_principal_id=uuid.uuid4())
+    assert not any("Page six" in m["content"] for m in someone_else)

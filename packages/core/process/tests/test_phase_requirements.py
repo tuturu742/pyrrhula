@@ -311,3 +311,32 @@ def test_entities_touched_is_separate_from_entity_changes() -> None:
     assert unmet_requirements(PhaseCompletionSpec(entity_changes=1), produced) == {
         "entity_changes": {"required": 1, "produced": 0}
     }
+
+
+async def test_measure_counts_read_only_remote_calls(db_available: None) -> None:
+    """A web search or a lab query is recorded in mcp_call_record, never in the effectful
+    ledger. A beat requiring "the desks must have looked something up" counted zero for
+    every search it made (newsroom sweep). Refused calls were never made."""
+    from core.mcp.registry import McpCallRecord
+
+    definition = _definition(PhaseCompletionSpec(tool_calls=1))
+    tenant_id, session_id = await _session_on(definition, "req-mcp")
+
+    async with tenant_scope(tenant_id) as session:
+        for seq, outcome in ((40, "completed"), (41, "completed"), (42, "refused")):
+            session.add(
+                McpCallRecord(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    server_key="web_search",
+                    tool_name="search",
+                    event_seq=seq,
+                    effectful=False,
+                    outcome=outcome,
+                    detail={},
+                )
+            )
+
+    produced = await measure_phase(tenant_id, session_id)
+    assert produced["tool_calls"] == 2, produced
