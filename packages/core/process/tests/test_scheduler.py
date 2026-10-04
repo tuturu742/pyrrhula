@@ -27,6 +27,7 @@ from core.process.scheduler import (
     make_scheduler,
 )
 from core.process.skeleton import create_session
+from core.sessions.models import SessionRow
 from core.tenancy.models import Membership, Principal, WorkspaceMembership
 from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
@@ -63,6 +64,19 @@ def _static_resolver(candidates: list[Candidate]):  # noqa: ANN201
     return resolve
 
 
+async def _take(scheduler, ctx: InterpreterContext):  # noqa: ANN001, ANN201
+    """Ask for the next actor and, if one was given, record that their turn landed --
+    the message event every real turn commits moves the session's event clock, which
+    is how the scheduler tells a taken turn from one that was only issued."""
+    actor = await scheduler(ctx)
+    if actor is not None:
+        async with tenant_scope(ctx.tenant_id) as session:
+            row = await session.get(SessionRow, ctx.session_id)
+            assert row is not None
+            row.next_event_seq = row.next_event_seq + 1
+    return actor
+
+
 # ── declared order ──────────────────────────────────────────────────────────────────
 
 
@@ -76,7 +90,7 @@ async def test_declared_order_gives_turns_in_list_order(db_available: None) -> N
 
     seen = []
     for _ in range(4):
-        actor = await scheduler(_ctx(tenant_id, session_id, phase))
+        actor = await _take(scheduler, _ctx(tenant_id, session_id, phase))
         seen.append(actor.principal_id if actor else None)
 
     assert seen == [p1, p2, p3, None]
@@ -89,8 +103,8 @@ async def test_declared_order_respects_max_turns_cap(db_available: None) -> None
     phase = _phase([spec])
     scheduler = make_scheduler(_static_resolver([Candidate(p1), Candidate(p2)]))
 
-    first = await scheduler(_ctx(tenant_id, session_id, phase))
-    second = await scheduler(_ctx(tenant_id, session_id, phase))
+    first = await _take(scheduler, _ctx(tenant_id, session_id, phase))
+    second = await _take(scheduler, _ctx(tenant_id, session_id, phase))
 
     assert first is not None and first.principal_id == p1
     assert second is None
@@ -115,7 +129,7 @@ async def test_initiative_order_sorts_descending(db_available: None) -> None:
 
     order = []
     for _ in range(3):
-        actor = await scheduler(_ctx(tenant_id, session_id, phase))
+        actor = await _take(scheduler, _ctx(tenant_id, session_id, phase))
         order.append(actor.principal_id)
 
     assert order == [high, mid, low]
@@ -138,7 +152,7 @@ async def test_initiative_ties_break_by_declared_order(db_available: None) -> No
 
     order = []
     for _ in range(2):
-        actor = await scheduler(_ctx(tenant_id, session_id, phase))
+        actor = await _take(scheduler, _ctx(tenant_id, session_id, phase))
         order.append(actor.principal_id)
 
     assert order == [first_declared, second_declared]
@@ -154,7 +168,7 @@ async def test_free_order_picks_deterministically_among_eligible(db_available: N
     phase = _phase([spec])
     scheduler = make_scheduler(_static_resolver([Candidate(p1), Candidate(p2)]))
 
-    first = await scheduler(_ctx(tenant_id, session_id, phase))
+    first = await _take(scheduler, _ctx(tenant_id, session_id, phase))
     assert first is not None and first.principal_id == p1  # sorted-by-id, deterministic
 
 
@@ -165,7 +179,7 @@ async def test_free_order_respects_max_turns_cap(db_available: None) -> None:
     phase = _phase([spec])
     scheduler = make_scheduler(_static_resolver([Candidate(p1)]))
 
-    results = [await scheduler(_ctx(tenant_id, session_id, phase)) for _ in range(3)]
+    results = [await _take(scheduler, _ctx(tenant_id, session_id, phase)) for _ in range(3)]
 
     assert [r is not None for r in results] == [True, True, False]
 
@@ -176,7 +190,7 @@ async def test_no_eligible_candidates_returns_none(db_available: None) -> None:
     phase = _phase([spec])
     scheduler = make_scheduler(_static_resolver([]))
 
-    actor = await scheduler(_ctx(tenant_id, session_id, phase))
+    actor = await _take(scheduler, _ctx(tenant_id, session_id, phase))
 
     assert actor is None
 
@@ -208,7 +222,7 @@ async def test_mid_phase_removal_is_skipped_without_a_turn(db_available: None) -
 
     seen = []
     for _ in range(4):
-        actor = await scheduler(_ctx(tenant_id, session_id, phase))
+        actor = await _take(scheduler, _ctx(tenant_id, session_id, phase))
         seen.append(actor.principal_id if actor else None)
 
     assert seen == [p1, p3, None, None]
@@ -220,7 +234,7 @@ async def test_mid_phase_removal_is_skipped_without_a_turn(db_available: None) -
 async def test_cursor_survives_simulated_kill_and_resume_mid_rotation(db_available: None) -> None:
     """A fresh `make_scheduler(...)` closure (simulating a new process after a crash) reads
     the SAME persisted session.actor_cursor and continues exactly where the old one left
-    off -- no skipped turn, no repeated turn."""
+    off -- no skipped turn, no repeated turn -- when the turn before the crash landed."""
     tenant_id, _workspace_id, session_id = await _setup("sched-resume")
     p1, p2, p3 = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     candidates = [Candidate(p1), Candidate(p2), Candidate(p3)]
@@ -228,18 +242,41 @@ async def test_cursor_survives_simulated_kill_and_resume_mid_rotation(db_availab
     phase = _phase([spec])
 
     scheduler_before_crash = make_scheduler(_static_resolver(candidates))
-    first = await scheduler_before_crash(_ctx(tenant_id, session_id, phase))
+    first = await _take(scheduler_before_crash, _ctx(tenant_id, session_id, phase))
     assert first is not None and first.principal_id == p1
 
     # "Crash": a brand-new closure, no in-memory state carried over -- only the DB cursor.
     scheduler_after_resume = make_scheduler(_static_resolver(candidates))
-    second = await scheduler_after_resume(_ctx(tenant_id, session_id, phase))
-    third = await scheduler_after_resume(_ctx(tenant_id, session_id, phase))
-    fourth = await scheduler_after_resume(_ctx(tenant_id, session_id, phase))
+    second = await _take(scheduler_after_resume, _ctx(tenant_id, session_id, phase))
+    third = await _take(scheduler_after_resume, _ctx(tenant_id, session_id, phase))
+    fourth = await _take(scheduler_after_resume, _ctx(tenant_id, session_id, phase))
 
     assert second is not None and second.principal_id == p2
     assert third is not None and third.principal_id == p3
     assert fourth is None
+
+
+async def test_a_turn_the_crash_cut_off_is_offered_again(db_available: None) -> None:
+    """The cursor is persisted before the turn runs. A process that dies mid-generation
+    leaves it advanced with nothing written, and a resume used to skip that actor: a
+    referee's resolution turn vanished after a pod was replaced under the session
+    (karsh-vale sweep, 2026-10-04). Nothing written since the cursor moved means the
+    turn never happened."""
+    tenant_id, _workspace_id, session_id = await _setup("sched-cut-off")
+    p1, p2 = uuid.uuid4(), uuid.uuid4()
+    spec = ActorSpec(persona_type="participant", mode="generate", order="declared", max_turns=2)
+    phase = _phase([spec])
+
+    before_crash = make_scheduler(_static_resolver([Candidate(p1), Candidate(p2)]))
+    first = await before_crash(_ctx(tenant_id, session_id, phase))  # issued, never landed
+    assert first is not None and first.principal_id == p1
+
+    after_resume = make_scheduler(_static_resolver([Candidate(p1), Candidate(p2)]))
+    again = await _take(after_resume, _ctx(tenant_id, session_id, phase))
+    then = await _take(after_resume, _ctx(tenant_id, session_id, phase))
+
+    assert again is not None and again.principal_id == p1
+    assert then is not None and then.principal_id == p2
 
 
 async def test_cursor_resets_on_entering_a_different_phase(db_available: None) -> None:
@@ -253,8 +290,8 @@ async def test_cursor_resets_on_entering_a_different_phase(db_available: None) -
     ctx_a = InterpreterContext(tenant_id, session_id, "phase_a", phase_a, {})
     ctx_b = InterpreterContext(tenant_id, session_id, "phase_b", phase_b, {})
 
-    first_in_a = await scheduler(ctx_a)
-    first_in_b = await scheduler(ctx_b)  # new phase -- cursor resets, starts from p1 again
+    first_in_a = await _take(scheduler, ctx_a)
+    first_in_b = await _take(scheduler, ctx_b)  # new phase -- cursor resets, starts from p1 again
 
     assert first_in_a is not None and first_in_a.principal_id == p1
     assert first_in_b is not None and first_in_b.principal_id == p1
