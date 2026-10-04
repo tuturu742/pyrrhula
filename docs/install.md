@@ -182,7 +182,7 @@ under **Admin → Models**.
   one-shot runs Alembic before api/worker start).
 - **Skip the build**: `./install.sh compose --from-registry` runs the same stack from
   the published images — minutes instead of a first build. Add `=VERSION` to pin one
-  (`--from-registry=0.1.0-rc2`). Everything else on this page still applies; the
+  (`--from-registry=0.1.0-rc3`). Everything else on this page still applies; the
   difference is that you are running the tagged code rather than your working tree.
 - **Offline model loads**: `PYRRHULA_HF_OFFLINE` defaults to `1`, so the runtime never
   reaches Hugging Face on its own; the admin-console download lifts that for its one
@@ -210,7 +210,7 @@ Ours are linux/amd64 and public: no `docker login`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
-curl -fsSL .../release.sh | sh -s -- 0.1.0-rc2          # a specific release
+curl -fsSL .../release.sh | sh -s -- 0.1.0-rc3          # a specific release
 ```
 
 Everything lands in `./pyrrhula` (`PYRRHULA_DIR` to choose). The script generates the
@@ -233,11 +233,11 @@ name. Unset, nothing changes.
 **Without the script**, if you would rather read what you run:
 
 ```bash
-base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v0.1.0-rc2/docker
+base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v0.1.0-rc3/docker
 curl -fsSLO $base/compose.release.yml
 curl -fsSLO $base/searxng-settings.yml     # the compose file mounts this by name
 cat > .env <<EOF
-PYRRHULA_VERSION=0.1.0-rc2
+PYRRHULA_VERSION=0.1.0-rc3
 PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)
 PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)
 PYRRHULA_JWT_SECRET=$(openssl rand -base64 48)
@@ -274,7 +274,7 @@ search that finds nothing.
 way to tell what a pulled deployment actually is:
 
 ```bash
-curl -s localhost:5173/api/health     # {"status":"ok","version":"0.1.0rc2"}
+curl -s localhost:5173/api/health     # {"status":"ok","version":"0.1.0rc3"}
 ```
 
 ## Portainer (a Docker host you manage in Portainer)

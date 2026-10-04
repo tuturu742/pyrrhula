@@ -1,6 +1,6 @@
 [project]
 name = "pyrrhula"
-version = "0.1.0rc2"
+version = "0.1.0rc3"
 description = "Multi-tenant, multi-agent orchestration platform: tabletop RPG, enterprise discussion and software-development workflows on one engine"
 license = "MIT"
 license-files = ["LICENSE"]

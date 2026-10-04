@@ -3,7 +3,7 @@
 # Python or Node on the host -- one compose file and three pulled images.
 #
 #   curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
-#   curl -fsSL .../release.sh | sh -s -- 0.1.0-rc2        # a specific release
+#   curl -fsSL .../release.sh | sh -s -- 0.1.0-rc3        # a specific release
 #
 # Everything lands in ./pyrrhula (override with PYRRHULA_DIR). Rerun it to upgrade:
 # the .env is kept, the compose file and images are refreshed.
@@ -14,7 +14,7 @@
 # docs/install.md.
 set -eu
 
-VERSION="${1:-${PYRRHULA_VERSION:-0.1.0-rc2}}"
+VERSION="${1:-${PYRRHULA_VERSION:-0.1.0-rc3}}"
 DIR="${PYRRHULA_DIR:-./pyrrhula}"
 REPO="tuturu742/pyrrhula"
 # Names every container, volume and network in this deployment. Change it (with
