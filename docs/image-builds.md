@@ -68,6 +68,13 @@ of it is refused. Its **read credential** is used to verify digests and lent to 
 pull, and **only for the organization's own namespace**: the operator's credential can
 usually read the whole registry.
 
+**Publishing an image for everyone** (a sample, a shared toolchain): copy it out of the
+organization's namespace first, e.g. `skopeo copy --all --preserve-digests` from
+`ghcr.io/acme/pyrrhula/t<org>/godot-node@sha256:…` to `ghcr.io/acme/samples/godot-node`.
+Same digest, no rebuild. A reference *inside* an organization's namespace is refused for
+every other organization on any deployment that declares that registry and prefix — which
+is the rule working, and why a shared image must not live there.
+
 The **runtime-image allowlist** (same page) restricts where *any* runtime image may come from
 — repository settings, a repository's own `pyrrhula-build.json`, runtimes, harnesses,
 previews, imported bundles, `FROM` lines. Empty means unrestricted.
