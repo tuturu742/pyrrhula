@@ -138,7 +138,22 @@ async def _load_conversation(
     viewer_principal_id: uuid.UUID | None = None,
     history_char_budget: int | None = None,
 ) -> list[dict[str, str]]:
-    """The transcript as chat messages. With a ``viewer_principal_id``, roles are
+    """The transcript as chat messages (see ``_load_conversation_with_boundary``)."""
+    messages, _first_seq = await _load_conversation_with_boundary(
+        tenant_id, session_id, viewer_principal_id, history_char_budget
+    )
+    return messages
+
+
+async def _load_conversation_with_boundary(
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    viewer_principal_id: uuid.UUID | None = None,
+    history_char_budget: int | None = None,
+) -> tuple[list[dict[str, str]], int]:
+    """The transcript as chat messages, and the event_seq of the first replayed message
+    when the tail trim dropped anything before it -- 0 when nothing was dropped, so the
+    caller knows there is nothing to summarise. With a ``viewer_principal_id``, roles are
     mapped from that actor's perspective: its own past turns keep their stored role,
     every other author's become ``user`` turns prefixed with the author's display
     name. Chat-completions backends assume a two-role dialogue (and some -- ollama's
@@ -199,16 +214,15 @@ async def _load_conversation(
                     )
                     timeline.append((event.event_seq, {"role": "user", "content": note}))
         timeline.sort(key=lambda item: item[0])
-        return _tail_trim([message for _seq, message in timeline], history_char_budget)
-
-
-def _replayed_from_seq(conversation: list[dict[str, str]], event_seq: int) -> int:
-    """The first event_seq still present verbatim in the replayed tail. Everything
-    BEFORE it is what a history summary must cover -- the tail is trimmed by character
-    budget (_tail_trim), so this is derived from how many messages survived, not from a
-    fixed window. 0 means nothing was dropped: no summary needed."""
-    dropped = max(0, event_seq - len(conversation))
-    return dropped
+        kept = _tail_trim_pairs(timeline, history_char_budget)
+        # The boundary comes from the seq that actually survived, not from counting
+        # messages against the event clock: a message takes more than one seq once a
+        # turn also records tool calls, and `event_seq - len(conversation)` then said
+        # something was dropped on nearly every turn. The history summariser ran 99
+        # times on one 50-minute session in which nothing had been trimmed, at ~55% of
+        # the session's own prompt tokens (Hägnaryd sweep, 2026-10-04).
+        first_seq = kept[0][0] if kept and len(kept) < len(timeline) else 0
+        return [message for _seq, message in kept], first_seq
 
 
 # The transcript budget when nothing more specific is configured. It is a property of
@@ -226,13 +240,21 @@ def _tail_trim(
     window on modest hardware, and the assembled manifest already carries the durable
     knowledge -- replaying the whole transcript verbatim is the part that grows without
     bound."""
+    return [m for _seq, m in _tail_trim_pairs(list(enumerate(conversation)), budget)]
+
+
+def _tail_trim_pairs(
+    timeline: list[tuple[int, dict[str, str]]], budget: int | None = None
+) -> list[tuple[int, dict[str, str]]]:
+    """``_tail_trim`` over ``(event_seq, message)`` pairs, so the caller still knows which
+    seqs survived."""
     budget = int(budget or _DEFAULT_HISTORY_CHAR_BUDGET)
-    kept: list[dict[str, str]] = []
+    kept: list[tuple[int, dict[str, str]]] = []
     used = 0
-    for message in reversed(conversation):
+    for seq, message in reversed(timeline):
         if kept and len(kept) >= 2 and used + len(message["content"]) > budget:
             break
-        kept.append(message)
+        kept.append((seq, message))
         used += len(message["content"])
     kept.reverse()
     return kept
@@ -340,7 +362,7 @@ async def run_one_persona_turn(
         history_budget_chars = int(str(raw_budget)) if raw_budget is not None else None
     except (TypeError, ValueError):
         history_budget_chars = None
-    conversation = await _load_conversation(
+    conversation, replayed_from = await _load_conversation_with_boundary(
         tenant_id, session_id, principal_id, history_budget_chars
     )
     query_text = conversation[-1]["content"] if conversation else ""
@@ -453,7 +475,8 @@ async def run_one_persona_turn(
     if history_budget > 0 and persona_agent is not None and permission_service is not None:
         from core.sessions.history import summarise_history
 
-        replayed_from = _replayed_from_seq(conversation, event_seq)
+        # replayed_from is the first replayed seq when the tail trim dropped anything,
+        # else 0: no summary call when nothing was lost.
         if replayed_from > 0:
             try:
                 summary = await summarise_history(
