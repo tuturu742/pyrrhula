@@ -819,6 +819,10 @@ class PullRequestOut(BaseModel):
     status: str = ""
     ci_status: str = ""
     commits: int = 0
+    # Where the pull request lives on the git host, when the repo has one. The record
+    # carried it from the day the remote was wired, and the transcript note showed it;
+    # the list was the one reader that dropped it.
+    html_url: str | None = None
     # Whether this branch has a build to preview. A pull request whose branch has been
     # deleted, or which never produced an artifact, still has a record in the sidecar --
     # offering it as previewable would deploy straight to a 404.
@@ -867,6 +871,7 @@ async def list_repo_pull_requests(
                 status=str(record.get("status") or ""),
                 ci_status=str(record.get("ci_status") or ""),
                 commits=int(record.get("commits") or 0),
+                html_url=str(record["html_url"]) if record.get("html_url") else None,
                 previewable=previewable,
             )
         )

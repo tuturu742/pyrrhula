@@ -358,7 +358,12 @@ async def collect_visible_facts(
 
 
 async def collect_prose_by_phase(
-    tenant_id: uuid.UUID, session_id: uuid.UUID, *, from_event_seq: int, to_event_seq: int
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    *,
+    from_event_seq: int,
+    to_event_seq: int,
+    with_author: bool = True,
 ) -> list[tuple[str, list[str]]]:
     """Walks the session log forward, tracking the current phase from ``phase_transition``
     events and attributing each ``message`` event to it -- the log is the source of truth,
@@ -371,6 +376,8 @@ async def collect_prose_by_phase(
     people and asks it to narrate the session: it cannot attribute an action to whoever
     took it, so the returning summary says "the party" and "someone" where the record
     knows the name. The log already carries the author on every ``message`` event.
+    ``with_author=False`` is for the one reader that wants the text itself -- a composed
+    document rendered as written -- where a speaker prefix would corrupt the first line.
     """
     async with tenant_scope(tenant_id) as session:
         rows = list(
@@ -401,7 +408,7 @@ async def collect_prose_by_phase(
         if not isinstance(content, str) or not content.strip():
             continue
         author = row.payload.get("author")
-        if isinstance(author, str) and author.strip():
+        if with_author and isinstance(author, str) and author.strip():
             content = f"{author.strip()}: {content}"
         phase_of_event = row.payload.get("phase")
         phase_key = phase_of_event if isinstance(phase_of_event, str) else current_phase

@@ -450,3 +450,89 @@ async def test_decision_summary_selects_only_decision_shaped_facts(
     assert "resolution" not in kinds, (
         "the decision summary included dice rolls -- its fact_kinds filter did nothing"
     )
+
+
+async def _log_said(
+    tenant_id: uuid.UUID, session_id: uuid.UUID, event_seq: int, phase: str, author: str, text: str
+) -> None:
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            SessionEventRow(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                event_seq=event_seq,
+                kind="message",
+                payload={"phase": phase, "author": author, "content": text},
+            )
+        )
+
+
+async def _verbatim_session(two_tenants: tuple[uuid.UUID, uuid.UUID]):  # noqa: ANN202
+    tenant_id, _tenant_b = two_tenants
+    workspace_id = await _workspace_of(tenant_id)
+    await seed_default_scopes(tenant_id, workspace_id)
+    viewer = await _member(tenant_id, workspace_id, "facilitator")
+    persona_id = await seed_dev_agent(tenant_id, workspace_id)
+    sess = await create_session(tenant_id, workspace_id, persona_id)
+    profile = await create_agent(
+        tenant_id, f"rep-{uuid.uuid4().hex[:6]}", "echo", "echo-1", encryptor=IdentityEncryptor()
+    )
+    await _log_said(tenant_id, sess.id, 1, "reporting", "Nadia Brekke", "I found one story.")
+    await _log_said(
+        tenant_id, sess.id, 2, "edition", "Marit Halvorsen", "# The Vantage\n\nOne story."
+    )
+    return tenant_id, workspace_id, sess.id, viewer, profile
+
+
+async def test_a_composed_document_is_the_last_phase_as_written(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """No summary step means the text itself is the deliverable. It used to mean nothing
+    was rendered at all: the newsroom's edition and the coffee campaign's launch plan both
+    came out as the facts header alone (sweep 2026-10-04)."""
+    tenant_id, workspace_id, session_id, viewer, profile = await _verbatim_session(two_tenants)
+
+    result = await generate_report(
+        tenant_id,
+        workspace_id,
+        session_id,
+        viewer,
+        _phase(["workspace_public"]),
+        get_template("composed_document"),
+        from_event_seq=0,
+        to_event_seq=10,
+        agent=profile,
+        provider=_ScriptedProvider("never asked"),
+        permission_service=_PERMISSIONS,
+    )
+
+    assert result.content_md.startswith("# Composed document")
+    assert "## Document" in result.content_md
+    assert "# The Vantage\n\nOne story." in result.content_md
+    assert "Marit Halvorsen:" not in result.content_md
+    assert "I found one story." not in result.content_md
+
+
+async def test_a_transcript_is_every_phase_with_its_speakers(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    tenant_id, workspace_id, session_id, viewer, profile = await _verbatim_session(two_tenants)
+
+    result = await generate_report(
+        tenant_id,
+        workspace_id,
+        session_id,
+        viewer,
+        _phase(["workspace_public"]),
+        get_template("transcript"),
+        from_event_seq=0,
+        to_event_seq=10,
+        agent=profile,
+        provider=_ScriptedProvider("never asked"),
+        permission_service=_PERMISSIONS,
+    )
+
+    assert result.content_md.startswith("# Transcript")
+    assert "### reporting" in result.content_md and "### edition" in result.content_md
+    assert "Nadia Brekke: I found one story." in result.content_md
+    assert "Marit Halvorsen: # The Vantage" in result.content_md

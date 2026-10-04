@@ -52,6 +52,7 @@ _READ_ANY_ACTION = "read_any_manifest"
 class TemplateResponse(BaseModel):
     key: str
     label_key: str
+    title: str
     audience_mode: str
     output_formats: list[str]
     requires_review: bool
@@ -63,6 +64,7 @@ async def list_templates() -> list[TemplateResponse]:
         TemplateResponse(
             key=t.key,
             label_key=t.label_key,
+            title=t.title,
             audience_mode=t.audience_mode,
             output_formats=list(t.output_formats),
             requires_review=t.requires_review,

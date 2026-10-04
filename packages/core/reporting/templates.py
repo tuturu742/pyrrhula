@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 AudienceMode = Literal["participant", "overseer", "sanitised"]
 StepKind = Literal["fact_frame", "chunk_summarise", "reduce", "render"]
@@ -67,8 +67,18 @@ class ReportTemplate(BaseModel):
 
     key: str
     label_key: str
+    # The heading a rendered artifact carries. Nothing resolves `label_key` on the way
+    # to a PDF, so every report used to be titled with the key itself ("report.recap").
+    # Defaults to the key spelled out ("sanitised_log" -> "Sanitised log").
+    title: str = ""
     audience_mode: AudienceMode
     pipeline: list[Step]
+    # Render prose as written instead of summarising it: "final_phase" gives the last
+    # phase's text without speaker labels (a drafted document, a written deliverable --
+    # the summary steps destroy the thing asked for), "all" gives every phase with its
+    # speakers (a transcript). Without this a template that omits the summary steps
+    # rendered the facts header and nothing else.
+    verbatim: str = ""
     # Explicitly typed rather than a bare lambda: mypy cannot narrow `list[str]` to
     # `list[OutputFormat]` through `default_factory`, and the annotation is the honest fix.
     output_formats: list[OutputFormat] = Field(default_factory=_default_formats)
@@ -76,6 +86,14 @@ class ReportTemplate(BaseModel):
     # Default False: most reports are not sensitive, and a review gate everywhere is a
     # review gate nobody reads.
     requires_review: bool = False
+
+    @model_validator(mode="after")
+    def _title_from_key(self) -> ReportTemplate:
+        if not self.title.strip():
+            self.title = self.key.replace("_", " ").strip().capitalize()
+        if self.verbatim not in ("", "final_phase", "all"):
+            raise ValueError("verbatim must be '', 'final_phase' or 'all'")
+        return self
 
     @field_validator("pipeline")
     @classmethod
@@ -100,6 +118,7 @@ class ReportTemplate(BaseModel):
 NARRATIVE_RECAP = ReportTemplate(
     key="narrative_recap",
     label_key="report.recap",
+    title="Session recap",
     audience_mode="participant",
     pipeline=[
         Step(kind="fact_frame"),
@@ -113,6 +132,7 @@ NARRATIVE_RECAP = ReportTemplate(
 SESSION_LOG = ReportTemplate(
     key="session_log",
     label_key="report.log",
+    title="Session log",
     audience_mode="overseer",
     pipeline=[Step(kind="fact_frame"), Step(kind="render")],
     output_formats=["markdown"],
@@ -121,6 +141,7 @@ SESSION_LOG = ReportTemplate(
 DECISION_SUMMARY = ReportTemplate(
     key="decision_summary",
     label_key="report.decision_summary",
+    title="Decision summary",
     audience_mode="overseer",
     # Disclosures only: a decision log is about what was *decided and disclosed*, and
     # padding it with every randomizer call in the session would bury the thing it exists for.
@@ -136,6 +157,7 @@ DECISION_SUMMARY = ReportTemplate(
 COMPOSED_DOCUMENT = ReportTemplate(
     key="composed_document",
     label_key="report.composed_document",
+    title="Composed document",
     audience_mode="participant",
     # No chunk_summarise, no reduce: the point is the text the session composed, rendered
     # as written. Every other template here answers "what happened", which is a summary
@@ -143,10 +165,25 @@ COMPOSED_DOCUMENT = ReportTemplate(
     # written deliverable -- where summarising it destroys the thing being asked for.
     pipeline=[Step(kind="fact_frame"), Step(kind="render")],
     output_formats=["markdown", "pdf"],
+    verbatim="final_phase",
+)
+
+TRANSCRIPT = ReportTemplate(
+    key="transcript",
+    label_key="report.transcript",
+    title="Transcript",
+    audience_mode="participant",
+    # What was said, by whom, phase by phase, with no model in between. Every other
+    # template reduces the session; until this one there was no way to take the
+    # conversation itself away as a document (Hägnaryd sweep, 2026-10-04).
+    pipeline=[Step(kind="fact_frame"), Step(kind="render")],
+    output_formats=["markdown", "pdf"],
+    verbatim="all",
 )
 
 BUILT_IN_TEMPLATES: dict[str, ReportTemplate] = {
-    t.key: t for t in (NARRATIVE_RECAP, SESSION_LOG, DECISION_SUMMARY, COMPOSED_DOCUMENT)
+    t.key: t
+    for t in (NARRATIVE_RECAP, SESSION_LOG, DECISION_SUMMARY, COMPOSED_DOCUMENT, TRANSCRIPT)
 }
 
 
