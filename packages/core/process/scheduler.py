@@ -337,12 +337,13 @@ def make_scheduler(resolve_candidates: CandidateResolver) -> NextActorFn:
         # landed -- the process died mid-generation, or the turn faulted -- and the actor
         # must be offered again rather than skipped. Observed as a lost referee turn after
         # a pod was replaced under a session (karsh-vale sweep, 2026-10-04).
+        previous_cursor = raw_cursor.get("previous")
         if (
             raw_cursor.get("phase_key") == ctx.phase_key
             and raw_cursor.get("issued_at_seq") == seq_now
-            and isinstance(raw_cursor.get("previous"), dict)
+            and isinstance(previous_cursor, dict)
         ):
-            raw_cursor = {"phase_key": ctx.phase_key, **raw_cursor["previous"]}
+            raw_cursor = {"phase_key": ctx.phase_key, **previous_cursor}
 
         if raw_cursor.get("phase_key") != ctx.phase_key:
             entry_index = 0
