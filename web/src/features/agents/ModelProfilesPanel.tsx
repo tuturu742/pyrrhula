@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -566,6 +566,12 @@ export function ModelPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
+  // Opening the list is a request to search it, so the cursor goes to the filter -- on
+  // that click, not on page load, which is what makes this fine where autoFocus is not.
+  const filterRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open) filterRef.current?.focus();
+  }, [open]);
   const shown = models.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
   const inputClass =
     "w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60";
@@ -613,7 +619,7 @@ export function ModelPicker({
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder={`Filter ${models.length} models…`}
-            autoFocus
+            ref={filterRef}
           />
           <ul className="max-h-56 overflow-auto text-sm">
             {shown.map((m) => (
