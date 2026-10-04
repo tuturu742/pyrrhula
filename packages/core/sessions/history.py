@@ -395,7 +395,17 @@ async def collect_prose_by_phase(
         )
 
     groups: list[tuple[str, list[str]]] = []
-    current_phase = "unknown"
+    # The session's first phase has no transition INTO it; the first transition OUT of it
+    # names it. Without this the opening phase rendered as "unknown" in every verbatim
+    # report of a session recorded before messages carried their phase.
+    current_phase = next(
+        (
+            str(row.payload.get("from"))
+            for row in rows
+            if row.kind == "phase_transition" and isinstance(row.payload.get("from"), str)
+        ),
+        "unknown",
+    )
     for row in rows:
         if row.kind == "phase_transition":
             to_phase = row.payload.get("to")
