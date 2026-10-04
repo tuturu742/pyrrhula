@@ -38,6 +38,24 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # The retrieval-model cache archive (Admin -> Models -> Upload cache archive) is
+    # gigabytes -- bge-m3 plus its reranker is ~4GB -- so it cannot share the 50m
+    # ceiling below: the upload died at nginx with a 413 before the api, whose own limit
+    # is 12GiB, ever saw it. Streamed straight through rather than spooled to the web
+    # container's disk first. An exact match wins over the regex location below.
+    location = /api/admin/retrieval-models/upload {
+        set $api_upstream "${PYRRHULA_API_UPSTREAM}";
+        proxy_pass http://$api_upstream/admin/retrieval-models/upload$is_args$args;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Connection "";
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        client_max_body_size 12g;
+    }
+
     # Identical proxy contract to the plain-http template: buffering OFF so the session
     # SSE stream and the assistant's NDJSON reach the browser as they are produced.
     location ~ ^/api/(.*)$ {
