@@ -346,34 +346,31 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
             />
           )}
         </Field>
-        <Field label="Model">
-          <div className="flex gap-1">
-            <input
-              list={`models-${existingProfile?.id ?? "new"}`}
-              className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={
-                { openai: "gpt-4o", anthropic: "claude-sonnet-4-5", gemini: "gemini-2.5-pro",
-                  "openai-compatible": "deepseek-chat", ollama: "qwen3:8b" }[providerChoice] ?? ""
-              }
-              required
-            />
-            <button
-              type="button"
-              onClick={() => fetchModels.mutate()}
-              disabled={fetchModels.isPending || !provider.trim()}
-              title="List models the provider offers (cloud providers need the API key)"
-              className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50"
-            >
-              {fetchModels.isPending ? "…" : "Fetch"}
-            </button>
-            <datalist id={`models-${existingProfile?.id ?? "new"}`}>
-              {availableModels.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </div>
+        {/* The key comes before the model: listing a cloud provider's models needs it,
+            and a form that asks for it last had people pressing Fetch with nothing to
+            fetch with. */}
+        <Field
+          label={isEditing ? "Replace API key" : "API key"}
+          hint={
+            isEditing
+              ? existingProfile.credential_ref
+                ? "A key is on file -- leave blank to keep it."
+                : "No key on file."
+              : providerChoice === "ollama"
+                ? "Not needed for a local Ollama."
+                : "Stored encrypted; never shown again after this."
+          }
+        >
+          <input
+            type="password"
+            autoComplete="new-password"
+            className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={
+              isEditing && existingProfile.credential_ref ? "•••••••• (on file)" : undefined
+            }
+          />
         </Field>
       </div>
 
@@ -395,6 +392,28 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
               : "http://localhost:11434"
           }
           required={providerChoice === "openai-compatible"}
+        />
+      </Field>
+
+      <Field label="Model">
+        <ModelPicker
+          value={model}
+          onChange={setModel}
+          models={availableModels}
+          placeholder={
+            { openai: "gpt-4o", anthropic: "claude-sonnet-4-5", gemini: "gemini-2.5-pro",
+              "openai-compatible": "deepseek-chat", ollama: "qwen3:8b" }[providerChoice] ?? ""
+          }
+          fetching={fetchModels.isPending}
+          onFetch={() => fetchModels.mutate()}
+          // A cloud provider lists nothing without a key; say so instead of failing.
+          fetchBlockedReason={
+            !provider.trim()
+              ? "Choose a provider first"
+              : providerChoice !== "ollama" && !apiKey && !existingProfile?.credential_ref
+                ? "Enter the API key first"
+                : null
+          }
         />
       </Field>
 
@@ -455,27 +474,6 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <Field
-          label={isEditing ? "Replace API key" : "API key"}
-          hint={
-            isEditing
-              ? existingProfile.credential_ref
-                ? "A key is on file -- leave blank to keep it."
-                : "No key on file."
-              : "Stored encrypted; never shown again after this."
-          }
-        >
-          <input
-            type="password"
-            autoComplete="new-password"
-            className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={
-              isEditing && existingProfile.credential_ref ? "•••••••• (on file)" : undefined
-            }
-          />
-        </Field>
         <Field label="Fallback profile">
           <select
             className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
@@ -539,6 +537,106 @@ function ModelProfileForm({ existingProfile, existingProfiles, onSaved }: ModelP
         <p className="text-xs text-destructive">Failed to reach the test-connection endpoint.</p>
       )}
     </form>
+  );
+}
+
+/**
+ * A model name: typed freely, or picked from what the provider listed.
+ *
+ * It used to be a native `<datalist>`, which browsers filter by whatever is already in the
+ * field -- so with a model typed (always, when editing) the list showed one entry or none,
+ * and looked broken. The list now always holds everything fetched, with a filter of its own.
+ */
+export function ModelPicker({
+  value,
+  onChange,
+  models,
+  placeholder,
+  fetching,
+  onFetch,
+  fetchBlockedReason,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  models: string[];
+  placeholder: string;
+  fetching: boolean;
+  onFetch: () => void;
+  fetchBlockedReason: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const shown = models.filter((m) => m.toLowerCase().includes(filter.trim().toLowerCase()));
+  const inputClass =
+    "w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60";
+
+  return (
+    <div className="relative flex flex-col gap-1">
+      <div className="flex gap-1">
+        <input
+          className={inputClass}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          required
+        />
+        <button
+          type="button"
+          onClick={() => {
+            onFetch();
+            setFilter("");
+            setOpen(true);
+          }}
+          disabled={fetching || fetchBlockedReason !== null}
+          title={fetchBlockedReason ?? "List the models this provider offers"}
+          className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50"
+        >
+          {fetching ? "…" : models.length ? "Refresh list" : "Fetch models"}
+        </button>
+        {models.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs"
+          >
+            {open ? "Close" : `Choose (${models.length})`}
+          </button>
+        )}
+      </div>
+      {fetchBlockedReason && (
+        <span className="text-xs text-muted-foreground">{fetchBlockedReason} to list models.</span>
+      )}
+      {open && models.length > 0 && (
+        <div className="z-10 flex flex-col gap-1 rounded-md border border-border bg-background p-2 shadow-sm">
+          <input
+            className={inputClass}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={`Filter ${models.length} models…`}
+            autoFocus
+          />
+          <ul className="max-h-56 overflow-auto text-sm">
+            {shown.map((m) => (
+              <li key={m}>
+                <button
+                  type="button"
+                  className={`w-full rounded px-2 py-1 text-left font-mono text-xs hover:bg-secondary ${m === value ? "bg-secondary" : ""}`}
+                  onClick={() => {
+                    onChange(m);
+                    setOpen(false);
+                  }}
+                >
+                  {m}
+                </button>
+              </li>
+            ))}
+            {shown.length === 0 && (
+              <li className="px-2 py-1 text-xs text-muted-foreground">No model matches.</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

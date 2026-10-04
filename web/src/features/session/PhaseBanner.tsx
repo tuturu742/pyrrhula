@@ -101,11 +101,29 @@ export function PhaseBanner({ sessionId, events }: PhaseBannerProps) {
   // await sets status "awaiting"; a free-mode actor leaves status "active" while the
   // interpreter reports awaiting_human, which the session row now records. Both mean the
   // same thing to whoever is reading the page — it is your move — so both say it.
-  const pending = pendingAwaits.data ?? [];
-  const waitingOnYou = session?.status === "awaiting" || session?.awaiting === "human";
+  //
+  // A third parks it on nobody: a phase that delegated work waits for those jobs, and the
+  // session continues by itself when the last one finishes. That used to read "Waiting for
+  // you ... blocked until someone confirms it is done" with an "awaiting" status while an
+  // agent was busy in its container -- an instruction to do something nobody needed to do.
+  const allPending = pendingAwaits.data ?? [];
+  const delegated = allPending.filter((a) => a.await_kind === "delegated_work");
+  const pending = allPending.filter((a) => a.await_kind !== "delegated_work");
+  const working = session?.status === "awaiting" && delegated.length > 0 && pending.length === 0;
+  const waitingOnYou =
+    !working && (session?.status === "awaiting" || session?.awaiting === "human");
 
   return (
     <div className="flex flex-col gap-2">
+      {working ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-sky-500/50 bg-sky-500/10 px-3 py-2 text-sm">
+          <span className="font-medium text-sky-700 dark:text-sky-400">Working</span>
+          <span className="text-muted-foreground">
+            Delegated work is running in its container. The session continues on its own
+            when it finishes — nothing is needed from you.
+          </span>
+        </div>
+      ) : null}
       {waitingOnYou ? (
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-sm">
           <span className="font-medium text-amber-700 dark:text-amber-400">
@@ -139,12 +157,14 @@ export function PhaseBanner({ sessionId, events }: PhaseBannerProps) {
             className={
               session.status === "paused"
                 ? "text-destructive"
-                : session.status === "awaiting"
-                  ? "text-amber-500"
-                  : "text-muted-foreground"
+                : working
+                  ? "text-sky-600 dark:text-sky-400"
+                  : session.status === "awaiting"
+                    ? "text-amber-500"
+                    : "text-muted-foreground"
             }
           >
-            {session.status}
+            {working ? "working" : session.status}
           </span>
         )}
       </div>

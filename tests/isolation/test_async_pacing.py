@@ -124,6 +124,26 @@ async def test_notification_filter_omission(two_tenants: tuple[uuid.UUID, uuid.U
 # ── acceptance criteria ─────────────────────────────────────────────────────────────
 
 
+async def test_waiting_on_delegated_work_tells_nobody_it_is_their_turn(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """Found in manual testing: while an agent was building in its container the session
+    said "waiting for you". A phase waiting on its delegated jobs continues by itself."""
+    tenant_id, _ = two_tenants
+    workspace_id = await _workspace_of(tenant_id)
+    await _member(tenant_id, workspace_id, "participant", "watcher")
+    session_id, definition = await _session_at_await_phase(tenant_id, workspace_id)
+    await_row = await create_await(tenant_id, session_id, definition.phases[_AWAIT_PHASE_KEY])
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(AwaitStateRow, await_row.id)
+        assert row is not None
+        row.await_kind = "delegated_work"
+    sent = await notify_await_opened(
+        tenant_id, workspace_id, await_row.id, notifier=RecordingNotifier()
+    )
+    assert sent == []
+
+
 async def test_await_notification_reminder_and_timeout_fire_once_each(
     two_tenants: tuple[uuid.UUID, uuid.UUID],
 ) -> None:

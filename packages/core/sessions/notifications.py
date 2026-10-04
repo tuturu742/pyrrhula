@@ -219,6 +219,11 @@ async def notify_await_opened(
         await_row = await session.get(AwaitStateRow, await_state_id)
         if await_row is None:
             raise ValueError(f"no await_state {await_state_id} in this tenant")
+        # A phase waiting on its delegated jobs is waiting on nobody: the session continues
+        # by itself when the last job finishes. "It's your turn" there sent people to a
+        # session that needed nothing from them while an agent was still at work.
+        if await_row.await_kind == "delegated_work":
+            return []
         session_row = await session.get(SessionRow, await_row.session_id)
         assert session_row is not None
         session_id = await_row.session_id
