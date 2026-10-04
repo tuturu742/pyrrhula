@@ -133,6 +133,9 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
     except Exception as exc:
         log.warning("worker.job_failed", job_id=str(job.id), kind=job.kind, error=str(exc))
         await queue.fail(job.id, str(exc))
+        # A failed job is finished too. Waking only on success left a session whose last
+        # delegation failed parked on "Working" until its await timed out, hours later.
+        await _wake_session(job)
         return
     finally:
         beat.cancel()
@@ -140,15 +143,19 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
             await beat
     log.info("worker.job_completed", job_id=str(job.id), kind=job.kind)
     await queue.complete(job.id, result)
+    await _wake_session(job)
 
-    # A session that dispatched work and parked is waiting on exactly this: the last job
-    # belonging to it finishing. Checked after every kind, not just the delegation ones,
-    # because the tail of a batch is a review or a rework as often as it is a build.
+
+async def _wake_session(job: Job) -> None:
+    """A session that dispatched work and parked is waiting on exactly this: the last job
+    belonging to it finishing, however it finished. Checked after every kind, not just the
+    delegation ones, because the tail of a batch is a review or a rework as often as it is
+    a build."""
     session_id = job.payload.get("session_id")
     if session_id:
         try:
             await wake_if_work_is_done(job.tenant_id, uuid.UUID(str(session_id)), job.id)
-        except Exception as exc:  # noqa: BLE001 -- the job itself already succeeded
+        except Exception as exc:  # noqa: BLE001 -- the job's own outcome is already recorded
             log.warning("worker.wake_failed", job_id=str(job.id), error=str(exc)[:200])
 
 

@@ -65,6 +65,38 @@ async def test_run_one_fails_job_on_handler_exception(monkeypatch) -> None:  # n
     assert "boom" in queue.failed[0][1]
 
 
+async def test_a_failed_job_still_wakes_its_session(monkeypatch) -> None:  # noqa: ANN001
+    """A session parked on its delegated work waits for the last job to finish -- and a
+    job that failed has finished. Waking only on success left the session on "Working"
+    until its await timed out, hours later, after a delegation's run had failed."""
+
+    async def _boom_handler(payload: dict[str, Any]) -> dict[str, Any]:
+        raise RuntimeError("engine gave up")
+
+    woken: list[tuple[uuid.UUID, uuid.UUID]] = []
+
+    async def _wake(tenant_id: uuid.UUID, session_id: uuid.UUID, job_id: uuid.UUID) -> bool:
+        woken.append((session_id, job_id))
+        return True
+
+    import worker.main as main_module
+
+    monkeypatch.setitem(main_module._HANDLERS, "test_kind", _boom_handler)
+    monkeypatch.setattr(main_module, "wake_if_work_is_done", _wake)
+    session_id = uuid.uuid4()
+    job = Job(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        kind="test_kind",
+        payload={"session_id": str(session_id)},
+        attempts=1,
+    )
+
+    await _run_one(_FakeQueue(), job)  # type: ignore[arg-type]
+
+    assert woken == [(session_id, job.id)]
+
+
 def test_worker_roles_split_long_builds_from_everything_else() -> None:
     import pytest
 

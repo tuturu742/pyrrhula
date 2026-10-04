@@ -570,24 +570,21 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
             )
             if remote:
                 extra["remote"] = remote
-    result = await delegate_work_item(
-        tenant_id,
-        uuid.UUID(payload["workspace_id"]),
-        uuid.UUID(payload["session_id"]),
-        int(payload["event_seq"]),
-        viewer,
-        _delegation_phase(),
-        uuid.UUID(payload["work_item_id"]),
-        server_key=str(payload["server_key"]),
-        transport=get_mcp_transport(),
-        permission_service=get_permission_service(),
-        # A caller may still name the walk explicitly; the default is the one the
-        # work_item lifecycle actually declares, from wherever the item currently sits.
-        on_dispatch_triggers=tuple(
-            payload.get("on_dispatch_triggers") or ("refine", "start", "submit_for_review")
-        ),
-        extra_arguments=extra or None,
-    )
+    try:
+        result = await _delegate(payload, viewer, extra)
+    except Exception as exc:
+        # The job fails either way; without this the reason lived only in the worker log,
+        # and the transcript showed a session that had simply stopped.
+        with contextlib.suppress(Exception):
+            title = entity.name if entity is not None else payload["work_item_id"]
+            await post_note(
+                tenant_id,
+                uuid.UUID(payload["session_id"]),
+                assignee.principal_id if assignee is not None else viewer.id,
+                f"\u26a0\ufe0f **{title}**: the coding run failed and opened no pull "
+                f"request: {str(exc)[:300]}",
+            )
+        raise
     outcome = result.outcome
 
     # Make the outcome visible where humans look (transcript), and hand the PR to the
@@ -666,6 +663,28 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
 # favoured. Taking the head here handed the agent 32,000 characters that named not one
 # failing test, because a run prints its failures and its tally last.
 _REWORK_TEST_OUTPUT_CHARS = 32000
+
+
+async def _delegate(payload: dict[str, Any], viewer: Principal, extra: dict[str, Any]) -> Any:
+    tenant_id = uuid.UUID(payload["tenant_id"])
+    return await delegate_work_item(
+        tenant_id,
+        uuid.UUID(payload["workspace_id"]),
+        uuid.UUID(payload["session_id"]),
+        int(payload["event_seq"]),
+        viewer,
+        _delegation_phase(),
+        uuid.UUID(payload["work_item_id"]),
+        server_key=str(payload["server_key"]),
+        transport=get_mcp_transport(),
+        permission_service=get_permission_service(),
+        # A caller may still name the walk explicitly; the default is the one the
+        # work_item lifecycle actually declares, from wherever the item currently sits.
+        on_dispatch_triggers=tuple(
+            payload.get("on_dispatch_triggers") or ("refine", "start", "submit_for_review")
+        ),
+        extra_arguments=extra or None,
+    )
 
 
 def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:
