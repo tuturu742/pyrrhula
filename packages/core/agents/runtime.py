@@ -272,7 +272,7 @@ async def _dispatch_tool_idempotent(
     ctx: ToolContext,
 ) -> dict[str, Any]:
     result = await tool_registry.dispatch(tool_call, ctx)
-    return {"content": result.content}
+    return {"content": result.content, "resolution_id": result.resolution_id}
 
 
 async def run_agent_turn(
@@ -448,7 +448,13 @@ async def run_agent_turn(
                         turn_event_seq=event_seq,
                     ),
                 )
-                resolution_id = _extract_resolution_id(tool_result["content"])
+                # The handler's own word first; parsing the content is the fallback for
+                # a handler that returns the bare record. The resolution preset returns
+                # an envelope, so the parse found nothing and every roll made through it
+                # was recorded but never linked to its message (karsh-vale sweep).
+                resolution_id = tool_result.get("resolution_id") or _extract_resolution_id(
+                    tool_result["content"]
+                )
                 if resolution_id is not None:
                     resolution_record_ids.append(resolution_id)
                 conversation.append(

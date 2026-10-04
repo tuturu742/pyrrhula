@@ -46,11 +46,15 @@ def compare_app_versions(bundle: str, running: str) -> Compatibility:
             f"This bundle records platform version {recorded!r}, which this build cannot "
             f"compare against {running!r}; compatibility cannot be verified.",
         )
-    if theirs > ours:
+    # Compared on the release numbers alone: a bundle stamped 0.1.0 imported into
+    # 0.1.0rc3 is the same release line, and warning on every import that it is
+    # "newer" (every sample bundle, on every release candidate) made the warning
+    # meaningless for the case it exists for.
+    if theirs.release > ours.release:
         return Compatibility(
             "newer",
             f"This bundle was written by Pyrrhula {recorded}, newer than this deployment "
             f"({running}). Compatibility cannot be verified. It may still import; anything "
             "it carries that this version does not understand is skipped and reported.",
         )
-    return Compatibility("older" if theirs < ours else "same")
+    return Compatibility("older" if theirs.release < ours.release else "same")

@@ -30,6 +30,11 @@ class ToolContext:
 @dataclass(frozen=True)
 class ToolResult:
     content: str  # fed back to the model as the tool call's output message
+    # A ResolutionRecord this call produced, when the handler knows it structurally.
+    # A handler whose `content` is not the bare resolution JSON (the resolution preset
+    # wraps it in an envelope) must set this, or the record never reaches
+    # message.resolution_record_ids and the result widget has nothing to render.
+    resolution_id: str | None = None
 
 
 ToolHandler = Callable[[dict[str, object], ToolContext], Awaitable[ToolResult]]
