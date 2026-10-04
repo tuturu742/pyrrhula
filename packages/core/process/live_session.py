@@ -1019,6 +1019,10 @@ async def run_one_persona_turn(
                 "content": result.content_md,
                 "author": author_name,
                 "persona_id": str(persona_id),
+                # The phase the message was spoken in. The report pipeline reads it
+                # per message; without it the opening phase, before any transition
+                # event, rendered as "unknown" in a transcript.
+                "phase": phase_key,
                 "created_at": datetime.now(UTC).isoformat(),
                 "triggered_by": triggered_by,
             },
