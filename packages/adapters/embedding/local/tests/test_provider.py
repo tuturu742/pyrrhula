@@ -90,7 +90,7 @@ def test_load_caps_the_models_sequence_length(monkeypatch: pytest.MonkeyPatch) -
     provider = SentenceTransformersEmbeddingProvider("fake/model", dimension=4, max_seq_length=1024)
     _pretend_downloaded(monkeypatch)
     monkeypatch.setattr(
-        "sentence_transformers.SentenceTransformer", lambda name: fake_model, raising=False
+        "sentence_transformers.SentenceTransformer", lambda name, **kw: fake_model, raising=False
     )
 
     assert provider._load().max_seq_length == 1024
@@ -103,7 +103,7 @@ def test_load_never_raises_a_models_own_shorter_limit(monkeypatch: pytest.Monkey
     provider = SentenceTransformersEmbeddingProvider("fake/model", dimension=4, max_seq_length=1024)
     _pretend_downloaded(monkeypatch)
     monkeypatch.setattr(
-        "sentence_transformers.SentenceTransformer", lambda name: fake_model, raising=False
+        "sentence_transformers.SentenceTransformer", lambda name, **kw: fake_model, raising=False
     )
 
     assert provider._load().max_seq_length == 512
@@ -138,7 +138,7 @@ def test_a_downloaded_model_loads(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda model: type("P", (), {"present": True, "model": model})(),
     )
     monkeypatch.setattr(
-        "sentence_transformers.SentenceTransformer", lambda name: fake_model, raising=False
+        "sentence_transformers.SentenceTransformer", lambda name, **kw: fake_model, raising=False
     )
 
     assert provider._load() is fake_model

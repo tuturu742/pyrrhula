@@ -10,6 +10,7 @@ the first real ``.embed()`` call does. Mirrors ``LiteLLMModelProvider``'s lazy
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any
 
 from core.ports.embedding import EmbedRequest, check_egress
@@ -76,6 +77,8 @@ class SentenceTransformersEmbeddingProvider:
         self._batch_size = batch_size
         self._max_seq_length = max_seq_length
         self._model: Any | None = None
+        # A cold load takes minutes; two requests arriving during it must not load twice.
+        self._load_lock = threading.Lock()
 
     @property
     def model_name(self) -> str:
@@ -86,21 +89,29 @@ class SentenceTransformersEmbeddingProvider:
         return self._dimension
 
     def _load(self) -> Any:
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
+        with self._load_lock:
+            if self._model is None:
+                from sentence_transformers import SentenceTransformer
 
-            _require_cached(self._hf_model_name)
-            model = SentenceTransformer(self._hf_model_name)
-            # Capped rather than left at the checkpoint's default: see the module constants.
-            model.max_seq_length = min(
-                self._max_seq_length, getattr(model, "max_seq_length", self._max_seq_length)
-            )
-            self._model = model
-        return self._model
+                _require_cached(self._hf_model_name)
+                # _require_cached just proved the files are here: never ask the hub.
+                # In online mode the constructor still does metadata round-trips, which
+                # took minutes on a slow route (coffee-campaign sweep, 2026-10-04).
+                model = SentenceTransformer(self._hf_model_name, local_files_only=True)
+                # Capped rather than left at the checkpoint's default: see the module
+                # constants.
+                model.max_seq_length = min(
+                    self._max_seq_length, getattr(model, "max_seq_length", self._max_seq_length)
+                )
+                self._model = model
+            return self._model
 
     async def embed(self, req: EmbedRequest) -> list[list[float]]:
         check_egress(req.purpose, req.model, req.egress_policy)
-        model = self._load()
+        # The cold load ran on the event loop and held every request of every tenant on
+        # the box for its whole duration -- six minutes, measured. It belongs in a thread
+        # as much as the encode does.
+        model = await asyncio.to_thread(self._load)
         vectors = await asyncio.to_thread(
             model.encode,
             list(req.texts),
