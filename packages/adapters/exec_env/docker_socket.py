@@ -14,12 +14,14 @@ stdout/stderr concatenated in arrival order.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 from typing import Any
 
 import httpx
 
+from adapters.exec_env.engine_images import ensure_image
 from adapters.exec_env.shell import shell_command
 from core.exec_limits import ExecLimits, limits_for
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
@@ -34,7 +36,12 @@ class DockerSocketExecEnvProvider:
         *,
         network: str | None = None,
         limits: ExecLimits | None = None,
+        run_timeout_seconds: int = 1800,
     ) -> None:
+        # How long one script may run: the engine's own run timeout, the same bound the
+        # one-shot engines enforce. The exec stream used to share the 600-second timeout
+        # of every other call, so a harness working past ten minutes was cut off mid-run.
+        self._run_timeout = run_timeout_seconds
         # Optional engine-declared network for environments (e.g. a dedicated
         # 'pyrrhula-envs' network that carries the api -- for git smart-HTTP -- but NOT
         # the database). None = the engine's default network.
@@ -85,27 +92,32 @@ class DockerSocketExecEnvProvider:
                 return await client.request(
                     method, f"{_API}{path}", json=json_body, params=params, headers=headers
                 )
+        except httpx.TimeoutException as exc:
+            # Not "unreachable": the engine answered, and then took longer than allowed.
+            # A timeout's own message is empty, which made this read as a dead socket.
+            raise ExecEnvUnavailableError(
+                f"the engine did not finish {method} {path} within {int(timeout)} seconds "
+                f"({type(exc).__name__})"
+            ) from exc
         except httpx.HTTPError as exc:
-            raise ExecEnvUnavailableError(f"engine socket unreachable: {exc}") from exc
+            raise ExecEnvUnavailableError(
+                f"engine socket unreachable: {type(exc).__name__}: {exc}"
+            ) from exc
 
     async def _ensure_image(self, image: str, registry_auth: str | None = None) -> None:
-        # X-Registry-Auth: the Docker-API convention for per-pull registry credentials
-        # (base64 JSON) -- podman's compat API honors it too.
-        headers = {"X-Registry-Auth": registry_auth} if registry_auth else None
-        resp = await self._request(
-            "POST", "/images/create", params={"fromImage": image}, headers=headers
-        )
-        if resp.status_code >= 400:
-            raise ExecEnvUnavailableError(f"could not pull {image!r}: {resp.text[:200]}")
-        # The pull endpoint streams progress JSON; an error mid-stream still returns 200
-        # with an {"error": ...} line -- surface it.
-        for line in resp.text.splitlines():
-            try:
-                obj = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(obj, dict) and obj.get("error"):
-                raise ExecEnvUnavailableError(f"pull {image!r} failed: {obj['error'][:200]}")
+        await ensure_image(self._request, image, registry_auth, unavailable=ExecEnvUnavailableError)
+
+    def _identity_labels(self, image: str) -> dict[str, str]:
+        """What a reusable container was created *for*.
+
+        Environments are found again by name, and the name says which session and repo
+        they belong to -- not which image or limits they run with. So a rebuilt image, or
+        limits an operator tightened, were silently ignored for the rest of the session:
+        the old container answered to the name. These labels let reuse notice.
+        """
+        limits = self._host_limits()
+        digest = hashlib.sha256(json.dumps(limits, sort_keys=True).encode()).hexdigest()[:12]
+        return {"pyrrhula.image": image, "pyrrhula.limits": digest}
 
     async def provision(
         self,
@@ -116,13 +128,20 @@ class DockerSocketExecEnvProvider:
         setup_cmds: list[str],
         registry_auth: str | None = None,
     ) -> str:
-        # Reuse a live environment of the same (deterministic) name.
+        # Reuse a live environment of the same (deterministic) name -- but only if it was
+        # made for this image and these limits. Otherwise it is replaced: the work script
+        # re-clones into a fresh /work, so nothing is lost but the warm-up.
+        wanted = self._identity_labels(image)
         inspect = await self._request("GET", f"/containers/{name}/json", timeout=30)
         if inspect.status_code == 200:
-            if inspect.json().get("State", {}).get("Running"):
+            details = inspect.json()
+            labels = (details.get("Config") or {}).get("Labels") or {}
+            if all(labels.get(k) == v for k, v in wanted.items()):
+                if details.get("State", {}).get("Running"):
+                    return name
+                await self._request("POST", f"/containers/{name}/start", timeout=60)
                 return name
-            await self._request("POST", f"/containers/{name}/start", timeout=60)
-            return name
+            await self.teardown(name)
 
         await self._ensure_image(image, registry_auth)
         create = await self._request(
@@ -139,7 +158,7 @@ class DockerSocketExecEnvProvider:
                     **({"NetworkMode": self._network} if self._network else {}),
                     **self._host_limits(),
                 },
-                "Labels": {"pyrrhula.exec_env": "1"},
+                "Labels": {"pyrrhula.exec_env": "1", **wanted},
             },
         )
         if create.status_code == 409:  # raced another provision of the same name
@@ -186,8 +205,13 @@ class DockerSocketExecEnvProvider:
                 f"exec create in {env_ref!r} failed: {created.text[:200]}"
             )
         exec_id = created.json()["Id"]
+        # The response is the command's whole output, so this call lasts as long as the
+        # command does: bounded by the run timeout, plus room for the engine to answer.
         started = await self._request(
-            "POST", f"/exec/{exec_id}/start", json_body={"Detach": False, "Tty": False}
+            "POST",
+            f"/exec/{exec_id}/start",
+            json_body={"Detach": False, "Tty": False},
+            timeout=float(self._run_timeout + 120),
         )
         if started.status_code >= 400:
             raise ExecEnvUnavailableError(f"exec start failed: {started.text[:200]}")

@@ -169,12 +169,33 @@ async def _environment_config(
             sources=recipe.sources,
         )
 
+    # At use time, whatever layer chose it. The repo row and runtime registrations are
+    # checked when they are written, but the manifest is a file in the repository and the
+    # registries and allowlist can change after anything was written.
+    from core.images.namespace import check_image_ref_for_tenant
+    from core.repos.image_ref import ImageRefError
+
+    try:
+        await check_image_ref_for_tenant(tenant_id, recipe.image)
+    except ImageRefError as exc:
+        raise BuildRecipeError(
+            f"image {recipe.image!r} (from {recipe.sources.get('image')}): {exc}"
+        ) from exc
+
     from core.exec_engines import engine_by_key, get_tenant_engine_key
 
     engine_key = await get_tenant_engine_key(tenant_id)
     engine = engine_by_key(engine_key) or {}
     return {
         "image": recipe.image,
+        # Which layer chose the image. The registry credential is offered to a legacy
+        # (not host-bound) credential only when the operator typed the image, never when
+        # a file inside the repository did.
+        "image_source": recipe.sources.get("image"),
+        # One of the tenant's own verified images, and what its smoke test proved is in
+        # it -- read by _apply_harness.
+        "image_built": recipe.image_built,
+        "baked_harness": recipe.baked_harness,
         "setup_cmds": recipe.setup_cmds,
         "test_cmd": recipe.test_cmd,
         "build_cmd": recipe.build_cmd,
@@ -385,16 +406,34 @@ def _apply_harness(environment: dict[str, Any], harness_cfg: dict[str, Any]) -> 
     """Fold a harness into an environment recipe, in place.
 
     Its setup commands are APPENDED, never substituted: the repo still needs its own
-    toolchain, because the harness has to run that repo's tests. Its image, when the spec
-    names one, does win -- that is the pre-baked variant an operator built precisely so a
-    one-shot engine stops reinstalling the harness on every run.
+    toolchain, because the harness has to run that repo's tests -- unless the image's
+    smoke test proved this exact harness is already inside (same key, same install
+    fingerprint), in which case reinstalling it on every run is the cost the image was
+    made to remove.
+
+    A harness image wins only over a catalog runtime. An image somebody named for this
+    repo -- on the repo row, in its manifest, or one of the tenant's own verified images --
+    was chosen for this code; a harness default must not quietly replace it.
     """
     if not harness_cfg:
         return
+    from core.harness.registry import harness_fingerprint
+
     spec = harness_cfg.get("harness") or {}
     environment.update(harness_cfg)
-    if spec.get("image"):
+    explicit = environment.get("image_built") or environment.get("image_source") in (
+        "repo",
+        "manifest",
+    )
+    if spec.get("image") and not explicit:
         environment["image"] = spec["image"]
+        # A different image: whatever the old one proved is not in this one.
+        environment["baked_harness"] = {}
+    baked = environment.get("baked_harness") or {}
+    if baked.get("key") == (spec.get("key") or "") and baked.get(
+        "fingerprint"
+    ) == harness_fingerprint(spec):
+        return
     environment["setup_cmds"] = [
         *(environment.get("setup_cmds") or []),
         *(spec.get("setup_cmds") or []),
@@ -531,24 +570,21 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
             )
             if remote:
                 extra["remote"] = remote
-    result = await delegate_work_item(
-        tenant_id,
-        uuid.UUID(payload["workspace_id"]),
-        uuid.UUID(payload["session_id"]),
-        int(payload["event_seq"]),
-        viewer,
-        _delegation_phase(),
-        uuid.UUID(payload["work_item_id"]),
-        server_key=str(payload["server_key"]),
-        transport=get_mcp_transport(),
-        permission_service=get_permission_service(),
-        # A caller may still name the walk explicitly; the default is the one the
-        # work_item lifecycle actually declares, from wherever the item currently sits.
-        on_dispatch_triggers=tuple(
-            payload.get("on_dispatch_triggers") or ("refine", "start", "submit_for_review")
-        ),
-        extra_arguments=extra or None,
-    )
+    try:
+        result = await _delegate(payload, viewer, extra)
+    except Exception as exc:
+        # The job fails either way; without this the reason lived only in the worker log,
+        # and the transcript showed a session that had simply stopped.
+        with contextlib.suppress(Exception):
+            title = entity.name if entity is not None else payload["work_item_id"]
+            await post_note(
+                tenant_id,
+                uuid.UUID(payload["session_id"]),
+                assignee.principal_id if assignee is not None else viewer.id,
+                f"\u26a0\ufe0f **{title}**: the coding run failed and opened no pull "
+                f"request: {str(exc)[:300]}",
+            )
+        raise
     outcome = result.outcome
 
     # Make the outcome visible where humans look (transcript), and hand the PR to the
@@ -627,6 +663,28 @@ async def handle_delegate_work_item(payload: dict[str, Any]) -> dict[str, Any]:
 # favoured. Taking the head here handed the agent 32,000 characters that named not one
 # failing test, because a run prints its failures and its tally last.
 _REWORK_TEST_OUTPUT_CHARS = 32000
+
+
+async def _delegate(payload: dict[str, Any], viewer: Principal, extra: dict[str, Any]) -> Any:
+    tenant_id = uuid.UUID(payload["tenant_id"])
+    return await delegate_work_item(
+        tenant_id,
+        uuid.UUID(payload["workspace_id"]),
+        uuid.UUID(payload["session_id"]),
+        int(payload["event_seq"]),
+        viewer,
+        _delegation_phase(),
+        uuid.UUID(payload["work_item_id"]),
+        server_key=str(payload["server_key"]),
+        transport=get_mcp_transport(),
+        permission_service=get_permission_service(),
+        # A caller may still name the walk explicitly; the default is the one the
+        # work_item lifecycle actually declares, from wherever the item currently sits.
+        on_dispatch_triggers=tuple(
+            payload.get("on_dispatch_triggers") or ("refine", "start", "submit_for_review")
+        ),
+        extra_arguments=extra or None,
+    )
 
 
 def _with_test_output(comment: str, pr: Mapping[str, Any]) -> str:

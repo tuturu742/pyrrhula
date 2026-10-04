@@ -166,9 +166,20 @@ export function RuntimesCard() {
             <li key={r.key} className="flex items-center justify-between gap-3 py-2">
               <div className="min-w-0">
                 <span className="text-sm font-medium">{r.key}</span>
-                {r.tenant_owned && (
-                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    yours
+                {r.built_origin ? (
+                  <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                    {r.built_origin === "imported" ? "imported image" : "built image"}
+                  </span>
+                ) : (
+                  r.tenant_owned && (
+                    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      yours
+                    </span>
+                  )
+                )}
+                {r.baked_harness && (
+                  <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    {r.baked_harness} included
                   </span>
                 )}
                 <div className="truncate font-mono text-xs text-muted-foreground">
@@ -181,7 +192,7 @@ export function RuntimesCard() {
                   </div>
                 )}
               </div>
-              {r.tenant_owned && (
+              {r.tenant_owned && !r.built_origin && (
                 <Button
                   size="sm"
                   variant="ghost"

@@ -72,4 +72,84 @@ def normalise_image_ref(value: str | None) -> str | None:
         )
     if ref.endswith("/"):
         raise ImageRefError("an image reference does not end in '/'")
+    if not has_tag_or_digest(ref):
+        # Not pedantry. Asked for an image with no tag, the engine's pull endpoint pulls
+        # *every* tag of the repository, and which one then runs is whatever the engine
+        # resolves the bare name to. Say which one is meant.
+        raise ImageRefError(
+            f"{ref!r} has no tag: add ':<tag>' (or '@sha256:<digest>'). An untagged "
+            "reference makes the engine pull every tag of the repository"
+        )
     return ref
+
+
+# ── parsing, by Docker's own rules ─────────────────────────────────────────────────────
+#
+# A registry credential is only safe to send to the registry it was issued for, and the
+# image a delegation runs can come from a file inside the repository. So "which registry
+# does this reference name" has to be answered exactly the way the engine answers it --
+# a guess like `image.split("/")[0]` sent Docker Hub credentials to a host called
+# `barichello` and let a manifest choose where a repo's credential went.
+
+_DOCKER_HUB = "docker.io"
+_HUB_ALIASES = frozenset({"docker.io", "index.docker.io", "registry-1.docker.io"})
+_DIGEST = re.compile(r"@[A-Za-z0-9_+.-]+:[0-9a-fA-F]+$")
+_PINNED = re.compile(r"@sha256:[0-9a-f]{64}$")
+
+
+def _split_domain(ref: str) -> tuple[str | None, str]:
+    """``(registry host or None, remainder)`` by Docker's rule: the first path component is
+    a registry only if there is a second one and it looks like a host -- it contains a
+    ``.`` or a ``:``, or is exactly ``localhost``."""
+    first, sep, rest = ref.partition("/")
+    if sep and ("." in first or ":" in first or first == "localhost"):
+        return first.lower(), rest
+    return None, ref
+
+
+def registry_host(ref: str) -> str:
+    """The registry a reference pulls from, canonical for Docker Hub's several names."""
+    host, _ = _split_domain(ref.strip())
+    if host is None or host in _HUB_ALIASES:
+        return _DOCKER_HUB
+    return host
+
+
+def has_tag_or_digest(ref: str) -> bool:
+    """Whether the reference names one image rather than a whole repository."""
+    if _DIGEST.search(ref):
+        return True
+    _, remainder = _split_domain(ref)
+    # A ':' after the last '/' is a tag; one before it belongs to the registry's port.
+    return ":" in remainder.rsplit("/", 1)[-1]
+
+
+def is_digest_pinned(ref: str) -> bool:
+    """``…@sha256:<64 hex>`` -- the only form that cannot change underneath a reader."""
+    return bool(_PINNED.search(ref.strip()))
+
+
+def canonical(ref: str) -> str:
+    """The fully qualified spelling: ``python:3.12`` -> ``docker.io/library/python:3.12``.
+
+    Two spellings of one image must compare equal wherever a reference is checked against
+    a policy, or the policy has a bypass that is just a different way of typing it.
+    """
+    ref = ref.strip()
+    host, remainder = _split_domain(ref)
+    host = _DOCKER_HUB if host is None or host in _HUB_ALIASES else host
+    if host == _DOCKER_HUB and "/" not in remainder.split("@", 1)[0].rsplit(":", 1)[0]:
+        remainder = f"library/{remainder}"
+    return f"{host}/{remainder}"
+
+
+def serveraddress_for(host: str) -> str:
+    """What a Docker ``X-Registry-Auth`` header's ``serveraddress`` must say for a host.
+
+    Docker Hub's credential is keyed by its historical index URL, not by ``docker.io``;
+    every other registry by ``host[:port]``.
+    """
+    host = host.strip().lower()
+    if host in _HUB_ALIASES:
+        return "https://index.docker.io/v1/"
+    return host

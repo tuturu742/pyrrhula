@@ -125,10 +125,11 @@ on a later turn rather than having the work be a gap in its own history; the
 `container_activity` tool answers the follow-ups, scoped by SQL to that persona's own
 environments.
 
-**What it costs.** The harness installs into the runtime image on every run unless a
-pre-baked image is named — about a minute for opencode. A warm socket container pays that
-once per session; a one-shot engine (k8s, ECS) pays it every run. See `ROADMAP.md` on the
-image builder that fixes this.
+**What it costs.** The harness installs into the runtime image on every run — about a
+minute for opencode; a warm socket container pays that once per session, a one-shot engine
+(k8s, ECS) every run — unless the repo runs in one of the organization's own images whose
+smoke test proved this exact harness is inside. Then the install is skipped. See
+`docs/image-builds.md`.
 
 ## What a delegation cannot do
 

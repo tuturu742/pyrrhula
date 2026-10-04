@@ -51,6 +51,10 @@ class BuildRecipe:
     # Which layer supplied each field, for the UI and for a note in the transcript: a
     # build that ran something unexpected should be traceable to where it was written.
     sources: dict[str, str] = field(default_factory=dict)
+    # Set when the image is one of the tenant's own verified images (a built runtime):
+    # what its smoke test proved is inside. A harness whose install matches is skipped.
+    image_built: bool = False
+    baked_harness: dict[str, str] = field(default_factory=dict)
 
 
 def _clean_cmd(value: Any, field_name: str) -> str | None:
@@ -79,10 +83,17 @@ def parse_manifest(text: str) -> dict[str, Any]:
     if "runtime" in raw:
         out["runtime"] = str(raw["runtime"]).strip()
     if "image" in raw:
-        image = str(raw["image"]).strip()
-        if " " in image:
-            raise BuildRecipeError("image must be a single reference")
-        out["image"] = image
+        # Through the same validator as a typed image. This file lives in the repository,
+        # so anyone who can commit to it chooses the image -- and, before this, it was only
+        # checked for spaces, while the repo's registry credential followed it anywhere.
+        from core.repos.image_ref import ImageRefError, normalise_image_ref
+
+        try:
+            image = normalise_image_ref(str(raw["image"]))
+        except ImageRefError as exc:
+            raise BuildRecipeError(f"image: {exc}") from exc
+        if image:
+            out["image"] = image
     for key in ("test_cmd", "build_cmd"):
         if key in raw:
             out[key] = _clean_cmd(raw[key], key)
@@ -150,6 +161,7 @@ def resolve_build_recipe(
     # Image. A repo-row image is the operator's word and wins outright. Otherwise the
     # manifest may name an image or a runtime; otherwise the repo row's runtime.
     baseline: list[str] = []
+    chosen_runtime: dict[str, object] | None = None
     if repo_image:
         image = repo_image
         sources["image"] = "repo"
@@ -161,11 +173,13 @@ def resolve_build_recipe(
         raw = manifest_runtime_entry.get("setup")
         baseline = [str(c) for c in raw] if isinstance(raw, list) else []
         sources["image"] = "manifest-runtime"
+        chosen_runtime = manifest_runtime_entry
     elif runtime_entry is not None:
         image = str(runtime_entry["image"])
         raw = runtime_entry.get("setup")
         baseline = [str(c) for c in raw] if isinstance(raw, list) else []
         sources["image"] = "runtime"
+        chosen_runtime = runtime_entry
     else:
         raise BuildRecipeError(
             f"no image for this build: repo runtime {repo_runtime!r} is not a known "
@@ -203,4 +217,10 @@ def resolve_build_recipe(
         build_cmd=build_cmd,
         artifact_name=artifact_name,
         sources=sources,
+        image_built=bool(chosen_runtime and isinstance(chosen_runtime.get("built"), dict)),
+        baked_harness=(
+            {str(k): str(v) for k, v in baked.items()}
+            if chosen_runtime and isinstance(baked := chosen_runtime.get("baked_harness"), dict)
+            else {}
+        ),
     )

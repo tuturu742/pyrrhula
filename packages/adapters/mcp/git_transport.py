@@ -268,6 +268,7 @@ class GitMcpTransport:
         codegen: Any | None = None,
         token_resolver: Any | None = None,
         env_tracker: Any | None = None,
+        image_auth_resolver: Any | None = None,
     ) -> None:
         self._store = store
         self._default_repo = default_repo
@@ -280,6 +281,9 @@ class GitMcpTransport:
         # async (event, env_cfg, name, exit_code) -> None; best-effort lifecycle registry
         # for the UI's "active environments" view. Never allowed to fail a delegation.
         self._env_tracker = env_tracker
+        # async (tenant_id, image) -> X-Registry-Auth|None: a declared registry's read
+        # credential, for the organization's own images there only (core.images.service).
+        self._image_auth_resolver = image_auth_resolver
 
     def _repo(self, server: McpServerRef) -> str:
         return (server.url or "").strip() or self._default_repo
@@ -312,7 +316,22 @@ class GitMcpTransport:
         """The Docker ``X-Registry-Auth`` payload for a private runtime image: resolve
         the sealed JSON credentials at call time (only the opaque ref rides the job
         arguments) and b64-wrap them. None for public images or resolution failure --
-        the pull then proceeds unauthenticated and fails loudly if it needed auth."""
+        the pull then proceeds unauthenticated and fails loudly if it needed auth.
+
+        The repo's own credential first; failing that, the declared registry's, which
+        the resolver lends only to the organization's own images."""
+        repo_auth = await self._repo_registry_auth(env_cfg)
+        if repo_auth or self._image_auth_resolver is None:
+            return repo_auth
+        try:
+            result = await self._image_auth_resolver(
+                env_cfg.get("tenant_id"), str(env_cfg.get("image") or "")
+            )
+        except Exception:  # noqa: BLE001 -- unauthenticated pull + its error is clearer
+            return None
+        return str(result) if result else None
+
+    async def _repo_registry_auth(self, env_cfg: dict[str, Any]) -> str | None:
         ref = env_cfg.get("registry_credential_ref")
         if not ref or self._token_resolver is None:
             return None
@@ -320,16 +339,17 @@ class GitMcpTransport:
             raw = await self._token_resolver(env_cfg.get("tenant_id"), str(ref))
             if not raw:
                 return None
-            import base64
             import json as _json
 
-            creds = _json.loads(raw)
-            payload = {
-                "username": str(creds.get("username") or ""),
-                "password": str(creds.get("password") or ""),
-                "serveraddress": str(env_cfg.get("image", "")).split("/")[0],
-            }
-            return base64.b64encode(_json.dumps(payload).encode()).decode()
+            from core.repos.registry_auth import x_registry_auth
+
+            # Sent only to the registry the credential was issued for -- see
+            # core/repos/registry_auth.py for why `image.split("/")[0]` was not enough.
+            return x_registry_auth(
+                _json.loads(raw),
+                str(env_cfg.get("image") or ""),
+                image_source=env_cfg.get("image_source"),
+            )
         except Exception:  # noqa: BLE001 -- unauthenticated pull + its error is clearer
             return None
 

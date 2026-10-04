@@ -16,11 +16,11 @@
 services:
   web:
     volumes:
-      # The nginx image envsubsts templates/ into conf.d/ at start; mounting the TLS
-      # template OVER the default one swaps the whole server block.
-      - ../docker/web-nginx-tls.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ${PYRRHULA_TLS_CERT_DIR:?set to the directory holding fullchain.pem and privkey.pem}:/etc/nginx/certs:ro
     environment:
+      # The web image swaps in its TLS server block (docker/web-tls.sh) and checks the
+      # certificates are there before nginx starts.
+      PYRRHULA_TLS: provided
       PYRRHULA_API_UPSTREAM: ${PYRRHULA_API_UPSTREAM:-api:8000}
       PYRRHULA_TLS_SERVER_NAME: ${PYRRHULA_TLS_SERVER_NAME:-localhost}
     ports:

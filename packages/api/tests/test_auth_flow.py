@@ -292,6 +292,85 @@ async def test_an_explicit_header_still_wins_in_single_tenant_mode(
     assert response.status_code == 200, response.text
 
 
+async def test_an_empty_tenant_header_names_no_tenant(
+    client: TestClient, db_available: None
+) -> None:
+    """Found importing a bundle on a single-tenant install: the browser stores no slug
+    there, the upload stamped `slug ?? ""`, and every request was refused as "token tenant
+    does not match". Empty means absent; a wrong slug is still refused."""
+    slug = await _new_tenant_slug()
+    token = _register(client, slug, f"empty-{slug}@example.com")
+    auth = {"Authorization": f"Bearer {token}"}
+    assert client.get("/me", headers={**auth, "X-Pyrrhula-Tenant": ""}).status_code == 200
+    other = await _new_tenant_slug()
+    assert client.get("/me", headers={**auth, "X-Pyrrhula-Tenant": other}).status_code == 403
+
+
+async def _platform_admin(email: str, password: str) -> None:
+    """What PYRRHULA_ADMIN_EMAIL/PASSWORD bootstrap: an owner in the reserved admin org."""
+    from adapters.identity.local.argon2_provider import LocalArgon2IdentityProvider
+    from core.tenancy.admin import ADMIN_TENANT_ID
+    from core.tenancy.provisioning import create_tenant_user
+
+    principal_id = await create_tenant_user(ADMIN_TENANT_ID, "Platform Admin", "owner")
+    await LocalArgon2IdentityProvider().register_local(
+        ADMIN_TENANT_ID, principal_id, email, password
+    )
+
+
+async def test_a_bootstrapped_admin_signs_in_on_a_fresh_single_tenant_install(
+    client: TestClient, db_available: None, single_tenant: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found installing a release on a second host: the single-tenant login form sends no
+    organization, the sole-organization rule (rightly) ignores the admin one, and a fresh
+    install has no other -- so the administrator the installer created could not sign in
+    at all, and the form said only "invalid email or password"."""
+    from api.middleware import tenant as tenant_middleware
+    from core.tenancy.admin import ADMIN_TENANT_ID
+
+    email = f"admin-{uuid.uuid4().hex[:6]}@example.com"
+    await _platform_admin(email, "correct horse battery")
+    monkeypatch.setattr(tenant_middleware, "_sole_tenant", lambda: _async(None))
+
+    response = client.post(
+        "/auth/login", json={"email": email, "password": "correct horse battery"}
+    )
+    assert response.status_code == 200, response.text
+    assert _tenant_of(response.json()["access_token"]) == str(ADMIN_TENANT_ID)
+
+    wrong = client.post("/auth/login", json={"email": email, "password": "not it"})
+    assert wrong.status_code in (400, 401), "the same failure as before; nothing new revealed"
+
+
+async def test_the_admin_still_signs_in_once_there_is_an_organization(
+    client: TestClient, db_available: None, single_tenant: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The organization's own people are tried first; the admin falls through to its org."""
+    from api.middleware import tenant as tenant_middleware
+    from core.tenancy.admin import ADMIN_TENANT_ID
+    from core.tenancy.models import Tenant
+    from core.tenancy.scope import unscoped_session
+
+    slug = await _new_tenant_slug()
+    _register(client, slug, f"member-{slug}@example.com")
+    async with unscoped_session() as session:
+        sole = await session.scalar(select(Tenant).where(Tenant.slug == slug))
+        session.expunge(sole)
+    monkeypatch.setattr(tenant_middleware, "_sole_tenant", lambda: _async(sole))
+    email = f"admin-{uuid.uuid4().hex[:6]}@example.com"
+    await _platform_admin(email, "correct horse battery")
+
+    member = client.post(
+        "/auth/login", json={"email": f"member-{slug}@example.com", "password": "correct horse"}
+    )
+    assert _tenant_of(member.json()["access_token"]) == str(sole.id)
+    admin = client.post("/auth/login", json={"email": email, "password": "correct horse battery"})
+    assert admin.status_code == 200, admin.text
+    assert _tenant_of(admin.json()["access_token"]) == str(ADMIN_TENANT_ID)
+    nobody = client.post("/auth/login", json={"email": email, "password": "wrong"})
+    assert nobody.status_code == 401
+
+
 # ── what the pre-auth screens are allowed to know ────────────────────────────────────
 
 

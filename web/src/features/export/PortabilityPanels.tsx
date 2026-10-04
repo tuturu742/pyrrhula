@@ -32,6 +32,7 @@ const SECTION_ORDER = [
   "rules",
   "vocabulary",
   "secrets",
+  "images",
 ] as const;
 
 const SECTION_LABEL: Record<string, string> = {
@@ -43,6 +44,7 @@ const SECTION_LABEL: Record<string, string> = {
   flows: "Flows",
   rules: "Rule systems and their tools",
   vocabulary: "Vocabulary overlays",
+  images: "Runtime images (checked again before use)",
   secrets: "Secrets",
 };
 
@@ -67,7 +69,12 @@ export function ImportPanel({ workspaceId }: { workspaceId: string }) {
     extra?.(form);
     const response = await fetch(path, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "X-Pyrrhula-Tenant": tenantSlug ?? "" },
+      // Only when there is one: single-tenant deployments store no slug, and an empty
+      // header named a tenant "" that never matched the token.
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(tenantSlug ? { "X-Pyrrhula-Tenant": tenantSlug } : {}),
+      },
       body: form,
     });
     if (!response.ok) throw new Error((await response.text()).slice(0, 300));

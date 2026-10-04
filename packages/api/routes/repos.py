@@ -225,6 +225,10 @@ class RuntimeResponse(BaseModel):
     # True: what runs is the tenant's image, and a catalog that hid that would be lying
     # about which image a build uses.
     tenant_owned: bool = False
+    # One of the organization's own verified images ("built" or "imported"), changed
+    # from Images rather than here. None for an ordinary runtime.
+    built_origin: str | None = None
+    baked_harness: str | None = None
 
 
 class RegisterRuntimeRequest(BaseModel):
@@ -247,6 +251,16 @@ async def list_runtimes_endpoint(
             image=str(v["image"]),
             setup=[str(c) for c in cast("list[object]", v.get("setup") or [])],
             tenant_owned=BUILTIN_RUNTIMES.get(k) != v,
+            built_origin=(
+                str(cast("dict[str, object]", v["built"]).get("origin") or "built")
+                if isinstance(v.get("built"), dict)
+                else None
+            ),
+            baked_harness=(
+                str(cast("dict[str, object]", v["baked_harness"]).get("key") or "") or None
+                if isinstance(v.get("baked_harness"), dict)
+                else None
+            ),
         )
         for k, v in sorted(effective.items())
     ]
@@ -290,10 +304,14 @@ async def remove_runtime_endpoint(
     Repos already pinned to the key keep the name and resolve to whatever it means now,
     which for a removed non-built-in is nothing: that build is refused with an unknown
     runtime rather than silently running on some other image."""
-    from core.repos.runtimes import remove_runtime
+    from core.repos.runtimes import InvalidRuntimeError, remove_runtime
 
     await require_tenant_permission(ctx, "repo:manage")
-    if not await remove_runtime(ctx.tenant_id, key):
+    try:
+        removed = await remove_runtime(ctx.tenant_id, key)
+    except InvalidRuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not removed:
         raise HTTPException(status_code=404, detail=f"this tenant has no runtime {key!r}")
 
 
@@ -329,29 +347,49 @@ class CreateRepoRequest(BaseModel):
     preview_env: dict[str, str] = {}
 
 
-def _checked_image(value: str | None, *, field: str) -> str | None:
+async def _checked_image(value: str | None, *, field: str, tenant_id: uuid.UUID) -> str | None:
     """Refuse an unusable image reference here, rather than at pull time inside a job.
 
     A registry web page pasted from the address bar is the common case and looks
-    plausible in the form; the engine's failure for it surfaces far from this field."""
+    plausible in the form; the engine's failure for it surfaces far from this field. The
+    reference must also be one this organization may use at all: not another tenant's
+    image, and from a source the operator's allowlist admits."""
+    from core.images.namespace import check_image_ref_for_tenant
     from core.repos.image_ref import ImageRefError, normalise_image_ref
 
     try:
-        return normalise_image_ref(value)
+        ref = normalise_image_ref(value)
+        await check_image_ref_for_tenant(tenant_id, ref)
+        return ref
     except ImageRefError as exc:
         raise HTTPException(status_code=422, detail=f"{field}: {exc}") from exc
 
 
 async def _seal_registry_credentials(
-    tenant_id: uuid.UUID, username: str | None, token: str | None
+    tenant_id: uuid.UUID, username: str | None, token: str | None, image: str | None
 ) -> uuid.UUID | None:
     """Registry credentials (for private runtime images) sealed as one encrypted JSON
-    payload -- same store and write-only discipline as repo access tokens."""
+    payload -- same store and write-only discipline as repo access tokens.
+
+    The payload records **which registry** the credential is for. Without that, the
+    credential was sent to whatever registry the delegation's image named -- and the image
+    can come from ``pyrrhula-build.json`` inside the repository, so a commit could redirect
+    the repo's registry password to a host of its choosing.
+    """
     if not token:
         return None
+    if not image:
+        raise HTTPException(
+            status_code=422,
+            detail="registry credentials need the image they are for: set runtime_image too",
+        )
     import json as _json
 
-    payload = _json.dumps({"username": username or "", "password": token})
+    from core.repos.image_ref import registry_host
+
+    payload = _json.dumps(
+        {"username": username or "", "password": token, "serveraddress": registry_host(image)}
+    )
     return await store_provider_credential(tenant_id, payload, encryptor=get_encryptor())
 
 
@@ -368,7 +406,7 @@ async def create_repo_endpoint(
             ctx.tenant_id, body.access_token, encryptor=get_encryptor()
         )
     registry_credential_ref = await _seal_registry_credentials(
-        ctx.tenant_id, body.registry_username, body.registry_token
+        ctx.tenant_id, body.registry_username, body.registry_token, body.runtime_image
     )
 
     try:
@@ -381,13 +419,17 @@ async def create_repo_endpoint(
             provider=body.provider,
             credential_ref=credential_ref,
             runtime=body.runtime,
-            runtime_image=_checked_image(body.runtime_image, field="runtime_image"),
+            runtime_image=await _checked_image(
+                body.runtime_image, field="runtime_image", tenant_id=ctx.tenant_id
+            ),
             registry_credential_ref=registry_credential_ref,
             setup_cmds=body.setup_cmds,
             test_cmd=body.test_cmd,
             build_cmd=body.build_cmd,
             artifact_name=body.artifact_name,
-            preview_image=_checked_image(body.preview_image, field="preview_image"),
+            preview_image=await _checked_image(
+                body.preview_image, field="preview_image", tenant_id=ctx.tenant_id
+            ),
             preview_cmd=body.preview_cmd,
             preview_port=body.preview_port,
             preview_env=body.preview_env,
@@ -514,8 +556,23 @@ async def update_repo_endpoint(
         credential_ref = await store_provider_credential(
             ctx.tenant_id, body.access_token, encryptor=get_encryptor()
         )
+    credential_image = body.runtime_image
+    if body.registry_token and not credential_image:
+        existing = await get_repo(ctx.tenant_id, repo_id)
+        credential_image = existing.runtime_image if existing is not None else None
     registry_credential_ref = await _seal_registry_credentials(
-        ctx.tenant_id, body.registry_username, body.registry_token
+        ctx.tenant_id, body.registry_username, body.registry_token, credential_image
+    )
+
+    checked_runtime_image = (
+        await _checked_image(body.runtime_image, field="runtime_image", tenant_id=ctx.tenant_id)
+        if body.runtime_image is not None
+        else None
+    )
+    checked_preview_image = (
+        await _checked_image(body.preview_image, field="preview_image", tenant_id=ctx.tenant_id)
+        if body.preview_image is not None and not body.clear_preview
+        else None
     )
 
     from core.tenancy.scope import tenant_scope
@@ -541,7 +598,7 @@ async def update_repo_endpoint(
         if body.runtime is not None:
             live.runtime = body.runtime
         if body.runtime_image is not None:
-            live.runtime_image = _checked_image(body.runtime_image, field="runtime_image")
+            live.runtime_image = checked_runtime_image
         if body.setup_cmds is not None:
             live.setup_cmds = list(body.setup_cmds)
         if body.clear_test_cmd:
@@ -563,7 +620,7 @@ async def update_repo_endpoint(
             live.preview_env = {}
         else:
             if body.preview_image is not None:
-                live.preview_image = _checked_image(body.preview_image, field="preview_image")
+                live.preview_image = checked_preview_image
             if body.preview_cmd is not None:
                 live.preview_cmd = body.preview_cmd.strip() or None
             if body.preview_port is not None:

@@ -1,0 +1,90 @@
+# Reference workflow for Pyrrhula's GitHub Actions image builder.
+#
+# Put this in a repository you control (for example `<org>/pyrrhula-builds`) at
+# `.github/workflows/pyrrhula-image-build.yml`, then declare the builder in
+# Admin ▸ Builders with owner/repo/workflow = that file's name. Pyrrhula's token needs only
+# "Actions: read and write" on this one repository. The push credential is this
+# workflow's own GITHUB_TOKEN (for GHCR) or a secret you add -- Pyrrhula never sees it.
+#
+# Security rules this file follows, and any edit of it must keep:
+#   * every input reaches a shell through `env:` only -- never `${{ inputs.* }}` inside
+#     `run:`, which would let a crafted input run commands on this runner;
+#   * the Dockerfile arrives base64 and is decoded to a file; the build context is an
+#     empty directory, so the build sees nothing from this repository;
+#   * the target is checked against PYRRHULA_TARGET_PREFIX (a repository variable), so
+#     even a compromised caller can only push under the prefix you chose;
+#   * pin the third-party actions below to commit SHAs in production.
+name: pyrrhula-image-build
+run-name: pyrrhula ${{ inputs.build_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: Pyrrhula build id
+        required: true
+        type: string
+      target_ref:
+        description: Exact image reference to push
+        required: true
+        type: string
+      dockerfile_b64:
+        description: The Dockerfile, base64
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check the inputs
+        env:
+          BUILD_ID: ${{ inputs.build_id }}
+          TARGET_REF: ${{ inputs.target_ref }}
+          ALLOWED_PREFIX: ${{ vars.PYRRHULA_TARGET_PREFIX }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD_ID" =~ ^[0-9a-f-]{36}$ ]] || { echo "bad build id"; exit 1; }
+          [[ "$TARGET_REF" =~ ^[a-z0-9.:/_-]+:[A-Za-z0-9._-]+$ ]] || { echo "bad target"; exit 1; }
+          [ -n "$ALLOWED_PREFIX" ] || { echo "set the PYRRHULA_TARGET_PREFIX variable"; exit 1; }
+          case "$TARGET_REF" in
+            "$ALLOWED_PREFIX"*) ;;
+            *) echo "target is outside $ALLOWED_PREFIX"; exit 1 ;;
+          esac
+
+      - name: Write the Dockerfile to an empty context
+        env:
+          DOCKERFILE_B64: ${{ inputs.dockerfile_b64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/context"
+          printf '%s' "$DOCKERFILE_B64" | base64 -d > "$RUNNER_TEMP/Dockerfile"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # Action inputs, not shell: target_ref was checked above and is not interpolated
+          # into any command line.
+          context: ${{ runner.temp }}/context
+          file: ${{ runner.temp }}/Dockerfile
+          tags: ${{ inputs.target_ref }}
+          push: true
+          provenance: false
+          # The source label links the package to this repository on GitHub, so anyone
+          # looking at the image can see the workflow that built it.
+          labels: |
+            pyrrhula.build=${{ inputs.build_id }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}

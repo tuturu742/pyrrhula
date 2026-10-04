@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client/client";
 import { Button } from "@/components/ui/button";
+import { ModelPicker } from "@/features/agents/ModelProfilesPanel";
 
 /**
  * The connection the deployment's own assistant talks to.
@@ -166,40 +167,6 @@ export function AssistantConnectionCard() {
                 />
               )}
             </Field>
-            <Field label="Model">
-              <div className="flex gap-1">
-                <input
-                  list="admin-assistant-models"
-                  className={inputClass}
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={
-                    {
-                      openai: "gpt-4o",
-                      anthropic: "claude-sonnet-4-5",
-                      gemini: "gemini-2.5-pro",
-                      "openai-compatible": "deepseek-chat",
-                      ollama: "qwen3:8b",
-                    }[providerChoice] ?? ""
-                  }
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => fetchModels.mutate()}
-                  disabled={fetchModels.isPending || !provider.trim()}
-                  title="List models the provider offers (cloud providers need the API key)"
-                  className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50"
-                >
-                  {fetchModels.isPending ? "…" : "Fetch"}
-                </button>
-                <datalist id="admin-assistant-models">
-                  {availableModels.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              </div>
-            </Field>
           </div>
 
           <Field
@@ -240,6 +207,33 @@ export function AssistantConnectionCard() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={hasStoredConnection ? "(unchanged)" : ""}
+            />
+          </Field>
+
+          {/* After the key: listing a cloud provider's models needs it. */}
+          <Field label="Model">
+            <ModelPicker
+              value={model}
+              onChange={setModel}
+              models={availableModels}
+              placeholder={
+                {
+                  openai: "gpt-4o",
+                  anthropic: "claude-sonnet-4-5",
+                  gemini: "gemini-2.5-pro",
+                  "openai-compatible": "deepseek-chat",
+                  ollama: "qwen3:8b",
+                }[providerChoice] ?? ""
+              }
+              fetching={fetchModels.isPending}
+              onFetch={() => fetchModels.mutate()}
+              fetchBlockedReason={
+                !provider.trim()
+                  ? "Choose a provider first"
+                  : providerChoice !== "ollama" && !apiKey && !hasStoredConnection
+                    ? "Enter the API key first"
+                    : null
+              }
             />
           </Field>
 

@@ -32,6 +32,9 @@ _COVERED_TABLES = {
     "tenant_mcp_capability",
     "exec_environment",
     "preview_environment",
+    # test_image_lifecycle.py
+    "image_definition",
+    "image_build",
     "identity",
     "membership",
     "workspace",

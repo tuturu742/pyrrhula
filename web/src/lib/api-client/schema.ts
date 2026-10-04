@@ -4214,6 +4214,438 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/image-registries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Registries Endpoint */
+        get: operations["list_registries_endpoint_admin_image_registries_get"];
+        put?: never;
+        /** Create Registry Endpoint */
+        post: operations["create_registry_endpoint_admin_image_registries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-registries/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Registry Endpoint */
+        delete: operations["delete_registry_endpoint_admin_image_registries__key__delete"];
+        options?: never;
+        head?: never;
+        /** Update Registry Endpoint */
+        patch: operations["update_registry_endpoint_admin_image_registries__key__patch"];
+        trace?: never;
+    };
+    "/admin/image-registries/{key}/credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Credential Endpoint */
+        put: operations["set_credential_endpoint_admin_image_registries__key__credential_put"];
+        post?: never;
+        /** Clear Credential Endpoint */
+        delete: operations["clear_credential_endpoint_admin_image_registries__key__credential_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-registries/{key}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Registry Endpoint
+         * @description Is it reachable, and does the stored credential work. Answers rather than raises:
+         *     a registry that is down is a finding to show, not an error in the console.
+         */
+        post: operations["test_registry_endpoint_admin_image_registries__key__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/runtime-image-allowlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Allowlist Endpoint */
+        get: operations["get_allowlist_endpoint_admin_runtime_image_allowlist_get"];
+        /** Set Allowlist Endpoint */
+        put: operations["set_allowlist_endpoint_admin_runtime_image_allowlist_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-builders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Builders Endpoint */
+        get: operations["list_builders_endpoint_admin_image_builders_get"];
+        put?: never;
+        /** Create Builder Endpoint */
+        post: operations["create_builder_endpoint_admin_image_builders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-builders/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Builder Endpoint */
+        delete: operations["delete_builder_endpoint_admin_image_builders__key__delete"];
+        options?: never;
+        head?: never;
+        /** Update Builder Endpoint */
+        patch: operations["update_builder_endpoint_admin_image_builders__key__patch"];
+        trace?: never;
+    };
+    "/admin/image-builders/{key}/credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Builder Credential Endpoint */
+        put: operations["set_builder_credential_endpoint_admin_image_builders__key__credential_put"];
+        post?: never;
+        /** Clear Builder Credential Endpoint */
+        delete: operations["clear_builder_credential_endpoint_admin_image_builders__key__credential_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-builders/{key}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Builder Endpoint
+         * @description Reachable, and does it accept this deployment's credential. Builds nothing.
+         */
+        post: operations["test_builder_endpoint_admin_image_builders__key__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-builders/{key}/isolation-probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Isolation Probe Endpoint
+         * @description Build a throwaway image whose RUN step reports what it can reach -- what any
+         *     organization's RUN step on this engine will reach. Shown so the operator can decide,
+         *     and then acknowledge (``isolation_ack``), before organizations may build here.
+         */
+        post: operations["isolation_probe_endpoint_admin_image_builders__key__isolation_probe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/image-build-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Build Limits Endpoint */
+        get: operations["get_build_limits_endpoint_admin_image_build_limits_get"];
+        /** Set Build Limits Endpoint */
+        put: operations["set_build_limits_endpoint_admin_image_build_limits_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Images Endpoint */
+        get: operations["list_images_endpoint_images_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Image Endpoint
+         * @description Start using a published image by its exact digest. Answers at once; the check --
+         *     the registry's digest, then a smoke test on this organization's engine -- runs in the
+         *     worker, and the image becomes a runtime when it passes.
+         */
+        post: operations["import_image_endpoint_images_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates Endpoint */
+        get: operations["list_templates_endpoint_images_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/propose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Endpoint
+         * @description A draft Dockerfile for a repository, from its files and manifests. Writes nothing:
+         *     the draft goes back to the editor, and a person saves and builds it.
+         */
+        post: operations["propose_endpoint_images_propose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/builders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Available Builders Endpoint
+         * @description The builders the operator made available to this organization. Empty means
+         *     Build is unavailable here -- imports still work.
+         */
+        get: operations["list_available_builders_endpoint_images_builders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Dockerfile Endpoint */
+        post: operations["validate_dockerfile_endpoint_images_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save Definition Endpoint
+         * @description Save an image this organization builds. Builds nothing; answers with what the
+         *     validator thinks of it, so the editor can show it next to the save.
+         */
+        put: operations["save_definition_endpoint_images__name__put"];
+        post?: never;
+        /** Remove Image Endpoint */
+        delete: operations["remove_image_endpoint_images__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/build": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build Endpoint */
+        post: operations["build_endpoint_images__name__build_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/builds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Builds Endpoint */
+        get: operations["list_builds_endpoint_images__name__builds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recheck Image Endpoint */
+        post: operations["recheck_image_endpoint_images__name__recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Build Endpoint */
+        post: operations["cancel_build_endpoint_images__name__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}/builds/{build_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Build Endpoint
+         * @description Make an earlier verified build current again -- the rollback.
+         */
+        post: operations["promote_build_endpoint_images__name__builds__build_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -4383,6 +4815,11 @@ export interface components {
             api_base: string | null;
             /** Fallback Agent Id */
             fallback_agent_id: string | null;
+        };
+        /** AllowlistBody */
+        AllowlistBody: {
+            /** Prefixes */
+            prefixes: string[];
         };
         /**
          * AnalysisStatus
@@ -4657,6 +5094,168 @@ export interface components {
             /** File */
             file: string;
         };
+        /** BuildLimits */
+        BuildLimits: {
+            /** Max Concurrent Per Tenant */
+            max_concurrent_per_tenant: number;
+            /** Max Per Day Per Tenant */
+            max_per_day_per_tenant: number;
+            /** Timeout Seconds */
+            timeout_seconds: number;
+        };
+        /** BuildOut */
+        BuildOut: {
+            /** Id */
+            id: string;
+            /** Origin */
+            origin: string;
+            /** Status */
+            status: string;
+            /** Target Ref */
+            target_ref: string;
+            /** Digest */
+            digest: string;
+            /** Pinned Ref */
+            pinned_ref: string;
+            /** Registry Key */
+            registry_key: string | null;
+            /** Builder Key */
+            builder_key: string | null;
+            /** External Url */
+            external_url: string;
+            /** Harness Claim */
+            harness_claim: {
+                [key: string]: unknown;
+            };
+            /** Baked Harness */
+            baked_harness: {
+                [key: string]: unknown;
+            };
+            /** Smoke */
+            smoke: string;
+            /**
+             * Log Tail
+             * @default
+             */
+            log_tail: string;
+            /** Error */
+            error: string;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Current
+             * @default false
+             */
+            current: boolean;
+            /**
+             * Reused
+             * @default false
+             */
+            reused: boolean;
+        };
+        /** BuildRequest */
+        BuildRequest: {
+            /** Builder Key */
+            builder_key: string;
+            /**
+             * Rebuild
+             * @default false
+             */
+            rebuild: boolean;
+        };
+        /** BuilderChoice */
+        BuilderChoice: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /** Registry Key */
+            registry_key: string;
+        };
+        /** BuilderCredentialRequest */
+        BuilderCredentialRequest: {
+            /**
+             * Signing Secret
+             * @default
+             */
+            signing_secret: string;
+            /**
+             * Token
+             * @default
+             */
+            token: string;
+            /**
+             * Api Key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Push Username
+             * @default
+             */
+            push_username: string;
+            /**
+             * Push Password
+             * @default
+             */
+            push_password: string;
+        };
+        /** BuilderFields */
+        BuilderFields: {
+            /** Label */
+            label?: string | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Registry Key */
+            registry_key?: string | null;
+            /** Allowed Tenants */
+            allowed_tenants?: string[] | null;
+            /** Isolation Ack */
+            isolation_ack?: boolean | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** BuilderOut */
+        BuilderOut: {
+            /** Key */
+            key: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Registry Key */
+            registry_key: string;
+            /** Allowed Tenants */
+            allowed_tenants: string[] | null;
+            /** Isolation Ack */
+            isolation_ack: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Has Credential */
+            has_credential: boolean;
+        };
+        /** BuilderProbeOut */
+        BuilderProbeOut: {
+            /** Ok */
+            ok: boolean;
+            /** Detail */
+            detail: string;
+        };
         /** BundleInspectionResponse */
         BundleInspectionResponse: {
             /** Tenant Ref */
@@ -4864,6 +5463,27 @@ export interface components {
             /** Fallback Agent Id */
             fallback_agent_id?: string | null;
         };
+        /** CreateBuilderRequest */
+        CreateBuilderRequest: {
+            /** Label */
+            label?: string | null;
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Registry Key */
+            registry_key?: string | null;
+            /** Allowed Tenants */
+            allowed_tenants?: string[] | null;
+            /** Isolation Ack */
+            isolation_ack?: boolean | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Key */
+            key: string;
+            /** Kind */
+            kind: string;
+        };
         /** CreateDefinitionRequest */
         CreateDefinitionRequest: {
             /** Key */
@@ -4941,6 +5561,31 @@ export interface components {
              * @default
              */
             git_ref: string;
+        };
+        /** CreateRegistryRequest */
+        CreateRegistryRequest: {
+            /** Label */
+            label?: string | null;
+            /** Pull Host */
+            pull_host?: string | null;
+            /** Aliases */
+            aliases?: string[] | null;
+            /** Path Prefix */
+            path_prefix?: string | null;
+            /** Path Style */
+            path_style?: string | null;
+            /** Insecure */
+            insecure?: boolean | null;
+            /** K8S Pull Secret */
+            k8s_pull_secret?: string | null;
+            /** Supports Delete */
+            supports_delete?: boolean | null;
+            /** Public By Default Ack */
+            public_by_default_ack?: boolean | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Key */
+            key: string;
         };
         /** CreateRepoRequest */
         CreateRepoRequest: {
@@ -5167,6 +5812,16 @@ export interface components {
             /** Key */
             key?: string | null;
         };
+        /** CredentialRequest */
+        CredentialRequest: {
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /** Password */
+            password: string;
+        };
         /** CurrentWorkflowResponse */
         CurrentWorkflowResponse: {
             /** Workflow Key */
@@ -5254,6 +5909,18 @@ export interface components {
             disclosed_to: {
                 [key: string]: unknown;
             };
+        };
+        /** DockerfileBody */
+        DockerfileBody: {
+            /** Dockerfile */
+            dockerfile: string;
+        };
+        /** DockerfileCheck */
+        DockerfileCheck: {
+            /** Errors */
+            errors: string[];
+            /** Warnings */
+            warnings: string[];
         };
         /** DraftRequest */
         DraftRequest: {
@@ -5634,6 +6301,16 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HarnessClaim */
+        HarnessClaim: {
+            /** Key */
+            key: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
         /** HarnessResponse */
         HarnessResponse: {
             /** Key */
@@ -5689,6 +6366,39 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ImageOut */
+        ImageOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Origin */
+            origin: string;
+            /** Harness Key */
+            harness_key: string;
+            /** Dockerfile */
+            dockerfile: string;
+            current: components["schemas"]["BuildOut"] | null;
+            latest: components["schemas"]["BuildOut"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ImportImageRequest */
+        ImportImageRequest: {
+            /** Name */
+            name: string;
+            /** Image */
+            image: string;
+            /**
+             * Dockerfile
+             * @default
+             */
+            dockerfile: string;
+            harness_claim?: components["schemas"]["HarnessClaim"] | null;
         };
         /** ImportResponse */
         ImportResponse: {
@@ -5756,6 +6466,19 @@ export interface components {
             behavioral_directive: string | null;
             /** Disclosure State */
             disclosure_state: string;
+        };
+        /** IsolationProbeOut */
+        IsolationProbeOut: {
+            /** Lines */
+            lines: string[];
+        };
+        /** IsolationProbeRequest */
+        IsolationProbeRequest: {
+            /**
+             * Extra Targets
+             * @default []
+             */
+            extra_targets: string[];
         };
         /** JobStatusResponse */
         JobStatusResponse: {
@@ -6266,6 +6989,26 @@ export interface components {
              */
             url: string;
         };
+        /** ProbeOut */
+        ProbeOut: {
+            /** Reachable */
+            reachable: boolean;
+            /** Authenticated */
+            authenticated: boolean | null;
+            /** Detail */
+            detail: string;
+        };
+        /** ProposalOut */
+        ProposalOut: {
+            /** Dockerfile */
+            dockerfile: string;
+            /** Rationale */
+            rationale: string;
+            /** Errors */
+            errors: string[];
+            /** Warnings */
+            warnings: string[];
+        };
         /** ProposeEntryEditRequest */
         ProposeEntryEditRequest: {
             /**
@@ -6285,6 +7028,24 @@ export interface components {
             agent_id: string;
             /** Instruction */
             instruction: string;
+        };
+        /** ProposeRequest */
+        ProposeRequest: {
+            /**
+             * Repo Id
+             * Format: uuid
+             */
+            repo_id: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /**
+             * Harness Key
+             * @default
+             */
+            harness_key: string;
         };
         /** ProposeSchemaEditRequest */
         ProposeSchemaEditRequest: {
@@ -6519,6 +7280,58 @@ export interface components {
         RegistrationPolicyRequest: {
             /** Policy */
             policy: string;
+        };
+        /** RegistryFields */
+        RegistryFields: {
+            /** Label */
+            label?: string | null;
+            /** Pull Host */
+            pull_host?: string | null;
+            /** Aliases */
+            aliases?: string[] | null;
+            /** Path Prefix */
+            path_prefix?: string | null;
+            /** Path Style */
+            path_style?: string | null;
+            /** Insecure */
+            insecure?: boolean | null;
+            /** K8S Pull Secret */
+            k8s_pull_secret?: string | null;
+            /** Supports Delete */
+            supports_delete?: boolean | null;
+            /** Public By Default Ack */
+            public_by_default_ack?: boolean | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** RegistryOut */
+        RegistryOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Pull Host */
+            pull_host: string;
+            /** Aliases */
+            aliases: string[];
+            /** Path Prefix */
+            path_prefix: string;
+            /** Path Style */
+            path_style: string;
+            /** Insecure */
+            insecure: boolean;
+            /** Has Credential */
+            has_credential: boolean;
+            /** Credential Username */
+            credential_username: string;
+            /** K8S Pull Secret */
+            k8s_pull_secret: string;
+            /** Supports Delete */
+            supports_delete: boolean;
+            /** Public By Default Ack */
+            public_by_default_ack: boolean;
+            /** Enabled */
+            enabled: boolean;
         };
         /** RejectRequest */
         RejectRequest: {
@@ -6837,6 +7650,10 @@ export interface components {
              * @default false
              */
             tenant_owned: boolean;
+            /** Built Origin */
+            built_origin?: string | null;
+            /** Baked Harness */
+            baked_harness?: string | null;
         };
         /** SatisfyAwaitRequest */
         SatisfyAwaitRequest: {
@@ -6855,6 +7672,16 @@ export interface components {
             process_definition_id: string;
             /** Phases */
             phases: components["schemas"]["PhaseSaturationResponse"][];
+        };
+        /** SaveDefinitionRequest */
+        SaveDefinitionRequest: {
+            /** Dockerfile */
+            dockerfile: string;
+            /**
+             * Harness Key
+             * @default
+             */
+            harness_key: string;
         };
         /** SchemaDefinitionDiffResponse */
         SchemaDefinitionDiffResponse: {
@@ -7141,6 +7968,19 @@ export interface components {
         SubmitMessageRequest: {
             /** Content */
             content: string;
+        };
+        /** TemplateOut */
+        TemplateOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Dockerfile */
+            dockerfile: string;
+            /** Harness Key */
+            harness_key: string;
         };
         /** TenantOut */
         TenantOut: {
@@ -17057,6 +17897,1160 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_registries_endpoint_admin_image_registries_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_registry_endpoint_admin_image_registries_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRegistryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_registry_endpoint_admin_image_registries__key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_registry_endpoint_admin_image_registries__key__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistryFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_credential_endpoint_admin_image_registries__key__credential_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_credential_endpoint_admin_image_registries__key__credential_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_registry_endpoint_admin_image_registries__key__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_allowlist_endpoint_admin_runtime_image_allowlist_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowlistBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_allowlist_endpoint_admin_runtime_image_allowlist_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllowlistBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowlistBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_builders_endpoint_admin_image_builders_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_builder_endpoint_admin_image_builders_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBuilderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_builder_endpoint_admin_image_builders__key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_builder_endpoint_admin_image_builders__key__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuilderFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_builder_credential_endpoint_admin_image_builders__key__credential_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuilderCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_builder_credential_endpoint_admin_image_builders__key__credential_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_builder_endpoint_admin_image_builders__key__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderProbeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    isolation_probe_endpoint_admin_image_builders__key__isolation_probe_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IsolationProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IsolationProbeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_build_limits_endpoint_admin_image_build_limits_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildLimits"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_build_limits_endpoint_admin_image_build_limits_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildLimits"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildLimits"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_images_endpoint_images_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_image_endpoint_images_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportImageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_endpoint_images_templates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_endpoint_images_propose_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_available_builders_endpoint_images_builders_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuilderChoice"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_dockerfile_endpoint_images_validate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DockerfileBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DockerfileCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_definition_endpoint_images__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DockerfileCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_image_endpoint_images__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    build_endpoint_images__name__build_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_builds_endpoint_images__name__builds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recheck_image_endpoint_images__name__recheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_build_endpoint_images__name__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_build_endpoint_images__name__builds__build_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path: {
+                name: string;
+                build_id: string;
+            };
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

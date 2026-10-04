@@ -70,6 +70,9 @@ services:
       # Base of a preview share link, as a browser sees it. Unlike GIT_HTTP_BASE this
       # must be reachable from outside the container network, or the link is useless.
       PYRRHULA_PUBLIC_BASE_URL: ${PYRRHULA_PUBLIC_BASE_URL:-}
+      # true behind HTTPS (compose.tls.yml sets it on the api): the session cookie is
+      # never sent in clear.
+      PYRRHULA_COOKIE_SECURE: ${PYRRHULA_COOKIE_SECURE:-false}
       # First run downloads the embedding model into the hf-cache volume; flip both to
       # "1" afterwards for fully-offline startups.
       HF_HUB_OFFLINE: ${PYRRHULA_HF_OFFLINE:-1}

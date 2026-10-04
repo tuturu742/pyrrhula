@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import signal
 import uuid
 from collections.abc import Awaitable, Callable
@@ -29,6 +30,12 @@ from worker.delegation import (
 from worker.embedding import handle_embed_chunks, handle_reembed_stale
 from worker.export import handle_export_workspace
 from worker.history_summary import handle_summarise_history
+from worker.images import (
+    handle_advance_image_build,
+    handle_run_image_build,
+    handle_verify_image_build,
+)
+from worker.images import sweep as sweep_image_builds
 from worker.ingestion import handle_knowledge_ingest
 from worker.notifications import handle_notify_await_opened, handle_send_digest
 from worker.pr_sync import sync_pull_requests
@@ -69,13 +76,37 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]] = {
     "download_retrieval_models": handle_download_retrieval_models,
     "stop_preview": handle_stop_preview,
     "advance_session": handle_advance_session,
+    "verify_image_build": handle_verify_image_build,
+    "advance_image_build": handle_advance_image_build,
+    "run_image_build": handle_run_image_build,
 }
+
+# A streamed image build holds this worker for the whole build, and the worker runs one
+# job at a time. A deployment with a stream builder can run a second worker with
+# PYRRHULA_WORKER_ROLE=image-builder (only those builds) and give the first
+# PYRRHULA_WORKER_ROLE=general (everything else), so a build never delays a delegation.
+# Unset ("all") keeps the single-worker behaviour: everything, builds included.
+_BUILDER_KINDS = frozenset({"run_image_build"})
+
+
+def claimable_kinds(role: str | None) -> list[str]:
+    role = (role or "all").strip().lower()
+    if role == "image-builder":
+        return sorted(_BUILDER_KINDS)
+    if role == "general":
+        return sorted(set(_HANDLERS) - _BUILDER_KINDS)
+    if role != "all":
+        raise SystemExit(f"PYRRHULA_WORKER_ROLE={role!r}: expected all, general or image-builder")
+    return sorted(_HANDLERS)
+
 
 # Previews are the only thing here with a wall-clock deadline, and this deployment has no
 # scheduler -- every other recurring-looking job is enqueued by an HTTP request. So the
 # idle branch doubles as the tick. Kubernetes also enforces its own deadline
 # (activeDeadlineSeconds), which covers the case where the worker itself is down.
 _REAP_INTERVAL = 60.0
+# A build at an external builder is followed by polling; someone is usually watching it.
+_IMAGE_SWEEP_INTERVAL = 20.0
 # Far below the queue's claim lease, so a working worker never looks silent.
 _HEARTBEAT_SECONDS = 30.0
 
@@ -102,6 +133,9 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
     except Exception as exc:
         log.warning("worker.job_failed", job_id=str(job.id), kind=job.kind, error=str(exc))
         await queue.fail(job.id, str(exc))
+        # A failed job is finished too. Waking only on success left a session whose last
+        # delegation failed parked on "Working" until its await timed out, hours later.
+        await _wake_session(job)
         return
     finally:
         beat.cancel()
@@ -109,15 +143,19 @@ async def _run_one(queue: JobQueue, job: Job) -> None:
             await beat
     log.info("worker.job_completed", job_id=str(job.id), kind=job.kind)
     await queue.complete(job.id, result)
+    await _wake_session(job)
 
-    # A session that dispatched work and parked is waiting on exactly this: the last job
-    # belonging to it finishing. Checked after every kind, not just the delegation ones,
-    # because the tail of a batch is a review or a rework as often as it is a build.
+
+async def _wake_session(job: Job) -> None:
+    """A session that dispatched work and parked is waiting on exactly this: the last job
+    belonging to it finishing, however it finished. Checked after every kind, not just the
+    delegation ones, because the tail of a batch is a review or a rework as often as it is
+    a build."""
     session_id = job.payload.get("session_id")
     if session_id:
         try:
             await wake_if_work_is_done(job.tenant_id, uuid.UUID(str(session_id)), job.id)
-        except Exception as exc:  # noqa: BLE001 -- the job itself already succeeded
+        except Exception as exc:  # noqa: BLE001 -- the job's own outcome is already recorded
             log.warning("worker.wake_failed", job_id=str(job.id), error=str(exc)[:200])
 
 
@@ -142,10 +180,13 @@ async def main() -> None:
         loop.add_signal_handler(sig, stop.set)
 
     queue: JobQueue = PostgresJobQueue()
+    kinds = claimable_kinds(os.environ.get("PYRRHULA_WORKER_ROLE"))
+    log.info("worker.role", kinds=len(kinds))
     next_reap = asyncio.get_running_loop().time()
+    next_image_sweep = next_reap
 
     while not stop.is_set():
-        job = await queue.claim_one(kinds=list(_HANDLERS))
+        job = await queue.claim_one(kinds=kinds)
         if job is None:
             now = asyncio.get_running_loop().time()
             if now >= next_reap:
@@ -165,6 +206,17 @@ async def main() -> None:
                         log.info("worker.work_items_followed_prs", count=followed)
                 except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
                     log.warning("worker.pr_sync_failed", error=str(exc))
+            if now >= next_image_sweep:
+                next_image_sweep = now + _IMAGE_SWEEP_INTERVAL
+                # Builds waiting on an external builder (submit, poll, cancel), images
+                # waiting to be checked with no job yet (a bundle import has no queue to
+                # hand), and checks whose worker died.
+                try:
+                    started, failed = await sweep_image_builds(queue)
+                    if started or failed:
+                        log.info("worker.image_builds_swept", started=started, failed=failed)
+                except Exception as exc:  # noqa: BLE001 -- a sweep must never kill the loop
+                    log.warning("worker.image_sweep_failed", error=str(exc))
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=_IDLE_POLL_INTERVAL)
             continue

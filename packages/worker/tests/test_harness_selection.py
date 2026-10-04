@@ -120,6 +120,46 @@ def test_a_harness_image_wins_over_the_runtimes() -> None:
     assert environment["image"] == "ghcr.io/x/node20-oc:1"
 
 
+def test_an_image_named_for_the_repo_beats_a_harness_image() -> None:
+    """The repo's own image was chosen for this code (its toolchain); a harness default
+    replacing it would run the tests somewhere they were never meant to run."""
+    for source in ("repo", "manifest"):
+        environment: dict[str, Any] = {"image": "godot:4", "image_source": source}
+        _apply_harness(environment, {"harness": {"key": "oc", "image": "ghcr.io/x/oc:1"}})
+        assert environment["image"] == "godot:4", source
+    built: dict[str, Any] = {"image": "r/t/godot@sha256:" + "a" * 64, "image_built": True}
+    _apply_harness(built, {"harness": {"key": "oc", "image": "ghcr.io/x/oc:1"}})
+    assert built["image"].startswith("r/t/godot@")
+
+
+def test_a_proven_harness_is_not_installed_again() -> None:
+    from core.harness.registry import harness_fingerprint
+
+    spec = {"key": "oc", "setup_cmds": ["npm i -g opencode-ai@1.18.33"]}
+    environment: dict[str, Any] = {
+        "image": "img",
+        "image_built": True,
+        "setup_cmds": ["make deps"],
+        "baked_harness": {"key": "oc", "fingerprint": harness_fingerprint(spec)},
+    }
+    _apply_harness(environment, {"harness": spec})
+    assert environment["setup_cmds"] == ["make deps"]
+
+
+def test_a_harness_baked_from_other_setup_is_installed_anyway() -> None:
+    """An operator bumped the harness version; the image still carries the old one."""
+    environment: dict[str, Any] = {
+        "image": "img",
+        "image_built": True,
+        "setup_cmds": [],
+        "baked_harness": {"key": "oc", "fingerprint": "stale"},
+    }
+    _apply_harness(
+        environment, {"harness": {"key": "oc", "setup_cmds": ["npm i -g opencode-ai@2"]}}
+    )
+    assert environment["setup_cmds"] == ["npm i -g opencode-ai@2"]
+
+
 def test_applying_nothing_changes_nothing() -> None:
     environment: dict[str, Any] = {"image": "i", "setup_cmds": ["a"]}
     _apply_harness(environment, {})

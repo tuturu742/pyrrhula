@@ -42,6 +42,9 @@ SECTIONS: tuple[str, ...] = (
     "rules",
     "vocabulary",
     "secrets",
+    # Exact, digest-pinned runtime images. Each is checked again on arrival -- digest,
+    # allowlist, smoke test on this organization's engine -- before any repo can use it.
+    "images",
 )
 
 
@@ -165,6 +168,7 @@ async def inspect_bundle(
         "entities": _simple_items(files, "entities/"),
         "secrets": _simple_items(files, "secrets/"),
         "rules": _simple_items(files, "rules/"),
+        "images": _simple_items(files, "images/"),
     }
     session_refs = sorted(
         {p.split("/")[1] for p in files if p.startswith("sessions/") and "/" in p[9:]}

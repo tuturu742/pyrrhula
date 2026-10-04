@@ -33,6 +33,7 @@ import httpx
 from adapters.exec_env.shell import shell_command
 from core.exec_limits import limits_for
 from core.ports.exec_env import ExecEnvUnavailableError, ExecResult
+from core.repos.image_ref import is_digest_pinned
 
 _SA_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 _LABEL = "pyrrhula.dev/exec-env"
@@ -137,15 +138,36 @@ class KubernetesExecEnvProvider:
             "spec": {
                 "backoffLimit": 0,
                 "ttlSecondsAfterFinished": self._job_ttl,
+                # Enforced by the cluster, not only by this process polling: if the worker
+                # dies or gives up, the pod is still stopped. Without it a timed-out run
+                # kept going with nobody watching.
+                "activeDeadlineSeconds": self._timeout + 60,
                 "template": {
                     "metadata": {"labels": {_LABEL: name[:63]}},
                     "spec": {
                         "restartPolicy": "Never",
+                        # The commands in this pod are an agent's own choices. It needs no
+                        # Kubernetes API credential and no list of every Service in the
+                        # namespace, so it is given neither.
+                        "automountServiceAccountToken": False,
+                        "enableServiceLinks": False,
+                        "securityContext": {"seccompProfile": {"type": "RuntimeDefault"}},
                         "containers": [
                             {
                                 "name": "work",
                                 "image": image,
                                 "command": shell_command(script),
+                                # NET_RAW is what raw-socket spoofing needs and nothing a
+                                # build or test suite uses. Root itself stays: test suites
+                                # switch users, so privilege escalation is not disabled.
+                                "securityContext": {"capabilities": {"drop": ["NET_RAW"]}},
+                                # A digest cannot change, so a node's cached copy is exactly
+                                # the image asked for; a tag keeps Kubernetes' own default.
+                                **(
+                                    {"imagePullPolicy": "IfNotPresent"}
+                                    if is_digest_pinned(image)
+                                    else {}
+                                ),
                                 # A Job with no resources block is scheduled anywhere and
                                 # bounded by nothing -- one runaway suite is the node's
                                 # problem, and with a coding harness the commands inside

@@ -173,7 +173,14 @@ def resolve_recipe(
     cmd_value, sources["cmd"] = pick("cmd", DEFAULT_SERVE_CMD)
     env_value, sources["env"] = pick("env", {})
 
-    image = str(image_value).strip()
+    from core.repos.image_ref import ImageRefError, normalise_image_ref
+
+    try:
+        # Same validator as every other image: a manifest is repository content, and an
+        # untagged reference makes the engine pull every tag.
+        image = normalise_image_ref(str(image_value)) or ""
+    except ImageRefError as exc:
+        raise PreviewRecipeError(f"{sources['image']}: image: {exc}") from exc
     if not image:
         raise PreviewRecipeError("image: no preview image configured and no default set")
 

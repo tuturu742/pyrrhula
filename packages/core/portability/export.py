@@ -106,6 +106,9 @@ EXPORT_SECTIONS = frozenset(
         # game: without this a bundle's rolls resolve against whatever the importing tenant
         # happened to have.
         "rules",
+        # The organization's verified runtime images, as exact digest-pinned references
+        # with their Dockerfile as provenance. Never a builder, a credential or history.
+        "images",
     }
 )
 DEFAULT_SECTIONS = EXPORT_SECTIONS - {"connections"}
@@ -255,6 +258,8 @@ async def export_workspace(
         await _add_vocabulary(writer, tenant_id, workspace_id)
     if opts.include_sessions and "sessions" in opts.sections:
         await _add_sessions(writer, tenant_id, workspace_id)
+    if "images" in opts.sections:
+        await _add_images(writer, tenant_id)
 
     manifest = writer.build_manifest()
     data = writer.seal()
@@ -263,6 +268,37 @@ async def export_workspace(
 
         data = encrypt_bundle(data, opts.password)
     return ExportResult(data=data, manifest=manifest)
+
+
+async def _add_images(writer: BundleWriter, tenant_id: uuid.UUID) -> None:
+    """Each image whose current build is verified, as the exact reference that was
+    checked. A tag never travels: the importer would be trusting whatever it points at
+    on the day they import.
+
+    Organization-wide rather than per workspace, like the runtimes they become -- a repo
+    picks a runtime, not a workspace. The harness travels as a *claim* only; the importer's
+    own smoke test decides whether it is believed.
+    """
+    from core.images.service import list_images
+
+    for image in await list_images(tenant_id):
+        current = image.get("current")
+        if not current or current.get("status") != "ready" or not current.get("pinned_ref"):
+            continue
+        baked = current.get("baked_harness") or {}
+        writer.add_json(
+            f"images/{image['name']}.json",
+            {
+                "name": image["name"],
+                "image": current["pinned_ref"],
+                "dockerfile": image.get("dockerfile") or current.get("dockerfile") or "",
+                "harness_claim": (
+                    {"key": baked["key"], "version": baked.get("version", "")}
+                    if baked.get("key")
+                    else None
+                ),
+            },
+        )
 
 
 # ── knowledge ───────────────────────────────────────────────────────────────────────
@@ -630,8 +666,40 @@ async def _add_connections(
     writer.add_json("connections/connections.json", records)
 
 
+async def _pack_flows(tenant_id: uuid.UUID) -> dict[str, dict[str, Any]]:
+    """The flows the tenant's workflow pack ships, by key, normalized as stored."""
+    import json
+
+    from core.plugins.service import list_repositories, pack_dir_for_workflow
+    from core.process.dsl.validator import validate_raw
+    from core.workflows.service import get_tenant_workflow_key
+
+    workflow_key = await get_tenant_workflow_key(tenant_id)
+    if not workflow_key:
+        return {}
+    pack_dir = pack_dir_for_workflow(workflow_key, await list_repositories())
+    if pack_dir is None or not (pack_dir / "processes").is_dir():
+        return {}
+    flows: dict[str, dict[str, Any]] = {}
+    for path in sorted((pack_dir / "processes").rglob("*.json")):
+        raw = json.loads(path.read_text())
+        dsl, issues = validate_raw(raw.get("definition", raw))
+        if dsl is not None and not issues:
+            flows[str(raw.get("key"))] = dsl.model_dump(
+                mode="json", by_alias=True, exclude_none=True
+            )
+    return flows
+
+
 async def _add_process(writer: BundleWriter, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> None:
+    """The workspace's own flows. A flow that is exactly what the workflow pack ships is
+    left out: the importer gets it from the same pack, and carrying it too made the import
+    fork it -- the flow picker then offered "Plan, Implement, Review, Merge" twice, with no
+    way to tell which was meant. A pack flow the workspace changed still travels."""
+    shipped = await _pack_flows(tenant_id)
     for definition in await list_definitions(tenant_id, workspace_id=workspace_id):
+        if shipped.get(definition.key) == definition.definition:
+            continue
         writer.add_json(
             f"process/process_def_{definition.id}.json",
             {

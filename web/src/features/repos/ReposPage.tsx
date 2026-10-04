@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
+import { ImagesCard } from "./ImagesCard";
 import { RuntimesCard } from "./RuntimesCard";
 import {
   usePreviewActions,
@@ -474,7 +475,7 @@ function PersonaIdentities({ repoId }: { repoId: string }) {
 export function ReposPage() {
   const queryClient = useQueryClient();
   const [identitiesFor, setIdentitiesFor] = useState<string | null>(null);
-  const [tab, setTab] = useState<"repositories" | "runtimes">("repositories");
+  const [tab, setTab] = useState<"repositories" | "runtimes" | "images">("repositories");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RepoRowData | null>(null);
 
@@ -551,7 +552,7 @@ export function ReposPage() {
           setup task, while the repositories themselves are the daily one. A tab keeps
           it reachable without it being the first thing between you and the repos. */}
       <div className="flex gap-1 border-b border-border">
-        {(["repositories", "runtimes"] as const).map((key) => (
+        {(["repositories", "runtimes", "images"] as const).map((key) => (
           <button
             key={key}
             type="button"
@@ -563,12 +564,17 @@ export function ReposPage() {
                 : "text-muted-foreground hover:text-foreground")
             }
           >
-            {key === "repositories" ? "Repositories" : "Build runtimes"}
+            {key === "repositories"
+              ? "Repositories"
+              : key === "runtimes"
+                ? "Build runtimes"
+                : "Images"}
           </button>
         ))}
       </div>
 
       {tab === "runtimes" && <RuntimesCard />}
+      {tab === "images" && <ImagesCard />}
 
       {tab === "repositories" && (
         <>
@@ -726,6 +732,8 @@ function RepoForm({
 }) {
   const [name, setName] = useState(existing?.name ?? "");
   const [key, setKey] = useState(existing?.key ?? "");
+  // Whether the key was typed by hand; clearing it hands it back to the name.
+  const [keyEdited, setKeyEdited] = useState(false);
   const [description, setDescription] = useState(existing?.description ?? "");
   const [sourceUrl, setSourceUrl] = useState(existing?.source_url ?? "");
   const [token, setToken] = useState("");
@@ -877,7 +885,10 @@ function RepoForm({
             value={name}
             onChange={(e) => {
               setName(e.target.value);
-              if (!key)
+              // The key follows the name until someone edits the key itself. It used to
+              // be set only while empty -- so the first keystroke fixed it at one letter
+              // and nothing typed afterwards changed it.
+              if (!existing && !keyEdited)
                 setKey(
                   e.target.value
                     .toLowerCase()
@@ -893,9 +904,10 @@ function RepoForm({
           <input
             className="rounded-md border border-input bg-transparent px-3 py-2 font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
             value={key}
-            onChange={(e) =>
-              setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "-"))
-            }
+            onChange={(e) => {
+              setKeyEdited(e.target.value !== "");
+              setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "-"));
+            }}
             placeholder="my-project"
             disabled={!!existing}
           />

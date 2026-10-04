@@ -212,6 +212,21 @@ def test_first_json_object_tolerates_fences_and_prose() -> None:
     assert _first_json_object("no json here") == "no json here"
 
 
+def test_a_fence_inside_the_object_is_part_of_it() -> None:
+    """A review verdict whose comment suggests code: the fence is inside a JSON string.
+    Cutting at the first fence used to hand the validator the code, and the review of a
+    pull request failed with "Invalid JSON ... input_value='gdscript\\nreturn ...'"."""
+    reply = json.dumps(
+        {
+            "verdict": "request_changes",
+            "comments": "Clamp it:\n```gdscript\nreturn BASE_SPEED * n\n```\nThen rerun.",
+        }
+    )
+    assert json.loads(_first_json_object(reply))["verdict"] == "request_changes"
+    fenced = f"Here is my verdict:\n```json\n{reply}\n```"
+    assert json.loads(_first_json_object(fenced))["verdict"] == "request_changes"
+
+
 def test_rejects_schema_constrained_output_matches_the_parameter_not_a_vendor() -> None:
     assert _rejects_schema_constrained_output(
         Exception("OpenAIException - This response_format type is unavailable now")
@@ -1029,6 +1044,52 @@ def test_a_value_refusal_only_drops_the_parameter_it_names() -> None:
     )
     assert named == "temperature"
     assert _unsupported_value_param(Exception("AuthenticationError: invalid api key")) is None
+
+
+async def test_the_refusals_met_importing_the_mystery_are_repaired(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both errors a reader hit running the Hägnaryd bundle on current models, in the
+    exact words they arrived in. Each names one knob; dropping both lets the turn run."""
+    import litellm
+
+    calls: list[dict[str, object]] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "temperature" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.UnsupportedParamsError: claude-opus-5-5 does not support "
+                "temperature=0.4. Only temperature=1 is supported. To drop unsupported "
+                "params, set `litellm.drop_params = True`."
+            )
+        if "presence_penalty" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.BadRequestError: OpenAIException - Unsupported parameter: "
+                "'presence_penalty' is not supported with this model."
+            )
+
+        async def gen():  # noqa: ANN202
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="Kriminalinspektör Berg nods.", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="anthropic/claude-opus-5-5",
+        messages=[{"role": "user", "content": "Who was in the library?"}],
+        purpose="generation",
+        params={"temperature": 0.4, "presence_penalty": 0.3},
+    )
+    text = "".join([c.text async for c in LiteLLMModelProvider().generate(req)])
+    assert "nods" in text
+    assert "temperature" not in calls[-1] and "presence_penalty" not in calls[-1]
 
 
 async def test_reasoning_streamed_beside_a_tool_call_rides_on_the_tool_call_chunk(

@@ -174,6 +174,18 @@ async def create_preview_endpoint(
         # and got a directory listing has no way to tell that their manifest was ignored.
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # The preview image can come from a file in the repository, so it answers to the same
+    # rule as every runtime image: not another organization's, and within the allowlist.
+    from core.images.namespace import check_image_ref_for_tenant
+    from core.repos.image_ref import ImageRefError
+
+    try:
+        await check_image_ref_for_tenant(ctx.tenant_id, recipe.image)
+    except ImageRefError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"image ({recipe.sources.get('image')}): {exc}"
+        ) from exc
+
     preview_id = await create_preview(
         ctx.tenant_id,
         name=name,

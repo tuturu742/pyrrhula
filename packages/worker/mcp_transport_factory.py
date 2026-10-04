@@ -36,6 +36,18 @@ async def _resolve_repo_token(tenant_id: str | None, credential_ref: str) -> str
     )
 
 
+async def _resolve_image_pull_auth(tenant_id: str | None, image: str) -> str | None:
+    """A declared registry's read credential for pulling one of this organization's own
+    images there -- never any other image on that host (core.images.service)."""
+    import uuid as _uuid
+
+    from core.images.service import registry_pull_auth
+
+    if not tenant_id or not image:
+        return None
+    return await registry_pull_auth(_uuid.UUID(tenant_id), image, encryptor=get_encryptor())
+
+
 async def _track_env(event: str, env_cfg: dict[str, Any], name: str, exit_code: int | None) -> None:
     """Best-effort exec-environment registry writes (core.exec_envs) around each run --
     the UI's 'active environments' view. The transport swallows any failure here."""
@@ -132,6 +144,7 @@ def get_mcp_transport() -> McpTransport:
             codegen=None,
             token_resolver=_resolve_repo_token,
             env_tracker=_track_env,
+            image_auth_resolver=_resolve_image_pull_auth,
         )
         if root
         else None

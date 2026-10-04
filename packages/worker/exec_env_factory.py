@@ -28,6 +28,7 @@ def _build(engine: dict[str, Any]) -> ExecEnvProvider:
                 socket,
                 network=str(engine.get("network") or "") or None,
                 limits=limits_for(engine),
+                run_timeout_seconds=int(engine.get("run_timeout_seconds") or 1800),
             )
         return NullExecEnvProvider()
     if kind == "kubernetes":

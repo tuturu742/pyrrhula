@@ -152,18 +152,25 @@ def _first_json_object(raw: str) -> str:
     `response_format` the endpoint refused would have done for us.
     """
     text = (raw or "").strip()
+    decoder = json.JSONDecoder()
+    # The reply as given comes first, fences only after: a fence can sit INSIDE the
+    # object -- a review comment suggesting a fix in ```gdscript -- and cutting at the
+    # first fence handed the validator the code instead of the verdict around it.
+    chunks = [text]
     if "```" in text:
-        fenced = text.split("```")
-        if len(fenced) >= 3:
-            text = fenced[1].removeprefix("json").strip()
-    start = text.find("{")
-    if start == -1:
-        return text
-    try:
-        obj, _end = json.JSONDecoder().raw_decode(text, start)
-    except json.JSONDecodeError:
-        return text
-    return json.dumps(obj)
+        chunks += [block.removeprefix("json").strip() for block in text.split("```")[1::2]]
+    for chunk in chunks:
+        start = chunk.find("{")
+        while start != -1:
+            try:
+                obj, _end = decoder.raw_decode(chunk, start)
+            except json.JSONDecodeError:
+                start = chunk.find("{", start + 1)
+                continue
+            if isinstance(obj, dict):
+                return json.dumps(obj)
+            start = chunk.find("{", start + 1)
+    return text
 
 
 def _parse_streamed_arguments(raw: str) -> dict[str, Any]:
@@ -279,6 +286,27 @@ def _unsupported_value_param(exc: Exception) -> str | None:
     return match.group(1).strip() if match else None
 
 
+# Two more phrasings of "this knob, not here", both met on real turns:
+#  - LiteLLM's own pre-flight check for Anthropic models that only take their default,
+#    raised before any request is sent: "claude-opus-5-5 does not support
+#    temperature=0.4. Only temperature=1 is supported."
+#  - OpenAI refusing a parameter outright *without* offering a replacement:
+#    "Unsupported parameter: 'presence_penalty' is not supported with this model."
+#    (With "Use 'x' instead" it is a rename, which _renamed_param handles first.)
+# A bundle's persona carrying a sampling knob -- the Hägnaryd inspector's temperature
+# 0.4, its presence_penalty -- failed every turn on these models until both were matched.
+_NAMED_REFUSAL_RES = (
+    re.compile(r"does not support\s+([a-z_]+)\s*=", re.I),
+    re.compile(r"unsupported parameter:\s*'([^']+)'\s*is not supported", re.I),
+)
+
+
+def _refused_param_names(exc: Exception) -> list[str]:
+    """Parameters an endpoint refused by name in either phrasing above."""
+    text = str(exc)
+    return [m.group(1).strip() for pattern in _NAMED_REFUSAL_RES for m in pattern.finditer(text)]
+
+
 # A parameter the endpoint refuses *under one name while naming another*. OpenAI's
 # newer chat-completions models answer `max_tokens` with "Unsupported parameter:
 # 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."
@@ -361,7 +389,9 @@ def _repair_call(
     # A parameter refused by name. Connection and persona params exist so ONE connection
     # can serve models with different knobs, and models genuinely differ -- refusing the
     # whole turn over a sampling nicety would make the feature a liability.
-    dropped = [key for key in _unsupported_params(exc) if key in call]
+    dropped = [
+        key for key in [*_unsupported_params(exc), *_refused_param_names(exc)] if key in call
+    ]
     if dropped:
         return {key: value for key, value in call.items() if key not in dropped}
 
