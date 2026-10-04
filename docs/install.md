@@ -300,6 +300,22 @@ The release images, as a Portainer stack — no shell on the host needed.
 4. **Deploy the stack.** `migrate` may exit and restart once or twice while Postgres starts;
    that is expected. Open `http://<host>:5173`.
 
+**HTTPS.** Anything beyond a quick look wants it: a password otherwise crosses the network
+in clear, and some of what agents build will not run without it (a Godot web build refuses
+to start outside a secure context). Add to the stack's variables:
+
+| Variable | Value |
+|---|---|
+| `PYRRHULA_TLS` | `self-signed`, or `provided` with your own certificate |
+| `PYRRHULA_TLS_SERVER_NAME` | the address people type, e.g. `192.168.1.20` or `pyrrhula.lan` |
+| `PYRRHULA_COOKIE_SECURE` | `true` |
+
+and redeploy. The same port now speaks HTTPS — open `https://<host>:5173`; plain `http://`
+to it is redirected. `self-signed` makes a certificate on first start and keeps it in the
+`pyrrhula-web-certs` volume, so it survives redeploys; each browser warns once until you
+accept it, or never if you import `fullchain.pem` from that volume as trusted. For
+`provided`, put `fullchain.pem` and `privkey.pem` in that volume instead.
+
 What differs from the release file, and why (the generator's docstring has the detail):
 SearXNG's settings are inline (a Portainer stack has no files beside it); the
 `${VAR:?…}` guards are plain `${VAR}` (Portainer validates before it applies variables —

@@ -59,6 +59,8 @@ directly where they are used.
 | `PYRRHULA_PREVIEW_IMAGE` | `docker.io/library/python:3.12-slim` | Image serving preview artifacts. Fully qualified on purpose: podman prompts on an unqualified name instead of assuming Docker Hub. |
 | `PYRRHULA_PREVIEW_MAX_TTL_SECONDS` | `86400` | Ceiling on any preview's lifetime. The default lifetime is an organization preference beneath this. |
 | `PYR_ARTIFACT_URL` / `PYR_ARTIFACT_TOKEN` | injected | Set **by** Pyrrhula inside a preview container so it can fetch its own artifact. Never set these yourself. |
+| `PYRRHULA_WORKER_ROLE` | `all` | Which jobs a worker claims: `all`, `general` (everything but image builds) or `image-builder` (only streamed image builds, which hold a worker for their whole duration). Run one `general` and one `image-builder` worker so a build never delays a delegation. |
+| `PYRRHULA_TARGET_PREFIX` | — | Not read by Pyrrhula: a repository **variable** of the GitHub Actions builder's reference workflow (`docs/builders/github-actions.yml`), the only prefix that workflow will push under, e.g. `ghcr.io/<owner>/pyrrhula/`. |
 
 ## Plugins
 
@@ -103,8 +105,11 @@ application behaves.
 | `PYRRHULA_HTTP_PORT` | `80` | Host HTTP port when serving TLS (`compose.tls.yml`). |
 | `PYRRHULA_HTTPS_PORT` | `443` | Host HTTPS port. |
 | `PYRRHULA_TLS_CERT_DIR` | — (**required for TLS**) | Directory holding `fullchain.pem` and `privkey.pem`, mounted read-only. |
-| `PYRRHULA_TLS_SERVER_NAME` | `localhost` | Server name nginx serves the certificate for. |
+| `PYRRHULA_TLS_SERVER_NAME` | `localhost` | Server name nginx serves the certificate for; with `PYRRHULA_TLS=self-signed`, also the name (or IP address) the certificate is made for. |
+| `PYRRHULA_TLS` | empty | Release-images stack (`compose.release.yml`, and the Portainer stack derived from it): `self-signed` serves HTTPS on the web port with a certificate made on first start and kept in the `pyrrhula-web-certs` volume; `provided` uses `fullchain.pem`/`privkey.pem` put in that volume. Plain http sent to the port is redirected. Empty serves plain http. |
+| `PYRRHULA_TLS_LISTEN` | `443` (`80` in `compose.release.yml`) | Container port the HTTPS server listens on. `80` means the stack publishes one port, which then speaks HTTPS only and redirects plain http; the release file sets it, you do not. |
 | `PYRRHULA_API_PORT` | `8000` | Host port the API is published on in the self-host compose file. |
+| `PYRRHULA_REGISTRY` | `ghcr.io/tuturu742` | Release-images path only: where the `pyrrhula` and `pyrrhula-web` images are pulled from — a mirror, an air-gapped registry, or a build that is not published. |
 | `PYRRHULA_VERSION` | the release the compose file ships with | Release-images path only (`docker/compose.release.yml`): the image tag every service pulls. Changing it and re-running `pull` + `up -d` + `run --rm migrate` is an upgrade. Ignored by the build-from-source stack, which runs what it built. |
 | `PYRRHULA_HF_OFFLINE` | `1` (`0` in `compose.release.yml`) | Retrieval models load strictly from the shared cache; the runtime never reaches Hugging Face on its own. A model that is not there is refused with a message pointing at Admin → Models, rather than fetched mid-request — an unauthenticated hub check has no timeout and has wedged the API's event loop. An admin-console download lifts this for that fetch alone. The release-images stack defaults to `0` instead, because a freshly pulled deployment has an empty cache and nothing to load strictly from. |
 

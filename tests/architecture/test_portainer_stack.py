@@ -59,3 +59,23 @@ def test_everything_else_is_the_release_file() -> None:
         got = stack["services"][name]
         for key in ("image", "command", "ports", "networks", "environment", "user"):
             assert got.get(key) == service.get(key), f"{name}.{key} drifted from the release file"
+
+
+def test_https_is_a_variable_away() -> None:
+    """A Portainer host is usually reached by address, over plain http unless the stack
+    says otherwise -- and a Godot web build will not start outside a secure context. The
+    switch is PYRRHULA_TLS on the web service; docker/web-tls.sh does the rest, by line
+    edits that only work while the template keeps the lines it edits."""
+    _, stack, _ = _stack()
+    web = stack["services"]["web"]
+    assert web["environment"]["PYRRHULA_TLS"] == "${PYRRHULA_TLS:-}"
+    assert web["environment"]["PYRRHULA_TLS_LISTEN"] == "80"
+    assert "pyrrhula-web-certs:/etc/nginx/certs" in web["volumes"]
+    assert "pyrrhula-web-certs" in stack["volumes"]
+
+    template = (ROOT / "docker" / "web-nginx-tls.conf.template").read_text()
+    hook = (ROOT / "docker" / "web-tls.sh").read_text()
+    assert "# BEGIN plain-http redirect" in template and "# END plain-http redirect" in template
+    assert "\n    listen 443 ssl;\n" in template, "web-tls.sh rewrites this exact line"
+    assert "error_page 497" in template, "plain http on the https port must redirect"
+    assert "Strict-Transport-Security" in template and "Strict-Transport-Security" in hook

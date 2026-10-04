@@ -75,6 +75,7 @@ services:
       PYRRHULA_BLOB_STORE_ROOT: /app/data/blobs
       PYRRHULA_GIT_HTTP_BASE: ${PYRRHULA_GIT_HTTP_BASE:-http://${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}_api_1:8000}
       PYRRHULA_PUBLIC_BASE_URL: ${PYRRHULA_PUBLIC_BASE_URL:-}
+      PYRRHULA_COOKIE_SECURE: ${PYRRHULA_COOKIE_SECURE:-false}
       # Unlike the build-from-source stack, this one defaults to ONLINE. The ~2.2GB
       # retrieval model is too large to bake into an image, so a freshly pulled
       # deployment has an empty cache volume and must fill it once. Starting offline
@@ -150,6 +151,16 @@ services:
     restart: always
     ports:
       - "${PYRRHULA_WEB_PORT:-5173}:80"
+    environment:
+      # HTTPS on the same port: PYRRHULA_TLS=self-signed (a certificate is made on first
+      # start and kept in pyrrhula-web-certs) or =provided (put fullchain.pem and
+      # privkey.pem in that volume). Plain http sent to the port is redirected. Set
+      # PYRRHULA_COOKIE_SECURE=true alongside it. Empty = plain http, as before.
+      PYRRHULA_TLS: ${PYRRHULA_TLS:-}
+      PYRRHULA_TLS_SERVER_NAME: ${PYRRHULA_TLS_SERVER_NAME:-localhost}
+      PYRRHULA_TLS_LISTEN: "80"
+    volumes:
+      - pyrrhula-web-certs:/etc/nginx/certs
     depends_on:
       - api
 
@@ -180,6 +191,7 @@ networks:
     name: ${PYRRHULA_COMPOSE_PROJECT:-pyrrhula}-envs
 
 volumes:
+  pyrrhula-web-certs:
   pyrrhula-postgres:
   pyrrhula-blobs:
   pyrrhula-hf:

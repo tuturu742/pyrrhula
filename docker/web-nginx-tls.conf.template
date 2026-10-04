@@ -1,20 +1,28 @@
-# TLS variant of web-nginx.conf.template, used by docker/compose.tls.yml. Certificates
-# are MOUNTED, never baked: bring your own (Let's Encrypt via certbot/lego on the host,
-# a corporate CA, or a self-signed pair for a lab) at /etc/nginx/certs/{fullchain.pem,
-# privkey.pem}.
+# TLS variant of web-nginx.conf.template, selected by PYRRHULA_TLS (docker/web-tls.sh).
+# Certificates are never baked: bring your own (Let's Encrypt via certbot/lego on the
+# host, a corporate CA) at /etc/nginx/certs/{fullchain.pem,privkey.pem}, or let
+# PYRRHULA_TLS=self-signed generate a pair there on first start.
 #
 # Plain http exists only to redirect -- a login form served over http is a login form
 # whose password is on the wire.
+# BEGIN plain-http redirect (dropped when PYRRHULA_TLS_LISTEN=80: one port, https only)
 server {
     listen 80;
     server_name _;
     return 301 https://$host$request_uri;
 }
+# END plain-http redirect
 
 server {
     listen 443 ssl;
     http2 on;
     server_name ${PYRRHULA_TLS_SERVER_NAME};
+
+    # Plain http sent to this port (a bookmark, a typed address) is answered with a
+    # redirect to the same host and port over https, instead of nginx's "400 The plain
+    # HTTP request was sent to HTTPS port". $http_host keeps the port the client used,
+    # which matters when 443 is published somewhere else (5173 on a Portainer host).
+    error_page 497 =301 https://$http_host$request_uri;
 
     ssl_certificate     /etc/nginx/certs/fullchain.pem;
     ssl_certificate_key /etc/nginx/certs/privkey.pem;

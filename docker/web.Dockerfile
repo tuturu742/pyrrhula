@@ -24,4 +24,10 @@ COPY docker/web-nginx.conf.template /etc/nginx/templates/default.conf.template
 # Runs before the image's envsubst step; writes conf.d/00-resolver.conf so the
 # /api upstream can be re-resolved instead of pinned at startup.
 COPY docker/web-resolver.sh /docker-entrypoint.d/15-resolver.sh
+# HTTPS on demand (PYRRHULA_TLS=provided|self-signed): the hook swaps in the TLS template
+# before envsubst runs, and makes a self-signed certificate when asked to. openssl is for
+# that one command.
+RUN apk add --no-cache openssl
+COPY docker/web-nginx-tls.conf.template /etc/nginx/tls/default.conf.template
+COPY docker/web-tls.sh /docker-entrypoint.d/12-tls.sh
 COPY --from=build /app/dist /usr/share/nginx/html
