@@ -8,6 +8,7 @@ import {
   inspectSecret,
   listSecretHolders,
   listSecretsForWorkspace,
+  listWorkspacePersonas,
 } from "./api";
 
 const NO_HOLDERS_BUCKET = "(no holders yet)";
@@ -49,6 +50,16 @@ export function SecretsByHolderPage() {
       enabled: !!workspaceId,
     })),
   });
+
+  // Holders are principals; the reader knows them by persona name. A holder that is
+  // not one of the workspace's personas (a human member) keeps its id.
+  const { data: personas } = useQuery({
+    queryKey: ["director-view-personas", workspaceId],
+    queryFn: () => listWorkspacePersonas(workspaceId!),
+    enabled: !!workspaceId,
+  });
+  const holderName = (principalId: string) =>
+    personas?.find((p) => p.principal_id === principalId)?.name ?? principalId;
 
   const reveal = useMutation({
     mutationFn: (secretId: string) => inspectSecret(workspaceId!, secretId),
@@ -116,7 +127,7 @@ export function SecretsByHolderPage() {
               <>
                 Holder:{" "}
                 <Link to={`agents/${holderKey}/beliefs`} className="underline hover:text-foreground">
-                  {holderKey}
+                  {holderName(holderKey)}
                 </Link>
               </>
             )}

@@ -9,6 +9,7 @@ import pytest
 
 from core.admin.assistant import ProposedAction, _register_tools, _State
 from core.agents.tools import ToolContext, ToolRegistry
+from core.docs.tools import DOCS_READ_TOOLS
 from core.ports.model_provider import ToolCall
 
 pytestmark = pytest.mark.asyncio
@@ -66,7 +67,7 @@ async def test_every_write_tool_is_a_proposal(monkeypatch: pytest.MonkeyPatch) -
     registry = ToolRegistry()
     specs = _register_tools(registry, state)
 
-    writes = [s for s in specs if s.name != "deployment_status"]
+    writes = [s for s in specs if s.name != "deployment_status" and s.name not in DOCS_READ_TOOLS]
     assert writes, "no write tools registered"
     for spec in writes:
         args = {"embedding_model": "x", "embedding_dimension": 1, "url": "u", "ref": "r"}
@@ -142,7 +143,9 @@ async def test_every_proposable_action_has_an_apply_path_in_the_ui() -> None:
     state = _State()
     registry = ToolRegistry()
     specs = _register_tools(registry, state)
-    proposable = {s.name for s in specs if s.name != "deployment_status"}
+    proposable = {
+        s.name for s in specs if s.name != "deployment_status" and s.name not in DOCS_READ_TOOLS
+    }
 
     ui = (
         pathlib.Path(__file__).resolve().parents[4]

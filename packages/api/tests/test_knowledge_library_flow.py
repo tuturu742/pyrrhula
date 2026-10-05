@@ -14,6 +14,7 @@ from sqlalchemy import text
 
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_tenant_role
 from core.knowledge.authoring import EntryFields, create_source, publish_version, upsert_draft_entry
 from core.knowledge.library import LIBRARY_TENANT_ID
 from core.knowledge.models import KnowledgeSource
@@ -68,6 +69,7 @@ async def test_editing_a_library_entry_forks_it_and_leaves_the_library_copy_unto
     slug = f"kn-lib-{uuid.uuid4().hex[:8]}"
     tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     resp = client.put(

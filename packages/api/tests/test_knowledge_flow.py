@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_tenant_role, grant_workspace_role
 from core.tenancy.models import Workspace
 from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
@@ -43,8 +44,9 @@ async def test_create_add_entry_publish_over_http(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"kn-http-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     create_resp = client.post(
@@ -88,8 +90,9 @@ async def test_own_source_is_not_library_and_entry_activation_fields_round_trip(
     """SourceResponse.is_library and EntryResponse's activation fields are new --
     both must actually round-trip what was written, not just accept it on write."""
     slug = f"kn-activation-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     create_resp = client.post(
@@ -149,6 +152,9 @@ async def test_attach_same_source_to_two_workspaces_over_http(
         workspace_b = ws_b.id
 
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
+    await grant_workspace_role(client, token, tenant_id, workspace_a)
+    await grant_workspace_role(client, token, tenant_id, workspace_b)
     headers = {"Authorization": f"Bearer {token}"}
 
     create_resp = client.post(
@@ -207,8 +213,10 @@ async def test_saturation_endpoint_reports_which_always_on_entries_fit(
     from core.process.dsl.fixtures import MINIMAL_MVP_FLOW
 
     slug = f"kn-sat-{uuid.uuid4().hex[:8]}"
-    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
+    await grant_workspace_role(client, token, tenant_id, workspace_id)
     headers = {"Authorization": f"Bearer {token}"}
 
     source_id = client.post(
@@ -295,3 +303,53 @@ async def test_saturation_endpoint_404s_for_an_unknown_flow(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
+
+
+async def test_knowledge_authoring_takes_the_tenant_seat_and_attaching_the_workspace_seat(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """A self-registered viewer may read the tenant's knowledge but not author it
+    (``knowledge:author``: owner, admin, editor); an editor may author it but may not
+    attach it to a workspace they hold no seat in (``manage_knowledge``)."""
+    slug = f"kn-authz-{uuid.uuid4().hex[:8]}"
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    viewer = {"Authorization": f"Bearer {_register_and_login(client, slug)}"}
+    editor_token = _register_and_login(client, slug)
+    await grant_tenant_role(client, editor_token, tenant_id, "editor")
+    editor = {"Authorization": f"Bearer {editor_token}"}
+
+    source = {"key": "core-rules", "name": "Core Rules", "class": "rules"}
+    assert client.post("/knowledge/sources", json=source, headers=viewer).status_code == 403
+    created = client.post("/knowledge/sources", json=source, headers=editor)
+    assert created.status_code == 201, created.text
+    source_id = created.json()["id"]
+
+    entry = {
+        "title": "Grappling",
+        "body_md": "Roll.",
+        "class": "rules",
+        "scope_key": "workspace_public",
+    }
+    entry_url = f"/knowledge/sources/{source_id}/entries/grappling"
+    assert client.put(entry_url, json=entry, headers=viewer).status_code == 403
+    assert (
+        client.post(f"/knowledge/sources/{source_id}/publish", json={}, headers=viewer).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"{entry_url}/apply-edit", json={"proposed_body_md": "x"}, headers=viewer
+        ).status_code
+        == 403
+    )
+    fork = {"from_version_id": str(uuid.uuid4()), "new_key": "fork", "new_name": "Fork"}
+    assert (
+        client.post(f"/knowledge/sources/{source_id}/fork", json=fork, headers=viewer).status_code
+        == 403
+    )
+
+    attach = {"workspace_id": str(workspace_id), "scope_key": "workspace_public"}
+    attached = client.post(
+        f"/knowledge/sources/{source_id}/attachments", json=attach, headers=editor
+    )
+    assert attached.status_code == 403, attached.text

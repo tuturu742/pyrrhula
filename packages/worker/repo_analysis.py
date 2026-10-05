@@ -22,7 +22,7 @@ import structlog
 from pydantic import BaseModel
 
 from adapters.mcp.git_store import GitStore, GitStoreError, default_git_root
-from core.actions.idempotency import idempotent
+from core.actions.idempotency import clear_failed_operation, idempotent
 from core.agents.assistant import ensure_workspace_assistant
 from core.agents.authoring import get_agent, resolve_connection_api_key
 from core.agents.models import Agent
@@ -396,6 +396,15 @@ async def handle_analyze_workspace_repos(payload: dict[str, Any]) -> dict[str, A
     if not repo_keys:
         raise ValueError("none of the requested repos are readable in the hosted store")
 
+    # `@idempotent` records a failure permanently, so the degraded analysis that
+    # `_run_analysis` refuses to keep (every prose step fell back) would otherwise block
+    # every later "Analyze repos" for the same content -- fixing the assistant's model
+    # changed nothing, because the retry never ran. Nothing before the summaries has a
+    # side effect that a re-run could double (ingestion is a no-op per unchanged SHA), so
+    # a recorded failure for this key is cleared before each attempt.
+    await clear_failed_operation(
+        tenant_id, _analysis_job_key(workspace_id=workspace_id, head_shas=head_shas)
+    )
     return await _run_analysis(
         tenant_id=tenant_id,
         workspace_id=workspace_id,

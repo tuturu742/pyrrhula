@@ -36,10 +36,15 @@ _PERMISSIONS = RolePermissionService()
 
 
 def _shipped_pack_dirs() -> list[pathlib.Path]:
+    """The workflows each root's ``plugin.json`` lists -- what the plugin sync loads
+    (``core.plugins.service.validate_plugin``), not every directory beside them: a
+    plugin repository may carry README images or docs at its root."""
     dirs: list[pathlib.Path] = []
     for root in _PACK_ROOTS:
-        if root.is_dir():
-            dirs.extend(p for p in root.iterdir() if p.is_dir())
+        manifest = root / "plugin.json"
+        if manifest.is_file():
+            listed = json.loads(manifest.read_text()).get("workflows", [])
+            dirs.extend(root / key for key in listed)
     return sorted(dirs)
 
 

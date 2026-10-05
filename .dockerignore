@@ -8,3 +8,5 @@
 **/.ruff_cache
 web/node_modules
 web/dist
+# README screenshots in plugin repositories are for GitHub, not the image.
+.plugins/*/images

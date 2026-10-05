@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client/client";
 import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useTenantVocabulary } from "@/lib/vocabulary/useWorkspaceVocabulary";
 import { MissingVocabularyKeysBadge } from "@/lib/vocabulary/MissingVocabularyKeysBadge";
 import { AssistantWidget } from "@/features/agents/AssistantWidget";
 import { useMe } from "@/features/admin/useMe";
@@ -29,6 +30,9 @@ export function AppShell() {
   const me = useMe();
   const isAdmin = me.data?.platform_admin === true;
   const adminOrg = me.data?.admin_tenant === true;
+  // The tenant's own vocabulary for the nav and every page without a workspace in
+  // scope; the admin organization has no workspaces and no overlay to resolve.
+  useTenantVocabulary(me.data !== undefined && !adminOrg);
 
   const links: Array<{ to: string; label: string; end?: boolean }> = adminOrg
     ? [

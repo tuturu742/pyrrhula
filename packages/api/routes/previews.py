@@ -282,6 +282,7 @@ async def share_preview_endpoint(
     row = await get_preview(ctx.tenant_id, preview_id)
     if row is None:
         raise HTTPException(status_code=404, detail="no such preview")
+    await require_tenant_permission(ctx, "repo:manage")
     if row.status != "running":
         # A token cannot resurrect a container the reaper already stopped; say so plainly
         # rather than handing back a link that 404s.

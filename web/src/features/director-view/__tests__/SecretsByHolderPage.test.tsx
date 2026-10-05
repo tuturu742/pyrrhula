@@ -11,6 +11,9 @@ vi.mock("../api", async () => {
     ...actual,
     listSecretsForWorkspace: vi.fn(),
     listSecretHolders: vi.fn(),
+    listWorkspacePersonas: vi.fn().mockResolvedValue([
+      { id: "persona-1", key: "lager", name: "Dr. Henrik Lager", principal_id: "agent-1" },
+    ]),
     inspectSecret: vi.fn(),
   };
 });
@@ -56,6 +59,9 @@ describe("SecretsByHolderPage", () => {
     renderDirectorViewPage("/workspaces/ws-1/director-view");
 
     const revealButton = await screen.findByRole("button", { name: /reveal plaintext/i });
+
+    // The holder is a principal id on the wire; the reader sees the persona's name.
+    await waitFor(() => expect(screen.getByText("Dr. Henrik Lager")).toBeInTheDocument());
 
     // A second render pass (e.g. React strict-mode double-invoke of an effect) must not
     // itself cause a second inspect() call -- only a deliberate click does.

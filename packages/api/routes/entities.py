@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from api.authz import require_permission
+from api.authz import require_permission, require_tenant_permission
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from api.model_provider_factory import get_model_provider
@@ -196,6 +196,15 @@ class CreateSchemaRequest(BaseModel):
     definition: dict[str, object]
 
 
+async def _require_schema_authoring(ctx: RequestContext, workspace_id: uuid.UUID | None) -> None:
+    """A schema saved into a workspace is that workspace's to manage; one saved with no
+    workspace is a tenant-wide template, which is the tenant's."""
+    if workspace_id is not None:
+        await require_permission(ctx, "manage_workspace", "workspace", workspace_id)
+    else:
+        await require_tenant_permission(ctx, "manage_tenant")
+
+
 @router.post("/schemas", status_code=201)
 async def create_schema_endpoint(
     body: CreateSchemaRequest, ctx: RequestContext = Depends(get_request_context)
@@ -203,6 +212,7 @@ async def create_schema_endpoint(
     """Creating from a template (or saving an edit) both land here: a new immutable
     version, never an in-place mutation (matching `entity_schema`'s own versioned-row
     shape) -- entities pin whichever version id they were created against."""
+    await _require_schema_authoring(ctx, body.workspace_id)
     definition, issues = validate_raw(body.definition)
     if issues or definition is None:
         raise HTTPException(
@@ -327,6 +337,7 @@ async def apply_schema_edit_endpoint(
     """The only write path an *approved* proposal takes -- ``save_schema`` re-validates
     independently (defense in depth), writing a new version attributed to the approving
     human and marked ``ai_assisted``."""
+    await _require_schema_authoring(ctx, body.workspace_id)
     definition, issues = validate_raw(body.proposed_definition)
     if issues or definition is None:
         raise HTTPException(

@@ -25,6 +25,8 @@ and CEL expressions — there is no `eval`, and no place to put a script.
 
 ## A state machine
 
+![The schema editor's state-machine canvas: the swdev work item's lifecycle, with triggers on the transitions and a guard being edited below](images/state-machine.png)
+
 ```json
 {
   "key": "health",
@@ -112,6 +114,10 @@ entity; it may create as many others as its work needs.
 - **The session cast panel** — the live state of everything with a machine running, so
   someone watching a fight sees healthy → bloodied → down without opening sheets.
 - **The work items panel** — the same mechanism, read as a status column.
+
+![A character sheet: identity, attributes with modifiers, a hit-point bar, and the state chips above](images/character-sheet.png)
+
+![The entities list: every entity in the workspace with its current states](images/entities.png)
 
 ## Taking them with you
 

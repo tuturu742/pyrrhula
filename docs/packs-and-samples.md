@@ -118,6 +118,8 @@ Choosing a workflow for an organization (**Workflows** in the UI, or the admin c
 workflow setting for a tenant) does this, which is why a workspace has flows the bundle it
 imported never carried.
 
+![The Workflows page: the shipped Default, Software Development and Tabletop RPG workflows, one of them current](images/workflows.png)
+
 Loading is **versioned, not idempotent**: loading the same pack twice leaves v1 and v2 of
 every flow active, both in the picker and indistinguishable by name. Applying a workflow
 is stamped per workspace, so re-applying the same pinned pack loads nothing; a new pin

@@ -36,6 +36,7 @@ from core.agents.assistant import (
     _workspace_context,
     ensure_workspace_assistant,
 )
+from core.agents.assistant_reads import ViewerGate, refused, register_viewer_read_tools
 from core.agents.authoring import (
     list_agents,
     list_personas,
@@ -44,6 +45,7 @@ from core.agents.authoring import (
 from core.agents.models import Agent
 from core.agents.tools import ToolContext, ToolRegistry, ToolResult
 from core.audit.models import UsageRecordRow
+from core.docs.tools import docs_prompt_line, register_docs_tools
 from core.knowledge.authoring import list_draft_entries, list_sources
 from core.ports.embedding import EmbeddingProvider
 from core.ports.encryptor import Encryptor
@@ -53,6 +55,7 @@ from core.ports.model_provider import (
     ToolCall,
     ToolSpec,
 )
+from core.ports.permission import PermissionService
 from core.repos.service import list_repos
 from core.sessions.lifecycle import list_sessions
 from core.settings.resolve import resolved_setting
@@ -80,7 +83,11 @@ _CHAT_SYSTEM = (
     "something, call the matching write tool with complete arguments -- the change is "
     "then SHOWN TO THE USER FOR CONFIRMATION, never applied by you directly; tell the "
     "user you have proposed it and what it contains. Use tools only when they help; "
-    "answer directly otherwise. Be concise."
+    "answer directly otherwise. Be concise. Before proposing something destructive or "
+    "hard to undo (archive_*, remove_*, delete_*, stop_preview, advance_clock, "
+    "transition_entity) name the exact target and say what cannot be undone. Never ask "
+    "the user for, or put in a proposal, a token, password or API key -- those are "
+    "entered in the UI afterwards."
 )
 
 
@@ -111,12 +118,14 @@ def _phase_keys(definition: object) -> list[str]:
 
 
 def _register_read_tools(
-    registry: ToolRegistry, tenant_id: uuid.UUID, workspace_id: uuid.UUID
+    registry: ToolRegistry, tenant_id: uuid.UUID, workspace_id: uuid.UUID, gate: ViewerGate
 ) -> None:
     """Read tools execute inline: they call the same core services the UI's GET routes
     use, so they can never show the assistant more than the UI would show the user."""
 
     async def _list_personas(_a: dict[str, object], _c: ToolContext) -> ToolResult:
+        if not await gate.allowed("view_workspace"):
+            return refused("view_workspace")
         rows = await list_personas(tenant_id, workspace_id)
         return ToolResult(
             content=json.dumps(
@@ -173,6 +182,8 @@ def _register_read_tools(
         )
 
     async def _list_sessions(_a: dict[str, object], _c: ToolContext) -> ToolResult:
+        if not await gate.allowed("view_workspace"):
+            return refused("view_workspace")
         rows = await list_sessions(tenant_id, workspace_id)
         return ToolResult(
             content=json.dumps(
@@ -210,6 +221,8 @@ def _register_read_tools(
     async def _list_definitions(_a: dict[str, object], _c: ToolContext) -> ToolResult:
         from core.process.authoring import list_definitions
 
+        if not await gate.allowed("view_workspace"):
+            return refused("view_workspace")
         rows = await list_definitions(tenant_id, workspace_id=workspace_id)
         return ToolResult(
             content=json.dumps(
@@ -229,6 +242,8 @@ def _register_read_tools(
     async def _get_definition(args: dict[str, object], _c: ToolContext) -> ToolResult:
         from core.process.authoring import list_definitions
 
+        if not await gate.allowed("view_workspace"):
+            return refused("view_workspace")
         wanted = str(args.get("key") or "")
         rows = await list_definitions(tenant_id, workspace_id=workspace_id)
         row = next((r for r in rows if r.key == wanted), None)
@@ -515,26 +530,406 @@ _WRITE_TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
             ["profile_id"],
         ),
     ),
+    # ── secrets and entities ──────────────────────────────────────────────────────
+    "create_secret": (
+        "Create a secret held by a character or record. Prefer typing sensitive content "
+        "in the Secrets page yourself; what you write here travels through the model.",
+        _obj(
+            {
+                "subject_kind": _s("entity | agent | workspace | knowledge_entry"),
+                "subject_id": _s("id of the subject (an entity id, or a persona's agent id)"),
+                "content": _s("the secret itself (plaintext)"),
+                "gist": _s("a one-line gist others may see"),
+                "scope_key": _s("scope key (from get_workspace visibility), e.g. workspace_public"),
+                "hint_text": _s("what a hint may reveal (optional)"),
+                "behavioral_directive": _s("how the holder behaves about it (optional)"),
+                "publication": _s("guarded | publishable (default guarded)"),
+            },
+            ["subject_kind", "subject_id", "content", "gist", "scope_key"],
+        ),
+    ),
+    "update_secret": (
+        "Update a secret's content, gist, hint, directive or publication. Fields you omit "
+        "are left unchanged; clear_hint / clear_directive remove those two.",
+        _obj(
+            {
+                "secret_id": _s("secret id (from list_secrets)"),
+                "content": _s("new plaintext (optional)"),
+                "gist": _s("new gist (optional)"),
+                "hint_text": _s("new hint (optional)"),
+                "behavioral_directive": _s("new directive (optional)"),
+                "publication": _s("guarded | publishable (optional)"),
+                "clear_hint": _s("'true' to remove the hint"),
+                "clear_directive": _s("'true' to remove the directive"),
+            },
+            ["secret_id"],
+        ),
+    ),
+    "add_secret_holder": (
+        "Give a persona or human knowledge of a secret (they become a holder).",
+        _obj(
+            {
+                "secret_id": _s("secret id (from list_secrets)"),
+                "holder_principal_id": _s("principal id (from get_workspace members)"),
+                "holder_kind": _s("told | witnessed | author"),
+            },
+            ["secret_id", "holder_principal_id", "holder_kind"],
+        ),
+    ),
+    "remove_secret_holder": (
+        "Remove a holder from a secret.",
+        _obj(
+            {
+                "secret_id": _s("secret id"),
+                "holder_id": _s("holder id (from list_secret_holders)"),
+            },
+            ["secret_id", "holder_id"],
+        ),
+    ),
+    "create_entity_schema": (
+        "Create an entity schema, or a new version of an existing key: fields, derived "
+        "values, views and state machines, as the definition document (read the current "
+        "one with get_entity_schema first). Validated on apply.",
+        _obj(
+            {
+                "key": _s("schema key"),
+                "definition": {"type": "object", "description": "the schema definition"},
+            },
+            ["key", "definition"],
+        ),
+    ),
+    "transition_entity": (
+        "Move an entity along one of its state machines by firing a trigger (see the "
+        "transitions get_entity lists).",
+        _obj(
+            {
+                "entity_id": _s("entity id"),
+                "trigger": _s("transition trigger"),
+                "machine_key": _s("state machine key (default lifecycle)"),
+                "expected_version": _s("the entity version you read (optional)"),
+            },
+            ["entity_id", "trigger"],
+        ),
+    ),
+    # ── the workspace ─────────────────────────────────────────────────────────────
+    "update_workspace_settings": (
+        "Change this workspace's settings: secret_mode (excluded | trust | gate), "
+        "conduct_rules, allow_automerge, max_review_rounds, moderation_model, "
+        "assistant_context_max_tokens. Omitted fields stay; clear_* flags unset one.",
+        _obj(
+            {
+                "secret_mode": _s("excluded | trust | gate (optional)"),
+                "conduct_rules": _s("conduct rules text (optional)"),
+                "allow_automerge": _s("'true' | 'false' (optional)"),
+                "max_review_rounds": _s("integer (optional)"),
+                "moderation_model": _s("model profile id for moderation (optional)"),
+                "assistant_context_max_tokens": _s("integer budget (optional)"),
+                "clear_max_review_rounds": _s("'true' to inherit the default"),
+                "clear_moderation_model": _s("'true' to inherit the default"),
+                "clear_assistant_context_max_tokens": _s("'true' to inherit the default"),
+            },
+            [],
+        ),
+    ),
+    "add_workspace_member": (
+        "Add a person to this workspace by email, with a workspace role.",
+        _obj(
+            {
+                "email": _s("the person's login email"),
+                "role": _s(
+                    "facilitator | participant | viewer | overseer | steward (default participant)"
+                ),
+            },
+            ["email"],
+        ),
+    ),
+    "remove_workspace_member": (
+        "Remove a human member from this workspace.",
+        _obj({"principal_id": _s("principal id (from get_workspace members)")}, ["principal_id"]),
+    ),
+    "set_persona_scopes": (
+        "Set which group scopes a persona may read (its levels of lore).",
+        _obj(
+            {
+                "persona_id": _s("persona id (from list_personas)"),
+                "scopes": _s("comma-separated scope keys"),
+            },
+            ["persona_id", "scopes"],
+        ),
+    ),
+    "advance_clock": (
+        "Advance the workspace clock to a value (between-session time passing).",
+        _obj({"to_value": _s("the new clock value (integer)")}, ["to_value"]),
+    ),
+    "create_workspace": (
+        "Create a new workspace in this organization.",
+        _obj({"name": _s("display name"), "key": _s("short key (optional)")}, ["name"]),
+    ),
+    "archive_workspace": (
+        "Archive a workspace (it disappears from lists; sessions in it stop).",
+        _obj({"workspace_id": _s("workspace id (from list_workspaces)")}, ["workspace_id"]),
+    ),
+    # ── sessions ──────────────────────────────────────────────────────────────────
+    "delegate_work": (
+        "Hand work items to the coding agents: each becomes a branch and a pull request.",
+        _obj(
+            {
+                "session_id": _s("session id"),
+                "work_item_ids": _s("comma-separated entity ids of the work items"),
+                "repo_id": _s("repository id (optional; the session's default otherwise)"),
+                "auto_review": _s("'false' to skip the automatic review (default true)"),
+            },
+            ["session_id", "work_item_ids"],
+        ),
+    ),
+    "request_review_changes": (
+        "Send a pull request back for rework with a comment.",
+        _obj(
+            {
+                "session_id": _s("session id"),
+                "work_item_id": _s("the work item's entity id"),
+                "branch": _s("the branch under review"),
+                "comment": _s("what to change (optional)"),
+                "repo_id": _s("repository id (optional)"),
+            },
+            ["session_id", "work_item_id", "branch"],
+        ),
+    ),
+    "pause_session": (
+        "Pause a running session.",
+        _obj({"session_id": _s("session id")}, ["session_id"]),
+    ),
+    "resume_session": (
+        "Resume a paused session.",
+        _obj({"session_id": _s("session id")}, ["session_id"]),
+    ),
+    "wrap_up_session": (
+        "Ask a managed session's supervisor to wrap up and synthesise.",
+        _obj({"session_id": _s("session id")}, ["session_id"]),
+    ),
+    "direct_turn": (
+        "In a managed session, have one persona take the next turn.",
+        _obj(
+            {"session_id": _s("session id"), "persona_id": _s("persona id")},
+            ["session_id", "persona_id"],
+        ),
+    ),
+    "continue_session": (
+        "Run more autonomous rounds on a finished session.",
+        _obj({"session_id": _s("session id"), "rounds": _s("1..10 (default 1)")}, ["session_id"]),
+    ),
+    "generate_report": (
+        "Render a report for a session (templates from list_report_templates).",
+        _obj(
+            {"session_id": _s("session id"), "template_key": _s("template key")},
+            ["session_id", "template_key"],
+        ),
+    ),
+    "request_recap": (
+        "Write a recap of a session for the asking user.",
+        _obj({"session_id": _s("session id")}, ["session_id"]),
+    ),
+    "archive_session": (
+        "Archive a session (it leaves the list; its record is kept).",
+        _obj({"session_id": _s("session id")}, ["session_id"]),
+    ),
+    # ── knowledge and vocabulary ──────────────────────────────────────────────────
+    "archive_knowledge_source": (
+        "Archive a knowledge source (its entries stop being retrieved).",
+        _obj({"source_key": _s("source key (from list_knowledge_sources)")}, ["source_key"]),
+    ),
+    "set_workspace_vocabulary": (
+        "Choose which vocabulary overlay this workspace is labelled with.",
+        _obj(
+            {
+                "overlay_key": _s(
+                    "overlay key (from get_tenant_config); empty = inherit the default"
+                )
+            },
+            [],
+        ),
+    ),
+    "set_tenant_default_vocabulary": (
+        "Choose the organization's default vocabulary overlay.",
+        _obj({"overlay_key": _s("overlay key; empty = the system default")}, []),
+    ),
+    # ── repositories, runtimes and the engine (repo:manage) ───────────────────────
+    "register_repo": (
+        "Register a code repository for delegated work. Never carries a token: the user "
+        "adds the access token under Repos afterwards.",
+        _obj(
+            {
+                "key": _s("short key"),
+                "name": _s("display name"),
+                "description": _s("what it is (optional)"),
+                "source_url": _s("clone URL (optional)"),
+                "provider": _s("github | gitlab | gitea | generic (optional)"),
+                "runtime": _s("build runtime key (from get_tenant_config; default debian)"),
+                "runtime_image": _s("a custom image instead of a runtime (optional)"),
+                "setup_cmds": _s("comma-separated setup commands (optional)"),
+                "test_cmd": _s("test command (optional)"),
+                "build_cmd": _s("build command (optional)"),
+                "artifact_name": _s("build artifact file name (optional)"),
+                "preview_cmd": _s("preview command (optional)"),
+                "preview_port": _s("preview port (optional)"),
+            },
+            ["key", "name"],
+        ),
+    ),
+    "put_runtime": (
+        "Create or update a build runtime (an image plus setup commands).",
+        _obj(
+            {
+                "key": _s("runtime key"),
+                "image": _s("container image reference"),
+                "setup": _s("comma-separated setup commands (optional)"),
+            },
+            ["key", "image"],
+        ),
+    ),
+    "delete_runtime": (
+        "Delete a tenant-defined build runtime.",
+        _obj({"key": _s("runtime key")}, ["key"]),
+    ),
+    "refresh_repo": (
+        "Fetch a repository's remote again.",
+        _obj({"repo_id": _s("repository id (from list_repos)")}, ["repo_id"]),
+    ),
+    "archive_repo": (
+        "Archive a repository registration.",
+        _obj({"repo_id": _s("repository id (from list_repos)")}, ["repo_id"]),
+    ),
+    "set_exec_engine": (
+        "Choose which execution engine delegated work runs on.",
+        _obj({"engine": _s("engine key (from get_tenant_config)")}, ["engine"]),
+    ),
+    # ── MCP servers (workflow:manage) ─────────────────────────────────────────────
+    "upsert_mcp_server": (
+        "Attach or update an MCP server for this workspace. Credentials are not part of "
+        "this: the user sets a credential reference in the MCP page afterwards.",
+        _obj(
+            {
+                "key": _s("server key"),
+                "url": _s("server URL"),
+                "enabled_tools": _s("comma-separated tool names the personas may call"),
+                "effectful_tools": _s("comma-separated tools that change things (optional)"),
+                "require_confirmation": _s("'false' to skip confirmation (default true)"),
+                "max_calls_per_session": _s("integer cap (optional)"),
+                "timeout_seconds": _s("integer (optional)"),
+                "max_result_chars": _s("integer (optional)"),
+            },
+            ["key", "url", "enabled_tools"],
+        ),
+    ),
+    "delete_mcp_server": (
+        "Detach an MCP server from this workspace.",
+        _obj({"key": _s("server key")}, ["key"]),
+    ),
+    # ── the organization (manage_tenant) ──────────────────────────────────────────
+    "set_limits": (
+        "Set the organization's daily token caps (0 = unlimited).",
+        _obj(
+            {
+                "tenant_daily_tokens": _s("integer"),
+                "per_connection_daily_tokens": _s("integer"),
+                "per_persona_daily_tokens": _s("integer"),
+                "per_user_daily_tokens": _s("integer"),
+            },
+            [],
+        ),
+    ),
+    "set_tenant_settings": (
+        "Set organization preferences: login lifetime, preview lifetime, reranking.",
+        _obj(
+            {
+                "session_lifetime_seconds": _s("integer (optional)"),
+                "preview_ttl_seconds": _s("integer (optional)"),
+                "reranker_enabled": _s("'true' | 'false' (optional)"),
+            },
+            [],
+        ),
+    ),
+    "deploy_preview": (
+        "Run a repository's latest build as a preview with a share link.",
+        _obj(
+            {
+                "repo_id": _s("repository id"),
+                "session_id": _s("session to attach it to (optional)"),
+                "ttl_seconds": _s("lifetime in seconds (optional)"),
+                "git_ref": _s("branch or ref (optional; the latest build otherwise)"),
+            },
+            ["repo_id"],
+        ),
+    ),
+    "stop_preview": (
+        "Stop a running preview.",
+        _obj({"preview_id": _s("preview id (from get_tenant_config)")}, ["preview_id"]),
+    ),
+    "request_export": (
+        "Export this workspace as a .pyr bundle (participant or sanitised mode; the full "
+        "mode and model connections need a password and are done in the Export page).",
+        _obj(
+            {
+                "mode": _s("participant | sanitised (default participant)"),
+                "sections": _s("comma-separated sections to include (optional; all otherwise)"),
+            },
+            [],
+        ),
+    ),
+}
+
+# Tools an ordinary member could never Apply are not offered to them: the viewer's own
+# tenant permission, asked at registration, decides. (Workspace-level tools register for
+# everyone -- the Apply call's own 403 is the backstop there.)
+_WRITE_TOOL_GATES: dict[str, str] = {
+    "register_repo": "repo:manage",
+    "put_runtime": "repo:manage",
+    "delete_runtime": "repo:manage",
+    "refresh_repo": "repo:manage",
+    "archive_repo": "repo:manage",
+    "set_exec_engine": "repo:manage",
+    "update_repo": "repo:manage",
+    "deploy_preview": "repo:manage",
+    "stop_preview": "repo:manage",
+    "upsert_mcp_server": "workflow:manage",
+    "delete_mcp_server": "workflow:manage",
+    "set_limits": "manage_tenant",
+    "set_tenant_settings": "manage_tenant",
+    "create_workspace": "manage_tenant",
 }
 
 
-def _register_write_tools(registry: ToolRegistry, state: _ChatState) -> None:
+# Secret plaintext a user dictated is for the Apply call, not for the summary the model
+# reads back; hints and directives are secret material too.
+_UNSUMMARISED = frozenset({"content", "hint_text", "behavioral_directive"})
+
+
+async def _register_write_tools(
+    registry: ToolRegistry, state: _ChatState, gate: ViewerGate
+) -> None:
     """Write tools NEVER execute: the handler records a proposal for the UI. The model
     is told so in its result, so it reports the proposal instead of claiming success."""
     for action, (description, parameters) in _WRITE_TOOLS.items():
+        required = _WRITE_TOOL_GATES.get(action)
+        if required and not await gate.allowed(required, tenant_level=True):
+            continue
 
         async def _propose(
-            args: dict[str, object], _c: ToolContext, *, _action: str = action
+            args: dict[str, object],
+            _c: ToolContext,
+            *,
+            _action: str = action,
+            _declared: frozenset[str] = frozenset(parameters.get("properties", {})),
         ) -> ToolResult:
+            # Only the declared parameters travel: a stray token, password or key the
+            # model invents for a tool that never asked for one is dropped here, before
+            # the proposal reaches the browser.
+            kept = {k: v for k, v in args.items() if k in _declared and v not in (None, "")}
             summary_bits = ", ".join(
-                f"{k}={str(v)[:60]}" for k, v in args.items() if v not in (None, "")
+                f"{k}={'(hidden)' if k in _UNSUMMARISED else str(v)[:60]}" for k, v in kept.items()
             )
             state.proposals.append(
-                ProposedAction(
-                    action=_action,
-                    args={k: v for k, v in args.items() if v not in (None, "")},
-                    summary=f"{_action}({summary_bits})",
-                )
+                ProposedAction(action=_action, args=kept, summary=f"{_action}({summary_bits})")
             )
             return ToolResult(
                 content=(
@@ -563,6 +958,7 @@ async def chat(
     embedder: EmbeddingProvider,
     provider_factory: Any,  # Callable[[str], ModelProvider] -- composition root's
     encryptor: Encryptor,
+    permission_service: PermissionService,
 ) -> AsyncIterator[dict[str, Any]]:
     """Stream one assistant reply (plus any proposals) for the given history."""
     try:
@@ -575,6 +971,7 @@ async def chat(
                 embedder=embedder,
                 provider_factory=provider_factory,
                 encryptor=encryptor,
+                permission_service=permission_service,
             ):
                 yield event
     except TimeoutError:
@@ -593,6 +990,7 @@ async def _chat_inner(
     embedder: EmbeddingProvider,
     provider_factory: Any,
     encryptor: Encryptor,
+    permission_service: PermissionService,
 ) -> AsyncIterator[dict[str, Any]]:
     persona = await ensure_workspace_assistant(tenant_id, workspace_id)
     async with tenant_scope(tenant_id) as session:
@@ -645,10 +1043,20 @@ async def _chat_inner(
 
     state = _ChatState()
     registry = ToolRegistry()
-    _register_read_tools(registry, tenant_id, workspace_id)
-    _register_write_tools(registry, state)
+    gate = ViewerGate(permission_service, tenant_id, viewer.id, workspace_id)
+    _register_read_tools(registry, tenant_id, workspace_id, gate)
+    register_viewer_read_tools(
+        registry,
+        tenant_id,
+        workspace_id,
+        viewer,
+        encryptor=encryptor,
+        permission_service=permission_service,
+    )
+    await _register_write_tools(registry, state, gate)
+    register_docs_tools(registry)
 
-    system = f"{persona.persona_md}\n\n{_CHAT_SYSTEM}"
+    system = f"{persona.persona_md}\n\n{_CHAT_SYSTEM}\n\n{docs_prompt_line()}"
     if context:
         system += f"\n\nWorkspace knowledge (viewer-scoped):\n{context}"
     conversation: list[dict[str, object]] = [

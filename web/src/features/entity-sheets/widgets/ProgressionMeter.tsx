@@ -1,4 +1,4 @@
-import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useFieldLabel } from "../fieldLabel";
 
 export interface ProgressionMeterProps {
   labelKey: string;
@@ -12,7 +12,7 @@ export interface ProgressionMeterProps {
 /** the `progression` tag -- XP-to-next-level and a work item's story-point rollup
  * are the same meter, differing only in `curve_ref`/metadata values. */
 export function ProgressionMeter({ labelKey, value, nextThreshold }: ProgressionMeterProps) {
-  const t = useLabel();
+  const t = useFieldLabel();
   const pct =
     nextThreshold !== null && nextThreshold > 0
       ? Math.max(0, Math.min(100, (value / nextThreshold) * 100))

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_tenant_role
 from core.tenancy.seed import seed_dev_tenant
 
 
@@ -40,8 +41,9 @@ async def test_diff_endpoint_returns_added_removed_changed(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"kn-diff-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     source_id = client.post(
@@ -90,8 +92,9 @@ async def test_list_versions_endpoint_returns_newest_first(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"kn-list-versions-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     source_id = client.post(
@@ -141,8 +144,9 @@ async def test_fork_endpoint_creates_independent_source(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"kn-fork-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     source_id = client.post(
@@ -181,6 +185,7 @@ async def test_effective_version_endpoint_follows_latest_by_default(
     slug = f"kn-effective-{uuid.uuid4().hex[:8]}"
     tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     source_id = client.post(

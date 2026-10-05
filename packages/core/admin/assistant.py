@@ -30,6 +30,7 @@ from typing import Any
 import structlog
 
 from core.agents.tools import ToolContext, ToolHandler, ToolRegistry, ToolResult
+from core.docs.tools import docs_prompt_line, register_docs_tools
 from core.ports.model_provider import GenerationRequest, ToolSpec
 
 log = structlog.get_logger()
@@ -109,6 +110,7 @@ def _register_tools(registry: ToolRegistry, state: _State) -> list[ToolSpec]:
     )
     registry.register(spec, _read)
     specs.append(spec)
+    specs.extend(register_docs_tools(registry))
 
     def _proposer(action: str) -> ToolHandler:
         async def handler(args: dict[str, Any], _ctx: ToolContext) -> ToolResult:
@@ -201,7 +203,9 @@ async def _inner(
 
     provider = provider_factory(connection.provider)
     model = f"{connection.provider}/{connection.model}"
-    conversation: list[dict[str, Any]] = [{"role": "system", "content": _SYSTEM}]
+    conversation: list[dict[str, Any]] = [
+        {"role": "system", "content": f"{_SYSTEM}\n\n{docs_prompt_line()}"}
+    ]
     conversation += [{"role": m["role"], "content": m["content"]} for m in messages]
 
     from core.tenancy.admin import ADMIN_TENANT_ID

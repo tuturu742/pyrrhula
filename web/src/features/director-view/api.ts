@@ -48,6 +48,15 @@ export async function listSecretHolders(workspaceId: string, secretId: string) {
   return unwrap(result);
 }
 
+/** The workspace's personas, for naming holders: a holder is a principal id on the
+ * wire, and `principal_id` is what maps it back to a name. */
+export async function listWorkspacePersonas(workspaceId: string) {
+  const result = await apiClient.GET("/workspaces/{workspace_id}/agents", {
+    params: { path: { workspace_id: workspaceId } },
+  });
+  return unwrap(result);
+}
+
 /** The plaintext read -- each call is exactly one `OverseerService.inspect()` invocation
  * and therefore exactly one new audit row; callers must call this once per deliberate
  * expansion, never speculatively/in bulk. */

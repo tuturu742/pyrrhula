@@ -22,6 +22,7 @@ from api.job_queue_factory import get_job_queue
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from api.model_provider_factory import get_model_provider
+from api.permission_service_factory import get_permission_service
 from core.agents.assistant import (
     UnknownAssistTaskError,
     assist,
@@ -187,6 +188,7 @@ async def assistant_chat_endpoint(
             embedder=get_embedding_provider(),
             provider_factory=get_model_provider,
             encryptor=get_encryptor(),
+            permission_service=get_permission_service(),
         ):
             yield json.dumps(event) + "\n"
 

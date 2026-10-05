@@ -1,4 +1,4 @@
-import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useFieldLabel } from "../fieldLabel";
 
 export interface ResourceBarProps {
   labelKey: string;
@@ -11,7 +11,7 @@ export interface ResourceBarProps {
  * work item's remaining estimate alike -- the tag, not the field name, decides this
  * renders here. */
 export function ResourceBar({ labelKey, value, max, lowThreshold }: ResourceBarProps) {
-  const t = useLabel();
+  const t = useFieldLabel();
   const pct = max && max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : null;
   const low = lowThreshold !== null && value <= lowThreshold;
 

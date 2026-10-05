@@ -46,6 +46,23 @@ managed by Pyrrhula. One product, one codebase.
 > on a fresh install before this release — start with the murder mystery, or with Mice
 > Invaders if you want to watch a pull request get built.
 
+![A session on the software bench: the work item approved, the pull request reviewed, the build served as a preview](docs/images/session-coding-bench.png)
+
+<table>
+<tr>
+<td><a href="docs/images/director-view.png"><img src="docs/images/director-view.png" alt="The director view: confidential facts grouped by the participant that holds each, plaintext only on an audited click"></a><br><sub>Confidential facts by holder; every plaintext look is an audit row</sub></td>
+<td><a href="docs/images/engine-roll.png"><img src="docs/images/engine-roll.png" alt="Engine rolls rendered from the record inside a transcript"></a><br><sub>Dice executed in code, rendered from the record</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/context-inspector.png"><img src="docs/images/context-inspector.png" alt="The context inspector: budget by knowledge class and the ranked entries one turn retrieved"></a><br><sub>What one turn retrieved, ranked, and why</sub></td>
+<td><a href="docs/images/process-editor.png"><img src="docs/images/process-editor.png" alt="The flow editor: phases, who acts in each, and the transitions between them"></a><br><sub>Flows are data: phases, actors, transitions</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/session-mystery.png"><img src="docs/images/session-mystery.png" alt="A six-agent interrogation with the inspector's agenda above the transcript"></a><br><sub>Six agents, eleven private briefs, one culprit</sub></td>
+<td><a href="docs/images/character-sheet.png"><img src="docs/images/character-sheet.png" alt="A character sheet rendered from its schema, with state chips"></a><br><sub>Entities render from their schema; states from their machine</sub></td>
+</tr>
+</table>
+
 ## Install
 
 ```bash
@@ -99,17 +116,17 @@ deployment.
 The schema uses domain-neutral vocabulary; the UI relabels it through a per-workspace
 **vocabulary overlay**:
 
-| Core term | RPG overlay | Default overlay | swdev overlay |
+| Core term | Default overlay | RPG overlay | swdev overlay |
 |---|---|---|---|
-| Workspace | World / Campaign | Workspace | Project |
-| Process Definition | Session Flow / Turn Structure | Workflow | Engineering Workflow |
-| Facilitator Agent | Arbiter | Facilitator / Chair | Engineering Manager |
-| Participant Agent | PC / NPC bot | Domain Expert Agent | Engineer |
-| Knowledge Source (rules/lore/misc) | Rulebook / Lorebook / Miscellany | Policy Doc / Domain Context / Reference | Engineering Standards / Business Context / Reference |
-| Entity + Entity Schema | Character + Sheet Template | Ticket / Project + Record Type | Work Item + Item Template |
-| Deterministic Tool | Dice Roller / Stat Calculator | Calculator / Policy Lookup | Checklist Runner / Estimator |
-| Secret | Hidden Motive | Confidential Info / MNPI | Embargoed Info |
-| Overseer | Director / Table Owner | Compliance Reviewer | Engineering Director |
+| Workspace | Workspace | World / Campaign | Project |
+| Process Definition | Workflow | Session Flow / Turn Structure | Workflow |
+| Facilitator Agent | Facilitator / Chair | Arbiter | Engineering Manager |
+| Participant Agent | Domain Expert Agent | Player Character bot / NPC bot | Engineer Agent |
+| Knowledge Source (rules/lore/misc) | Policy Doc / Domain Context / Reference | Rulebook / Lorebook / Miscellany | Engineering Handbook / Product Context / Runbook |
+| Entity + Entity Schema | Record / Ticket / Project + Record Type | Character / NPC + Character Sheet Template | Work Item / Pull Request / Build + Record Type |
+| Deterministic Tool | Calculator / Policy Lookup | Dice Roller / Coin Flip / Stat Calculator | Checklist Evaluator / Estimate Rollup |
+| Secret | Confidential Information / MNPI | Secret / Hidden Motive | Embargoed Info |
+| Overseer | Compliance Reviewer | Director / Table Owner | Tech Lead |
 
 What belongs in `rules` vs `lore` vs `misc` — and why the split drives retrieval
 budgets — is spelled out per workflow in [docs/knowledge-classes.md](docs/knowledge-classes.md).
@@ -212,6 +229,9 @@ Running one:
 | [`docs/portability.md`](docs/portability.md) | `.pyr` bundles: what travels, the export modes, and what import will not overwrite |
 | [`docs/packs-and-samples.md`](docs/packs-and-samples.md) | Registering workflows from `pyrrhula-workflows`, and setting tenants up from `pyrrhula-samples` |
 | [`docs/operations.md`](docs/operations.md) | Operator tasks on a running deployment: deleting a tenant, resetting a password, the admin console, troubleshooting |
+| [`docs/assistant.md`](docs/assistant.md) | The workspace assistant and its admin sibling: what they know, what they can propose, what they never do |
+| [`docs/delegation.md`](docs/delegation.md) | Handing work items to coding agents, the review loop, and what a delegation cannot do |
+| [`docs/image-builds.md`](docs/image-builds.md) | Building, importing and running your own toolchain images on builders the operator declares |
 
 Where this README and the code disagree, the code is what runs — and the disagreement is a
 bug in one of them.

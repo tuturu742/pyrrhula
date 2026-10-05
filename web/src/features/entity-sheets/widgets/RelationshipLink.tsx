@@ -1,4 +1,4 @@
-import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useFieldLabel } from "../fieldLabel";
 
 export interface RelationshipLinkProps {
   labelKey: string;
@@ -10,7 +10,7 @@ export interface RelationshipLinkProps {
  * (not a real router link -- the referenced id's own entity type isn't known here,
  * only that this field points at one). */
 export function RelationshipLink({ labelKey, value }: RelationshipLinkProps) {
-  const t = useLabel();
+  const t = useFieldLabel();
   return (
     <div className="flex flex-col gap-0.5" data-widget="relationship_link">
       <div className="text-xs text-muted-foreground">{t(labelKey)}</div>

@@ -15,6 +15,8 @@ from api.main import app
 from api.redis_client import get_redis
 from core.agents.scheduling import _personas_with_type
 from core.process.dsl.fixtures import MINIMAL_MVP_FLOW
+from core.tenancy.models import WorkspaceMembership
+from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
 
 
@@ -122,6 +124,18 @@ async def test_archive_agent_and_source_and_definition_hidden(
 ) -> None:
     slug = f"arch-misc-{uuid.uuid4().hex[:8]}"
     headers, workspace_id, profile_id = await _owner_setup(client, slug)
+    # Attaching a source is a workspace act (manage_knowledge), which tenant ownership
+    # alone does not grant: seat the owner in the workspace first.
+    tenant_id, owner_id, _ws = await seed_dev_tenant(slug=slug)
+    async with tenant_scope(tenant_id) as session:
+        session.add(
+            WorkspaceMembership(
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
+                principal_id=owner_id,
+                role="facilitator",
+            )
+        )
 
     # model profile
     assert client.delete(f"/model-profiles/{profile_id}", headers=headers).status_code == 204
@@ -135,11 +149,12 @@ async def test_archive_agent_and_source_and_definition_hidden(
         json={"key": f"k-{uuid.uuid4().hex[:6]}", "name": "Lore", "class": "lore"},
         headers=headers,
     ).json()["id"]
-    client.post(
+    attached = client.post(
         f"/knowledge/sources/{src}/attachments",
         json={"workspace_id": str(workspace_id), "scope_key": "workspace_public"},
         headers=headers,
     )
+    assert attached.status_code == 201, attached.text
     assert client.delete(f"/knowledge/sources/{src}", headers=headers).status_code == 204
     assert src not in {s["id"] for s in client.get("/knowledge/sources", headers=headers).json()}
     attachments = client.get(

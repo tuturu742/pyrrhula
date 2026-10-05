@@ -33,7 +33,7 @@ A useful test when filing a source: *if the model contradicts this text, is that
   superstitions, proverbs, what the innkeeper always says. A small budget slice, but it
   is where a table stops sounding generic.
 
-### Default (`default` — labels: Policy Document / Domain Context / Reference Material)
+### Default (`default` — labels: Policy Doc / Domain Context / Reference)
 
 - **rules** — policies and constraints the discussion must respect: brand voice rules,
   confidentiality policy, approval thresholds, "we never promise dates in public copy."
@@ -41,7 +41,7 @@ A useful test when filing a source: *if the model contradicts this text, is that
   market situation, what this working session is for.
 - **misc** — reference material: glossaries, past-campaign trivia, house anecdotes.
 
-### Software development (`swdev` — labels: Engineering Standards / Business Context / Reference)
+### Software development (`swdev` — labels: Engineering Handbook / Product Context / Runbook)
 
 - **rules** — how code is written here: style guides, required and forbidden libraries,
   review criteria, architectural invariants, CI expectations. If a reviewer would block a
@@ -96,6 +96,10 @@ A useful test when filing a source: *if the model contradicts this text, is that
 
 A class decides *what kind* of knowledge a source is. A **scope** decides *who* may read
 it. Combine them and lore stops being uniform: not every character knows the same history.
+
+![Knowledge sources of one workspace: a rulebook, three lorebooks of different reach, a miscellany](images/knowledge-bands.png)
+
+![The context inspector on a referee turn: the budget split across rules, lore and misc, and the ranked entries with why each was included](images/context-inspector.png)
 
 A scope is a named membership set on the workspace (`public`, `role`, `group`, or a
 per-principal `private`), and

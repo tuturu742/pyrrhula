@@ -1,4 +1,4 @@
-import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useFieldLabel } from "../fieldLabel";
 
 export interface AttributeBlockProps {
   labelKey: string;
@@ -12,7 +12,7 @@ export interface AttributeBlockProps {
  * modifier, or any other domain's "attribute with a derived adjustment", share this
  * one block. */
 export function AttributeBlock({ labelKey, value, modifier }: AttributeBlockProps) {
-  const t = useLabel();
+  const t = useFieldLabel();
   const sign = modifier !== null && modifier >= 0 ? "+" : "";
 
   return (

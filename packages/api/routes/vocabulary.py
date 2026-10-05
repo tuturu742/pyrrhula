@@ -11,12 +11,14 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.authz import require_permission, require_tenant_permission
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from core.tenancy.context import RequestContext
 from core.vocabulary.models import VocabularyOverlayRow
 from core.vocabulary.service import (
     list_overlays,
+    resolve_overlay_for_tenant,
     resolve_overlay_for_workspace,
     set_tenant_default_overlay,
     set_workspace_overlay,
@@ -63,6 +65,19 @@ async def get_workspace_vocabulary_overlay(
     return _overlay_response(overlay)
 
 
+@router.get("/tenant/vocabulary-overlay")
+async def get_tenant_vocabulary_overlay(
+    ctx: RequestContext = Depends(get_request_context),
+) -> VocabularyOverlayResponse:
+    """The overlay for pages with no workspace in scope -- the tenant default, else the
+    system default. Without it the shell labelled a software-development organization's
+    home page "World / Campaigns" until the user opened a workspace."""
+    overlay = await resolve_overlay_for_tenant(ctx.tenant_id)
+    if overlay is None:
+        raise HTTPException(status_code=404, detail="no resolvable vocabulary overlay")
+    return _overlay_response(overlay)
+
+
 class SetWorkspaceOverlayRequest(BaseModel):
     overlay_id: uuid.UUID | None
 
@@ -73,6 +88,7 @@ async def set_workspace_vocabulary_overlay(
     body: SetWorkspaceOverlayRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> VocabularyOverlayResponse:
+    await require_permission(ctx, "manage_workspace", "workspace", workspace_id)
     try:
         await set_workspace_overlay(ctx.tenant_id, workspace_id, body.overlay_id)
     except ValueError as exc:
@@ -93,5 +109,6 @@ class SetTenantDefaultOverlayRequest(BaseModel):
 async def set_tenant_default_vocabulary_overlay(
     body: SetTenantDefaultOverlayRequest, ctx: RequestContext = Depends(get_request_context)
 ) -> dict[str, str | None]:
+    await require_tenant_permission(ctx, "manage_tenant")
     await set_tenant_default_overlay(ctx.tenant_id, body.overlay_key)
     return {"default_vocabulary_overlay_key": body.overlay_key}
