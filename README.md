@@ -116,17 +116,17 @@ deployment.
 The schema uses domain-neutral vocabulary; the UI relabels it through a per-workspace
 **vocabulary overlay**:
 
-| Core term | RPG overlay | Default overlay | swdev overlay |
+| Core term | Default overlay | RPG overlay | swdev overlay |
 |---|---|---|---|
-| Workspace | World / Campaign | Workspace | Project |
-| Process Definition | Session Flow / Turn Structure | Workflow | Workflow |
-| Facilitator Agent | Arbiter | Facilitator / Chair | Engineering Manager |
-| Participant Agent | Player Character bot / NPC bot | Domain Expert Agent | Engineer Agent |
-| Knowledge Source (rules/lore/misc) | Rulebook / Lorebook / Miscellany | Policy Doc / Domain Context / Reference | Engineering Handbook / Review Rubric / Runbook |
-| Entity + Entity Schema | Character / NPC + Character Sheet Template | Record / Ticket / Project + Record Type | Work Item / Pull Request / Build + Record Type |
-| Deterministic Tool | Dice Roller / Coin Flip / Stat Calculator | Calculator / Policy Lookup | Checklist Evaluator / Estimate Rollup |
-| Secret | Secret / Hidden Motive | Confidential Information / MNPI | Embargoed Info |
-| Overseer | Director / Table Owner | Compliance Reviewer | Tech Lead |
+| Workspace | Workspace | World / Campaign | Project |
+| Process Definition | Workflow | Session Flow / Turn Structure | Workflow |
+| Facilitator Agent | Facilitator / Chair | Arbiter | Engineering Manager |
+| Participant Agent | Domain Expert Agent | Player Character bot / NPC bot | Engineer Agent |
+| Knowledge Source (rules/lore/misc) | Policy Doc / Domain Context / Reference | Rulebook / Lorebook / Miscellany | Engineering Handbook / Product Context / Runbook |
+| Entity + Entity Schema | Record / Ticket / Project + Record Type | Character / NPC + Character Sheet Template | Work Item / Pull Request / Build + Record Type |
+| Deterministic Tool | Calculator / Policy Lookup | Dice Roller / Coin Flip / Stat Calculator | Checklist Evaluator / Estimate Rollup |
+| Secret | Confidential Information / MNPI | Secret / Hidden Motive | Embargoed Info |
+| Overseer | Compliance Reviewer | Director / Table Owner | Tech Lead |
 
 What belongs in `rules` vs `lore` vs `misc` — and why the split drives retrieval
 budgets — is spelled out per workflow in [docs/knowledge-classes.md](docs/knowledge-classes.md).

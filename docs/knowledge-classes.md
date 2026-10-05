@@ -41,7 +41,7 @@ A useful test when filing a source: *if the model contradicts this text, is that
   market situation, what this working session is for.
 - **misc** — reference material: glossaries, past-campaign trivia, house anecdotes.
 
-### Software development (`swdev` — labels: Engineering Handbook / Review Rubric / Runbook)
+### Software development (`swdev` — labels: Engineering Handbook / Product Context / Runbook)
 
 - **rules** — how code is written here: style guides, required and forbidden libraries,
   review criteria, architectural invariants, CI expectations. If a reviewer would block a
