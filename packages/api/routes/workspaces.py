@@ -81,6 +81,9 @@ class PersonaResponse(BaseModel):
     id: uuid.UUID
     key: str
     name: str
+    # The principal the persona acts as -- what secret holders, audit actors and
+    # belief views are keyed by, so a page can put a name next to those ids.
+    principal_id: uuid.UUID
 
 
 class CreateWorkspaceRequest(BaseModel):
@@ -235,7 +238,9 @@ async def list_personas(
         .scalars()
         .all()
     )
-    return [PersonaResponse(id=a.id, key=a.key, name=a.name) for a in rows]
+    return [
+        PersonaResponse(id=a.id, key=a.key, name=a.name, principal_id=a.principal_id) for a in rows
+    ]
 
 
 # ── between-session state ─────────────────────────────────────────────────────

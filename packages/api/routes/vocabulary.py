@@ -17,6 +17,7 @@ from core.tenancy.context import RequestContext
 from core.vocabulary.models import VocabularyOverlayRow
 from core.vocabulary.service import (
     list_overlays,
+    resolve_overlay_for_tenant,
     resolve_overlay_for_workspace,
     set_tenant_default_overlay,
     set_workspace_overlay,
@@ -60,6 +61,19 @@ async def get_workspace_vocabulary_overlay(
         raise HTTPException(
             status_code=404, detail=f"no resolvable vocabulary overlay for workspace {workspace_id}"
         )
+    return _overlay_response(overlay)
+
+
+@router.get("/tenant/vocabulary-overlay")
+async def get_tenant_vocabulary_overlay(
+    ctx: RequestContext = Depends(get_request_context),
+) -> VocabularyOverlayResponse:
+    """The overlay for pages with no workspace in scope -- the tenant default, else the
+    system default. Without it the shell labelled a software-development organization's
+    home page "World / Campaigns" until the user opened a workspace."""
+    overlay = await resolve_overlay_for_tenant(ctx.tenant_id)
+    if overlay is None:
+        raise HTTPException(status_code=404, detail="no resolvable vocabulary overlay")
     return _overlay_response(overlay)
 
 

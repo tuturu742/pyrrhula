@@ -66,6 +66,14 @@ async def resolve_overlay_for_workspace(
             if overlay is not None:
                 return overlay
 
+    return await resolve_overlay_for_tenant(tenant_id)
+
+
+async def resolve_overlay_for_tenant(tenant_id: uuid.UUID) -> VocabularyOverlayRow | None:
+    """The tail of the chain, for pages that have no workspace in scope (the workspace
+    list, the persona picker, the schema library): the tenant's default, else the
+    shipped system default."""
+    async with tenant_scope(tenant_id) as session:
         tenant = await session.get(Tenant, tenant_id)
         default_key = (
             tenant.settings.get("default_vocabulary_overlay_key") if tenant is not None else None

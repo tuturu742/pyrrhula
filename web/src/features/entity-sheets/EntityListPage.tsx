@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { BackLink } from "@/components/BackLink";
 import { apiClient } from "@/lib/api-client/client";
 import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useWorkspaceVocabulary } from "@/lib/vocabulary/useWorkspaceVocabulary";
 
 /**
  * Every entity in the workspace, grouped by schema.
@@ -17,6 +18,7 @@ import { useLabel } from "@/lib/vocabulary/useLabel";
 export function EntityListPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const t = useLabel();
+  useWorkspaceVocabulary(workspaceId);
   const [schemaFilter, setSchemaFilter] = useState<string>("");
 
   const { data, isLoading, error } = useQuery({

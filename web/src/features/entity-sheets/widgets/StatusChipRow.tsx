@@ -1,4 +1,4 @@
-import { useLabel } from "@/lib/vocabulary/useLabel";
+import { useFieldLabel } from "../fieldLabel";
 
 export interface StatusChipRowProps {
   labelKey: string;
@@ -8,7 +8,7 @@ export interface StatusChipRowProps {
 /** the `status_set` tag -- an array-of-enum field (conditions, blockers, a work
  * item's lifecycle tags) renders as a chip row, whatever domain it came from. */
 export function StatusChipRow({ labelKey, values }: StatusChipRowProps) {
-  const t = useLabel();
+  const t = useFieldLabel();
 
   return (
     <div className="flex flex-col gap-1" data-widget="status_chip_row">

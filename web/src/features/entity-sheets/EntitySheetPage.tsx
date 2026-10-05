@@ -1,5 +1,6 @@
 import { useLocation, useParams } from "react-router-dom";
 import { BackLink } from "@/components/BackLink";
+import { useWorkspaceVocabulary } from "@/lib/vocabulary/useWorkspaceVocabulary";
 import { EntitySheetContainer } from "./EntitySheetContainer";
 
 /** Route mount for the entity sheet — the widget system was fully built and never
@@ -10,6 +11,9 @@ export function EntitySheetPage() {
   // session's cast panel does). A sheet opened mid-session used to send "back" to the
   // personas list, which is not where the reader was.
   const from = (useLocation().state as { from?: { to: string; label: string } } | null)?.from;
+  // The sheet's group headings are overlay keys (`group.attributes`); without the
+  // workspace's overlay loaded they rendered as the keys themselves.
+  useWorkspaceVocabulary(workspaceId);
   if (!workspaceId || !entityId) return null;
   return (
     <div className="flex max-w-3xl flex-col gap-4">

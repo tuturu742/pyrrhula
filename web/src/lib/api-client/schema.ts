@@ -1969,7 +1969,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Tenant Vocabulary Overlay */
+        get: operations["get_tenant_vocabulary_overlay_tenant_vocabulary_overlay_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8684,6 +8685,11 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
         };
     };
     responses: never;
@@ -13074,6 +13080,40 @@ export interface operations {
                 "application/json": components["schemas"]["SetWorkspaceOverlayRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VocabularyOverlayResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_vocabulary_overlay_tenant_vocabulary_overlay_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-pyrrhula-tenant"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                pyrrhula_session?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

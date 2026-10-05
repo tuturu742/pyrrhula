@@ -126,6 +126,32 @@ async def test_tenant_default_overlay_applies_when_no_workspace_override(
     assert resolved.json()["key"] == "default_v1"
 
 
+async def test_tenant_overlay_endpoint_resolves_without_a_workspace(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """The shell's own labels (workspace list, persona picker, schema library) come
+    from here: the tenant default when one is set, else the system default -- never
+    whatever workspace was open last, and never the RPG defaults for a software
+    organization."""
+    slug = f"vocab-tenant-get-{uuid.uuid4().hex[:8]}"
+    await seed_dev_tenant(slug=slug)
+    token = _register_and_login(client, slug)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    before = client.get("/tenant/vocabulary-overlay", headers=headers)
+    assert before.status_code == 200, before.text
+    assert before.json()["key"] == "rpg_v1"
+
+    set_resp = client.patch(
+        "/tenant/vocabulary-overlay", json={"overlay_key": "swdev_v1"}, headers=headers
+    )
+    assert set_resp.status_code == 200, set_resp.text
+
+    after = client.get("/tenant/vocabulary-overlay", headers=headers)
+    assert after.json()["key"] == "swdev_v1"
+    assert after.json()["labels"]["role.facilitator"] == "Engineering Manager"
+
+
 async def test_second_tenant_cannot_read_first_tenants_custom_overlay(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
@@ -151,4 +177,5 @@ async def test_second_tenant_cannot_read_first_tenants_custom_overlay(
 
 async def test_vocabulary_endpoints_require_auth(client: TestClient, db_available: None) -> None:
     assert client.get("/vocabulary-overlays").status_code == 401
+    assert client.get("/tenant/vocabulary-overlay").status_code == 401
     assert client.get(f"/workspaces/{uuid.uuid4()}/vocabulary-overlay").status_code == 401

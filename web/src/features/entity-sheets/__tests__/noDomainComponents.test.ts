@@ -12,6 +12,7 @@ const ALLOWED_FILES = new Set([
   "api.ts",
   "types.ts",
   "tagWidgetRegistry.ts",
+  "fieldLabel.ts", // label resolution for user-authored field keys -- no domain words
   "FieldWidget.tsx",
   "SheetView.tsx",
   "EntitySheetContainer.tsx",
