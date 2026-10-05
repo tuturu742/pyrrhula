@@ -3,8 +3,8 @@
 --
 
 
--- Dumped from database version 16.14 (Debian 16.14-1.pgdg12+1)
--- Dumped by pg_dump version 16.14 (Debian 16.14-1.pgdg12+1)
+-- Dumped from database version 16.15 (Debian 16.15-1.pgdg12+2)
+-- Dumped by pg_dump version 16.15 (Debian 16.15-1.pgdg12+2)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -413,6 +413,113 @@ ALTER TABLE ONLY public.identity FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: image_build; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.image_build (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    definition_id uuid NOT NULL,
+    origin character varying(16) NOT NULL,
+    status character varying(16) NOT NULL,
+    cancel_requested boolean DEFAULT false NOT NULL,
+    attempt integer DEFAULT 0 NOT NULL,
+    builder_key character varying(40),
+    registry_key character varying(40),
+    dockerfile text DEFAULT ''::text NOT NULL,
+    content_hash character varying(64) DEFAULT ''::character varying NOT NULL,
+    target_ref character varying(512) DEFAULT ''::character varying NOT NULL,
+    external_ref character varying(255) DEFAULT ''::character varying NOT NULL,
+    external_url character varying(1024) DEFAULT ''::character varying NOT NULL,
+    reported_digest character varying(71) DEFAULT ''::character varying NOT NULL,
+    digest character varying(71) DEFAULT ''::character varying NOT NULL,
+    pinned_ref character varying(512) DEFAULT ''::character varying NOT NULL,
+    harness_claim jsonb DEFAULT '{}'::jsonb NOT NULL,
+    baked_harness jsonb DEFAULT '{}'::jsonb NOT NULL,
+    smoke text DEFAULT ''::text NOT NULL,
+    log_tail text DEFAULT ''::text NOT NULL,
+    error text DEFAULT ''::text NOT NULL,
+    job_id uuid,
+    requested_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    heartbeat_at timestamp with time zone,
+    finished_at timestamp with time zone,
+    CONSTRAINT ck_image_build_origin CHECK (((origin)::text = ANY ((ARRAY['built'::character varying, 'imported'::character varying])::text[]))),
+    CONSTRAINT ck_image_build_status CHECK (((status)::text = ANY ((ARRAY['queued'::character varying, 'submitted'::character varying, 'building'::character varying, 'verifying'::character varying, 'smoke_testing'::character varying, 'ready'::character varying, 'failed'::character varying, 'cancelled'::character varying, 'superseded'::character varying, 'deleted'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.image_build FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: image_builder; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.image_builder (
+    key character varying(40) NOT NULL,
+    kind character varying(24) NOT NULL,
+    label character varying(120) DEFAULT ''::character varying NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    credential_ref uuid,
+    registry_key character varying(40) NOT NULL,
+    allowed_tenants jsonb,
+    isolation_ack boolean DEFAULT false NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_image_builder_kind CHECK (((kind)::text = ANY ((ARRAY['webhook'::character varying, 'github_actions'::character varying, 'portainer'::character varying])::text[])))
+);
+
+
+--
+-- Name: image_definition; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.image_definition (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    name character varying(63) NOT NULL,
+    dockerfile text DEFAULT ''::text NOT NULL,
+    origin character varying(16) DEFAULT 'built'::character varying NOT NULL,
+    harness_key character varying(63) DEFAULT ''::character varying NOT NULL,
+    current_build_id uuid,
+    created_by uuid,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    archived_at timestamp with time zone,
+    CONSTRAINT ck_image_definition_origin CHECK (((origin)::text = ANY ((ARRAY['built'::character varying, 'imported'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.image_definition FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: image_registry; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.image_registry (
+    key character varying(40) NOT NULL,
+    label character varying(120) DEFAULT ''::character varying NOT NULL,
+    pull_host character varying(255) NOT NULL,
+    aliases jsonb DEFAULT '[]'::jsonb NOT NULL,
+    path_prefix character varying(120) DEFAULT 'pyrrhula'::character varying NOT NULL,
+    path_style character varying(8) DEFAULT 'nested'::character varying NOT NULL,
+    insecure boolean DEFAULT false NOT NULL,
+    credential_ref uuid,
+    credential_username character varying(255) DEFAULT ''::character varying NOT NULL,
+    k8s_pull_secret character varying(253) DEFAULT ''::character varying NOT NULL,
+    supports_delete boolean DEFAULT false NOT NULL,
+    public_by_default_ack boolean DEFAULT false NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ck_image_registry_style CHECK (((path_style)::text = ANY ((ARRAY['nested'::character varying, 'flat'::character varying])::text[])))
+);
+
+
+--
 -- Name: job; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -487,6 +594,7 @@ CREATE TABLE public.knowledge_entry (
     quarantine_reason text,
     quarantine_reviewed_by uuid,
     quarantine_reviewed_at timestamp with time zone,
+    keys_derived boolean DEFAULT false NOT NULL,
     CONSTRAINT ck_knowledge_entry_logic CHECK (((logic)::text = ANY (ARRAY[('AND'::character varying)::text, ('OR'::character varying)::text, ('NOT'::character varying)::text])))
 );
 
@@ -680,6 +788,7 @@ CREATE TABLE public.persona (
     archived_at timestamp with time zone,
     web_search boolean DEFAULT false NOT NULL,
     params jsonb DEFAULT '{}'::jsonb NOT NULL,
+    harness character varying(63) DEFAULT ''::character varying NOT NULL,
     CONSTRAINT ck_persona_persona_type CHECK (((persona_type)::text = ANY (ARRAY[('supervisor'::character varying)::text, ('participant'::character varying)::text, ('informational'::character varying)::text])))
 );
 
@@ -848,7 +957,7 @@ CREATE TABLE public.registration_request (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     decided_at timestamp with time zone,
     decided_by_principal_id uuid,
-    CONSTRAINT ck_registration_request_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying])::text[])))
+    CONSTRAINT ck_registration_request_status CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text])))
 );
 
 ALTER TABLE ONLY public.registration_request FORCE ROW LEVEL SECURITY;
@@ -1448,6 +1557,30 @@ ALTER TABLE ONLY public.workspace_membership FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Data for Name: image_build; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+
+
+--
+-- Data for Name: image_builder; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+
+
+--
+-- Data for Name: image_definition; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+
+
+--
+-- Data for Name: image_registry; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+
+
+--
 -- Data for Name: job; Type: TABLE DATA; Schema: public; Owner: -
 --
 
@@ -1938,6 +2071,38 @@ ALTER TABLE ONLY public.identity
 
 
 --
+-- Name: image_build image_build_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_build
+    ADD CONSTRAINT image_build_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: image_builder image_builder_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_builder
+    ADD CONSTRAINT image_builder_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: image_definition image_definition_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_definition
+    ADD CONSTRAINT image_definition_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: image_registry image_registry_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_registry
+    ADD CONSTRAINT image_registry_pkey PRIMARY KEY (key);
+
+
+--
 -- Name: job job_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2330,6 +2495,14 @@ ALTER TABLE ONLY public.identity
 
 
 --
+-- Name: image_definition uq_image_definition_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_definition
+    ADD CONSTRAINT uq_image_definition_name UNIQUE (tenant_id, name);
+
+
+--
 -- Name: knowledge_source uq_knowledge_source_tenant_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2632,6 +2805,13 @@ CREATE INDEX ix_entity_state_change_entity_id ON public.entity_state_change USIN
 
 
 --
+-- Name: ix_image_build_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_image_build_status ON public.image_build USING btree (tenant_id, status);
+
+
+--
 -- Name: ix_job_kind; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2804,6 +2984,13 @@ CREATE INDEX ix_vector_store_item_embedding ON public.vector_store_item USING hn
 --
 
 CREATE INDEX ix_vector_store_item_tenant_scope_class ON public.vector_store_item USING btree (tenant_id, scope_key, class);
+
+
+--
+-- Name: uq_image_build_one_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_image_build_one_active ON public.image_build USING btree (tenant_id, definition_id) WHERE ((status)::text = ANY ((ARRAY['queued'::character varying, 'submitted'::character varying, 'building'::character varying, 'verifying'::character varying, 'smoke_testing'::character varying])::text[]));
 
 
 --
@@ -3322,6 +3509,38 @@ ALTER TABLE ONLY public.identity
 
 ALTER TABLE ONLY public.identity
     ADD CONSTRAINT identity_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
+
+
+--
+-- Name: image_build image_build_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_build
+    ADD CONSTRAINT image_build_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.image_definition(id) ON DELETE CASCADE;
+
+
+--
+-- Name: image_build image_build_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_build
+    ADD CONSTRAINT image_build_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
+
+
+--
+-- Name: image_builder image_builder_registry_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_builder
+    ADD CONSTRAINT image_builder_registry_key_fkey FOREIGN KEY (registry_key) REFERENCES public.image_registry(key) ON DELETE RESTRICT;
+
+
+--
+-- Name: image_definition image_definition_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.image_definition
+    ADD CONSTRAINT image_definition_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenant(id) ON DELETE CASCADE;
 
 
 --
@@ -4083,6 +4302,18 @@ ALTER TABLE public.exec_environment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.identity ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: image_build; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.image_build ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: image_definition; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.image_definition ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: knowledge_chunk; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4373,6 +4604,20 @@ CREATE POLICY tenant_isolation ON public.exec_environment USING ((tenant_id = (N
 --
 
 CREATE POLICY tenant_isolation ON public.identity USING ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)) WITH CHECK ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid));
+
+
+--
+-- Name: image_build tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_isolation ON public.image_build USING ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)) WITH CHECK ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid));
+
+
+--
+-- Name: image_definition tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_isolation ON public.image_definition USING ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)) WITH CHECK ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid));
 
 
 --
@@ -4826,6 +5071,34 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exec_environment TO pyrrhula_a
 --
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.identity TO pyrrhula_app;
+
+
+--
+-- Name: TABLE image_build; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.image_build TO pyrrhula_app;
+
+
+--
+-- Name: TABLE image_builder; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.image_builder TO pyrrhula_app;
+
+
+--
+-- Name: TABLE image_definition; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.image_definition TO pyrrhula_app;
+
+
+--
+-- Name: TABLE image_registry; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.image_registry TO pyrrhula_app;
 
 
 --
