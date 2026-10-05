@@ -33,7 +33,7 @@ A useful test when filing a source: *if the model contradicts this text, is that
   superstitions, proverbs, what the innkeeper always says. A small budget slice, but it
   is where a table stops sounding generic.
 
-### Default (`default` — labels: Policy Document / Domain Context / Reference Material)
+### Default (`default` — labels: Policy Doc / Domain Context / Reference)
 
 - **rules** — policies and constraints the discussion must respect: brand voice rules,
   confidentiality policy, approval thresholds, "we never promise dates in public copy."
@@ -41,7 +41,7 @@ A useful test when filing a source: *if the model contradicts this text, is that
   market situation, what this working session is for.
 - **misc** — reference material: glossaries, past-campaign trivia, house anecdotes.
 
-### Software development (`swdev` — labels: Engineering Standards / Business Context / Reference)
+### Software development (`swdev` — labels: Engineering Handbook / Review Rubric / Runbook)
 
 - **rules** — how code is written here: style guides, required and forbidden libraries,
   review criteria, architectural invariants, CI expectations. If a reviewer would block a

@@ -119,14 +119,14 @@ The schema uses domain-neutral vocabulary; the UI relabels it through a per-work
 | Core term | RPG overlay | Default overlay | swdev overlay |
 |---|---|---|---|
 | Workspace | World / Campaign | Workspace | Project |
-| Process Definition | Session Flow / Turn Structure | Workflow | Engineering Workflow |
+| Process Definition | Session Flow / Turn Structure | Workflow | Workflow |
 | Facilitator Agent | Arbiter | Facilitator / Chair | Engineering Manager |
-| Participant Agent | PC / NPC bot | Domain Expert Agent | Engineer |
-| Knowledge Source (rules/lore/misc) | Rulebook / Lorebook / Miscellany | Policy Doc / Domain Context / Reference | Engineering Standards / Business Context / Reference |
-| Entity + Entity Schema | Character + Sheet Template | Ticket / Project + Record Type | Work Item + Item Template |
-| Deterministic Tool | Dice Roller / Stat Calculator | Calculator / Policy Lookup | Checklist Runner / Estimator |
-| Secret | Hidden Motive | Confidential Info / MNPI | Embargoed Info |
-| Overseer | Director / Table Owner | Compliance Reviewer | Engineering Director |
+| Participant Agent | Player Character bot / NPC bot | Domain Expert Agent | Engineer Agent |
+| Knowledge Source (rules/lore/misc) | Rulebook / Lorebook / Miscellany | Policy Doc / Domain Context / Reference | Engineering Handbook / Review Rubric / Runbook |
+| Entity + Entity Schema | Character / NPC + Character Sheet Template | Record / Ticket / Project + Record Type | Work Item / Pull Request / Build + Record Type |
+| Deterministic Tool | Dice Roller / Coin Flip / Stat Calculator | Calculator / Policy Lookup | Checklist Evaluator / Estimate Rollup |
+| Secret | Secret / Hidden Motive | Confidential Information / MNPI | Embargoed Info |
+| Overseer | Director / Table Owner | Compliance Reviewer | Tech Lead |
 
 What belongs in `rules` vs `lore` vs `misc` — and why the split drives retrieval
 budgets — is spelled out per workflow in [docs/knowledge-classes.md](docs/knowledge-classes.md).
