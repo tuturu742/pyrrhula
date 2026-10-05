@@ -46,6 +46,23 @@ managed by Pyrrhula. One product, one codebase.
 > on a fresh install before this release — start with the murder mystery, or with Mice
 > Invaders if you want to watch a pull request get built.
 
+![A session on the software bench: the work item approved, the pull request reviewed, the build served as a preview](docs/images/session-coding-bench.png)
+
+<table>
+<tr>
+<td><a href="docs/images/director-view.png"><img src="docs/images/director-view.png" alt="The director view: secrets grouped by holder, plaintext only on an audited click"></a><br><sub>Secrets by holder; every plaintext look is an audit row</sub></td>
+<td><a href="docs/images/engine-roll.png"><img src="docs/images/engine-roll.png" alt="Engine rolls rendered from the record inside a transcript"></a><br><sub>Dice executed in code, rendered from the record</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/context-inspector.png"><img src="docs/images/context-inspector.png" alt="The context inspector: budget by knowledge class and the ranked entries one turn retrieved"></a><br><sub>What one turn retrieved, ranked, and why</sub></td>
+<td><a href="docs/images/process-editor.png"><img src="docs/images/process-editor.png" alt="The flow editor: phases, who acts in each, and the transitions between them"></a><br><sub>Flows are data: phases, actors, transitions</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/session-mystery.png"><img src="docs/images/session-mystery.png" alt="A six-agent interrogation with the inspector's agenda above the transcript"></a><br><sub>Six agents, eleven private briefs, one culprit</sub></td>
+<td><a href="docs/images/character-sheet.png"><img src="docs/images/character-sheet.png" alt="A character sheet rendered from its schema, with state chips"></a><br><sub>Entities render from their schema; states from their machine</sub></td>
+</tr>
+</table>
+
 ## Install
 
 ```bash

@@ -11,6 +11,10 @@ state machine, and the roles are ordinary personas. What makes it a *software* l
 the pack content — `swdev` supplies the schema, the states and the vocabulary overlay
 that renders `work_item_status.changes_requested` as "Changes Requested".
 
+![A session with a work item approved, the repo and its environment listed, and the build offered as a preview](images/session-coding-bench.png)
+
+![The end of the loop: the reviewer's verdict, the merge order, and the preview link](images/session-review-merge.png)
+
 ## The four jobs
 
 | Job | What it does |

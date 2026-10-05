@@ -42,6 +42,10 @@ By default: your artifact, extracted, served as a static site. That covers a web
 a Godot HTML5 export, a Vite bundle — and nothing else. If your project is a server, it
 needs a recipe.
 
+![The Repos page: preview deployments with their expiry, and the repo with its runtime and test command](images/repos.png)
+
+![A Godot web build served as a preview, opened from the share link](images/preview-game.png)
+
 Three layers decide, most specific first:
 
 1. **Repo settings** — the *Preview recipe* fields on the repo form (**Repos**), at

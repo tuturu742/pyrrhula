@@ -97,6 +97,10 @@ A useful test when filing a source: *if the model contradicts this text, is that
 A class decides *what kind* of knowledge a source is. A **scope** decides *who* may read
 it. Combine them and lore stops being uniform: not every character knows the same history.
 
+![Knowledge sources of one workspace: a rulebook, three lorebooks of different reach, a miscellany](images/knowledge-bands.png)
+
+![The context inspector on a referee turn: the budget split across rules, lore and misc, and the ranked entries with why each was included](images/context-inspector.png)
+
 A scope is a named membership set on the workspace (`public`, `role`, `group`, or a
 per-principal `private`), and
 every knowledge entry carries a `scope_key`. An entry reaches a persona's context only if
