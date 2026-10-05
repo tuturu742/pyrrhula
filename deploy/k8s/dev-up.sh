@@ -47,6 +47,15 @@ else
 fi
 
 SECRETS=overlays/dev/secrets.env
+# A checkout without the secrets file beside a namespace that already has them: a fresh
+# clone upgrading a running cluster (git clone, not git pull). Generating new secrets
+# here replaces the Secret while postgres keeps the password it was initialised with,
+# and the api can never connect again. The cluster's own copy is the source of truth.
+if [ ! -f "$SECRETS" ] && kubectl -n pyrrhula get secret pyrrhula-secrets >/dev/null 2>&1; then
+  echo "== recovering $SECRETS from the cluster's pyrrhula-secrets (this checkout has none)"
+  kubectl -n pyrrhula get secret pyrrhula-secrets -o go-template='{{range $k, $v := .data}}{{$k}}={{$v | base64decode}}{{"\n"}}{{end}}' > "$SECRETS"
+  chmod 600 "$SECRETS"
+fi
 if [ ! -f "$SECRETS" ]; then
   echo "== generating $SECRETS (first run)"
   PG=$(openssl rand -hex 24)

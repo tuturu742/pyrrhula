@@ -137,6 +137,24 @@ envval() { # envval <file> <key> <default>
 
 # --- secrets ----------------------------------------------------------------------
 FRESH_ENV=0
+# A checkout without .env beside data that exists: a fresh clone upgrading a running
+# stack (git clone, not git pull). Generating new secrets here can never work, and
+# the generator used to overwrite the one backup it then told the operator to restore.
+# Restore the backup instead; without one, stop before anything is touched.
+if [ ! -f .env ] && [ -f ~/.config/pyrrhula/compose.env.bak ] \
+   && { "$ENGINE" volume exists "${PROJECT}_pyrrhula-postgres" >/dev/null 2>&1 \
+        || "$ENGINE" volume inspect "${PROJECT}_pyrrhula-postgres" >/dev/null 2>&1; }; then
+  say "restoring .env from ~/.config/pyrrhula/compose.env.bak (this checkout has none, the data exists)"
+  cp ~/.config/pyrrhula/compose.env.bak .env && chmod 600 .env
+fi
+if [ ! -f .env ] \
+   && { "$ENGINE" volume exists "${PROJECT}_pyrrhula-postgres" >/dev/null 2>&1 \
+        || "$ENGINE" volume inspect "${PROJECT}_pyrrhula-postgres" >/dev/null 2>&1; }; then
+  fail "a previous install's data exists (volume ${PROJECT}_pyrrhula-postgres) but this
+       checkout has no .env and there is no backup at ~/.config/pyrrhula/compose.env.bak.
+       Copy the .env of the checkout that installed it here, or wipe the old install:
+       ${COMPOSE[*]} -p $PROJECT -f $COMPOSE_FILE down -v"
+fi
 if [ ! -f .env ]; then
   FRESH_ENV=1
   say "generating .env (secrets)"
