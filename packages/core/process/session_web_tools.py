@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import uuid
 
+import structlog
+
 from core.agents.tools import ToolContext, ToolHandler, ToolResult
 from core.mcp.client import ToolNotAvailableError
 from core.mcp.client import call_tool as mcp_call_tool
@@ -30,7 +32,11 @@ WEB_SEARCH_SERVER_KEY = "web_search"
 WEB_FETCH_SERVER_KEY = "web_fetch"
 
 
-def _search_phase() -> PhaseSpec:
+def _web_phase(tool: str) -> PhaseSpec:
+    # The synthesized single-tool phase the client requires. It must name the tool being
+    # called: discovery filters by `phase.tools`, so a fetch authorised against a phase
+    # that listed only `search` was refused as "not available in this phase" before it
+    # was recorded anywhere, and every desk filed from snippets (newsroom sweep).
     return PhaseSpec(
         label_key="phase.turn",
         actors=[],
@@ -40,7 +46,7 @@ def _search_phase() -> PhaseSpec:
             entity_fields="all",
             secrets="none",
         ),
-        tools=["search"],
+        tools=[tool],
     )
 
 
@@ -85,13 +91,18 @@ def make_web_fetch_handler(*, workspace_id: uuid.UUID, transport: McpTransport) 
                 workspace_id,
                 ctx.session_id,
                 event_seq,
-                _search_phase(),
+                _web_phase("fetch"),
                 WEB_FETCH_SERVER_KEY,
                 "fetch",
                 {"url": url},
                 transport=transport,
             )
         except (McpTransportError, ToolNotAvailableError) as exc:
+            # The model is told, and so is the log: a fetch refused by registration
+            # used to be visible only as the desks saying pages were unavailable.
+            structlog.get_logger().warning(
+                "web_fetch.failed", session_id=str(ctx.session_id), error=str(exc)[:200]
+            )
             return ToolResult(
                 content=json.dumps({"error": "fetch_failed", "message": str(exc)[:200]})
             )
@@ -127,7 +138,7 @@ def make_web_search_handler(*, workspace_id: uuid.UUID, transport: McpTransport)
                 workspace_id,
                 ctx.session_id,
                 event_seq,
-                _search_phase(),
+                _web_phase("search"),
                 WEB_SEARCH_SERVER_KEY,
                 "search",
                 {"query": query, "recency": str(args.get("recency") or "")},

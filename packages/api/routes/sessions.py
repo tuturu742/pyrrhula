@@ -1172,6 +1172,13 @@ async def _run_process_definition_advance(
             job_queue=get_job_queue(),
             moderation_provider=await moderation_provider_for(tenant_id),
         )
+        if result.status == "terminal":
+            # Same as the worker's advance: a finished session keeps no warm container.
+            await get_job_queue().enqueue(
+                tenant_id,
+                "teardown_session_envs",
+                {"session_id": str(session_id), "tenant_id": str(tenant_id)},
+            )
         if result.status != "active":
             return
         if result.steps_taken == 0:

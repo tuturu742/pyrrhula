@@ -34,7 +34,10 @@ def test_garbage_is_unknown_not_an_exception() -> None:
 
 
 def test_prerelease_ordering_follows_pep_440() -> None:
-    # An rc precedes its release: a deployment on the release must not warn about a
-    # bundle its own rc wrote, and a later patch is newer than an rc.
-    assert compare_app_versions("0.1.0rc1", "0.1.0").verdict == "older"
+    # An rc and its release are one release line: a deployment on the release must not
+    # warn about a bundle its own rc wrote, and -- the case every sample bundle hit on
+    # every release candidate -- a candidate must not warn about a bundle the release
+    # wrote. A later patch is newer than an rc.
+    assert compare_app_versions("0.1.0rc1", "0.1.0").verdict == "same"
+    assert compare_app_versions("0.1.0", "0.1.0rc3").verdict == "same"
     assert compare_app_versions("0.1.1", "0.1.0rc1").verdict == "newer"

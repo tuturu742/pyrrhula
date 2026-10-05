@@ -269,6 +269,7 @@ async def measure_phase(tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict[str
     from core.actions.effectful import ActionRecordRow
     from core.entities.fsm import EntityStateChangeRow
     from core.entities.storage import EntityRow
+    from core.mcp.registry import McpCallRecord
     from core.resolution.records import ResolutionRecordRow
 
     async with tenant_scope(tenant_id) as session:
@@ -334,6 +335,25 @@ async def measure_phase(tenant_id: uuid.UUID, session_id: uuid.UUID) -> dict[str
                 .where(
                     ActionRecordRow.session_id == session_id,
                     ActionRecordRow.event_seq >= floor,
+                )
+            )
+            or 0
+        )
+        # Read-only remote calls (a web search, a page fetch, a lab query) never reach
+        # the effectful ledger above; they are recorded in mcp_call_record only. A beat
+        # whose requirement is "the desks must have looked something up" counted zero
+        # for every search it made (newsroom sweep, 2026-10-04: two searches recorded,
+        # produced=0). Effectful calls are already counted, so only the read-only rows
+        # are added, and a call refused by the session cap was never made.
+        tool_calls += int(
+            await session.scalar(
+                select(func.count())
+                .select_from(McpCallRecord)
+                .where(
+                    McpCallRecord.session_id == session_id,
+                    McpCallRecord.event_seq >= floor,
+                    McpCallRecord.effectful.is_(False),
+                    McpCallRecord.outcome != "refused",
                 )
             )
             or 0
@@ -747,8 +767,19 @@ async def advance_session(
                     row = await session.get(SessionRow, session_id)
                     if row is None:
                         raise ValueError(f"no session {session_id} in this tenant")
+                    # A pause or an archive taken while this loop runs must stop it at
+                    # the next step. Nothing re-read the status before: a paused
+                    # newsroom session ran four more turns and two phase transitions,
+                    # and its terminal transition then overwrote 'paused' with
+                    # 'completed' (sweep 2026-10-04).
+                    if row.status == "paused" or row.archived_at is not None:
+                        return AdvanceResult("paused", steps, row.current_phase, ())
                     phase_key = row.current_phase
                     state = dict(row.state)
+                    # The scheduler persists the advanced cursor as a side effect of
+                    # choosing the actor, before the turn runs. Kept so a turn that
+                    # never happened can put it back.
+                    cursor_before = dict(row.actor_cursor or {})
 
                 if phase_key not in definition.phases:
                     raise InterpreterFaultError(f"session is in undeclared phase {phase_key!r}")
@@ -805,9 +836,20 @@ async def advance_session(
                         return AdvanceResult("terminal", steps, phase_key, tuple(phase.flags))
                     continue
 
-                await _run_actor_turn(
-                    tenant_id, session_id, phase_key, phase, actor, execute_turn, on_event
-                )
+                try:
+                    await _run_actor_turn(
+                        tenant_id, session_id, phase_key, phase, actor, execute_turn, on_event
+                    )
+                except InterpreterFaultError:
+                    # The turn never happened, but the cursor already moved past this
+                    # actor. Put it back, so a resume offers them the turn again instead
+                    # of skipping it: a single-actor opening phase vanished entirely
+                    # after a resume (Hägnaryd sweep, 2026-10-04).
+                    async with tenant_scope(tenant_id) as session:
+                        row = await session.get(SessionRow, session_id)
+                        if row is not None:
+                            row.actor_cursor = cursor_before
+                    raise
 
             # max_steps was reached. A transition on the *last* iteration updates
             # current_phase via `continue`, without another loop-top re-read -- so

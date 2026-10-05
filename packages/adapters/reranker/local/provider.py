@@ -7,6 +7,7 @@ this adapter never requires the model weights already be present.
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Sequence
 from typing import Any
 
@@ -18,22 +19,26 @@ class CrossEncoderReranker:
         self._model_name = f"local/{model}"
         self._hf_model_name = model
         self._model: Any | None = None
+        self._load_lock = threading.Lock()
 
     @property
     def model_name(self) -> str:
         return self._model_name
 
     def _load(self) -> Any:
-        if self._model is None:
-            from sentence_transformers import CrossEncoder
+        with self._load_lock:
+            if self._model is None:
+                from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(self._hf_model_name)
-        return self._model
+                # Same two points as the embedding provider: the files are local, so the
+                # hub is never asked, and the load runs off the event loop.
+                self._model = CrossEncoder(self._hf_model_name, local_files_only=True)
+            return self._model
 
     async def rerank(self, query: str, candidates: Sequence[RerankCandidate]) -> list[RerankResult]:
         if not candidates:
             return []
-        model = self._load()
+        model = await asyncio.to_thread(self._load)
         pairs = [(query, c.text) for c in candidates]
         scores = await asyncio.to_thread(model.predict, pairs)
         return [

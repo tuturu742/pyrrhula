@@ -125,7 +125,7 @@ export function ReportPanel({ sessionId }: { sessionId: string }) {
               disabled={generate.isPending}
               onClick={() => generate.mutate(template.key)}
             >
-              {template.key}
+              {template.title || template.key}
             </Button>
           ))}
           {templates.isSuccess && (templates.data ?? []).length === 0 && (

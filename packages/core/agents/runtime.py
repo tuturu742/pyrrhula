@@ -155,10 +155,17 @@ async def _call_provider_with_retry(
     egress_policy: dict[str, list[str]] | None = None,
     persona_params: dict[str, object] | None = None,
     limits: GenerationLimits = DEFAULT_LIMITS,
+    allow_empty: bool = False,
 ) -> tuple[str, list[ToolCall], _UsagePoint, str]:
     """Tries ``profile`` up to ``max_retries`` times with exponential backoff; on total
     failure, tries ``fallback_profile`` once (if set). Raises
-    ``AllRetriesExhaustedError`` if every attempt failed."""
+    ``AllRetriesExhaustedError`` if every attempt failed.
+
+    ``allow_empty`` is for the follow-up call after a turn has already acted through a
+    tool: a model that created the work item and then has nothing to add returns an
+    empty reply (seen live with gpt-5.6-luna, twice, on two deployments). That is a
+    finished turn, and retrying cannot change it -- failing it paused the session over
+    work already done."""
     with _tracer.start_as_current_span("runtime.call_provider_with_retry") as span:
         candidates: list[Agent] = [profile] * max_retries
         if fallback_profile is not None:
@@ -217,7 +224,7 @@ async def _call_provider_with_retry(
                     tool_calls=len(tool_calls),
                     max_tokens=req.params.get("max_tokens"),
                 )
-                if not content.strip() and not tool_calls:
+                if not content.strip() and not tool_calls and not allow_empty:
                     structlog.get_logger().info("runtime.empty_content", raw=repr(content[:200]))
                     raise EmptyGenerationError(f"{model_string} returned an empty generation")
                 prompt_tokens = sum(
@@ -265,7 +272,7 @@ async def _dispatch_tool_idempotent(
     ctx: ToolContext,
 ) -> dict[str, Any]:
     result = await tool_registry.dispatch(tool_call, ctx)
-    return {"content": result.content}
+    return {"content": result.content, "resolution_id": result.resolution_id}
 
 
 async def run_agent_turn(
@@ -348,6 +355,7 @@ async def run_agent_turn(
         conversation = list(messages)
         usage_points: list[_UsagePoint] = []
         tool_calls_made = 0
+        tools_called: list[str] = []
         resolution_record_ids: list[str] = []
         tools = tool_registry.specs()
 
@@ -366,10 +374,23 @@ async def run_agent_turn(
                 egress_policy,
                 persona_params=persona_params,
                 limits=generation_limits,
+                allow_empty=tool_calls_made > 0,
             )
             usage_points.append(usage)
 
             if not tool_calls:
+                if not content.strip() and tools_called:
+                    # The turn acted and then said nothing. An empty message hides the
+                    # turn from the transcript (a plan phase with no visible plan); say
+                    # what it did instead.
+                    counted = sorted(
+                        {name: tools_called.count(name) for name in tools_called}.items()
+                    )
+                    content = (
+                        "(acted through "
+                        + ", ".join(f"{name} ×{n}" if n > 1 else name for name, n in counted)
+                        + ")"
+                    )
                 if finalize_reply is not None:
                     content = await finalize_reply(content)
                 return await _commit_turn(
@@ -414,6 +435,7 @@ async def run_agent_turn(
             )
             for tool_call in tool_calls:
                 tool_calls_made += 1
+                tools_called.append(tool_call.name)
                 tool_result = await _dispatch_tool_idempotent(
                     tenant_id=tenant_id,
                     idempotency_key=f"{idempotency_key}:tool:{tool_call.id}",
@@ -426,7 +448,13 @@ async def run_agent_turn(
                         turn_event_seq=event_seq,
                     ),
                 )
-                resolution_id = _extract_resolution_id(tool_result["content"])
+                # The handler's own word first; parsing the content is the fallback for
+                # a handler that returns the bare record. The resolution preset returns
+                # an envelope, so the parse found nothing and every roll made through it
+                # was recorded but never linked to its message (karsh-vale sweep).
+                resolution_id = tool_result.get("resolution_id") or _extract_resolution_id(
+                    tool_result["content"]
+                )
                 if resolution_id is not None:
                     resolution_record_ids.append(resolution_id)
                 conversation.append(

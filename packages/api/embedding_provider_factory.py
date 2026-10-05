@@ -20,9 +20,18 @@ class EmbeddingConfigError(Exception):
     producing vectors that don't fit the pgvector column they're written to."""
 
 
+# One provider per model: the local provider holds the loaded weights, and a fresh
+# instance per call reloaded them on every embedding request (five loads in seven
+# minutes on one organization's first session, measured in the sweep of 2026-10-04).
+_providers: dict[tuple[str, int], EmbeddingProvider] = {}
+
+
 def get_embedding_provider(model_name: str | None = None) -> EmbeddingProvider:
     models = current_retrieval_models()
     model_name = model_name or models.embedding_model
+    cached = _providers.get((model_name, models.embedding_dimension))
+    if cached is not None:
+        return cached
 
     if model_name == "local/stub":
         provider: EmbeddingProvider = StubEmbeddingProvider(dimension=models.embedding_dimension)
@@ -38,4 +47,5 @@ def get_embedding_provider(model_name: str | None = None) -> EmbeddingProvider:
             f"embedding_model {model_name!r} has dimension={provider.dimension}, but "
             f"the configured embedding_dimension is {models.embedding_dimension}"
         )
+    _providers[(model_name, models.embedding_dimension)] = provider
     return provider

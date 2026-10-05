@@ -185,7 +185,10 @@ def render_pdf(content_md: str, *, title: str) -> RenderedArtifact:
     return RenderedArtifact(  # pragma: no cover -- see above
         format="pdf",
         media_type="application/pdf",
-        data=HTML(string=html).write_pdf(),
+        # presentational_hints: without it WeasyPrint ignores `<ol start>`, so a document
+        # with several numbered lists restarts each at 1 (the launch plan's sections 2-5
+        # all came out as "1.").
+        data=HTML(string=html).write_pdf(presentational_hints=True),
         filename="report.pdf",
     )
 

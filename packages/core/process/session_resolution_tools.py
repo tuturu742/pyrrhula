@@ -121,6 +121,13 @@ def make_resolution_handler(
             return ToolResult(
                 content=json.dumps({"error": "resolution_failed", "message": str(exc)[:200]})
             )
-        return ToolResult(content=invocation.envelope)
+        # The envelope is what the model reads; the record id comes from the structured
+        # result the transport returns, never from parsing prose.
+        structured = invocation.raw.structured or {}
+        record_id = structured.get("resolution_id")
+        return ToolResult(
+            content=invocation.envelope,
+            resolution_id=str(record_id) if record_id and not invocation.raw.is_error else None,
+        )
 
     return handler

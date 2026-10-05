@@ -1285,3 +1285,67 @@ async def test_the_budget_raise_still_fires_after_a_rename(
         "the raise must land on the renamed budget, not resurrect max_tokens"
     )
     assert "max_tokens" not in calls[2]
+
+
+def test_a_refusal_phrased_as_dont_support_is_matched() -> None:
+    """LiteLLM's pre-flight for OpenAI gpt-5.x says "gpt-5 models (including gpt-5-codex)
+    don't support temperature=0.4" -- "don't", not "does not". The Hägnaryd inspector's
+    0.4 paused her first turn on gpt-5.6-luna because nothing matched it."""
+    from adapters.models.litellm.provider import _refused_param_names
+
+    exc = Exception(
+        "litellm.UnsupportedParamsError: gpt-5 models (including gpt-5-codex) don't "
+        "support temperature=0.4. Only temperature=1 is supported."
+    )
+    assert _refused_param_names(exc) == ["temperature"]
+
+
+async def test_an_ollama_request_gets_an_output_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ollama shifts its context instead of stopping when the output fills it, so a model
+    in a repetition loop never returned. The ceiling is a platform default: a connection
+    that sets its own budget keeps it."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="fine", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    provider = LiteLLMModelProvider()
+
+    req = GenerationRequest(
+        model="ollama_chat/devstral:24b",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+    assert "".join([c.text async for c in provider.generate(req)]) == "fine"
+    assert calls[-1]["max_tokens"] == 4096
+
+    chosen = GenerationRequest(
+        model="ollama_chat/devstral:24b",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+        params={"max_tokens": 2000},
+    )
+    assert "".join([c.text async for c in provider.generate(chosen)]) == "fine"
+    assert calls[-1]["max_tokens"] == 2000
+
+    hosted = GenerationRequest(
+        model="openai/gpt-5.6-terra",
+        messages=[{"role": "user", "content": "hi"}],
+        purpose="generation",
+    )
+    assert "".join([c.text async for c in provider.generate(hosted)]) == "fine"
+    assert calls[-1].get("max_tokens") is None

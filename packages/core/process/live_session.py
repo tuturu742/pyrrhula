@@ -8,6 +8,7 @@ established "build the seam, wire it in once the real pieces exist" discipline.
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -87,7 +88,7 @@ from core.resolution.registry import RANDOMIZER_DEFINITION, ensure_tool_definiti
 from core.resolution.rule_system import RuleSystemDefinition, get_or_create_default_rule_system
 from core.resolution.service import ActorFieldsResolver, make_randomizer_handler
 from core.sessions.lifecycle import resolve_author_name
-from core.sessions.models import MessageRow, SessionPersonaRow, SessionRow
+from core.sessions.models import MessageRow, SessionEventRow, SessionPersonaRow, SessionRow
 from core.tenancy.models import Principal, Workspace
 from core.tenancy.scope import tenant_scope
 from core.usage_limits import UsageLimitExceededError
@@ -137,13 +138,34 @@ async def _load_conversation(
     viewer_principal_id: uuid.UUID | None = None,
     history_char_budget: int | None = None,
 ) -> list[dict[str, str]]:
-    """The transcript as chat messages. With a ``viewer_principal_id``, roles are
+    """The transcript as chat messages (see ``_load_conversation_with_boundary``)."""
+    messages, _first_seq = await _load_conversation_with_boundary(
+        tenant_id, session_id, viewer_principal_id, history_char_budget
+    )
+    return messages
+
+
+async def _load_conversation_with_boundary(
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    viewer_principal_id: uuid.UUID | None = None,
+    history_char_budget: int | None = None,
+) -> tuple[list[dict[str, str]], int]:
+    """The transcript as chat messages, and the event_seq of the first replayed message
+    when the tail trim dropped anything before it -- 0 when nothing was dropped, so the
+    caller knows there is nothing to summarise. With a ``viewer_principal_id``, roles are
     mapped from that actor's perspective: its own past turns keep their stored role,
     every other author's become ``user`` turns prefixed with the author's display
     name. Chat-completions backends assume a two-role dialogue (and some -- ollama's
     chat API among them -- reject a list with no ``user`` entry at all), so a
     multi-actor transcript replayed as all-``assistant`` both crashes those backends
-    and misattributes everyone's words to the current speaker."""
+    and misattributes everyone's words to the current speaker.
+
+    The viewer's own remote-tool results ride along, at the seq they were fetched. A
+    result used to exist only inside the turn that fetched it: the Hägnaryd inspector
+    spent her second lab request repeating the first and told the table the radio had
+    produced nothing, with the answer sitting in the transcript's tool_call event. Only
+    the viewer's own calls -- what another persona looked up is theirs to tell."""
     async with tenant_scope(tenant_id) as session:
         rows = (
             await session.execute(
@@ -157,23 +179,50 @@ async def _load_conversation(
                 .order_by(MessageRow.event_seq)
             )
         ).all()
-        out: list[dict[str, str]] = []
+        timeline: list[tuple[int, dict[str, str]]] = []
         for m, author_name in rows:
             if viewer_principal_id is None or m.author_principal_id == viewer_principal_id:
-                out.append({"role": m.role, "content": m.content_md})
+                timeline.append((m.event_seq, {"role": m.role, "content": m.content_md}))
             else:
                 content = f"{author_name}: {m.content_md}" if author_name else m.content_md
-                out.append({"role": "user", "content": content})
-        return _tail_trim(out, history_char_budget)
-
-
-def _replayed_from_seq(conversation: list[dict[str, str]], event_seq: int) -> int:
-    """The first event_seq still present verbatim in the replayed tail. Everything
-    BEFORE it is what a history summary must cover -- the tail is trimmed by character
-    budget (_tail_trim), so this is derived from how many messages survived, not from a
-    fixed window. 0 means nothing was dropped: no summary needed."""
-    dropped = max(0, event_seq - len(conversation))
-    return dropped
+                timeline.append((m.event_seq, {"role": "user", "content": content}))
+        if viewer_principal_id is not None:
+            viewer_name = await session.scalar(
+                select(Persona.name).where(Persona.principal_id == viewer_principal_id)
+            )
+            if viewer_name:
+                events = (
+                    await session.execute(
+                        select(SessionEventRow)
+                        .where(
+                            SessionEventRow.session_id == session_id,
+                            SessionEventRow.kind == "tool_call",
+                        )
+                        .order_by(SessionEventRow.event_seq)
+                    )
+                ).scalars()
+                for event in events:
+                    payload = event.payload
+                    result = payload.get("result")
+                    if payload.get("author") != viewer_name or not isinstance(result, str):
+                        continue
+                    if payload.get("outcome") != "completed" or not result.strip():
+                        continue
+                    note = (
+                        f"[Result of your {payload.get('tool_name')} request "
+                        f"{json.dumps(payload.get('arguments') or {})}: {result}]"
+                    )
+                    timeline.append((event.event_seq, {"role": "user", "content": note}))
+        timeline.sort(key=lambda item: item[0])
+        kept = _tail_trim_pairs(timeline, history_char_budget)
+        # The boundary comes from the seq that actually survived, not from counting
+        # messages against the event clock: a message takes more than one seq once a
+        # turn also records tool calls, and `event_seq - len(conversation)` then said
+        # something was dropped on nearly every turn. The history summariser ran 99
+        # times on one 50-minute session in which nothing had been trimmed, at ~55% of
+        # the session's own prompt tokens (Hägnaryd sweep, 2026-10-04).
+        first_seq = kept[0][0] if kept and len(kept) < len(timeline) else 0
+        return [message for _seq, message in kept], first_seq
 
 
 # The transcript budget when nothing more specific is configured. It is a property of
@@ -191,13 +240,21 @@ def _tail_trim(
     window on modest hardware, and the assembled manifest already carries the durable
     knowledge -- replaying the whole transcript verbatim is the part that grows without
     bound."""
+    return [m for _seq, m in _tail_trim_pairs(list(enumerate(conversation)), budget)]
+
+
+def _tail_trim_pairs(
+    timeline: list[tuple[int, dict[str, str]]], budget: int | None = None
+) -> list[tuple[int, dict[str, str]]]:
+    """``_tail_trim`` over ``(event_seq, message)`` pairs, so the caller still knows which
+    seqs survived."""
     budget = int(budget or _DEFAULT_HISTORY_CHAR_BUDGET)
-    kept: list[dict[str, str]] = []
+    kept: list[tuple[int, dict[str, str]]] = []
     used = 0
-    for message in reversed(conversation):
+    for seq, message in reversed(timeline):
         if kept and len(kept) >= 2 and used + len(message["content"]) > budget:
             break
-        kept.append(message)
+        kept.append((seq, message))
         used += len(message["content"])
     kept.reverse()
     return kept
@@ -305,7 +362,7 @@ async def run_one_persona_turn(
         history_budget_chars = int(str(raw_budget)) if raw_budget is not None else None
     except (TypeError, ValueError):
         history_budget_chars = None
-    conversation = await _load_conversation(
+    conversation, replayed_from = await _load_conversation_with_boundary(
         tenant_id, session_id, principal_id, history_budget_chars
     )
     query_text = conversation[-1]["content"] if conversation else ""
@@ -418,7 +475,8 @@ async def run_one_persona_turn(
     if history_budget > 0 and persona_agent is not None and permission_service is not None:
         from core.sessions.history import summarise_history
 
-        replayed_from = _replayed_from_seq(conversation, event_seq)
+        # replayed_from is the first replayed seq when the tail trim dropped anything,
+        # else 0: no summary call when nothing was lost.
         if replayed_from > 0:
             try:
                 summary = await summarise_history(
@@ -813,8 +871,6 @@ async def run_one_persona_turn(
     # three out of four once the same text arrived as the user turn instead.
     speak_to_the_floor = not any(turn.get("role") == "user" for turn in conversation)
     instruction_as_user = phase_prompt.strip() if speak_to_the_floor else ""
-    if phase_prompt.strip() and not instruction_as_user:
-        system_blocks.append(f"Instructions for this phase:\n\n{phase_prompt.strip()}")
     # #5: the supervisor is the one who moves the discussion/flow along the agenda.
     if persona_type == "supervisor" and agenda_md and agenda_md.strip():
         system_blocks.append(
@@ -838,6 +894,20 @@ async def run_one_persona_turn(
         {"role": "system", "content": block} for block in system_blocks
     ]
     messages.extend(dict(turn) for turn in conversation)
+    # With a transcript, the phase's instruction goes AFTER it, not among the opening
+    # system blocks. Placed ahead of the transcript it is the oldest thing in the
+    # request, and a model answers the newest line instead: replaying the newsroom's
+    # edition turn, devstral asked the desks for sources again three times in three with
+    # the instruction up front, and wrote the edition two times in two with it after the
+    # transcript. Providers that want system messages first get them hoisted by LiteLLM,
+    # so this costs them nothing.
+    if phase_prompt.strip() and not instruction_as_user:
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Instructions for this phase:\n\n{phase_prompt.strip()}",
+            }
+        )
     if needs_floor_turn(conversation):
         # Chat-completions backends (e.g. ollama's chat API, which litellm routes to
         # whenever tools are registered) reject a request with no user-role message.
@@ -972,6 +1042,10 @@ async def run_one_persona_turn(
                 "content": result.content_md,
                 "author": author_name,
                 "persona_id": str(persona_id),
+                # The phase the message was spoken in. The report pipeline reads it
+                # per message; without it the opening phase, before any transition
+                # event, rendered as "unknown" in a transcript.
+                "phase": phase_key,
                 "created_at": datetime.now(UTC).isoformat(),
                 "triggered_by": triggered_by,
             },

@@ -19,7 +19,7 @@
 # published release instead -- minutes rather than a first build:
 #
 #   ./install.sh compose --from-registry            # the release this checkout names
-#   ./install.sh compose --from-registry=0.1.0-rc2  # a specific one
+#   ./install.sh compose --from-registry=0.1.0-rc3  # a specific one
 #
 # Each target's installer is deploy/installers/<target>.sh; the full walkthrough,
 # what gets created, and troubleshooting live in docs/install.md.

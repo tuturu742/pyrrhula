@@ -7083,6 +7083,8 @@ export interface components {
         PullRequestOut: {
             /** Branch */
             branch: string;
+            /** Html Url */
+            html_url?: string | null;
             /**
              * Pr Ref
              * @default
@@ -8640,6 +8642,8 @@ export interface components {
             key: string;
             /** Label Key */
             label_key: string;
+            /** Title */
+            title: string;
             /** Audience Mode */
             audience_mode: string;
             /** Output Formats */

@@ -52,6 +52,8 @@ from core.entities.fsm import EntityStateChangeRow
 from core.entities.repo import get_schema, list_latest_schemas, save_schema
 from core.entities.schema import EntitySchemaDefinition
 from core.entities.storage import EntityRow, create_entity
+from core.knowledge.authoring import DERIVED_KEY_CLASSES
+from core.knowledge.keys import derive_keys
 from core.knowledge.models import KnowledgeEntry, KnowledgeSource, KnowledgeSourceVersion
 from core.portability.bundle import BundleIntegrityError, open_bundle, verify_bundle
 from core.portability.compat import compare_app_versions
@@ -708,6 +710,18 @@ async def _import_knowledge(
                 body = files[body_path].decode()
 
                 reason = quarantine_reason(scan_text(f"{entry_meta['title']}\n{body}"))
+                # Publishing derives activation keys from titles (core.knowledge.authoring),
+                # but an imported version is never published here, so a bundle written
+                # before keys were derived, or by hand, arrived with its rulebook unkeyed
+                # and retrieval guessing from prose: 482 sections, none of them answering
+                # to its own name (greyfen sweep, 2026-10-04). Derive the same keys on
+                # the way in, unless the author cleared them on purpose.
+                keys = [str(k) for k in entry_meta.get("keys", [])]
+                keys_derived = bool(entry_meta.get("keys_derived", False))
+                derivable = str(entry_meta["class"]) in DERIVED_KEY_CLASSES
+                if not keys and not keys_derived and derivable:
+                    keys = derive_keys(str(entry_meta["title"]))
+                    keys_derived = bool(keys)
                 async with tenant_scope(tenant_id) as session:
                     entry = KnowledgeEntry(
                         tenant_id=tenant_id,
@@ -718,7 +732,8 @@ async def _import_knowledge(
                         body_md=body,
                         class_=str(entry_meta["class"]),
                         scope_key=str(entry_meta["scope_key"]),
-                        keys=list(entry_meta.get("keys", [])),
+                        keys=keys,
+                        keys_derived=keys_derived,
                         secondary_keys=list(entry_meta.get("secondary_keys", [])),
                         logic=str(entry_meta.get("logic", "AND")),
                         use_regex=bool(entry_meta.get("use_regex", False)),

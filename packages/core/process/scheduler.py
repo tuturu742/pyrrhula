@@ -330,6 +330,20 @@ def make_scheduler(resolve_candidates: CandidateResolver) -> NextActorFn:
             row = await session.get(SessionRow, ctx.session_id)
             assert row is not None
             raw_cursor = row.actor_cursor
+            seq_now = row.next_event_seq
+
+        # The cursor is persisted before the turn it was advanced for runs. If nothing has
+        # been written to the session since (next_event_seq unchanged), that turn never
+        # landed -- the process died mid-generation, or the turn faulted -- and the actor
+        # must be offered again rather than skipped. Observed as a lost referee turn after
+        # a pod was replaced under a session (karsh-vale sweep, 2026-10-04).
+        previous_cursor = raw_cursor.get("previous")
+        if (
+            raw_cursor.get("phase_key") == ctx.phase_key
+            and raw_cursor.get("issued_at_seq") == seq_now
+            and isinstance(previous_cursor, dict)
+        ):
+            raw_cursor = {"phase_key": ctx.phase_key, **previous_cursor}
 
         if raw_cursor.get("phase_key") != ctx.phase_key:
             entry_index = 0
@@ -337,6 +351,7 @@ def make_scheduler(resolve_candidates: CandidateResolver) -> NextActorFn:
         else:
             entry_index = raw_cursor.get("entry_index", 0)  # type: ignore[assignment]
             entry_cursor = _EntryCursor.from_json(raw_cursor.get("entry"))  # type: ignore[arg-type]
+        previous = {"entry_index": entry_index, "entry": entry_cursor.to_json()}
 
         actors = ctx.phase.actors
         actor: ActorRef | None = None
@@ -357,6 +372,11 @@ def make_scheduler(resolve_candidates: CandidateResolver) -> NextActorFn:
                 "phase_key": ctx.phase_key,
                 "entry_index": entry_index,
                 "entry": entry_cursor.to_json(),
+                # Where this advance started from, and the session's event clock at the
+                # time: the pair that lets the next call tell "the turn happened" from
+                # "the turn was only issued".
+                "previous": previous,
+                "issued_at_seq": seq_now,
             }
 
         return actor

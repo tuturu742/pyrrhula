@@ -134,4 +134,13 @@ async def handle_advance_session(payload: dict[str, Any]) -> dict[str, Any]:
         steps=steps,
         status=status,
     )
+    if status == "terminal":
+        # A finished session has no reworks left to keep a warm container for. Until
+        # this, only archiving tore them down, and a host that ran a sample twice kept
+        # every delegation container of both runs (sweep 2026-10-04).
+        await get_job_queue().enqueue(
+            tenant_id,
+            "teardown_session_envs",
+            {"session_id": str(session_id), "tenant_id": str(tenant_id)},
+        )
     return {"session_id": str(session_id), "advanced": True, "steps": steps, "status": status}

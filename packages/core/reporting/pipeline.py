@@ -214,6 +214,26 @@ async def generate_report(
         narrative = await _summarise(
             tenant_id, template, visible_prose, agent, provider, metering, api_key
         )
+    elif visible_prose and template.verbatim == "final_phase":
+        # The document is the last phase's prose, as written and without speaker
+        # labels: a document whose first line is "# The Vantage" must not come out as
+        # "Marit Halvorsen: # The Vantage". Before this, nothing filled `narrative` for
+        # a template with no summary step, and the composed-document report was the
+        # facts header alone (two samples in the sweep of 2026-10-04).
+        verbatim = await collect_prose_by_phase(
+            tenant_id,
+            session_id,
+            from_event_seq=from_event_seq,
+            to_event_seq=to_event_seq,
+            with_author=False,
+        )
+        if verbatim:
+            narrative = "\n\n".join(verbatim[-1][1])
+    elif visible_prose and template.verbatim == "all":
+        # The transcript: every phase, every speaker, as said.
+        narrative = "\n\n".join(
+            f"### {phase_key}\n\n" + "\n\n".join(messages) for phase_key, messages in visible_prose
+        )
     if metering:
         await _meter(tenant_id, workspace_id, agent, metering)
 
@@ -395,10 +415,13 @@ def _render_markdown(
 ) -> str:
     """Facts first, narrative second, stub last. The order is the argument: a reader who
     stops after the first section has read the part that is true by construction."""
-    parts = [f"# {template.label_key}", "", "## Recorded facts"]
+    parts = [f"# {template.title}", "", "## Recorded facts"]
     parts.append(frame.rendered if frame.rendered else "_No recorded facts in this range._")
     if narrative:
-        parts.extend(["", "## Narrative", narrative])
+        heading = {"final_phase": "## Document", "all": "## Transcript"}.get(
+            template.verbatim, "## Narrative"
+        )
+        parts.extend(["", heading, narrative])
     if hidden_count:
         parts.extend(["", render_redaction_stub(hidden_count)])
     return "\n".join(parts)
