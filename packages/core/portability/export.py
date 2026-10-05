@@ -442,6 +442,9 @@ def _entry_meta(entry: Any) -> dict[str, Any]:
         "class": entry.class_,
         "scope_key": entry.scope_key,
         "keys": list(entry.keys or []),
+        # Whether the keys were derived from the title rather than written: lets an
+        # importer tell "the author cleared them" from "nobody ever derived them".
+        "keys_derived": bool(getattr(entry, "keys_derived", False)),
         "secondary_keys": list(entry.secondary_keys or []),
         "logic": entry.logic,
         "use_regex": entry.use_regex,
