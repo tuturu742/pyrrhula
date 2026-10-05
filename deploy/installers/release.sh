@@ -67,6 +67,12 @@ if [ ! -f .env ]; then
     echo "PYRRHULA_ADMIN_EMAIL=admin@example.com"
     echo "PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)"
     echo "PYRRHULA_SINGLE_TENANT_UI=true"
+    # Ports given to this run are part of the deployment, not of this one shell: a
+    # later `compose up` from the directory must publish the same ones, and the URL
+    # printed below must name them. Without this a release stood beside another on
+    # 5373 came up there and announced itself on 5173 (sweep, 2026-10-05).
+    [ -n "${PYRRHULA_WEB_PORT:-}" ] && echo "PYRRHULA_WEB_PORT=$PYRRHULA_WEB_PORT"
+    [ -n "${PYRRHULA_API_PORT:-}" ] && echo "PYRRHULA_API_PORT=$PYRRHULA_API_PORT"
   } > .env
   # Delegated coding agents build and test in sibling containers, which needs the host
   # engine's socket. Absent is not fatal -- it disables that one feature.
