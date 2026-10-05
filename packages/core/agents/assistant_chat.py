@@ -44,6 +44,7 @@ from core.agents.authoring import (
 from core.agents.models import Agent
 from core.agents.tools import ToolContext, ToolRegistry, ToolResult
 from core.audit.models import UsageRecordRow
+from core.docs.tools import docs_prompt_line, register_docs_tools
 from core.knowledge.authoring import list_draft_entries, list_sources
 from core.ports.embedding import EmbeddingProvider
 from core.ports.encryptor import Encryptor
@@ -647,8 +648,9 @@ async def _chat_inner(
     registry = ToolRegistry()
     _register_read_tools(registry, tenant_id, workspace_id)
     _register_write_tools(registry, state)
+    register_docs_tools(registry)
 
-    system = f"{persona.persona_md}\n\n{_CHAT_SYSTEM}"
+    system = f"{persona.persona_md}\n\n{_CHAT_SYSTEM}\n\n{docs_prompt_line()}"
     if context:
         system += f"\n\nWorkspace knowledge (viewer-scoped):\n{context}"
     conversation: list[dict[str, object]] = [

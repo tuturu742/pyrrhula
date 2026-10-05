@@ -60,6 +60,11 @@ COPY deploy/plugins.json ./deploy/plugins.json
 # without an exec to pipe into cannot receive it, and an operator wanting to re-run it
 # later should not need the source tree.
 COPY deploy/installers/smoke.py ./deploy-smoke.py
+# The product documentation, for the assistants' search_docs/read_doc (core/docs).
+# Only the Markdown: the screenshots under docs/images are for GitHub, not the model.
+COPY docs/*.md ./docs/
+COPY docs/builders/webhook.md ./docs/builders/webhook.md
+COPY README.md FAQ.md ./docs/
 COPY docker/entrypoint.sh /entrypoint.sh
 
 ENV PATH="/app/.venv/bin:${PATH}" \

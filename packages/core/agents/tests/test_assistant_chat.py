@@ -283,3 +283,34 @@ async def test_tool_results_are_paired_with_the_assistant_turn_that_asked(
         assert call["type"] == "function"
         assert call["function"]["name"] == "list_personas"
         json.loads(call["function"]["arguments"])  # arguments travel as a JSON string
+
+
+async def test_docs_tools_are_offered_and_answer(db_available: None) -> None:
+    """The manual is inside the assistant: search_docs is offered on every turn, the
+    system prompt names the pages, and a search lands on the right page without a model."""
+    tenant_id, workspace_id, viewer = await _setup("chat-docs")
+    provider = _ScriptedChatProvider(
+        turns=[
+            ("", (ToolCall(id="c1", name="search_docs", arguments={"query": "secret_mode"}),)),
+            ("secret_mode is a workspace setting.", ()),
+        ]
+    )
+
+    events = await _collect(
+        chat(
+            tenant_id,
+            workspace_id,
+            viewer,
+            [{"role": "user", "content": "what does secret_mode do?"}],
+            embedder=StubEmbeddingProvider(dimension=1024),
+            provider_factory=lambda _p: provider,
+            encryptor=IdentityEncryptor(),
+        )
+    )
+
+    assert {"type": "tool", "name": "search_docs"} in events
+    assert events[-1]["type"] == "done"
+    assert "search_docs" in provider.seen_tools[0] and "read_doc" in provider.seen_tools[0]
+    assert "Product documentation pages" in provider.seen_messages[0][0]["content"]
+    tool_reply = provider.seen_messages[1][-1]["content"]
+    assert '"page": "configuration"' in tool_reply
