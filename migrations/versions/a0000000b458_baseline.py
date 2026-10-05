@@ -6,6 +6,12 @@ starts from zero and should not replay months of back-and-forth to reach the pre
 Nothing of those migrations is lost: their reasoning lives in git history and in the
 model docstrings.
 
+Squashed again on 2026-10-05, before 0.1.0-rc3: the six incrementals written since the
+previous squash (persona memberships, the derived-keys marker, persona harnesses, image
+registries, the image lifecycle, image builders) are folded in the same way, and the
+revision id is unchanged -- a deployment that applied them is stamped to this id, which
+describes the schema it already has.
+
 The schema itself is ``baseline.sql`` beside this file: a ``pg_dump`` (``--no-owner
 --inserts --exclude-table=alembic_version``) of a database built by the full original
 chain, not a hand-reassembly. That distinction is the whole safety argument -- the
