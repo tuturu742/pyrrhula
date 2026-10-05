@@ -1,8 +1,8 @@
 # CLAUDE.md — ground rules for coding agents
 
-Pyrrhula is a multi-tenant, multi-agent orchestration platform (tabletop-RPG-first,
-enterprise-second, software-development-third) built around one claim: **who-knows-what
-is enforced by the system, not requested of the model.**
+Pyrrhula is a multi-tenant, multi-agent orchestration platform — software development,
+facilitated team workflows and tabletop RPG on one domain-neutral core — built around one
+claim: **who-knows-what is enforced by the system, not requested of the model.**
 
 ## Source-of-truth order
 

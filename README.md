@@ -3,34 +3,48 @@
 [![CI](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml/badge.svg)](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**A multi-tenant platform where teams of AI agents and people talk, decide and build,
-with asymmetric knowledge enforced by the system.**
+**A multi-tenant platform for orchestrating teams of AI agents and people — where who
+knows what is enforced by the system, not requested of the model.**
 
-Pyrrhula runs structured sessions between AI agents and humans: a game table, a planning
-meeting, an engineering bench that delegates work to coding agents and reviews the pull
-requests they open. Knowledge, process rules and participant state are versioned,
-structured data rather than prompt text, and every session is driven by an explicit,
-user-configurable phase/turn engine rather than free-form chat.
+Pyrrhula runs structured sessions between AI agents and humans: an engineering bench that
+plans work, hands it to coding agents in containers and reviews the pull requests they
+open; a planning meeting where some participants hold facts the others must not see; a
+game table whose referee knows things the players don't. Knowledge, process rules and
+participant state are versioned, structured data rather than prompt text, and every
+session is driven by an explicit, user-configurable phase/turn engine.
 
-The first target use case is **AI-managed tabletop RPG campaigns**. The core engine is
-domain-neutral, so two further use cases run on the same engine with different vocabulary
-overlays and content packs: **structured enterprise multi-agent workflows** (multi-perspective
-strategy discussions and planning simulations, sequential review/approval loops) and
-**multi-agent software development**, where a facilitator agent acts as an
-engineering manager proposing tasks and participant agents act as engineers on a shared
-repository, with implementation delegated to external coding agents over MCP. The stated end
-state of the third use case is dogfooding: Pyrrhula's own backlog worked by a team of agents
+One domain-neutral core runs three kinds of work through vocabulary overlays and content
+packs:
+
+- **Multi-agent software development.** A facilitator agent turns an agenda into work
+  items and delegates them; developer agents work through a coding harness in an
+  isolated container (a sibling container, a Kubernetes job, or a Docker host managed in
+  Portainer), run the tests, open a pull request on your repository; the facilitator
+  reviews the diff and sends it back or approves it under a second identity; a green
+  branch's build can be served as a preview. Toolchain images are built on builders the
+  operator declares, verified by digest and smoke-tested before anything runs in them.
+  Every model call is metered; no provider key ever enters a container.
+- **Facilitated team workflows.** Multi-perspective discussions, planning simulations
+  and review/approval loops where confidential facts are held by named participants and
+  structurally kept out of everyone else's context.
+- **AI-managed tabletop RPG campaigns.** The first use case, and still the sharpest
+  test of asymmetric knowledge: a referee with private briefs, players whose characters
+  retrieve only what they would know, dice that are rolled in code and rendered from the
+  record.
+
+The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **approaching 0.1.0-rc.** The full stack described below is implemented and
-> running: tenancy/RLS, knowledge & retrieval, the process engine, the context assembler,
+> Status: **0.1.0-rc3.** The full stack described below is implemented and running:
+> tenancy/RLS, knowledge & retrieval, the process engine, the context assembler,
 > deterministic resolution, the secrets layer (disclosure gate, structural exclusion,
-> post-generation leak check, per-workspace trust modes), the overseer's Director's View,
-> behavioral axes with engine-enforced high-stakes dials, portable `.pyr` workspace
-> bundles, and two verified install paths (compose, k8s). Seven runnable
-> sample workspaces live in
-> [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples) — start with the
-> murder mystery.
+> post-generation leak check, per-workspace trust modes), the overseer's view, behavioral
+> axes with engine-enforced high-stakes dials, delegated coding work with image builds,
+> portable `.pyr` workspace bundles, and three verified install paths (compose, k8s,
+> Portainer). Seven runnable sample workspaces live in
+> [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples), each run end to end
+> on a fresh install before this release — start with the murder mystery, or with Mice
+> Invaders if you want to watch a pull request get built.
 
 ## Install
 
@@ -52,27 +66,33 @@ out of the box; specialized workflows (RPG, software development) come from plug
 repositories, with the official one preinstalled. Full walkthrough, upgrade paths, and troubleshooting:
 [docs/install.md](docs/install.md).
 
-## Why another AI chat tool?
+## What the system enforces
 
-Tools like SillyTavern proved the demand but share structural limits: knowledge is prompt
-blobs, turn order is ad hoc, secrets survive only as long as the model feels like keeping
-them, and everything is single-user. Orchestration frameworks (LangGraph, AutoGen, CrewAI)
-have real graph execution but no visibility model at all — every agent is trusted and every
-developer is the only tenant. Nobody has built the intersection. Pyrrhula's defensible claim:
+Orchestration frameworks give you graph execution and trust every agent with everything;
+a single developer is the only tenant. Pyrrhula's claim is the intersection nobody built:
+multi-agent orchestration with a visibility model, for many organizations on one
+deployment.
 
-- **The GM can know things you don't — enforceably.** Visibility is scoped per role and per
-  phase, at retrieval time, in the database.
-- **An NPC can hold a secret it *structurally cannot* blurt out.** A concealed secret's text
-  is never in the model's context — exclusion, not an instruction to keep quiet. The holder
-  acts on an author-written behavioral directive instead (and, when the gate allows, a
-  bounded hint). Nobody else's context ever contains it; only a workspace that chooses
-  *trust* mode hands a holder its own plaintext, and that choice is recorded on every turn.
-- **Dice never lie.** Rolls are seeded, code-executed, validated against the actual character
-  sheet, hash-chained, and rendered in the UI from the database record — never from model
-  prose.
-- **Every ruling is explainable.** Each turn records a context manifest: what was retrieved,
-  from which rulebook version, at what rank, and why. "Why did the Arbiter rule that way?" is
-  answerable six months later.
+- **A participant can know things the others don't — enforceably.** Visibility is scoped
+  per role and per phase, at retrieval time, in the database. A player character
+  retrieves only the lore its character learned; an engineer sees the repository, not the
+  facilitator's briefing.
+- **A participant can hold a secret it *structurally cannot* blurt out.** A concealed
+  secret's text is never in the model's context — exclusion, not an instruction to keep
+  quiet. The holder acts on an author-written behavioral directive instead (and, when the
+  gate allows, a bounded hint). Nobody else's context ever contains it; only a workspace
+  that chooses *trust* mode hands a holder its own plaintext, and that choice is recorded
+  on every turn.
+- **Delegated work is real work, under control.** A coding agent runs in a container the
+  operator's engine provides, on an image checked before use, with a short-lived token
+  scoped to one model connection; its pull request, its test run and its review are
+  records, and the facilitator cannot approve its own pull request.
+- **Deterministic results never come from prose.** Rolls, checks and calculations are
+  seeded, code-executed, validated against the actual record, hash-chained, and rendered
+  in the UI from the database — never from what the model said happened.
+- **Every turn is explainable.** Each turn records a context manifest: what was retrieved,
+  from which source version, at what rank, and why. "Why did the facilitator decide
+  that?" is answerable six months later.
 
 ## Core concepts
 
