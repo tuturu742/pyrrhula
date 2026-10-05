@@ -123,7 +123,13 @@ def _regex_matches(pattern_text: str, text: str) -> bool:
 def _key_matches(key: str, text: str, *, use_regex: bool) -> bool:
     if use_regex:
         return _regex_matches(key, text)
-    return key.lower() in text.lower()
+    # A plain key matches a whole word, not any text that contains it: a key derived from
+    # a section title must not wake on "hearth" (earth), "firelight" (fire) or the
+    # adjective "cold" (the cold elemental), which it did in nearly every fight turn of
+    # one run. Plurals and possessives still match ("ghouls", "skeleton's"); regex keys
+    # are untouched.
+    pattern = r"(?<!\w)" + re.escape(key.lower()) + r"(?:s|es|'s|’s)?(?!\w)"
+    return re.search(pattern, text.lower()) is not None
 
 
 def _any_key_matches(keys: list[str], text: str, *, use_regex: bool) -> bool:

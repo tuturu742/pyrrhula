@@ -197,6 +197,11 @@ class ImportResponse(BaseModel):
     imported: list[str] = []
     skipped: list[str] = []
     warnings: list[str] = []
+    # The embedding sweep the import enqueued, or None when the bundle carried no
+    # knowledge. Until that job is done the imported text answers lexical and keyed
+    # retrieval only, and nothing said so: a 482-section rulebook took eight minutes to
+    # index with no signal anywhere. Poll ``GET /knowledge/jobs/{embed_job_id}``.
+    embed_job_id: uuid.UUID | None = None
 
 
 class QuarantinedEntryResponse(BaseModel):
@@ -338,11 +343,12 @@ async def import_bundle_endpoint(
     except UnsupportedFormatError as exc:
         raise HTTPException(status_code=415, detail=str(exc)) from exc
 
+    embed_job_id = None
     if report.knowledge_sources:
         # A bundle carries chunk text, never vectors -- embeddings are per deployment.
         # Without this sweep an imported workspace answered lexical search only, and
         # nothing said so: the same silent absence that unchunked publishing had.
-        await get_job_queue().enqueue(
+        embed_job_id = await get_job_queue().enqueue(
             ctx.tenant_id, "reembed_stale", {"tenant_id": str(ctx.tenant_id)}
         )
 
@@ -356,6 +362,7 @@ async def import_bundle_endpoint(
         imported=report.imported,
         skipped=report.skipped,
         warnings=report.warnings,
+        embed_job_id=embed_job_id,
     )
 
 
