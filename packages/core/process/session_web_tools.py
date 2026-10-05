@@ -100,8 +100,12 @@ def make_web_fetch_handler(*, workspace_id: uuid.UUID, transport: McpTransport) 
         except (McpTransportError, ToolNotAvailableError) as exc:
             # The model is told, and so is the log: a fetch refused by registration
             # used to be visible only as the desks saying pages were unavailable.
+            # The type too: a transport timeout's own message is empty, and an empty
+            # `error=` field said nothing.
             structlog.get_logger().warning(
-                "web_fetch.failed", session_id=str(ctx.session_id), error=str(exc)[:200]
+                "web_fetch.failed",
+                session_id=str(ctx.session_id),
+                error=f"{type(exc).__name__}: {str(exc)[:200]}",
             )
             return ToolResult(
                 content=json.dumps({"error": "fetch_failed", "message": str(exc)[:200]})

@@ -98,12 +98,18 @@ class SearxngSearchTransport:
                     "title": str(item.get("title") or "")[:200],
                     "url": str(item.get("url") or "")[:300],
                     "snippet": str(item.get("content") or "")[:400],
+                    # SearXNG's `publishedDate` (ISO 8601, engine-dependent): the news
+                    # engines set it on most results, and it is the only date a desk can
+                    # print without fetching the page.
+                    "published": str(item.get("publishedDate") or "")[:10],
                 }
             )
         if not results:
             return McpToolResult(content=f'no results for "{query}"', structured={"results": []})
         lines = [
-            f"{i + 1}. {r['title']}\n   {r['url']}\n   {r['snippet']}"
+            f"{i + 1}. {r['title']}"
+            + (f" ({r['published']})" if r["published"] else "")
+            + f"\n   {r['url']}\n   {r['snippet']}"
             for i, r in enumerate(results)
         ]
         return McpToolResult(
