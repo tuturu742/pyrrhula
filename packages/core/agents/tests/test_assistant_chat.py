@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from adapters.embedding.stub.provider import StubEmbeddingProvider
 from adapters.encryptor.identity import IdentityEncryptor
+from adapters.permission.role_permission import RolePermissionService
 from core.agents.assistant import ensure_workspace_assistant
 from core.agents.assistant_chat import chat
 from core.ports.model_provider import (
@@ -74,6 +75,9 @@ async def _setup(prefix: str):  # noqa: ANN202
         viewer = await session.get(Principal, owner_id)
         assert viewer is not None
         session.expunge(viewer)
+    # Signup makes the owner a steward of the first workspace (routes/auth.py); the dev
+    # seed does not, and the read tools now answer under the viewer's workspace role.
+    await _make_steward(tenant_id, workspace_id, owner_id)
     return tenant_id, workspace_id, viewer
 
 
@@ -94,6 +98,7 @@ async def test_plain_answer_streams_text_and_done(db_available: None) -> None:
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: provider,
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
 
@@ -126,6 +131,7 @@ async def test_read_tool_executes_inline(db_available: None) -> None:
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: provider,
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
 
@@ -165,6 +171,7 @@ async def test_write_tool_proposes_and_does_not_execute(db_available: None) -> N
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: provider,
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
 
@@ -195,6 +202,7 @@ async def test_provider_failure_becomes_error_event(db_available: None) -> None:
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: _Boom(turns=[]),
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
 
@@ -227,6 +235,7 @@ async def test_chat_refuses_when_no_model_is_configured(db_available: None) -> N
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: _ScriptedChatProvider(turns=[("unused", ())]),
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
     assert events[-1]["type"] == "error"
@@ -258,6 +267,7 @@ async def test_tool_results_are_paired_with_the_assistant_turn_that_asked(
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: provider,
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
 
@@ -305,6 +315,7 @@ async def test_docs_tools_are_offered_and_answer(db_available: None) -> None:
             embedder=StubEmbeddingProvider(dimension=1024),
             provider_factory=lambda _p: provider,
             encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
         )
     )
 
@@ -314,3 +325,180 @@ async def test_docs_tools_are_offered_and_answer(db_available: None) -> None:
     assert "Product documentation pages" in provider.seen_messages[0][0]["content"]
     tool_reply = provider.seen_messages[1][-1]["content"]
     assert '"page": "configuration"' in tool_reply
+
+
+async def _chat_events(tenant_id, workspace_id, viewer, provider, question: str) -> list[dict]:  # noqa: ANN001
+    return await _collect(
+        chat(
+            tenant_id,
+            workspace_id,
+            viewer,
+            [{"role": "user", "content": question}],
+            embedder=StubEmbeddingProvider(dimension=1024),
+            provider_factory=lambda _p: provider,
+            encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
+        )
+    )
+
+
+async def _outsider(tenant_id):  # noqa: ANN001, ANN202
+    """A tenant editor with no workspace membership: may use the tenant, sees no workspace."""
+    from core.tenancy.models import Principal
+    from core.tenancy.provisioning import create_tenant_user
+    from core.tenancy.scope import tenant_scope
+
+    pid = await create_tenant_user(tenant_id, "Outsider", "editor")
+    async with tenant_scope(tenant_id) as session:
+        principal = await session.get(Principal, pid)
+        assert principal is not None
+        session.expunge(principal)
+    return principal
+
+
+async def _make_steward(tenant_id, workspace_id, principal_id) -> None:  # noqa: ANN001
+    """The seeded owner's workspace role does not author secrets; a steward's does."""
+    from sqlalchemy import select
+
+    from core.tenancy.models import WorkspaceMembership
+    from core.tenancy.scope import tenant_scope
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.scalar(
+            select(WorkspaceMembership).where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.principal_id == principal_id,
+            )
+        )
+        if row is None:
+            session.add(
+                WorkspaceMembership(
+                    tenant_id=tenant_id,
+                    workspace_id=workspace_id,
+                    principal_id=principal_id,
+                    role="steward",
+                )
+            )
+        else:
+            row.role = "steward"
+
+
+async def test_list_secrets_shows_gists_never_content(db_available: None) -> None:
+    """INV-8 at the assistant: an author asking for the secrets gets the gists; the
+    plaintext the author could read in the UI still never enters the model's context."""
+    from adapters.moderation.allow_all import AllowAllModerationProvider
+    from core.secrets.authoring import create_secret
+
+    tenant_id, workspace_id, viewer = await _setup("chat-secrets")
+    await create_secret(
+        tenant_id,
+        workspace_id,
+        viewer.id,
+        subject_kind="entity",
+        subject_id=uuid.uuid4(),
+        content="the butler did it",
+        gist="knows who did it",
+        scope_key="workspace_public",
+        encryptor=IdentityEncryptor(),
+        permission_service=RolePermissionService(),
+        moderation_provider=AllowAllModerationProvider(),
+    )
+    provider = _ScriptedChatProvider(
+        turns=[("", (ToolCall(id="c1", name="list_secrets", arguments={}),)), ("One secret.", ())]
+    )
+    events = await _chat_events(tenant_id, workspace_id, viewer, provider, "what secrets exist?")
+    assert events[-1]["type"] == "done"
+    tool_reply = provider.seen_messages[1][-1]["content"]
+    assert "knows who did it" in tool_reply
+    assert "butler" not in tool_reply
+    assert "content" not in json.loads(tool_reply)[0]
+
+
+async def test_gated_reads_refuse_a_non_member(db_available: None) -> None:
+    """The read tools answer under the asking user's own permissions: someone who is in
+    the organization but not in the workspace gets a refusal, not the workspace."""
+    tenant_id, workspace_id, _owner = await _setup("chat-outsider")
+    outsider = await _outsider(tenant_id)
+    for tool, args in (
+        ("list_secrets", {}),
+        ("get_workspace", {}),
+        ("list_entities", {}),
+        ("list_personas", {}),
+        ("list_process_definitions", {}),
+        ("get_session", {"session_id": str(uuid.uuid4())}),
+    ):
+        provider = _ScriptedChatProvider(
+            turns=[("", (ToolCall(id="c1", name=tool, arguments=args),)), ("Sorry.", ())]
+        )
+        events = await _chat_events(tenant_id, workspace_id, outsider, provider, "show me")
+        assert events[-1]["type"] == "done", tool
+        assert "proposal" not in {e["type"] for e in events}
+        reply = json.loads(provider.seen_messages[1][-1]["content"])
+        assert reply == {"error": "not permitted: view_workspace"}, tool
+
+
+async def test_get_workspace_lists_members_with_principal_ids(db_available: None) -> None:
+    tenant_id, workspace_id, viewer = await _setup("chat-workspace")
+    provider = _ScriptedChatProvider(
+        turns=[("", (ToolCall(id="c1", name="get_workspace", arguments={}),)), ("Here.", ())]
+    )
+    await _chat_events(tenant_id, workspace_id, viewer, provider, "who is here?")
+    reply = json.loads(provider.seen_messages[1][-1]["content"])
+    assert "id" in reply, reply
+    assert reply["id"] == str(workspace_id)
+    assert any(m["principal_id"] == str(viewer.id) for m in reply["members"])
+    assert "settings" in reply and "clock_value" in reply
+
+
+async def test_secret_and_schema_tools_propose_without_writing(db_available: None) -> None:
+    """Two write tools in one turn -> two proposals, nothing written; a field the tool
+    never declared (a token the model invented) is dropped before the proposal is made,
+    and the secret's plaintext is hidden in the summary the model reads back."""
+    from core.entities.repo import list_latest_schemas
+    from core.secrets.authoring import list_secret_views_for_workspace
+
+    tenant_id, workspace_id, viewer = await _setup("chat-writes")
+    provider = _ScriptedChatProvider(
+        turns=[
+            (
+                "",
+                (
+                    ToolCall(
+                        id="c1",
+                        name="create_secret",
+                        arguments={
+                            "subject_kind": "entity",
+                            "subject_id": str(uuid.uuid4()),
+                            "content": "the butler did it",
+                            "gist": "knows who did it",
+                            "scope_key": "workspace_public",
+                            "access_token": "ghp_should_not_travel",
+                        },
+                    ),
+                    ToolCall(
+                        id="c2",
+                        name="create_entity_schema",
+                        arguments={"key": "clue", "definition": {"fields": []}},
+                    ),
+                ),
+            ),
+            ("Proposed both.", ()),
+        ]
+    )
+    events = await _chat_events(tenant_id, workspace_id, viewer, provider, "do it")
+    proposals = [e for e in events if e["type"] == "proposal"]
+    assert [p["action"] for p in proposals] == ["create_secret", "create_entity_schema"]
+    assert "access_token" not in proposals[0]["args"]
+    assert "butler" not in proposals[0]["summary"] and "(hidden)" in proposals[0]["summary"]
+    assert proposals[0]["args"]["content"] == "the butler did it"  # travels to Apply only
+    assert (
+        await list_secret_views_for_workspace(
+            tenant_id,
+            workspace_id,
+            viewer.id,
+            encryptor=IdentityEncryptor(),
+            permission_service=RolePermissionService(),
+        )
+        == []
+    )
+    assert not [r for r in await list_latest_schemas(tenant_id, workspace_id) if r.key == "clue"]

@@ -124,6 +124,9 @@ phone app.
 
 ## The admin assistant
 
+> The workspace assistant -- what it knows, what it can propose, what it never does -- is
+> [assistant.md](assistant.md); this is its smaller sibling for the deployment.
+
 The admin console has an **Assistant** page. Point it at a model under **Models**
 (provider, model, API key — a connection on the reserved admin organization, so no
 tenant's budget pays for console questions), then ask about the deployment: whether the retrieval models are downloaded,

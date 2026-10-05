@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.authz import require_permission
 from api.dependencies import get_db_session
 from api.job_queue_factory import get_job_queue
 from api.middleware.auth import get_request_context
@@ -150,6 +151,9 @@ class WorkspaceSettingsBody(BaseModel):
     # to inheriting its tenant's value rather than storing an empty one.
     max_review_rounds: int | None = None
     moderation_model: str | None = None
+    # The assistant's retrieval budget per question; null clears the override so the
+    # tenant default (or the shipped 6000) applies again. Inheritable like the two above.
+    assistant_context_max_tokens: int | None = None
 
 
 @router.get("/{workspace_id}/settings")
@@ -163,7 +167,9 @@ async def get_workspace_settings(
         row = await session.get(Workspace, workspace_id)
         if row is None or row.tenant_id != ctx.tenant_id:
             raise HTTPException(status_code=404, detail="no such workspace")
-        return {"settings": dict(row.settings)}
+        settings = dict(row.settings)
+    await require_permission(ctx, "view_workspace", "workspace", workspace_id)
+    return {"settings": settings}
 
 
 @router.patch("/{workspace_id}/settings")
@@ -209,7 +215,11 @@ async def patch_workspace_settings(
             settings["allow_automerge"] = body.allow_automerge
         # Inheritable keys: present-and-null means "stop overriding", which is removing
         # the key rather than storing a falsy value the resolver would treat as a choice.
-        for field_name in ("max_review_rounds", "moderation_model"):
+        for field_name in (
+            "max_review_rounds",
+            "moderation_model",
+            "assistant_context_max_tokens",
+        ):
             if field_name not in body.model_fields_set:
                 continue
             value = getattr(body, field_name)
@@ -380,6 +390,7 @@ async def list_workspace_members(
     from core.tenancy.models import Identity, Principal, WorkspaceMembership
     from core.tenancy.scope import tenant_scope
 
+    await require_permission(ctx, "view_workspace", "workspace", workspace_id)
     async with tenant_scope(ctx.tenant_id) as session:
         rows = (
             await session.execute(

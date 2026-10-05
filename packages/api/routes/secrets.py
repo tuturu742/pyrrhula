@@ -13,6 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.authz import require_permission
 from api.encryptor_factory import get_encryptor
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
@@ -147,6 +148,7 @@ async def list_secrets_endpoint(
     encryptor: Encryptor = Depends(get_encryptor),
     permission_service: PermissionService = Depends(get_permission_service),
 ) -> list[SecretResponse]:
+    await require_permission(ctx, "view_workspace", "workspace", workspace_id)
     views = await list_secret_views_for_workspace(
         ctx.tenant_id,
         workspace_id,
@@ -289,8 +291,24 @@ async def add_holder_endpoint(
 
 @router.get("/{secret_id}/holders")
 async def list_holders_endpoint(
-    secret_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
+    secret_id: uuid.UUID,
+    ctx: RequestContext = Depends(get_request_context),
+    encryptor: Encryptor = Depends(get_encryptor),
+    permission_service: PermissionService = Depends(get_permission_service),
 ) -> list[HolderResponse]:
+    # The holder set is workspace-visible, like the secret's gist: anyone who may view
+    # the workspace may see who holds its secrets, nobody outside it may.
+    try:
+        view = await get_secret_view(
+            ctx.tenant_id,
+            secret_id,
+            ctx.principal_id,
+            encryptor=encryptor,
+            permission_service=permission_service,
+        )
+    except SecretNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await require_permission(ctx, "view_workspace", "workspace", view.workspace_id)
     rows = await list_holders(ctx.tenant_id, secret_id)
     # Holders are principals; show them as the personas (or humans) they are, not ids.
     from sqlalchemy import select

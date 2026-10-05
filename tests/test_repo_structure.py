@@ -47,7 +47,7 @@ def test_only_one_application_dockerfile() -> None:
     dockerfiles = [
         p
         for p in ROOT.glob("**/*Dockerfile*")
-        if ".git" not in p.parts and "deploy" not in p.parts and "node_modules" not in p.parts
+        if not {".git", ".claude", "deploy", "node_modules"} & set(p.parts)
     ]
     # ONE deployment's images, not application variants: the app itself and the static
     # web bundle. SearXNG is not ours to build -- the upstream image runs with our

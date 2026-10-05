@@ -16,6 +16,7 @@ from api import blob_store_factory
 from api.job_queue_factory import get_job_queue
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_tenant_role
 from core.tenancy.seed import seed_dev_tenant
 from worker import blob_store_factory as worker_blob_store_factory
 from worker.ingestion import handle_knowledge_ingest
@@ -64,8 +65,9 @@ async def test_upload_enqueues_job_and_worker_processes_it(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"kn-ingest-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "editor")
     headers = {"Authorization": f"Bearer {token}"}
 
     create_resp = client.post(

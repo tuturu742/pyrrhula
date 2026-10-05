@@ -320,3 +320,38 @@ async def test_ai_assist_usage_record_written_in_transaction_with_purpose_rewrit
             )
         ).scalar_one()
     assert row.agent_id == profile.id
+
+
+async def test_listing_secrets_and_holders_takes_a_seat_in_the_workspace(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """The list and the holder set carry gists and names, workspace-visible things, so
+    they take ``view_workspace``: a tenant member with no seat in the workspace gets a
+    refusal, not an empty list."""
+    slug = f"secflow-authz-{uuid.uuid4().hex[:8]}"
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    author_token, author_id = _register_and_login(client, slug)
+    await _grant_role(tenant_id, workspace_id, author_id, "facilitator")
+    author_headers = {"Authorization": f"Bearer {author_token}"}
+    create_resp = client.post(
+        "/secrets",
+        json={
+            "workspace_id": str(workspace_id),
+            "subject_kind": "entity",
+            "subject_id": str(uuid.uuid4()),
+            "content": "the ferryman takes no coin from the drowned",
+            "gist": "the ferryman has a rule",
+            "scope_key": "workspace_public",
+        },
+        headers=author_headers,
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    secret_id = create_resp.json()["id"]
+
+    outsider_token, _outsider_id = _register_and_login(client, slug)
+    outsider = {"Authorization": f"Bearer {outsider_token}"}
+    listed = client.get("/secrets", params={"workspace_id": str(workspace_id)}, headers=outsider)
+    assert listed.status_code == 403, listed.text
+    holders = client.get(f"/secrets/{secret_id}/holders", headers=outsider)
+    assert holders.status_code == 403, holders.text
+    assert client.get(f"/secrets/{secret_id}/holders", headers=author_headers).status_code == 200

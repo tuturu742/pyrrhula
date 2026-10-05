@@ -25,6 +25,14 @@ interface ChatItem {
  * NDJSON. Edit proposals arrive as cards — Apply runs the ordinary API call from THIS
  * browser session, so the assistant can do exactly what the user could, nothing more.
  */
+/** Secret plaintext a proposal carries is for the Apply call, not for the screen. */
+const HIDDEN_ARGS = new Set(["content", "hint_text", "behavioral_directive"]);
+function maskSecretArgs(args: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(args).map(([k, v]) => [k, HIDDEN_ARGS.has(k) && v ? "(hidden)" : v]),
+  );
+}
+
 export function AssistantWidget() {
   const routeWorkspace = useMatch("/workspaces/:workspaceId/*")?.params.workspaceId;
   const soleWorkspace = useSoleWorkspaceId();
@@ -230,7 +238,7 @@ export function AssistantWidget() {
                           Proposed: {p.action.replaceAll("_", " ")}
                         </div>
                         <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
-                          {JSON.stringify(p.args, null, 1)}
+                          {JSON.stringify(maskSecretArgs(p.args), null, 1)}
                         </pre>
                         {p.status === "pending" ? (
                           <div className="mt-1.5 flex gap-2">

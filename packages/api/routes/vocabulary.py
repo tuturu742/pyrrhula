@@ -11,6 +11,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.authz import require_permission, require_tenant_permission
 from api.middleware.auth import get_request_context
 from api.middleware.rate_limit import rate_limit_by_principal, rate_limit_by_tenant
 from core.tenancy.context import RequestContext
@@ -87,6 +88,7 @@ async def set_workspace_vocabulary_overlay(
     body: SetWorkspaceOverlayRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> VocabularyOverlayResponse:
+    await require_permission(ctx, "manage_workspace", "workspace", workspace_id)
     try:
         await set_workspace_overlay(ctx.tenant_id, workspace_id, body.overlay_id)
     except ValueError as exc:
@@ -107,5 +109,6 @@ class SetTenantDefaultOverlayRequest(BaseModel):
 async def set_tenant_default_vocabulary_overlay(
     body: SetTenantDefaultOverlayRequest, ctx: RequestContext = Depends(get_request_context)
 ) -> dict[str, str | None]:
+    await require_tenant_permission(ctx, "manage_tenant")
     await set_tenant_default_overlay(ctx.tenant_id, body.overlay_key)
     return {"default_vocabulary_overlay_key": body.overlay_key}

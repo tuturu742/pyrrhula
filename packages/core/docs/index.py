@@ -21,6 +21,9 @@ _EXTRA_PAGES = ("README.md", "FAQ.md")
 _HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
 _FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_./-]*")
+# A term a line *defines* -- a table row or list item that opens with it in backticks --
+# outranks a line that merely mentions it, so a setting's own reference row wins.
+_DEFINED_RE = re.compile(r"^(?:\|\s*|[-*]\s+)?`([^`]+)`", re.M)
 _SNIPPET_CHARS = 240
 
 
@@ -147,6 +150,7 @@ class DocsIndex:
     sections: list[Section]
     terms: list[Counter[str]]
     head_terms: list[set[str]]
+    defined_terms: list[set[str]]
     pages: dict[str, str]
 
     @classmethod
@@ -162,7 +166,17 @@ class DocsIndex:
         head_terms = [
             set(tokenize(" ".join(s.heading_path))) | set(tokenize(s.page)) for s in sections
         ]
-        return cls(sections=sections, terms=terms, head_terms=head_terms, pages=pages)
+        defined_terms = [
+            {t for m in _DEFINED_RE.finditer(s.body) for t in tokenize(m.group(1))}
+            for s in sections
+        ]
+        return cls(
+            sections=sections,
+            terms=terms,
+            head_terms=head_terms,
+            defined_terms=defined_terms,
+            pages=pages,
+        )
 
 
 @functools.lru_cache(maxsize=1)
@@ -209,6 +223,8 @@ def search(query: str, *, limit: int = 8, index: DocsIndex | None = None) -> lis
                 score += 1.0 + math.log(tf)
             if token in heads:
                 score += 3.0
+            if token in index.defined_terms[i]:
+                score += 4.0
         if len(phrase) >= 6 and phrase in section.body.lower():
             score += 4.0
         if score > 0:

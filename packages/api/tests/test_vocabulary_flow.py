@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_tenant_role, grant_workspace_role
 from core.tenancy.seed import seed_dev_tenant
 
 
@@ -81,8 +82,9 @@ async def test_switching_a_workspace_to_default_v1_relabels_immediately(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"vocab-switch-{uuid.uuid4().hex[:8]}"
-    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_workspace_role(client, token, tenant_id, workspace_id)
     headers = {"Authorization": f"Bearer {token}"}
 
     overlays = client.get("/vocabulary-overlays", headers=headers).json()
@@ -113,8 +115,9 @@ async def test_tenant_default_overlay_applies_when_no_workspace_override(
     client: TestClient, db_available: None, redis_available: None
 ) -> None:
     slug = f"vocab-tenant-default-{uuid.uuid4().hex[:8]}"
-    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "owner")
     headers = {"Authorization": f"Bearer {token}"}
 
     set_resp = client.patch(
@@ -134,8 +137,9 @@ async def test_tenant_overlay_endpoint_resolves_without_a_workspace(
     whatever workspace was open last, and never the RPG defaults for a software
     organization."""
     slug = f"vocab-tenant-get-{uuid.uuid4().hex[:8]}"
-    await seed_dev_tenant(slug=slug)
+    tenant_id, _owner_id, _workspace_id = await seed_dev_tenant(slug=slug)
     token = _register_and_login(client, slug)
+    await grant_tenant_role(client, token, tenant_id, "owner")
     headers = {"Authorization": f"Bearer {token}"}
 
     before = client.get("/tenant/vocabulary-overlay", headers=headers)
@@ -179,3 +183,28 @@ async def test_vocabulary_endpoints_require_auth(client: TestClient, db_availabl
     assert client.get("/vocabulary-overlays").status_code == 401
     assert client.get("/tenant/vocabulary-overlay").status_code == 401
     assert client.get(f"/workspaces/{uuid.uuid4()}/vocabulary-overlay").status_code == 401
+
+
+async def test_setting_an_overlay_takes_the_workspace_or_tenant_seat(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """Reading the resolved overlay is open to every member; choosing it is not -- a
+    workspace's override takes ``manage_workspace`` there, the tenant default
+    ``manage_tenant``. A self-registered viewer holds neither."""
+    slug = f"vocab-authz-{uuid.uuid4().hex[:8]}"
+    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    viewer = {"Authorization": f"Bearer {_register_and_login(client, slug)}"}
+
+    overlays = client.get("/vocabulary-overlays", headers=viewer).json()
+    default_id = next(o["id"] for o in overlays if o["key"] == "default_v1")
+    switched = client.patch(
+        f"/workspaces/{workspace_id}/vocabulary-overlay",
+        json={"overlay_id": default_id},
+        headers=viewer,
+    )
+    assert switched.status_code == 403, switched.text
+    tenant_default = client.patch(
+        "/tenant/vocabulary-overlay", json={"overlay_key": "default_v1"}, headers=viewer
+    )
+    assert tenant_default.status_code == 403, tenant_default.text
+    assert client.get("/tenant/vocabulary-overlay", headers=viewer).json()["key"] == "rpg_v1"

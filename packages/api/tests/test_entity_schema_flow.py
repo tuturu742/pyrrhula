@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_workspace_role
 from core.packs.loader import load_pack
 from core.tenancy.seed import seed_dev_tenant
 
@@ -47,6 +48,7 @@ async def test_template_first_flow_produces_renderable_schema(
 
     with TestClient(app) as client:
         token = _register_and_login(client, slug)
+        await grant_workspace_role(client, token, tenant_id, workspace_id)
         headers = {"Authorization": f"Bearer {token}"}
 
         templates_resp = client.get("/entities/schemas/templates", headers=headers)
@@ -85,6 +87,7 @@ async def test_live_cel_validation_blocks_save_with_anchored_error(
 
     with TestClient(app) as client:
         token = _register_and_login(client, slug)
+        await grant_workspace_role(client, token, tenant_id, workspace_id)
         headers = {"Authorization": f"Bearer {token}"}
 
         bad_definition = {
@@ -122,3 +125,30 @@ async def test_live_cel_validation_blocks_save_with_anchored_error(
         )
         assert list_resp.status_code == 200
         assert all(s["key"] != "broken" for s in list_resp.json())
+
+
+async def test_saving_a_schema_takes_the_workspace_or_tenant_seat(
+    db_available: None, redis_available: None
+) -> None:
+    """A schema saved into a workspace takes ``manage_workspace`` there; one saved with
+    no workspace is a tenant template and takes ``manage_tenant``. The checks come before
+    validation, so a viewer learns nothing about what would have been accepted."""
+    slug = f"schema-editor-authz-{uuid.uuid4().hex[:8]}"
+    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    definition = {"fields": [{"key": "xp", "type": "integer"}]}
+
+    with TestClient(app) as client:
+        viewer = {"Authorization": f"Bearer {_register_and_login(client, slug)}"}
+        for workspace in (str(workspace_id), None):
+            created = client.post(
+                "/entities/schemas",
+                json={"key": "sheet", "workspace_id": workspace, "definition": definition},
+                headers=viewer,
+            )
+            assert created.status_code == 403, created.text
+            applied = client.post(
+                "/entities/schemas/apply-edit",
+                json={"key": "sheet", "workspace_id": workspace, "proposed_definition": definition},
+                headers=viewer,
+            )
+            assert applied.status_code == 403, applied.text

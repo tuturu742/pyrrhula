@@ -82,3 +82,18 @@ async def test_workspaces_are_tenant_isolated(
     workspace_ids_a = {w["id"] for w in resp_a.json()}
 
     assert workspace_ids_a.isdisjoint(workspace_ids_b)
+
+
+async def test_members_and_settings_take_a_seat_in_the_workspace(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """Who sits in a workspace, and how it is configured, are the workspace's own
+    business (``view_workspace``) -- a tenant member with no seat there is refused."""
+    slug = f"wsauthz-{uuid.uuid4().hex[:8]}"
+    _tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    viewer = {"Authorization": f"Bearer {_register_and_login(client, slug)}"}
+
+    members = client.get(f"/workspaces/{workspace_id}/members", headers=viewer)
+    assert members.status_code == 403, members.text
+    settings = client.get(f"/workspaces/{workspace_id}/settings", headers=viewer)
+    assert settings.status_code == 403, settings.text

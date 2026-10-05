@@ -8575,6 +8575,8 @@ export interface components {
             max_review_rounds?: number | null;
             /** Moderation Model */
             moderation_model?: string | null;
+            /** Assistant Context Max Tokens */
+            assistant_context_max_tokens?: number | null;
         };
         /** HolderResponse */
         api__overseer__routes__HolderResponse: {

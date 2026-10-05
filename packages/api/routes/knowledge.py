@@ -13,7 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from api.authz import require_tenant_permission
+from api.authz import require_permission, require_tenant_permission
 from api.blob_store_factory import get_blob_store
 from api.job_queue_factory import get_job_queue
 from api.middleware.auth import get_request_context
@@ -97,6 +97,7 @@ def _source_response(source) -> SourceResponse:  # type: ignore[no-untyped-def]
 async def create_source_endpoint(
     body: CreateSourceRequest, ctx: RequestContext = Depends(get_request_context)
 ) -> SourceResponse:
+    await require_tenant_permission(ctx, "knowledge:author")
     source = await create_source(
         ctx.tenant_id, body.key, body.name, body.class_, visibility=body.visibility
     )
@@ -213,6 +214,7 @@ async def upsert_draft_entry_endpoint(
     body: EntryRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> EntryResponse:
+    await require_tenant_permission(ctx, "knowledge:author")
     try:
         effective_source_id = await fork_if_library(
             ctx.tenant_id, source_id, created_by=ctx.principal_id
@@ -296,6 +298,7 @@ async def publish_version_endpoint(
     body: PublishRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> VersionResponse:
+    await require_tenant_permission(ctx, "knowledge:author")
     try:
         version = await publish_version(
             ctx.tenant_id, source_id, created_by=ctx.principal_id, change_note=body.change_note
@@ -379,6 +382,7 @@ async def apply_entry_edit_endpoint(
     """The only write path an *approved* proposal takes: folds the proposed body into
     the draft and publishes -- a new immutable version, attributed to the approving
     human, marked ``ai_assisted``."""
+    await require_tenant_permission(ctx, "knowledge:author")
     try:
         version = await apply_knowledge_edit_proposal(
             ctx.tenant_id, source_id, entry_key, body.proposed_body_md, approved_by=ctx.principal_id
@@ -434,6 +438,7 @@ async def attach_source_endpoint(
     body: AttachSourceRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> AttachmentResponse:
+    await require_permission(ctx, "manage_knowledge", "workspace", body.workspace_id)
     try:
         attachment = await attach_source_to_workspace(
             ctx.tenant_id,
@@ -567,6 +572,7 @@ async def ingest_document_endpoint(
     """Stores the upload and enqueues a worker job — parsing/chunking never happens in
     this process ("a 200-page PDF ingests without blocking the API"), only a blob
     write and a job insert, both fast regardless of document size."""
+    await require_tenant_permission(ctx, "knowledge:author")
     data = await file.read()
     blob_key = f"knowledge/{ctx.tenant_id}/{source_id}/{uuid.uuid4()}-{file.filename}"
     await get_blob_store().put(blob_key, data, content_type=file.content_type)
@@ -665,6 +671,7 @@ async def fork_source_endpoint(
     body: ForkSourceRequest,
     ctx: RequestContext = Depends(get_request_context),
 ) -> SourceResponse:
+    await require_tenant_permission(ctx, "knowledge:author")
     try:
         forked = await fork_source(
             ctx.tenant_id,

@@ -82,7 +82,7 @@ from core.sessions.lifecycle import (
     set_session_roster,
     set_session_turn_policy,
 )
-from core.sessions.models import SessionPersonaRow
+from core.sessions.models import SessionPersonaRow, SessionRow
 from core.tenancy.context import RequestContext
 from core.tenancy.scope import tenant_scope
 from core.workflows.service import tenant_workflow_grants_repo_access
@@ -334,6 +334,17 @@ class RenameSessionRequest(BaseModel):
     name: str | None
 
 
+async def _conducted_session(ctx: RequestContext, session_id: uuid.UUID) -> SessionRow:
+    """The session, for a caller who may conduct it: 404 when the tenant has no such
+    session (RLS makes "someone else's" and "none" the same answer), 403 when the caller
+    holds no ``session:conduct`` seat in its workspace."""
+    sess = await get_session(ctx.tenant_id, session_id)
+    if sess is None:
+        raise HTTPException(status_code=404, detail=f"no session {session_id}")
+    await require_permission(ctx, "session:conduct", "workspace", sess.workspace_id)
+    return sess
+
+
 @router.patch("/{session_id}")
 async def rename_session_endpoint(
     session_id: uuid.UUID,
@@ -341,6 +352,7 @@ async def rename_session_endpoint(
     ctx: RequestContext = Depends(get_request_context),
 ) -> SessionResponse:
     """Set (or clear, with null) the session's display name."""
+    await _conducted_session(ctx, session_id)
     try:
         sess = await rename_session(ctx.tenant_id, session_id, body.name)
     except ValueError as exc:
@@ -379,6 +391,7 @@ async def set_agenda_endpoint(
     ctx: RequestContext = Depends(get_request_context),
 ) -> SessionResponse:
     """#5: set/clear the free-form agenda the supervisor is steered by."""
+    await _conducted_session(ctx, session_id)
     try:
         await set_session_agenda(ctx.tenant_id, session_id, body.agenda_md)
     except ValueError as exc:
@@ -812,6 +825,7 @@ async def review_endpoint(
 async def pause_session_endpoint(
     session_id: uuid.UUID, ctx: RequestContext = Depends(get_request_context)
 ) -> SessionResponse:
+    await _conducted_session(ctx, session_id)
     try:
         sess = await pause_session(ctx.tenant_id, session_id)
     except ValueError as exc:
@@ -825,6 +839,7 @@ async def resume_session_endpoint(
     background_tasks: BackgroundTasks,
     ctx: RequestContext = Depends(get_request_context),
 ) -> SessionResponse:
+    await _conducted_session(ctx, session_id)
     try:
         sess = await resume_session(ctx.tenant_id, session_id)
     except ValueError as exc:

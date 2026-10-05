@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from adapters.embedding.stub.provider import StubEmbeddingProvider
 from api.main import app
 from api.redis_client import get_redis
+from api.tests.grants import grant_workspace_role
 from core.agents.seed import seed_dev_agent
 from core.process.authoring import create_definition
 from core.process.dsl.fixtures import MINIMAL_MVP_FLOW
@@ -137,6 +138,7 @@ async def test_pause_and_resume_session_endpoints(
     tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
     persona_id = await seed_dev_agent(tenant_id, workspace_id)
     token = _register_and_login(client, slug)
+    await grant_workspace_role(client, token, tenant_id, workspace_id)
     headers = {"Authorization": f"Bearer {token}"}
 
     create_resp = client.post(
@@ -168,6 +170,7 @@ async def test_resume_restarts_the_interpreter(
     tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
     persona_id = await seed_dev_agent(tenant_id, workspace_id)
     token = _register_and_login(client, slug)
+    await grant_workspace_role(client, token, tenant_id, workspace_id)
     headers = {"Authorization": f"Bearer {token}"}
 
     kicked: list[tuple] = []
@@ -500,3 +503,31 @@ async def test_a_session_waiting_on_a_person_says_so(monkeypatch) -> None:
         awaiting="human" if result.status == "awaiting_human" else None,
     )
     assert seen == ["human"]
+
+
+async def test_pause_resume_rename_and_agenda_take_the_conduct_seat(
+    client: TestClient, db_available: None, redis_available: None
+) -> None:
+    """They act on the session, so they take the same ``session:conduct`` seat the
+    turn-policy and directed-turn endpoints already do; a tenant member with no seat in
+    the workspace is refused, not merely unlisted."""
+    slug = f"sessflow-authz-{uuid.uuid4().hex[:8]}"
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=slug)
+    persona_id = await seed_dev_agent(tenant_id, workspace_id)
+    facilitator_token = _register_and_login(client, slug)
+    await grant_workspace_role(client, facilitator_token, tenant_id, workspace_id)
+    create_resp = client.post(
+        "/sessions",
+        json={"workspace_id": str(workspace_id), "persona_id": str(persona_id)},
+        headers={"Authorization": f"Bearer {facilitator_token}"},
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    session_id = create_resp.json()["id"]
+
+    viewer = {"Authorization": f"Bearer {_register_and_login(client, slug)}"}
+    assert client.post(f"/sessions/{session_id}/pause", headers=viewer).status_code == 403
+    assert client.post(f"/sessions/{session_id}/resume", headers=viewer).status_code == 403
+    renamed = client.patch(f"/sessions/{session_id}", json={"name": "mine"}, headers=viewer)
+    assert renamed.status_code == 403, renamed.text
+    agenda = client.patch(f"/sessions/{session_id}/agenda", json={"agenda_md": "x"}, headers=viewer)
+    assert agenda.status_code == 403, agenda.text

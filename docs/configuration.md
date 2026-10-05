@@ -143,7 +143,7 @@ as the placeholder.
 | `secret_mode`, `conduct_rules` | workspace | `excluded` | how secrets are handled; see [portability.md](portability.md) |
 | `max_review_rounds` | workspace | 2 | review→rework cycles, under `PYRRHULA_REVIEW_ROUNDS_CEILING` |
 | `moderation_model` | workspace, then organization | none | the classifier that screens authored content; unset means none |
-| `assistant_context_max_tokens` | workspace | 6000 | retrieved knowledge the assistant may put in front of the model per question |
+| `assistant_context_max_tokens` | workspace | 6000 | retrieved knowledge the assistant may put in front of the model per question (see [assistant.md](assistant.md)) |
 | `assistant_class_ratios` | workspace | rules .35 / lore .40 / misc .25 | how that budget splits across knowledge classes |
 | `generation_limits` | admin console, per organization | 300 s / 100 000 chars | circuit breakers on one generation; unparseable values read as the default |
 | egress policy | admin console, per organization | permissive | which provider kinds each purpose may reach |

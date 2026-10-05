@@ -284,3 +284,37 @@ async def test_a_compressed_page_survives_the_proxy(echo_server: int) -> None:
     assert response.headers.get("content-encoding") == "gzip"
     # httpx decodes using that header; without it this is gzip bytes, not markup.
     assert response.text == "<html><body>hello</body></html>"
+
+
+@pytest.mark.asyncio
+async def test_sharing_a_preview_takes_the_repo_seat() -> None:
+    """A share link hands a running container to anyone holding the URL, so minting one
+    takes the same ``repo:manage`` seat that deploying and stopping the preview take."""
+    from core.tenancy.provisioning import create_tenant_user
+
+    tenant_id, owner_id, workspace_id = await seed_dev_tenant(
+        slug=f"prevshare-{uuid.uuid4().hex[:8]}"
+    )
+    repo_id = uuid.uuid4()
+    preview_id = await create_preview(
+        tenant_id,
+        name=preview_name(repo_id, "main"),
+        repo_id=repo_id,
+        workspace_id=workspace_id,
+        session_id=None,
+        artifact_name="app.tar.gz",
+        engine_key=None,
+        image="example/ttyd",
+        ttl_seconds=600,
+        git_ref="main",
+        created_by_principal_id=owner_id,
+    )
+    await mark_running(tenant_id, preview_id, ref="pyr-prev-x", internal_url="http://127.0.0.1:9")
+    viewer_id = await create_tenant_user(tenant_id, "Viewer", "viewer")
+    token = issue_token(principal_id=viewer_id, tenant_id=tenant_id, expires_in_seconds=3600)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/previews/{preview_id}/share", headers={"Authorization": f"Bearer {token}"}
+        )
+    assert response.status_code == 403, response.text
