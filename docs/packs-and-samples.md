@@ -24,7 +24,7 @@ packs it provides:
 ```json
 {
   "name": "Pyrrhula core workflows",
-  "description": "Tabletop RPG, software development, and enterprise discussion workflows.",
+  "description": "Tabletop RPG, software development, and facilitated team workflows.",
   "workflows": ["rpg", "swdev"]
 }
 ```

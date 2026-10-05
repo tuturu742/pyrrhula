@@ -24,9 +24,9 @@ packs:
   branch's build can be served as a preview. Toolchain images are built on builders the
   operator declares, verified by digest and smoke-tested before anything runs in them.
   Every model call is metered; no provider key ever enters a container.
-- **Structured enterprise workflows.** Multi-perspective discussions, planning
-  simulations and review/approval loops where confidential facts are held by named
-  participants and structurally kept out of everyone else's context.
+- **Facilitated team workflows.** Multi-perspective discussions, planning simulations
+  and review/approval loops where confidential facts are held by named participants and
+  structurally kept out of everyone else's context.
 - **AI-managed tabletop RPG campaigns.** The first use case, and still the sharpest
   test of asymmetric knowledge: a referee with private briefs, players whose characters
   retrieve only what they would know, dice that are rolled in code and rendered from the
