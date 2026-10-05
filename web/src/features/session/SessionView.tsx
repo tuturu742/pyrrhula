@@ -495,7 +495,7 @@ export function SessionView() {
       </div>
 
       <PhaseBanner sessionId={sessionId} events={events} />
-      <CharactersPanel workspaceId={session?.workspace_id} />
+      <CharactersPanel workspaceId={session?.workspace_id} sessionId={sessionId} />
       <WorkPanel sessionId={sessionId} workspaceId={session?.workspace_id} />
       <ReportPanel sessionId={sessionId} />
 

@@ -6433,6 +6433,11 @@ export interface components {
              * @default []
              */
             warnings: string[];
+            /**
+             * Embed Job Id
+             * Format: uuid
+             */
+            embed_job_id?: string | null;
         };
         /** IngestJobResponse */
         IngestJobResponse: {
