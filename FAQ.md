@@ -62,10 +62,10 @@ project free to offer other terms later without asking every contributor again.
 | | They have | They don't have |
 |---|---|---|
 | **LangGraph / AutoGen / CrewAI** | Real graph/team execution for developers | Any visibility model — every agent sees what you give the run; no tenancy, no audit, no notion of a secret |
-| **SillyTavern** | A huge ecosystem for LLM roleplay | Structural anything: lorebooks are prompt blobs, secrets survive as long as the model feels like it, dice are prose, single-user |
-| **AI Dungeon–style tools** | Polished consumer narrative | Multi-agent asymmetry, auditability, self-hosting, rules engines |
+| **Hosted coding agents (Devin, Copilot coding agent, …)** | One agent working one task in a sandbox you do not control | A team: a facilitator that plans, delegates and reviews under its own identity; several developers on one repository; your own engines, images and models; metering per organization |
+| **Roleplay front-ends** | A large ecosystem of characters and lorebooks | Structure: knowledge is prompt text, secrets last as long as the model keeps them, dice are prose, one user |
 
-Pyrrhula is the intersection nobody built: orchestration *with* an enforced
+Pyrrhula is the intersection nobody built: multi-agent orchestration *with* an enforced
 information-asymmetry model, multi-tenant, auditable, self-hosted.
 
 ## Do the dice actually matter, or does the model narrate whatever it wants?
