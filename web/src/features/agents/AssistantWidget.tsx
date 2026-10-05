@@ -152,7 +152,11 @@ export function AssistantWidget() {
         ...next,
         {
           role: "system",
-          content: `[${proposal.action} ${res.ok ? "applied" : "failed"}: ${res.detail}]`,
+          // Worded so the model cannot read it as the proposal notice again: the user
+          // has acted, and this is the outcome.
+          content: res.ok
+            ? `[The user clicked Apply on ${proposal.action}; it was applied: ${res.detail}]`
+            : `[The user clicked Apply on ${proposal.action}; it failed: ${res.detail}]`,
         },
       ];
     });

@@ -56,7 +56,7 @@ and its arguments, and **Apply** performs the ordinary API call from *your* brow
 *your* token. The assistant's effective access is therefore exactly yours: an Apply you
 are not entitled to fails with the same 403 the page would show, and a model-side
 mistake lands as a validation error on the card, not in the database. After Apply the
-model is told the outcome (`[rename_session applied: Session renamed.]`) so the next
+model is told the outcome (`[The user clicked Apply on rename_session; it was applied: Session renamed.]`) so the next
 answer knows.
 
 ![A pending proposal card with Apply and Dismiss](images/assistant-proposal-pending.png)
