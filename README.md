@@ -50,7 +50,7 @@ managed by Pyrrhula. One product, one codebase.
 
 <table>
 <tr>
-<td><a href="docs/images/director-view.png"><img src="docs/images/director-view.png" alt="The director view: secrets grouped by holder, plaintext only on an audited click"></a><br><sub>Secrets by holder; every plaintext look is an audit row</sub></td>
+<td><a href="docs/images/director-view.png"><img src="docs/images/director-view.png" alt="The director view: confidential facts grouped by the participant that holds each, plaintext only on an audited click"></a><br><sub>Confidential facts by holder; every plaintext look is an audit row</sub></td>
 <td><a href="docs/images/engine-roll.png"><img src="docs/images/engine-roll.png" alt="Engine rolls rendered from the record inside a transcript"></a><br><sub>Dice executed in code, rendered from the record</sub></td>
 </tr>
 <tr>

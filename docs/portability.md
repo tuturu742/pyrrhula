@@ -8,6 +8,8 @@ It is a plain ZIP — `manifest.json`, JSON for objects, JSONL for logs, Markdow
 bodies. Unzip one and read it. Entry bodies are separate `.md` files on purpose, so a
 bundle diffs in git, which is a real workflow for anyone authoring rules or lore.
 
+![The export page: participant, full or sanitised visibility of secrets; what to include; optional password encryption](images/export-import.png)
+
 ## What travels
 
 | Section | Contents |

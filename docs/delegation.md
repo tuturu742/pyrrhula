@@ -15,6 +15,14 @@ that renders `work_item_status.changes_requested` as "Changes Requested".
 
 ![The end of the loop: the reviewer's verdict, the merge order, and the preview link](images/session-review-merge.png)
 
+Before a bench plans against a repository it has never seen, **Analyze repos** (on the
+workspace's repo-graph page) reads the hosted checkout and writes what the repository
+achieves — and how several repositories relate — into workspace knowledge, so the
+planning phases retrieve it like any other source. The analysis is written by the
+workspace assistant's model, so that persona needs a model profile first.
+
+![The repo knowledge graph of one repository: its parts and what implements what, with the written overview below](images/repo-graph.png)
+
 ## The four jobs
 
 | Job | What it does |
