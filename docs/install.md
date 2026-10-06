@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/inst
 It creates `./pyrrhula/` and, in it:
 
 1. downloads `compose.release.yml` and `searxng-settings.yml` for the newest stable
-   release (or the one you name: `… | sh -s -- 0.1.0`);
+   release (or the one you name: `… | sh -s -- 0.1.1`);
 2. writes `.env` with freshly generated secrets, and a copy to
    `~/.config/pyrrhula/release.env.bak`;
 3. pulls the images, starts the stack and runs the database migrations;
@@ -156,7 +156,7 @@ name, and the ports are written to `.env` so later commands keep them. Use
 If you would rather run every step yourself:
 
 ```bash
-VERSION=0.1.0              # a release from https://github.com/tuturu742/pyrrhula/releases
+VERSION=0.1.1              # a release from https://github.com/tuturu742/pyrrhula/releases
 mkdir pyrrhula && cd pyrrhula
 base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v$VERSION/docker
 curl -fsSLO $base/compose.release.yml
@@ -357,7 +357,7 @@ under **Admin → Models**.
   one-shot runs Alembic before api/worker start).
 - **Skip the build**: `./install.sh compose --from-registry` runs the same stack from
   the published images — minutes instead of a first build. Add `=VERSION` to pin one
-  (`--from-registry=0.1.0`). Everything else on this page still applies; the
+  (`--from-registry=0.1.1`). Everything else on this page still applies; the
   difference is that you are running the tagged code rather than your working tree.
 - **Offline model loads**: `PYRRHULA_HF_OFFLINE` defaults to `1`, so the runtime never
   reaches Hugging Face on its own; the admin-console download lifts that for its one
@@ -566,7 +566,7 @@ restart.
 - **k8s**: `git pull && ./install.sh k8s` — rebuilds the images, re-applies the
   overlay, and waits for the migration Job.
 - **release images**: rerun the installer with the newer version
-  (`curl -fsSL .../release.sh | sh -s -- 0.1.0`), or edit `PYRRHULA_VERSION` in `.env`,
+  (`curl -fsSL .../release.sh | sh -s -- 0.1.1`), or edit `PYRRHULA_VERSION` in `.env`,
   then `docker compose -p pyrrhula -f compose.release.yml pull && ... up -d` and
   `... run --rm --no-deps migrate`. Run that migration *from the new image*: `up` leaves
   an already-exited one-shot alone, which would put new code on an old schema.

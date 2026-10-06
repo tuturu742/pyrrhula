@@ -37,9 +37,7 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.1.0**, the first public release ([what is in it](CHANGELOG.md)). `main` is
-> development toward 0.1.1 (`0.1.1.dev0`); the [install](#install) one-liner fetches the
-> latest release, not this code. The full
+> Status: **0.1.1** ([what is in it](CHANGELOG.md)). The full
 > stack described below is implemented and running: tenancy/RLS, knowledge & retrieval,
 > the process engine, the context assembler, deterministic resolution, the secrets layer
 > (disclosure gate, structural exclusion, post-generation leak check, per-workspace trust
@@ -247,6 +245,7 @@ Running one:
 | [`docs/portability.md`](docs/portability.md) | `.pyr` bundles: what travels, the export modes, and what import will not overwrite |
 | [`docs/packs-and-samples.md`](docs/packs-and-samples.md) | Registering workflows from `pyrrhula-workflows`, and setting tenants up from `pyrrhula-samples` |
 | [`docs/operations.md`](docs/operations.md) | Operator tasks on a running deployment: deleting a tenant, resetting a password, the admin console, troubleshooting |
+| [`docs/releasing.md`](docs/releasing.md) | How a version is cut, and how a fix ships while the next feature set is in progress |
 | [`docs/assistant.md`](docs/assistant.md) | The workspace assistant and its admin sibling: what they know, what they can propose, what they never do |
 | [`docs/delegation.md`](docs/delegation.md) | Handing work items to coding agents, the review loop, and what a delegation cannot do |
 | [`docs/image-builds.md`](docs/image-builds.md) | Building, importing and running your own toolchain images on builders the operator declares |
