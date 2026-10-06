@@ -37,7 +37,9 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.1.0**, the first public release ([what is in it](CHANGELOG.md)). The full
+> Status: **0.1.0**, the first public release ([what is in it](CHANGELOG.md)). `main` is
+> development toward 0.1.1 (`0.1.1.dev0`); the [install](#install) one-liner fetches the
+> latest release, not this code. The full
 > stack described below is implemented and running: tenancy/RLS, knowledge & retrieval,
 > the process engine, the context assembler, deterministic resolution, the secrets layer
 > (disclosure gate, structural exclusion, post-generation leak check, per-workspace trust
