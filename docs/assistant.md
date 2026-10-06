@@ -14,8 +14,10 @@ smaller sibling for the deployment itself.
 - Stateless on the server. The conversation lives in your browser tab (per workspace) and
   travels with every request; closing the tab forgets it, **Clear** forgets it sooner.
 - One question is one model turn plus up to 12 tool rounds, under a 300-second ceiling.
-  The reply streams in as it is produced; a wedged provider becomes a visible error, not
-  a spinner.
+  Two rounds before the end the model is told to stop reading and propose; the last
+  round offers only the proposal tools, so a long setup request ends in proposal cards
+  rather than an error. The reply streams in as it is produced; a wedged provider becomes
+  a visible error, not a spinner.
 - Every turn is metered on the workspace as `generation`, against the same daily caps as
   a session (**Organization → Daily usage limits**).
 
@@ -94,6 +96,10 @@ and what cannot be undone before proposing anything destructive.
   carries the content you dictated to the Apply call once, hides it on the card and in
   the summary the model reads back — and the doc you are reading recommends typing
   anything sensitive in the Secrets page instead.
+- **Propose a gist that gives the secret away.** The gist is what others may see. A
+  `create_secret` or `update_secret` whose gist repeats the content, or most of its
+  distinctive words, is not proposed; the model is told to describe what the secret is
+  *about* instead and tries again.
 - **Read the overseer's view**, build images, register coding harnesses, import a
   bundle, or export model connections or a `full` bundle (those need a password you
   type yourself).
@@ -126,9 +132,11 @@ page; see [self-host.md](self-host.md#the-admin-assistant).
 - **Empty reply after it said it would do something.** The reply budget is 8000 tokens
   so a whole flow document fits in one proposal; if a provider cuts off earlier, the tool
   call never closes. Ask for a smaller change, or raise the connection's max tokens.
-- **"tool loop exceeded 12 iterations".** The model kept calling tools without
-  answering — usually a question it cannot resolve from what the tools return. Ask it
-  more specifically, or give it the id it is looking for.
+- **"ran out of tool rounds (12) before answering".** The model kept reading and never
+  proposed or answered — usually a question it cannot resolve from what the tools return.
+  Ask it more specifically, or give it the name or id it is looking for. When it did
+  propose something before the budget ran out, you get the cards and a line saying the
+  budget was used, not this error.
 - **Apply fails with 403.** Your role, not the assistant's: the card shows the server's
   reason. Ask an owner for the seat the action needs.
 - **Apply fails with 422.** The server refused the arguments (a flow document that does

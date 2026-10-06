@@ -502,3 +502,62 @@ async def test_secret_and_schema_tools_propose_without_writing(db_available: Non
         == []
     )
     assert not [r for r in await list_latest_schemas(tenant_id, workspace_id) if r.key == "clue"]
+
+
+async def test_gist_that_repeats_the_secret_is_refused_not_proposed(db_available: None) -> None:
+    """The gist is what others see. A gist that is the secret is not proposed; the model is
+    told why and gets to try again."""
+    tenant_id, workspace_id, viewer = await _setup("chat-gist")
+    secret = {
+        "subject_kind": "entity",
+        "subject_id": str(uuid.uuid4()),
+        "content": "The barrow's warden is Linnea's lost brother.",
+        "scope_key": "facilitator_only",
+    }
+    leaky = {**secret, "gist": "The barrow's warden is Linnea's lost brother."}
+    safe = {**secret, "gist": "the warden's true identity"}
+    provider = _ScriptedChatProvider(
+        turns=[
+            ("", (ToolCall(id="c1", name="create_secret", arguments=leaky),)),
+            ("", (ToolCall(id="c2", name="create_secret", arguments=safe),)),
+            ("Proposed.", ()),
+        ]
+    )
+    events = await _chat_events(tenant_id, workspace_id, viewer, provider, "add the secret")
+    proposals = [e for e in events if e["type"] == "proposal"]
+    assert [p["args"]["gist"] for p in proposals] == ["the warden's true identity"]
+    assert "Not proposed: the gist repeats the secret" in provider.seen_messages[1][-1]["content"]
+    assert events[-1]["type"] == "done"
+
+
+async def test_last_round_offers_only_proposals_and_lands_them(db_available: None) -> None:
+    """A model that keeps reading is told its budget is running out, and its last round can
+    only propose -- so a long setup request ends in proposals, not an error."""
+    from core.agents.assistant_chat import _MAX_TOOL_ITERATIONS
+
+    tenant_id, workspace_id, viewer = await _setup("chat-budget")
+    read = ("", (ToolCall(id="r", name="list_personas", arguments={}),))
+    rename = {"session_id": str(uuid.uuid4()), "name": "The Barrow"}
+    propose = ("", (ToolCall(id="w", name="rename_session", arguments=rename),))
+    provider = _ScriptedChatProvider(turns=[read] * (_MAX_TOOL_ITERATIONS - 1) + [propose])
+    events = await _chat_events(tenant_id, workspace_id, viewer, provider, "set it all up")
+
+    assert provider.calls == _MAX_TOOL_ITERATIONS
+    assert "list_personas" in provider.seen_tools[-2]
+    assert "list_personas" not in provider.seen_tools[-1]
+    assert "rename_session" in provider.seen_tools[-1]
+    notes = [m["content"] for m in provider.seen_messages[-1] if m.get("role") == "tool"]
+    assert any("tool rounds left" in n for n in notes)
+    assert any("Last tool round" in n for n in notes)
+    assert [e["action"] for e in events if e["type"] == "proposal"] == ["rename_session"]
+    assert events[-1]["type"] == "done"
+
+
+async def test_out_of_rounds_without_proposals_is_an_error(db_available: None) -> None:
+    tenant_id, workspace_id, viewer = await _setup("chat-budget-none")
+    provider = _ScriptedChatProvider(
+        turns=[("", (ToolCall(id="r", name="list_personas", arguments={}),))]
+    )
+    events = await _chat_events(tenant_id, workspace_id, viewer, provider, "keep reading")
+    assert events[-1]["type"] == "error"
+    assert "ran out of tool rounds" in events[-1]["detail"]
