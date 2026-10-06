@@ -3,15 +3,17 @@
 [![CI](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml/badge.svg)](https://github.com/tuturu742/pyrrhula/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**A multi-tenant platform for orchestrating teams of AI agents and people — where who
-knows what is enforced by the system, not requested of the model.**
+**From pull requests to dungeon crawls: people and AI agents working together, each
+knowing only what their role allows.**
 
-Pyrrhula runs structured sessions between AI agents and humans: an engineering bench that
-plans work, hands it to coding agents in containers and reviews the pull requests they
-open; a planning meeting where some participants hold facts the others must not see; a
-game table whose referee knows things the players don't. Knowledge, process rules and
-participant state are versioned, structured data rather than prompt text, and every
-session is driven by an explicit, user-configurable phase/turn engine.
+Pyrrhula is a self-hosted, multi-tenant platform where who knows what is enforced by the
+system, not requested of the model. It runs structured sessions between AI agents and
+humans: an engineering bench that plans work, hands it to coding agents in containers and
+reviews the pull requests they open; a planning meeting where some participants hold facts
+the others must not see; a game table whose referee knows things the players don't.
+Knowledge, process rules and participant state are versioned, structured data rather than
+prompt text, and every session is driven by an explicit, user-configurable phase/turn
+engine.
 
 One domain-neutral core runs three kinds of work through vocabulary overlays and content
 packs:
