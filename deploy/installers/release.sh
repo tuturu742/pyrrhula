@@ -3,7 +3,7 @@
 # Python or Node on the host -- one compose file and three pulled images.
 #
 #   curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
-#   curl -fsSL .../release.sh | sh -s -- 0.1.0-rc3        # a specific release
+#   curl -fsSL .../release.sh | sh -s -- 0.1.0              # a specific release
 #
 # Everything lands in ./pyrrhula (override with PYRRHULA_DIR). Rerun it to upgrade:
 # the .env is kept, the compose file and images are refreshed.
@@ -14,9 +14,18 @@
 # docs/install.md.
 set -eu
 
-VERSION="${1:-${PYRRHULA_VERSION:-0.1.0-rc3}}"
-DIR="${PYRRHULA_DIR:-./pyrrhula}"
 REPO="tuturu742/pyrrhula"
+# Used only when GitHub cannot be asked (offline, rate-limited) and no version was given.
+FALLBACK_VERSION="0.1.0-rc3"
+VERSION="${1:-${PYRRHULA_VERSION:-}}"
+if [ -z "$VERSION" ]; then
+  # The newest *stable* release: GitHub's releases/latest skips pre-releases, so the
+  # one-liner on main never needs editing when a release ships.
+  VERSION=$(curl -fsSL --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+    | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)
+  VERSION="${VERSION:-$FALLBACK_VERSION}"
+fi
+DIR="${PYRRHULA_DIR:-./pyrrhula}"
 # Names every container, volume and network in this deployment. Change it (with
 # PYRRHULA_WEB_PORT and PYRRHULA_API_PORT) to stand a release beside an existing
 # Pyrrhula on the same host rather than on top of it.
@@ -93,7 +102,8 @@ else
   if grep -q '^PYRRHULA_VERSION=' .env; then
     sed -i.bak "s/^PYRRHULA_VERSION=.*/PYRRHULA_VERSION=$VERSION/" .env && rm -f .env.bak
   else
-    echo "PYRRHULA_VERSION=$VERSION"
+    # An .env from before the version was recorded in it: record both now.
+    echo "PYRRHULA_VERSION=$VERSION" >> .env
     echo "PYRRHULA_COMPOSE_PROJECT=$PROJECT" >> .env
   fi
 fi
@@ -145,16 +155,32 @@ fi
 # printing. Pull the field out rather than echoing the whole probe body at someone.
 VERSION_RUNNING=$(curl -fsS "http://localhost:${WEB_PORT}/api/health" 2>/dev/null \
   | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+# The same end-to-end check every installer runs (docs/install.md, "Does it work?"): a
+# blob write, a queued job the *worker* claims and runs, rows in the database. A worker
+# that dies on its first job looks healthy to the probe above and fails here.
+say "checking the stack end to end"
+$COMPOSE -p "$PROJECT" -f compose.release.yml exec -T api python /app/deploy-smoke.py < /dev/null \
+  || fail "the post-install check failed (output above); the stack is up but not working"
+
 say "ready"
+ADMIN_EMAIL=$(sed -n 's/^PYRRHULA_ADMIN_EMAIL=//p' .env)
+ADMIN_PASSWORD=$(sed -n 's/^PYRRHULA_ADMIN_PASSWORD=//p' .env)
 echo
-echo "   Pyrrhula ${VERSION_RUNNING:-$VERSION}"
-echo "   open     http://localhost:${WEB_PORT}"
-echo "   admin    $(sed -n 's/^PYRRHULA_ADMIN_EMAIL=//p' .env) / $(sed -n 's/^PYRRHULA_ADMIN_PASSWORD=//p' .env)"
-echo "   config   $(pwd)/.env   (backup: ~/.config/pyrrhula/release.env.bak)"
+echo "   Pyrrhula ${VERSION_RUNNING:-$VERSION} is running."
 echo
-echo "   BACK UP the PYRRHULA_ENCRYPTION_KEY line. Losing it orphans every stored"
-echo "   credential -- provider keys, repository tokens, registry passwords."
+echo "   Open http://localhost:${WEB_PORT} and finish in the browser:"
+echo "     1. Register, naming your organization. The first account owns this"
+echo "        deployment and is its admin."
+echo "     2. App settings -> Models -> Download from Hugging Face. About 6.5 GB, once;"
+echo "        until it finishes, sessions run but cannot search their knowledge."
+echo "     3. Personas -> Model profiles -> New model profile, with your provider's API key."
+echo "     4. Import a sample: https://github.com/tuturu742/pyrrhula-samples"
 echo
-echo "   First start downloads the ~2.2GB retrieval model into a volume; until it"
-echo "   finishes, sessions run but retrieve nothing. Watch it with:"
-echo "     $COMPOSE -p "$PROJECT" -f compose.release.yml logs -f worker"
+echo "   Files     $(pwd)   (.env holds this deployment's secrets)"
+echo "   Backup    ~/.config/pyrrhula/release.env.bak"
+echo "             BACK UP the PYRRHULA_ENCRYPTION_KEY line: losing it orphans every"
+echo "             stored credential -- provider keys, repository tokens, registry passwords."
+echo "   Spare admin (only if locked out): organization 'admin', $ADMIN_EMAIL / $ADMIN_PASSWORD"
+echo
+echo "   Stop      $COMPOSE -p $PROJECT -f compose.release.yml stop     (from $(pwd))"
+echo "   Upgrade   rerun this script"

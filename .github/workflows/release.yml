@@ -119,21 +119,29 @@ jobs:
           body: |
             ## Install
 
-            One compose file, three pulled images, no checkout and no build:
+            Docker or Podman, `curl` and `openssl` — no checkout, no build. This
+            installs exactly this release into `./pyrrhula/`:
 
             ```bash
-            curl -fsSLO https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.tag || github.ref_name }}/compose.release.yml
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.tag || github.ref_name }}/deploy/installers/release.sh | sh
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.inputs.tag || github.ref_name }}/deploy/installers/release.sh | sh -s -- ${{ steps.version.outputs.image_tag }}
             ```
+
+            Then open http://localhost:5173 and:
+
+            1. **Register** — name your organization; the first account owns the deployment and is its admin.
+            2. **App settings → Models → Download from Hugging Face** — the search models, ~6.5 GB, once.
+            3. **Personas → Model profiles** — a connection with your provider's API key, or a local Ollama.
+            4. Import a sample from [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples).
+
+            Requirements, upgrading, HTTPS, running it beside another install, removing it,
+            and doing every step by hand without the script:
+            [docs/install.md](https://github.com/${{ github.repository }}/blob/${{ github.event.inputs.tag || github.ref_name }}/docs/install.md#published-images-no-checkout-no-build).
 
             From a checkout, the same images instead of a local build:
 
             ```bash
-            ./install.sh compose --from-registry
+            ./install.sh compose --from-registry=${{ steps.version.outputs.image_tag }}
             ```
-
-            `docs/install.md` has both paths in full, including what to do without the
-            script. Building from source is still supported and unchanged.
 
             ## Images
 
