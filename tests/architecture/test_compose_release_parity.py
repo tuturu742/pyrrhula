@@ -17,6 +17,7 @@ import pathlib
 import re
 
 import yaml
+from packaging.version import Version
 
 _DOCKER = pathlib.Path(__file__).resolve().parents[2] / "docker"
 _SELFHOST = _DOCKER / "compose.selfhost.yml"
@@ -130,6 +131,17 @@ def test_the_release_default_version_matches_this_source_tree() -> None:
     text = _RELEASE.read_text()
     defaults = set(re.findall(r"\$\{PYRRHULA_VERSION:-([^}]+)\}", text))
     assert defaults, "the release stack no longer carries a default version"
+    if Version(declared).is_devrelease:
+        # Between releases the tree is X.Y.Z.devN and no image of that version exists:
+        # the default must stay on a real, earlier release (the one people can pull),
+        # and the release commit that drops .devN brings it back under the rule below.
+        assert len(defaults) == 1, f"compose names several versions: {sorted(defaults)}"
+        (default,) = defaults
+        released = Version(default)
+        assert not released.is_devrelease and released < Version(declared), (
+            f"compose defaults to {default}, which is not a release older than {declared}"
+        )
+        return
     normalised = {d.replace("-", "") for d in defaults}
     assert normalised == {declared.replace("-", "")}, (
         f"compose defaults to {sorted(defaults)} but this tree is version {declared}"
