@@ -1114,6 +1114,7 @@ async def _chat_inner(
     model_string = f"{profile.provider}/{profile.model}"
     tool_ctx = ToolContext(tenant_id=tenant_id, persona_id=persona.id, session_id=None)
 
+    streamed_text = False
     for iteration in range(_MAX_TOOL_ITERATIONS):
         rounds_left = _MAX_TOOL_ITERATIONS - iteration - 1
         # The last round offers only the proposal tools. A model that kept reading (five
@@ -1140,7 +1141,13 @@ async def _chat_inner(
         start = time.monotonic()
         async for chunk in provider.generate(req):
             if chunk.text:
+                if not pieces and streamed_text:
+                    # Text from an earlier round ("Let me check the sessions.") and this
+                    # round's ("Yes, it went through.") land in one chat bubble; without a
+                    # break they read as one run-on sentence.
+                    yield {"type": "text", "delta": "\n\n"}
                 pieces.append(chunk.text)
+                streamed_text = True
                 yield {"type": "text", "delta": chunk.text}
             if chunk.tool_calls:
                 tool_calls = chunk.tool_calls

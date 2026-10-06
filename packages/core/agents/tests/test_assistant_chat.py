@@ -553,6 +553,23 @@ async def test_last_round_offers_only_proposals_and_lands_them(db_available: Non
     assert events[-1]["type"] == "done"
 
 
+async def test_text_from_two_rounds_is_separated(db_available: None) -> None:
+    """Text before a tool call and text after it share one bubble; they must not run on."""
+    tenant_id, workspace_id, viewer = await _setup("chat-two-rounds")
+    provider = _ScriptedChatProvider(
+        turns=[
+            (
+                "Let me check the sessions.",
+                (ToolCall(id="c1", name="list_sessions", arguments={}),),
+            ),
+            ("Yes, it went through.", ()),
+        ]
+    )
+    events = await _chat_events(tenant_id, workspace_id, viewer, provider, "did it work?")
+    text = "".join(e.get("delta", "") for e in events if e["type"] == "text")
+    assert text == "Let me check the sessions.\n\nYes, it went through."
+
+
 async def test_out_of_rounds_without_proposals_is_an_error(db_available: None) -> None:
     tenant_id, workspace_id, viewer = await _setup("chat-budget-none")
     provider = _ScriptedChatProvider(
