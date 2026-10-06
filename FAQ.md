@@ -84,7 +84,9 @@ egress policy — and nothing else phones home.
 
 ## What state is the project in?
 
-`0.1.0`, the first public release ([CHANGELOG](CHANGELOG.md)). The full stack described in
+`0.1.0`, the first public release ([CHANGELOG](CHANGELOG.md)). `main` is development toward
+0.1.1 (`0.1.1.dev0`, unreleased changes under *Unreleased* in the changelog); installs from
+the release script get the latest release. The full stack described in
 the README is implemented, tested — isolation, leak, replay, pack and architecture suites
 gate CI — and verified on published images, compose, k8s and a Portainer host. An ECS
 execution engine exists as an experimental, unverified adapter, not an install path. It is
