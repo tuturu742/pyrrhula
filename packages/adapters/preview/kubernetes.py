@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -83,8 +84,9 @@ class KubernetesPreviewProvider:
         ttl_seconds: int | None = None,
         registry_auth: str | None = None,
     ) -> PreviewHandle:
-        # Replace any previous preview under this name -- it serves the old artifact.
-        await self.teardown_matching(name)
+        # Replace any previous preview under this name -- it serves the old artifact. Only
+        # this name: a repo's no-branch preview is a prefix of its branch previews' names.
+        await self.teardown(name)
 
         job_name = f"{name}-{uuid.uuid4().hex[:6]}"[:63].rstrip("-")
         pod_spec: dict[str, Any] = {
@@ -172,9 +174,15 @@ class KubernetesPreviewProvider:
             return "missing"
 
     async def teardown(self, ref: str) -> None:
-        await self.teardown_matching(ref)
+        """Stop exactly this preview. Not a prefix match: ``pyr-prev-<repo8>`` (no branch)
+        is a prefix of ``pyr-prev-<repo8>-<branch>``, and stopping one must not stop the
+        others."""
+        await self._delete_jobs(lambda label: label == ref[:63])
 
     async def teardown_matching(self, prefix: str) -> int:
+        return await self._delete_jobs(lambda label: label.startswith(prefix))
+
+    async def _delete_jobs(self, matches: Callable[[str], bool]) -> int:
         removed = 0
         try:
             async with self._client() as client:
@@ -186,7 +194,7 @@ class KubernetesPreviewProvider:
                     return 0
                 for job in jobs.json().get("items", []):
                     label = (job["metadata"].get("labels") or {}).get(_LABEL, "")
-                    if not label.startswith(prefix):
+                    if not matches(label):
                         continue
                     await client.delete(
                         f"/apis/batch/v1/namespaces/{self._namespace}/jobs/"

@@ -185,13 +185,16 @@ async def handle_stop_preview(payload: dict[str, Any]) -> dict[str, Any]:
     row = await get_preview(tenant_id, preview_id)
     if row is None:
         return {"preview_id": str(preview_id), "outcome": "not_found"}
-    removed = 0
+    # teardown, not teardown_matching: the no-branch preview's name is a prefix of every
+    # branch preview of the same repo, and stopping it used to stop them all.
+    torn_down = False
     try:
-        removed = await get_preview_provider(row.engine_key).teardown_matching(row.name)
+        await get_preview_provider(row.engine_key).teardown(row.name)
+        torn_down = True
     except PreviewUnavailableError as exc:
         log.warning("preview.teardown_failed", preview_id=str(preview_id), error=str(exc))
     await set_status(tenant_id, preview_id, status)
-    return {"preview_id": str(preview_id), "name": row.name, "removed": removed}
+    return {"preview_id": str(preview_id), "name": row.name, "torn_down": torn_down}
 
 
 async def reap_expired_previews() -> int:
@@ -201,7 +204,7 @@ async def reap_expired_previews() -> int:
     reaped = 0
     for tenant_id, preview_id, name, engine_key in await due_for_reaping():
         try:
-            await get_preview_provider(engine_key).teardown_matching(name)
+            await get_preview_provider(engine_key).teardown(name)
         except PreviewUnavailableError as exc:
             log.warning("preview.reap_teardown_failed", name=name, error=str(exc))
         await set_status(tenant_id, preview_id, "expired")
