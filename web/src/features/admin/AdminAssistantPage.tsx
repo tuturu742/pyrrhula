@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Markdown } from "@/components/Markdown";
 
 /**
  * An assistant for the platform-admin console.
@@ -123,7 +124,11 @@ export function AdminAssistantPage() {
             <div className="text-xs font-medium text-muted-foreground">
               {turn.role === "user" ? "You" : "Assistant"}
             </div>
-            <div className="whitespace-pre-wrap text-sm">{turn.content}</div>
+            {turn.role === "user" ? (
+              <div className="whitespace-pre-wrap text-sm">{turn.content}</div>
+            ) : (
+              <Markdown text={turn.content} className="text-sm" />
+            )}
             {(turn.proposals ?? []).map((p, j) => (
               <ProposalCard key={j} proposal={p} />
             ))}

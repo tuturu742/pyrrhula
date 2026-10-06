@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { BackLink } from "@/components/BackLink";
+import { Markdown } from "@/components/Markdown";
 import { NameDialog } from "@/components/NameDialog";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -568,7 +569,7 @@ export function SessionView() {
               </div>
             </div>
           ) : session.agenda_md ? (
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{session.agenda_md}</p>
+            <Markdown text={session.agenda_md} className="text-sm text-muted-foreground" />
           ) : (
             <p className="text-sm text-muted-foreground">No agenda set.</p>
           )}
@@ -1015,7 +1016,9 @@ function TimelineEvent({
               <span> · {m.tool_calls_made} tool call(s)</span>
             )}
           </div>
-          <div className="inline-block rounded-md bg-secondary px-3 py-2">{m.content}</div>
+          <div className="inline-block max-w-full rounded-md bg-secondary px-3 py-2 text-left">
+            <Markdown text={m.content} />
+          </div>
           <MessageAssets content={m.content} assetOrigins={assetOrigins} workspaceId={workspaceId} />
           {m.role === "assistant" && m.id && (
             <div className="mt-1 flex flex-col gap-1">
@@ -1053,7 +1056,9 @@ function TimelineEvent({
             {o.author ?? t("role.facilitator")}
             <OverrideBadge rewriteApplied={o.rewrite_applied} />
           </div>
-          <div className="inline-block rounded-md bg-secondary px-3 py-2">{o.content}</div>
+          <div className="inline-block max-w-full rounded-md bg-secondary px-3 py-2">
+            <Markdown text={o.content} />
+          </div>
           {o.id && (
             <div className="mt-1 flex flex-col gap-1">
               <ResolutionWidget messageId={o.id} />
@@ -1258,7 +1263,7 @@ function SessionPreviewPanel({
  * by repo *and* ref, so two branches are two previews rather than one that keeps
  * replacing itself.
  */
-function RepoPreviewRow({
+export function RepoPreviewRow({
   repo,
   sessionId,
   previews,
@@ -1278,7 +1283,8 @@ function RepoPreviewRow({
 }) {
   const { deploy, share, stop } = usePreviewActions(setNotice);
   const { data: pullRequests } = useRepoPullRequests(repo.id);
-  const [gitRef, setGitRef] = useState("");
+  // null until someone picks; until then the row shows what is actually up.
+  const [chosenRef, setChosenRef] = useState<string | null>(null);
 
   // Every pull request is listed, but only one with a build behind it can be chosen:
   // deploying a branch that never produced an artifact lands on a 404 that reads as the
@@ -1291,6 +1297,19 @@ function RepoPreviewRow({
   const choices = [...(pullRequests ?? [])].sort(
     (a, b) => Number(Boolean(b.previewable)) - Number(Boolean(a.previewable)),
   );
+  // Default to a running preview. Defaulting to "the latest build" alone let an older,
+  // stopped no-branch preview hide a branch preview that was up and shareable -- the row
+  // read "stopped" while the transcript above it said "the build is running".
+  const isRunning = (ref: string) =>
+    previews.some((p) => p.repo_id === repo.id && (p.git_ref ?? "") === ref && p.status === "running");
+  const runningBranch =
+    previews.find(
+      (p) =>
+        p.repo_id === repo.id &&
+        p.status === "running" &&
+        choices.some((c) => c.branch === (p.git_ref ?? "")),
+    )?.git_ref ?? "";
+  const gitRef = chosenRef ?? (isRunning("") ? "" : runningBranch);
   const preview = previews.find(
     (p) => p.repo_id === repo.id && (p.git_ref ?? "") === gitRef,
   );
@@ -1362,7 +1381,7 @@ function RepoPreviewRow({
           */}
           <select
             value={gitRef}
-            onChange={(e) => setGitRef(e.target.value)}
+            onChange={(e) => setChosenRef(e.target.value)}
             className="w-full max-w-xs truncate rounded-md border border-border bg-background px-2 py-1 text-xs sm:w-auto"
           >
             <option value="">the latest build</option>

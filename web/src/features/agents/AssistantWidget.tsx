@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMatch } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
+import { Markdown } from "@/components/Markdown";
 import { useSoleWorkspaceId } from "./assist";
 import { applyAssistantAction } from "./assistant-actions";
 
@@ -229,10 +230,13 @@ export function AssistantWidget() {
                         : "self-start bg-secondary"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap">
-                      {item.content ||
-                        (busy && i === items.length - 1 ? "…" : item.content)}
-                    </p>
+                    {item.role === "user" ? (
+                      <p className="whitespace-pre-wrap">{item.content}</p>
+                    ) : item.content ? (
+                      <Markdown text={item.content} />
+                    ) : busy && i === items.length - 1 ? (
+                      <p>…</p>
+                    ) : null}
                     {(item.proposals ?? []).map((p) => (
                       <div
                         key={p.id}

@@ -6,6 +6,28 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stopping one preview stopped others.** A repository's preview of "the latest build"
+  is named so that it is a prefix of its branch previews' names, and stopping or expiring
+  it tore those down too (every engine for stops; Kubernetes also on redeploy). Stops now
+  match the one preview exactly.
+- **Markdown showed as markup.** Session transcripts, both assistants, the session agenda
+  and the repository graph now render Markdown (bold, lists, code, links, tables) instead
+  of showing `**` and backticks. Raw HTML in model output stays text.
+- **"Play the build" hid a running preview** behind an older stopped one for the latest
+  build. Until you pick, the row now shows the preview that is running.
+- **The assistant gave up on long requests.** A request that needed many reads ended in
+  "tool loop exceeded" with nothing proposed. It is now warned two rounds before its
+  budget ends, its last round can only propose, and a turn that proposed something ends
+  normally.
+
+### Changed
+
+- **The assistant will not propose a secret whose gist gives it away.** The gist is the
+  part others may see; a proposal whose gist repeats the secret is refused and the model
+  is asked for one that says what the secret is about instead.
+
 ## [0.1.0] - 2026-10-06
 
 The first public release: a self-hosted, multi-tenant platform for orchestrating teams of
