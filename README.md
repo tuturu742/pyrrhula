@@ -35,16 +35,17 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.1.0-rc3.** The full stack described below is implemented and running:
-> tenancy/RLS, knowledge & retrieval, the process engine, the context assembler,
-> deterministic resolution, the secrets layer (disclosure gate, structural exclusion,
-> post-generation leak check, per-workspace trust modes), the overseer's view, behavioral
-> axes with engine-enforced high-stakes dials, delegated coding work with image builds,
-> portable `.pyr` workspace bundles, and three verified install paths (compose, k8s,
-> Portainer). Seven runnable sample workspaces live in
-> [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples), each run end to end
-> on a fresh install before this release — start with the murder mystery, or with Mice
-> Invaders if you want to watch a pull request get built.
+> Status: **0.1.0**, the first public release ([what is in it](CHANGELOG.md)). The full
+> stack described below is implemented and running: tenancy/RLS, knowledge & retrieval,
+> the process engine, the context assembler, deterministic resolution, the secrets layer
+> (disclosure gate, structural exclusion, post-generation leak check, per-workspace trust
+> modes), the overseer's view, behavioral axes with engine-enforced high-stakes dials,
+> delegated coding work with image builds, the workspace assistant, portable `.pyr`
+> workspace bundles, and three verified install paths (published images, compose, k8s,
+> plus a Portainer stack). Nine runnable sample workspaces live in
+> [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples), seven of them run end
+> to end on fresh installs before this release — start with the murder mystery, or with
+> Mice Invaders if you want to watch a pull request get built.
 
 ![A session on the software bench: the work item approved, the pull request reviewed, the build served as a preview](docs/images/session-coding-bench.png)
 

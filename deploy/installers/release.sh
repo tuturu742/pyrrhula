@@ -16,7 +16,7 @@ set -eu
 
 REPO="tuturu742/pyrrhula"
 # Used only when GitHub cannot be asked (offline, rate-limited) and no version was given.
-FALLBACK_VERSION="0.1.0-rc3"
+FALLBACK_VERSION="0.1.0"
 VERSION="${1:-${PYRRHULA_VERSION:-}}"
 if [ -z "$VERSION" ]; then
   # The newest *stable* release: GitHub's releases/latest skips pre-releases, so the

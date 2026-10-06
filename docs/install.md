@@ -156,7 +156,7 @@ name, and the ports are written to `.env` so later commands keep them. Use
 If you would rather run every step yourself:
 
 ```bash
-VERSION=0.1.0-rc3          # a release from https://github.com/tuturu742/pyrrhula/releases
+VERSION=0.1.0              # a release from https://github.com/tuturu742/pyrrhula/releases
 mkdir pyrrhula && cd pyrrhula
 base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v$VERSION/docker
 curl -fsSLO $base/compose.release.yml
@@ -357,7 +357,7 @@ under **Admin → Models**.
   one-shot runs Alembic before api/worker start).
 - **Skip the build**: `./install.sh compose --from-registry` runs the same stack from
   the published images — minutes instead of a first build. Add `=VERSION` to pin one
-  (`--from-registry=0.1.0-rc3`). Everything else on this page still applies; the
+  (`--from-registry=0.1.0`). Everything else on this page still applies; the
   difference is that you are running the tagged code rather than your working tree.
 - **Offline model loads**: `PYRRHULA_HF_OFFLINE` defaults to `1`, so the runtime never
   reaches Hugging Face on its own; the admin-console download lifts that for its one

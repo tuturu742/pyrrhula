@@ -117,6 +117,8 @@ jobs:
             docker/compose.release.yml
             docker/searxng-settings.yml
           body: |
+            What is in this release: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.event.inputs.tag || github.ref_name }}/CHANGELOG.md).
+
             ## Install
 
             Docker or Podman, `curl` and `openssl` — no checkout, no build. This
