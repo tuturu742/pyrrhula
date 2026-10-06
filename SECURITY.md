@@ -48,4 +48,5 @@ crashes:
 
 ## Supported versions
 
-Pre-1.0: only the latest `main`. There are no maintained release branches yet.
+Pre-1.0: the latest release and `main`. There are no maintained release branches; a
+fix lands on `main` and ships in the next release.

@@ -3,8 +3,8 @@
 Direction, not promises — a single-maintainer project, so this is ordered by intent and
 kept honest. Issues are welcome on any of it, and "I want to build this" beats "+1".
 
-Three tracks, because Pyrrhula is one engine serving three kinds of table: tabletop
-role-playing first, structured enterprise work second, software development third.
+Three tracks, because Pyrrhula is one engine serving three kinds of work: software
+development, facilitated team workflows and tabletop RPG.
 
 ## Tabletop RPG
 

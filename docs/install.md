@@ -1,30 +1,204 @@
 # Installing Pyrrhula
 
-Two supported deployment targets, one entry point:
+Two ways in:
 
-```bash
-./install.sh compose   # docker or podman on one machine -- smallest footprint
-./install.sh k8s       # a Kubernetes cluster -- built against k3s
-```
+- **Run a published release** — pulled images, no checkout, no build, one command. The
+  right choice unless you are changing the code:
 
-Add `--check` to any target to verify prerequisites without changing anything.
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
+  ```
 
-Both build the images from this checkout. A third path skips the build and pulls the
-images of a published release instead — no checkout, no toolchain, one compose file:
+  Step by step below, in [published images](#published-images-no-checkout-no-build).
+
+- **Build from a checkout** — to work on Pyrrhula, or to deploy to Kubernetes:
+
+  ```bash
+  ./install.sh compose   # docker or podman on one machine -- smallest footprint
+  ./install.sh k8s       # a Kubernetes cluster -- built against k3s
+  ```
+
+  Add `--check` to verify prerequisites without changing anything. The rest of this page
+  covers both builds, then [Portainer](#portainer-a-docker-host-you-manage-in-portainer)
+  and the topics every install shares.
+
+## Published images (no checkout, no build)
+
+The way to *run* Pyrrhula rather than work on it. Every release publishes two images to
+GitHub Container Registry, and one compose file runs them beside unmodified Postgres,
+Redis and SearXNG. Nothing is built on your machine, and nothing needs Python or Node.
+
+### 1. What you need
+
+- **A container engine:** Docker 24+ with the Compose plugin, or Podman 4+ with
+  `podman compose` or `podman-compose`. The images are `linux/amd64`; on Apple Silicon
+  they run under emulation, which works but is slower.
+- **`curl` and `openssl`** (the installer generates this deployment's secrets with it).
+- **About 4 GB of free RAM and 12 GB of disk:** ~4 GB of images, ~6.5 GB for the
+  retrieval models you download in step 4, and room for your data.
+- **Ports 5173 and 8000 free** — the web UI and the API. Taken? See
+  [another install on the same host](#running-beside-another-install).
+- **A model to talk to:** an API key for a hosted provider (OpenAI, Anthropic, DeepSeek,
+  …) or an [Ollama](https://github.com/ollama/ollama) your machine can reach.
+- *Optional* — for coding agents that build and test code in containers, the engine's
+  API socket. Docker: `/var/run/docker.sock` readable by you. Rootless Podman: run
+  `systemctl --user enable --now podman.socket` **before** installing. Without it,
+  everything else works and the installer says which feature it left off.
+
+### 2. Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
 ```
 
-See [release images](#release-images-no-checkout-no-build). Which to choose: pull a
-release to run the product, build from source to change it.
+It creates `./pyrrhula/` and, in it:
 
-## Prerequisites
+1. downloads `compose.release.yml` and `searxng-settings.yml` for the newest stable
+   release (or the one you name: `… | sh -s -- 0.1.0`);
+2. writes `.env` with freshly generated secrets, and a copy to
+   `~/.config/pyrrhula/release.env.bak`;
+3. pulls the images, starts the stack and runs the database migrations;
+4. waits until the API answers, then runs the [end-to-end check](#does-it-work-the-installer-answers-that);
+5. prints the URL and the next steps.
+
+A first install takes a few minutes, most of it the pull. `PYRRHULA_DIR=/srv/pyrrhula`
+puts it somewhere else. To read the script before running it:
+`curl -fsSLO …/release.sh`, read it, then `sh release.sh`.
+
+### 3. Sign up
+
+Open **http://localhost:5173** and click **Register**. On a new deployment the form asks
+for an organization name — yours, or your team's — besides your name, email and password.
+That first account creates the deployment's organization, owns it, and is its admin: the
+admin pages are under **App settings** in your own navigation. People who register after
+you join the same organization. The installer also printed a spare admin
+account (organization `admin`); you only need it if you lock yourself out.
+
+### 4. Download the retrieval models
+
+**App settings → Models → Download from Hugging Face.** Pyrrhula runs two models of its
+own — one embeds text for search, one reranks the results. The defaults (`bge-m3` and
+`bge-reranker-v2-m3`) take about 6.5 GB and are downloaded once, into a volume; the
+sizes on the page grow while it runs. Until it finishes, sessions run but cannot search
+their knowledge. No route to `huggingface.co` from this machine? Upload a cache archive
+instead — see [the retrieval models](#the-retrieval-models).
+
+### 5. Connect a model
+
+**Personas → Model profiles → New model profile:** a name, the provider, the model and
+your API key (stored encrypted, never shown again). Also set the **Assistant model**
+profile on the same page — that is what the 💬 [assistant](assistant.md) and repository
+analysis run on. Per-persona settings and refusals: [models.md](models.md).
+
+### 6. Try something
+
+Import a sample workspace — each comes with a README that walks through it:
+[pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples). Start with
+`hagnaryd-mystery`, or `mice-invaders` to watch a pull request get built.
+
+### Running it
+
+From the `pyrrhula/` directory. With Podman, write `podman compose` (or `podman-compose`)
+where these say `docker compose`.
+
+| To | Run |
+|---|---|
+| see what is running | `docker compose -p pyrrhula -f compose.release.yml ps` |
+| follow the logs | `docker compose -p pyrrhula -f compose.release.yml logs -f api worker` |
+| stop / start again | `docker compose -p pyrrhula -f compose.release.yml stop` / `… up -d` |
+| check the version | `curl -s localhost:5173/api/health` → `{"status":"ok","version":"…"}` |
+| re-run the end-to-end check | `docker compose -p pyrrhula -f compose.release.yml exec api python /app/deploy-smoke.py` |
+
+**Upgrade** by running the install command again from the same place (or with the same
+`PYRRHULA_DIR`). It keeps `.env` and every volume, fetches the new release's compose
+file, pulls and migrates. The database only migrates forward, so back it up first if
+the data matters — and keep the encryption key safe regardless: see
+[the one thing to never lose](#the-one-thing-to-never-lose).
+
+**From another machine,** open `http://<this host>:5173`; the UI listens on every
+interface. The API is also published on 8000 for scripts; the UI reaches it through
+5173, so a firewall may close 8000. On a network you do not trust, serve HTTPS — add to
+`.env`:
+
+```bash
+PYRRHULA_TLS=self-signed                 # or: provided (your own certificate)
+PYRRHULA_TLS_SERVER_NAME=192.168.1.20    # the name or IP the browser will use
+PYRRHULA_COOKIE_SECURE=true
+```
+
+and run `docker compose -p pyrrhula -f compose.release.yml up -d`. The same port then
+serves HTTPS and redirects plain http to it; a self-signed certificate is made on first
+start and kept in a volume. Your own certificate:
+[configuration.md](configuration.md#serving-and-tls).
+
+**Remove it** with `docker compose -p pyrrhula -f compose.release.yml down` — the
+containers go, the data stays. `down -v` deletes the volumes too: the database, uploaded
+files and downloaded models, irreversibly. Then delete the directory.
+
+### Running beside another install
+
+A release install claims the same container names, volumes and ports as a source
+install on the same host, and would replace it. To stand one beside the other —
+evaluating a release next to your working tree, or two deployments on one machine —
+give it its own name and ports:
+
+```bash
+PYRRHULA_COMPOSE_PROJECT=pyrrhula-rc PYRRHULA_WEB_PORT=5273 PYRRHULA_API_PORT=8100 \
+  sh -c 'curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh'
+```
+
+Container names, the exec-environment network and the volumes all follow that project
+name, and the ports are written to `.env` so later commands keep them. Use
+`-p pyrrhula-rc` in the commands above.
+
+### Without the script
+
+If you would rather run every step yourself:
+
+```bash
+VERSION=0.1.0              # a release from https://github.com/tuturu742/pyrrhula/releases
+mkdir pyrrhula && cd pyrrhula
+base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v$VERSION/docker
+curl -fsSLO $base/compose.release.yml
+curl -fsSLO $base/searxng-settings.yml     # the compose file mounts this by name
+cat > .env <<EOF
+PYRRHULA_VERSION=$VERSION
+PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)
+PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)
+PYRRHULA_JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+PYRRHULA_ENCRYPTION_KEY=$(openssl rand -base64 32)
+PYRRHULA_ADMIN_EMAIL=admin@example.com
+PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)
+EOF
+# Optional, for coding agents: PYRRHULA_ENGINE_SOCKET=/var/run/docker.sock (or the
+# rootless podman socket) in .env.
+chmod 600 .env
+docker compose -p pyrrhula -f compose.release.yml up -d
+```
+
+`up` runs the migrations before the API starts. Then continue at [step 3](#3-sign-up).
+
+### What differs from a source install
+
+- **The stack can reach Hugging Face.** `PYRRHULA_HF_OFFLINE` defaults to `0` here, so
+  step 4's download works; a source install defaults to `1`. Set it to `1` after the
+  models are in place if this host should never reach Hugging Face again. The runtime
+  never fetches a model mid-request either way.
+- **Hand-placed workflow packs go in a volume**, not a directory beside the compose
+  file — a file you downloaded on its own has nothing beside it. Use
+  `docker cp <pack> pyrrhula_api_1:/app/plugins-local/`.
+- **Search needs the second file.** SearXNG runs from its own upstream image, and its
+  engine configuration is not something an environment variable can express — stock
+  SearXNG answers `/search?format=json` with a 403, and the big web engines it ships
+  enabled return HTTP 200 with zero results from an ordinary self-hosted address. The
+  settings travel as a file instead of a republished image; if it is missing, the
+  container exits 127 saying so rather than running a search that finds nothing.
+
+## Prerequisites (building from a checkout)
 
 Both installers build the images from source inside containers, so the host needs no
 Python or Node toolchain — the image builds bring their own (`uv`, Node 22, `pnpm`).
-The release path builds nothing at all: it needs only a container engine, `curl` and
-`openssl`.
+The published images need even less — see [what you need](#1-what-you-need).
 
 **compose**
 
@@ -33,8 +207,8 @@ The release path builds nothing at all: it needs only a container engine, `curl`
   `systemctl --user enable --now podman.socket`; Docker needs `/var/run/docker.sock`
   readable by the user running the installer.
 - `git` and `openssl` (the installer generates the secrets with it).
-- About 4 GB of RAM for the stack, plus 2–3 GB per retrieval model you download, and
-  10 GB of disk for images, the database and the model cache. A local model server
+- About 4 GB of RAM for the stack, and 12 GB of disk: the images, about 6.5 GB for
+  the default retrieval models, and the database. A local model server
   (Ollama) is extra, and optional.
 
 **k8s**
@@ -99,8 +273,9 @@ connection, create a starter team, launch a session.
 
 ## The retrieval models
 
-Pyrrhula runs two models itself: one embeds text for search, one reranks the results. They
-are ~3GB together and live in a cache volume shared by the api and the worker.
+Pyrrhula runs two models itself: one embeds text for search, one reranks the results. The
+defaults (`bge-m3`, `bge-reranker-v2-m3`) take about 6.5 GB on disk and live in a cache
+volume shared by the api and the worker.
 
 **The installer does not download them, and does not choose them for you.** It used to,
 and that was the slowest part of an install by a wide margin — several gigabytes spent
@@ -182,7 +357,7 @@ under **Admin → Models**.
   one-shot runs Alembic before api/worker start).
 - **Skip the build**: `./install.sh compose --from-registry` runs the same stack from
   the published images — minutes instead of a first build. Add `=VERSION` to pin one
-  (`--from-registry=0.1.0-rc3`). Everything else on this page still applies; the
+  (`--from-registry=0.1.0`). Everything else on this page still applies; the
   difference is that you are running the tagged code rather than your working tree.
 - **Offline model loads**: `PYRRHULA_HF_OFFLINE` defaults to `1`, so the runtime never
   reaches Hugging Face on its own; the admin-console download lifts that for its one
@@ -192,90 +367,6 @@ under **Admin → Models**.
   in-request fetch back.
 - **TLS**: terminate in front of the web port with any proxy (Caddy example in
   `docs/self-host.md`).
-
-## release images (no checkout, no build)
-
-For running the product rather than working on it. Two images are published per release
-to GitHub Container Registry, and one compose file wires them together with two
-off-the-shelf ones:
-
-| image | what it runs |
-|---|---|
-| `ghcr.io/tuturu742/pyrrhula` | api, worker and the migration one-shot — one image, the entrypoint selects |
-| `ghcr.io/tuturu742/pyrrhula-web` | the built UI behind nginx |
-| `docker.io/pgvector/pgvector:pg16`, `docker.io/redis:7` | the database and the cache, unmodified |
-| `docker.io/searxng/searxng:latest` | agent web search, with this release's settings file mounted beside it |
-
-Ours are linux/amd64 and public: no `docker login`.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
-curl -fsSL .../release.sh | sh -s -- 0.1.0-rc3          # a specific release
-```
-
-Everything lands in `./pyrrhula` (`PYRRHULA_DIR` to choose). The script generates the
-same secrets the compose installer does, pulls, migrates, waits for the stack and prints
-the URL and the admin login. Rerunning it upgrades in place — the `.env` is kept.
-
-**Already running Pyrrhula on this host?** A release install claims the same container
-names, volumes and ports as a source install and would recreate it. To stand one beside
-the other — evaluating a release next to your working tree, or two deployments on one
-machine — give it its own name and ports:
-
-```bash
-PYRRHULA_COMPOSE_PROJECT=pyrrhula-rc PYRRHULA_WEB_PORT=5273 PYRRHULA_API_PORT=8100 \
-  curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
-```
-
-Container names, the exec-environment network and the volumes all follow that project
-name. Unset, nothing changes.
-
-**Without the script**, if you would rather read what you run:
-
-```bash
-base=https://raw.githubusercontent.com/tuturu742/pyrrhula/v0.1.0-rc3/docker
-curl -fsSLO $base/compose.release.yml
-curl -fsSLO $base/searxng-settings.yml     # the compose file mounts this by name
-cat > .env <<EOF
-PYRRHULA_VERSION=0.1.0-rc3
-PYRRHULA_POSTGRES_PASSWORD=$(openssl rand -hex 24)
-PYRRHULA_APP_DB_PASSWORD=$(openssl rand -hex 24)
-PYRRHULA_JWT_SECRET=$(openssl rand -base64 48)
-PYRRHULA_ENCRYPTION_KEY=$(openssl rand -base64 32)
-PYRRHULA_ADMIN_EMAIL=admin@example.com
-PYRRHULA_ADMIN_PASSWORD=$(openssl rand -hex 12)
-EOF
-chmod 600 .env
-docker compose -p pyrrhula -f compose.release.yml up -d
-```
-
-Two things differ from a source install, both deliberate:
-
-- **The first start is online.** The ~2.2 GB retrieval model is too large to put in an
-  image, so a pulled deployment begins with an empty cache volume and fills it once.
-  `PYRRHULA_HF_OFFLINE` therefore defaults to `0` here rather than `1`. Set it to `1`
-  after the first successful start if the host should never reach Hugging Face again.
-  Until the model is cached the stack runs and accepts turns but retrieves nothing, so
-  give it those few minutes before judging a first session.
-- **Hand-placed workflow packs go in a volume**, not a directory beside the compose
-  file — a file you downloaded on its own has nothing beside it. Use
-  `docker cp <pack> pyrrhula_api_1:/app/plugins-local/`.
-
-**Why search needs a second file.** SearXNG runs from its own upstream image, and its
-82 lines of engine configuration are not something an environment variable can express —
-stock SearXNG answers `/search?format=json` with a 403, and the big web engines it ships
-enabled return HTTP 200 with zero results from an ordinary self-hosted address.
-Republishing 266 MB of someone else's project to ship 4 KB of configuration would also
-have frozen SearXNG at whatever it was on release day, so the settings travel as a file
-instead. If it is missing, the container exits 127 saying so rather than running a
-search that finds nothing.
-
-`GET /health` on the api reports the version it is running, which is the only reliable
-way to tell what a pulled deployment actually is:
-
-```bash
-curl -s localhost:5173/api/health     # {"status":"ok","version":"0.1.0rc3"}
-```
 
 ## Portainer (a Docker host you manage in Portainer)
 
@@ -292,7 +383,7 @@ The release images, as a Portainer stack — no shell on the host needed.
    `pyrrhula`, paste the file.
 3. Under **Environment variables** add the four secrets the release file requires
    (`PYRRHULA_POSTGRES_PASSWORD`, `PYRRHULA_APP_DB_PASSWORD`, `PYRRHULA_JWT_SECRET`,
-   `PYRRHULA_ENCRYPTION_KEY` — generate them as in [release images](#release-images-no-checkout-no-build))
+   `PYRRHULA_ENCRYPTION_KEY` — generate them as in [published images](#published-images-no-checkout-no-build))
    plus `PYRRHULA_ENGINE_SOCKET=/var/run/docker.sock`, and — to have an administrator from
    the start — `PYRRHULA_ADMIN_EMAIL` / `PYRRHULA_ADMIN_PASSWORD`. Optional:
    `PYRRHULA_WEB_PORT` (default 5173), `PYRRHULA_API_PORT` (default 8000),

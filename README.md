@@ -35,16 +35,17 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.1.0-rc3.** The full stack described below is implemented and running:
-> tenancy/RLS, knowledge & retrieval, the process engine, the context assembler,
-> deterministic resolution, the secrets layer (disclosure gate, structural exclusion,
-> post-generation leak check, per-workspace trust modes), the overseer's view, behavioral
-> axes with engine-enforced high-stakes dials, delegated coding work with image builds,
-> portable `.pyr` workspace bundles, and three verified install paths (compose, k8s,
-> Portainer). Seven runnable sample workspaces live in
-> [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples), each run end to end
-> on a fresh install before this release — start with the murder mystery, or with Mice
-> Invaders if you want to watch a pull request get built.
+> Status: **0.1.0**, the first public release ([what is in it](CHANGELOG.md)). The full
+> stack described below is implemented and running: tenancy/RLS, knowledge & retrieval,
+> the process engine, the context assembler, deterministic resolution, the secrets layer
+> (disclosure gate, structural exclusion, post-generation leak check, per-workspace trust
+> modes), the overseer's view, behavioral axes with engine-enforced high-stakes dials,
+> delegated coding work with image builds, the workspace assistant, portable `.pyr`
+> workspace bundles, and three verified install paths (published images, compose, k8s,
+> plus a Portainer stack). Nine runnable sample workspaces live in
+> [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples), seven of them run end
+> to end on fresh installs before this release — start with the murder mystery, or with
+> Mice Invaders if you want to watch a pull request get built.
 
 ![A session on the software bench: the work item approved, the pull request reviewed, the build served as a preview](docs/images/session-coding-bench.png)
 
@@ -65,22 +66,35 @@ managed by Pyrrhula. One product, one codebase.
 
 ## Install
 
-```bash
-./install.sh compose   # docker or podman on this machine
-./install.sh k8s       # a Kubernetes cluster (one-command dev install on k3s)
-```
-
-Or run a published release — no checkout, no build, three pulled images:
+**Run a published release** — no checkout, no build. You need Docker or Podman, `curl`
+and `openssl`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
 ```
 
-Each installer checks prerequisites (`--check` to only check), generates secrets,
-brings the stack up, and prints the URL — then you sign up in the browser and the
-setup checklist takes over — a built-in general discussion workflow ("Default") works
-out of the box; specialized workflows (RPG, software development) come from plugin
-repositories, with the official one preinstalled. Full walkthrough, upgrade paths, and troubleshooting:
+Then open **http://localhost:5173** and:
+
+1. **Register** — name your organization; the first account owns the deployment and is its admin.
+2. **App settings → Models → Download from Hugging Face** — the search models, ~6.5 GB, once.
+3. **Personas → Model profiles** — add a connection with your provider's API key (or a
+   local Ollama).
+4. Import a [sample](https://github.com/tuturu742/pyrrhula-samples) and run it.
+
+Requirements, upgrading, HTTPS, running beside another install and removing it:
+[docs/install.md](docs/install.md#published-images-no-checkout-no-build).
+
+**Build from source** — to change the code, or to deploy to Kubernetes:
+
+```bash
+./install.sh compose   # docker or podman on this machine
+./install.sh k8s       # a Kubernetes cluster (one-command dev install on k3s)
+```
+
+Each checks prerequisites (`--check` to only check), generates secrets, builds and starts
+the stack, and prints the URL; the steps after that are the same. A built-in general
+discussion workflow works out of the box; the RPG and software-development workflows come
+from the official plugin repository, preinstalled. Full walkthrough and troubleshooting:
 [docs/install.md](docs/install.md).
 
 ## What the system enforces
@@ -165,7 +179,7 @@ Key mechanisms:
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Pydantic v2, celpy |
 | Database | PostgreSQL 16 only — relational + pgvector + JSONB + tsvector + job queue |
 | Cache / fan-out | Redis (SSE fan-out, rate limits, retrieval cache) |
-| Embeddings / rerank | bge-m3 (1024-dim) + bge-reranker-v2-m3, self-hosted ([swappable](#the-bundled-models)) |
+| Embeddings / rerank | bge-m3 (1024-dim) + bge-reranker-v2-m3, self-hosted ([swappable](#the-retrieval-models)) |
 | Model providers | LiteLLM behind a `ModelProvider` port — Ollama, OpenAI, Anthropic, Gemini, … |
 | Frontend | React 18 + Vite + TypeScript, React Flow, Tailwind + shadcn/ui, TanStack Query |
 | Streaming | SSE (POST for commands), Redis pub/sub across workers |
@@ -194,7 +208,7 @@ mismatched choice fails loudly on boot instead of quietly returning nothing at q
 
 Two things to know before changing the embedding model. Existing vectors are **not**
 re-embedded: a swap orphans every stored chunk embedding, so re-index or start clean.
-And the deployment always loads models offline (`HF_HUB_OFFLINE=1`), because a cold
+And the runtime never downloads a model in the middle of a request, because a cold
 in-request download blocks the first knowledge call for minutes; the only fetch path is
 the download (or cache upload) on **Admin → Models**.
 
