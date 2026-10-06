@@ -3,7 +3,7 @@
 # Python or Node on the host -- one compose file and three pulled images.
 #
 #   curl -fsSL https://raw.githubusercontent.com/tuturu742/pyrrhula/main/deploy/installers/release.sh | sh
-#   curl -fsSL .../release.sh | sh -s -- 0.1.0              # a specific release
+#   curl -fsSL .../release.sh | sh -s -- 0.1.1              # a specific release
 #
 # Everything lands in ./pyrrhula (override with PYRRHULA_DIR). Rerun it to upgrade:
 # the .env is kept, the compose file and images are refreshed.
@@ -16,7 +16,7 @@ set -eu
 
 REPO="tuturu742/pyrrhula"
 # Used only when GitHub cannot be asked (offline, rate-limited) and no version was given.
-FALLBACK_VERSION="0.1.0"
+FALLBACK_VERSION="0.1.1"
 VERSION="${1:-${PYRRHULA_VERSION:-}}"
 if [ -z "$VERSION" ]; then
   # The newest *stable* release: GitHub's releases/latest skips pre-releases, so the

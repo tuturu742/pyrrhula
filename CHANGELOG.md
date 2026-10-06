@@ -6,6 +6,11 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-06
+
+Fixes found while preparing the launch material, and a release process that lets a fix ship
+while the next feature set is still being built.
+
 ### Fixed
 
 - **Stopping one preview stopped others.** A repository's preview of "the latest build"
@@ -27,6 +32,10 @@ break APIs, the database always migrates forward.
 - **The assistant will not propose a secret whose gist gives it away.** The gist is the
   part others may see; a proposal whose gist repeats the secret is refused and the model
   is asked for one that says what the secret is about instead.
+- **Releases are one command and two lines.** `scripts/set_version.py` sets every version
+  string a release needs; CI also runs on `release/X.Y` branches so patch releases can be
+  tagged there; only the highest final version is marked *latest*, which is what the
+  one-line installer follows. See [docs/releasing.md](docs/releasing.md).
 
 ## [0.1.0] - 2026-10-06
 
@@ -124,5 +133,6 @@ domain-neutral core.
 - The AWS ECS execution engine is experimental and unverified; OIDC/SAML login is not
   there yet.
 
-[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.1
 [0.1.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.0

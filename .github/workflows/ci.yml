@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # release/X.Y carries patch releases; the release workflow refuses a tag whose
+    # commit has no green run of this file, so the branch must be built here too.
+    branches: [main, "release/**"]
   pull_request:
 
 concurrency:
