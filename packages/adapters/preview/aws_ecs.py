@@ -109,7 +109,9 @@ class AwsEcsPreviewProvider:
         self, name: str, image: str, command: str, env: dict[str, str], port: int
     ) -> PreviewHandle:
         ecs = self._client("ecs")
-        self._stop_matching(ecs, name)  # the old task serves the old artifact
+        # The old task serves the old artifact. Only this name: a repo's no-branch preview
+        # is a prefix of its branch previews' names.
+        self._stop_matching(ecs, name[:36], exact=True)
         task_def = self._ensure_task_definition(ecs, image, port)
         started = ecs.run_task(
             cluster=self._cluster,
@@ -171,7 +173,9 @@ class AwsEcsPreviewProvider:
         # ECS has no native task deadline -- the worker's reaper enforces ttl_seconds.
         return await asyncio.to_thread(self._start, name, image, command, env, port)
 
-    def _describe_by_started_by(self, ecs: Any, prefix: str) -> list[dict[str, Any]]:
+    def _describe_by_started_by(
+        self, ecs: Any, prefix: str, *, exact: bool = False
+    ) -> list[dict[str, Any]]:
         arns: list[str] = []
         token: str | None = None
         while True:
@@ -187,7 +191,8 @@ class AwsEcsPreviewProvider:
         for start in range(0, len(arns), 100):
             described = ecs.describe_tasks(cluster=self._cluster, tasks=arns[start : start + 100])
             for task in described.get("tasks") or []:
-                if str(task.get("startedBy") or "").startswith(prefix):
+                started_by = str(task.get("startedBy") or "")
+                if started_by == prefix if exact else started_by.startswith(prefix):
                     matched.append(task)
         return matched
 
@@ -195,7 +200,7 @@ class AwsEcsPreviewProvider:
         def _status() -> str:
             try:
                 ecs = self._client("ecs")
-                tasks = self._describe_by_started_by(ecs, ref)
+                tasks = self._describe_by_started_by(ecs, ref[:36], exact=True)
             except PreviewUnavailableError:
                 return "missing"
             if not tasks:
@@ -207,9 +212,9 @@ class AwsEcsPreviewProvider:
 
         return await asyncio.to_thread(_status)
 
-    def _stop_matching(self, ecs: Any, prefix: str) -> int:
+    def _stop_matching(self, ecs: Any, prefix: str, *, exact: bool = False) -> int:
         removed = 0
-        for task in self._describe_by_started_by(ecs, prefix):
+        for task in self._describe_by_started_by(ecs, prefix, exact=exact):
             ecs.stop_task(
                 cluster=self._cluster, task=task["taskArn"], reason="pyrrhula preview teardown"
             )
@@ -217,7 +222,16 @@ class AwsEcsPreviewProvider:
         return removed
 
     async def teardown(self, ref: str) -> None:
-        await self.teardown_matching(ref)
+        """Stop exactly this preview (``startedBy`` holds the name's first 36 characters),
+        never the branch previews whose names it is a prefix of."""
+
+        def _teardown() -> None:
+            try:
+                self._stop_matching(self._client("ecs"), ref[:36], exact=True)
+            except PreviewUnavailableError:
+                return
+
+        await asyncio.to_thread(_teardown)
 
     async def teardown_matching(self, prefix: str) -> int:
         def _teardown() -> int:

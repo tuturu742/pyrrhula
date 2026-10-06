@@ -199,3 +199,75 @@ async def test_unreachable_api_is_graceful_not_a_crash() -> None:
     assert await _provider(handler).status("pyr-prev-x") == "missing"
     with pytest.raises(PreviewUnavailableError, match="kubernetes api unreachable"):
         await _provider(handler).start("pyr-prev-x", "img", "serve", env={}, port=8080)
+
+
+_PLAIN = "pyr-prev-6a23d529"
+_BRANCH = "pyr-prev-6a23d529-pyr-45dd0469-3"
+
+
+def _jobs_handler(deleted: list[str]):  # noqa: ANN202
+    """A namespace holding a repo's no-branch preview and one of its branch previews."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/apis/batch/v1/namespaces/envs/jobs" and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "metadata": {
+                                "name": "plain-job",
+                                "labels": {"pyrrhula.dev/preview": _PLAIN},
+                            }
+                        },
+                        {
+                            "metadata": {
+                                "name": "branch-job",
+                                "labels": {"pyrrhula.dev/preview": _BRANCH},
+                            }
+                        },
+                    ]
+                },
+            )
+        if request.method == "DELETE":
+            deleted.append(path.rsplit("/", 1)[-1])
+            return httpx.Response(200, json={})
+        if path == "/apis/batch/v1/namespaces/envs/jobs":
+            return httpx.Response(201, json={})
+        if path == "/api/v1/namespaces/envs/pods":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "metadata": {"name": "p"},
+                            "status": {"phase": "Running", "podIP": "10.0.0.3"},
+                        }
+                    ]
+                },
+            )
+        raise AssertionError(path)
+
+    return handler
+
+
+async def test_teardown_stops_only_that_preview_not_the_branches_it_prefixes() -> None:
+    """``pyr-prev-<repo8>`` (no branch) is a prefix of ``pyr-prev-<repo8>-<branch>``.
+    Stopping the first used to stop every branch preview of the repo."""
+    deleted: list[str] = []
+    await _provider(_jobs_handler(deleted)).teardown(_PLAIN)
+    assert deleted == ["plain-job"]
+
+
+async def test_start_replaces_only_its_own_name() -> None:
+    deleted: list[str] = []
+    await _provider(_jobs_handler(deleted)).start(_PLAIN, "img", "serve", env={}, port=8080)
+    assert deleted == ["plain-job"]
+
+
+async def test_teardown_matching_still_sweeps_by_prefix() -> None:
+    """Session-wide cleanup keeps its prefix semantics."""
+    deleted: list[str] = []
+    assert await _provider(_jobs_handler(deleted)).teardown_matching(_PLAIN) == 2
+    assert sorted(deleted) == ["branch-job", "plain-job"]

@@ -11,6 +11,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { apiClient } from "@/lib/api-client/client";
+import { Markdown } from "@/components/Markdown";
 
 interface GraphNodeData {
   id: string;
@@ -237,16 +238,14 @@ export function RepoGraphPage() {
       {selectedNode && selectedNode.summary && (
         <div className="rounded-md border border-border bg-secondary/40 p-3">
           <div className="text-sm font-medium">{selectedNode.label}</div>
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {selectedNode.summary}
-          </p>
+          <Markdown text={selectedNode.summary} className="text-sm text-muted-foreground" />
         </div>
       )}
 
       {graph?.available && graph.overview_md && (
         <section className="flex flex-col gap-2 rounded-md border border-border p-4">
           <h2 className="font-medium">Overview</h2>
-          <p className="whitespace-pre-wrap text-sm">{graph.overview_md}</p>
+          <Markdown text={graph.overview_md} className="text-sm" />
         </section>
       )}
       {graph?.available &&
@@ -258,7 +257,7 @@ export function RepoGraphPage() {
             <h2 className="font-medium">
               Repo: <span className="font-mono">{key}</span>
             </h2>
-            <p className="whitespace-pre-wrap text-sm">{summary as string}</p>
+            <Markdown text={summary as string} className="text-sm" />
           </section>
         ))}
     </div>

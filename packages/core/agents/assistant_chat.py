@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -903,6 +904,38 @@ _WRITE_TOOL_GATES: dict[str, str] = {
 # reads back; hints and directives are secret material too.
 _UNSUMMARISED = frozenset({"content", "hint_text", "behavioral_directive"})
 
+_WORD_RE = re.compile(r"[a-z0-9']+")
+
+
+def gist_gives_away(content: str, gist: str) -> bool:
+    """Whether a secret's gist -- the part others may see -- repeats the secret itself.
+
+    The model writes both fields from one user sentence, and has proposed the sentence as
+    the gist ("the barrow's warden is Linnea's lost brother"), which concealment then
+    faithfully shows to everyone. Caught here, before the proposal reaches the user: the
+    content verbatim; most of its distinctive words; or -- when the model writes a longer
+    secret and keeps the user's one-line statement of it as the gist -- a gist made almost
+    entirely of the secret's own distinctive words.
+    """
+    content_words = _words(content)
+    gist_words = _words(gist)
+    if not content_words or not gist_words:
+        return False
+    if " ".join(content_words) in " ".join(gist_words):
+        return True
+    content_distinct = {w for w in content_words if len(w) >= 4}
+    gist_distinct = {w for w in gist_words if len(w) >= 4}
+    shared = content_distinct & gist_distinct
+    if len(content_distinct) >= 3 and len(shared) / len(content_distinct) >= 0.6:
+        return True
+    return len(gist_distinct) >= 4 and len(shared) / len(gist_distinct) >= 0.8
+
+
+def _words(text: str) -> list[str]:
+    """Lowercased words with possessives folded ("Linnea's" and "Linnea" are one word)."""
+    folded = (w.removesuffix("'s").strip("'") for w in _WORD_RE.findall(text.lower()))
+    return [w for w in folded if w]
+
 
 async def _register_write_tools(
     registry: ToolRegistry, state: _ChatState, gate: ViewerGate
@@ -925,6 +958,20 @@ async def _register_write_tools(
             # model invents for a tool that never asked for one is dropped here, before
             # the proposal reaches the browser.
             kept = {k: v for k, v in args.items() if k in _declared and v not in (None, "")}
+            if (
+                _action in ("create_secret", "update_secret")
+                and kept.get("content")
+                and kept.get("gist")
+                and gist_gives_away(str(kept["content"]), str(kept["gist"]))
+            ):
+                return ToolResult(
+                    content=(
+                        f"Not proposed: the gist repeats the secret. Others may see the gist, "
+                        f"so it must say what the secret is ABOUT without saying what it IS "
+                        f"(e.g. 'the warden's true identity', not the identity). Call "
+                        f"{_action} again with a gist that gives nothing away."
+                    )
+                )
             summary_bits = ", ".join(
                 f"{k}={'(hidden)' if k in _UNSUMMARISED else str(v)[:60]}" for k, v in kept.items()
             )
@@ -1067,14 +1114,24 @@ async def _chat_inner(
     model_string = f"{profile.provider}/{profile.model}"
     tool_ctx = ToolContext(tenant_id=tenant_id, persona_id=persona.id, session_id=None)
 
-    for _iteration in range(_MAX_TOOL_ITERATIONS):
+    streamed_text = False
+    for iteration in range(_MAX_TOOL_ITERATIONS):
+        rounds_left = _MAX_TOOL_ITERATIONS - iteration - 1
+        # The last round offers only the proposal tools. A model that kept reading (five
+        # knowledge listings, two doc searches) used to hit the cap with nothing to show
+        # for it; on its last round it can still propose what was asked, but not read more.
+        specs = (
+            registry.specs()
+            if rounds_left > 0
+            else tuple(s for s in registry.specs() if s.name in _WRITE_TOOLS)
+        )
         req = GenerationRequest(
             egress_policy=await load_egress_policy(tenant_id),
             model=model_string,
             messages=conversation,
             purpose="generation",
             max_tokens=_MAX_REPLY_TOKENS,
-            tools=registry.specs(),
+            tools=specs,
             api_base=profile.api_base,
             params=dict(profile.params or {}),
             api_key=api_key,
@@ -1084,7 +1141,13 @@ async def _chat_inner(
         start = time.monotonic()
         async for chunk in provider.generate(req):
             if chunk.text:
+                if not pieces and streamed_text:
+                    # Text from an earlier round ("Let me check the sessions.") and this
+                    # round's ("Yes, it went through.") land in one chat bubble; without a
+                    # break they read as one run-on sentence.
+                    yield {"type": "text", "delta": "\n\n"}
                 pieces.append(chunk.text)
+                streamed_text = True
                 yield {"type": "text", "delta": chunk.text}
             if chunk.tool_calls:
                 tool_calls = chunk.tool_calls
@@ -1156,5 +1219,40 @@ async def _chat_inner(
                     "tool_call_id": tool_call.id,
                 }
             )
+        # Say so before the budget runs out, in the tool result the model reads next (a
+        # mid-conversation system message is not portable across providers).
+        if rounds_left in (1, 2) and conversation[-1].get("role") == "tool":
+            conversation[-1]["content"] = (
+                f"{conversation[-1]['content']}\n\n{_budget_note(rounds_left)}"
+            )
 
-    yield {"type": "error", "detail": f"tool loop exceeded {_MAX_TOOL_ITERATIONS} iterations"}
+    if state.proposals:
+        # It proposed what it could before the budget ran out: the cards are the answer.
+        yield {"type": "text", "delta": _OUT_OF_ROUNDS_WITH_PROPOSALS}
+        yield {"type": "done", "context_entry_keys": entry_keys}
+        return
+    yield {
+        "type": "error",
+        "detail": (
+            f"ran out of tool rounds ({_MAX_TOOL_ITERATIONS}) before answering -- ask "
+            "something narrower, or name the thing you mean"
+        ),
+    }
+
+
+_OUT_OF_ROUNDS_WITH_PROPOSALS = (
+    "\n\nThat used this turn's tool budget. The proposals above are ready to Apply; "
+    "ask me to continue if something is missing."
+)
+
+
+def _budget_note(rounds_left: int) -> str:
+    if rounds_left == 1:
+        return (
+            "[Last tool round of this turn: only proposal tools are available now. Propose "
+            "what the user asked for with what you already know, then stop.]"
+        )
+    return (
+        f"[{rounds_left} tool rounds left in this turn. Stop reading: propose what the user "
+        "asked for now, or answer with what you have.]"
+    )
