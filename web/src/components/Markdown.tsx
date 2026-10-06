@@ -22,13 +22,13 @@ const components: Components = {
     <ol className="my-1.5 list-decimal space-y-0.5 pl-5 first:mt-0 last:mb-0">{children}</ol>
   ),
   li: ({ children }) => <li className="pl-0.5">{children}</li>,
-  h1: ({ children }) => <p className="my-1.5 font-semibold first:mt-0">{children}</p>,
-  h2: ({ children }) => <p className="my-1.5 font-semibold first:mt-0">{children}</p>,
-  h3: ({ children }) => <p className="my-1.5 font-semibold first:mt-0">{children}</p>,
-  h4: ({ children }) => <p className="my-1.5 font-medium first:mt-0">{children}</p>,
-  h5: ({ children }) => <p className="my-1.5 font-medium first:mt-0">{children}</p>,
-  h6: ({ children }) => <p className="my-1.5 font-medium first:mt-0">{children}</p>,
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  h1: ({ children }) => <p className="my-1.5 font-bold first:mt-0">{children}</p>,
+  h2: ({ children }) => <p className="my-1.5 font-bold first:mt-0">{children}</p>,
+  h3: ({ children }) => <p className="my-1.5 font-bold first:mt-0">{children}</p>,
+  h4: ({ children }) => <p className="my-1.5 font-semibold first:mt-0">{children}</p>,
+  h5: ({ children }) => <p className="my-1.5 font-semibold first:mt-0">{children}</p>,
+  h6: ({ children }) => <p className="my-1.5 font-semibold first:mt-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
   a: ({ children, href }) => (
     <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
       {children}

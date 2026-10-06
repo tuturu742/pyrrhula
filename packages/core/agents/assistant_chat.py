@@ -913,18 +913,28 @@ def gist_gives_away(content: str, gist: str) -> bool:
     The model writes both fields from one user sentence, and has proposed the sentence as
     the gist ("the barrow's warden is Linnea's lost brother"), which concealment then
     faithfully shows to everyone. Caught here, before the proposal reaches the user: the
-    content verbatim, or most of its distinctive words.
+    content verbatim; most of its distinctive words; or -- when the model writes a longer
+    secret and keeps the user's one-line statement of it as the gist -- a gist made almost
+    entirely of the secret's own distinctive words.
     """
-    content_words = _WORD_RE.findall(content.lower())
-    gist_words = _WORD_RE.findall(gist.lower())
+    content_words = _words(content)
+    gist_words = _words(gist)
     if not content_words or not gist_words:
         return False
     if " ".join(content_words) in " ".join(gist_words):
         return True
-    distinctive = {w for w in content_words if len(w) >= 4}
-    if len(distinctive) < 3:
-        return False
-    return len(distinctive & set(gist_words)) / len(distinctive) >= 0.6
+    content_distinct = {w for w in content_words if len(w) >= 4}
+    gist_distinct = {w for w in gist_words if len(w) >= 4}
+    shared = content_distinct & gist_distinct
+    if len(content_distinct) >= 3 and len(shared) / len(content_distinct) >= 0.6:
+        return True
+    return len(gist_distinct) >= 4 and len(shared) / len(gist_distinct) >= 0.8
+
+
+def _words(text: str) -> list[str]:
+    """Lowercased words with possessives folded ("Linnea's" and "Linnea" are one word)."""
+    folded = (w.removesuffix("'s").strip("'") for w in _WORD_RE.findall(text.lower()))
+    return [w for w in folded if w]
 
 
 async def _register_write_tools(
