@@ -198,3 +198,50 @@ async def test_extra_usage_is_committed_with_the_message(db_available: None) -> 
         )
     assert {r.model for r in rows} >= {"fake-regen"}
     assert all(r.message_id == rows[0].message_id for r in rows)
+
+
+async def test_a_required_tool_left_uncalled_is_asked_for_once(db_available: None) -> None:
+    """A vote turn that answers in words without voting is asked once for the vote, in
+    the same turn; what it said first is kept."""
+    tenant_id, session_id, persona_id = await _setup("hygiene-required")
+    seen: list[dict[str, object]] = []
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(text="I think seat 2 is lying."),
+            _ScriptedTurn(
+                text="",
+                tool_calls=(
+                    ToolCall(id="c1", name="claim", arguments={"seat": 2, "item": "Peru"}),
+                ),
+            ),
+            _ScriptedTurn(text="Done."),
+        ]
+    )
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Vote now."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=_registry(_CLAIM, seen),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+        required_tool="claim",
+    )
+    assert seen == [{"seat": 2, "item": "Peru"}]
+    assert result.content_md == "I think seat 2 is lying.\n\nDone."
+
+
+async def test_a_required_tool_is_asked_for_only_once(db_available: None) -> None:
+    tenant_id, session_id, persona_id = await _setup("hygiene-required-once")
+    provider = _ScriptedProvider(turns=[_ScriptedTurn(text="No."), _ScriptedTurn(text="Still no.")])
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Vote now."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=_registry(_CLAIM, []),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+        required_tool="claim",
+    )
+    assert result.content_md == "No.\n\nStill no."

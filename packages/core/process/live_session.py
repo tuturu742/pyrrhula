@@ -601,6 +601,7 @@ async def run_one_persona_turn(
     # value the viewer may not know never enters the request at all.
     participants_block = ""
     audience: list[uuid.UUID] | None = None
+    required_tool: str | None = None
     definition = await parts.load_session_definition(tenant_id, session_id)
     if definition is not None and definition.participants is not None:
         views = await parts.participant_views(tenant_id, session_id)
@@ -618,6 +619,7 @@ async def run_one_persona_turn(
             targets = parts.ballot_targets(
                 phase.ballot, views, voter, state=session_state, settings=session_settings
             )
+            required_tool = parts.BALLOT_TOOL_NAME
             tool_registry.register(
                 *parts.make_ballot_tool(
                     tenant_id=tenant_id,
@@ -1111,6 +1113,8 @@ async def run_one_persona_turn(
             triggered_by=triggered_by,
             extra_usage_points=regen_usage,
             audience=audience,
+            phase_key=phase_key,
+            required_tool=required_tool,
             max_tool_loop=getattr(phase, "max_tool_calls", None) or _DEFAULT_MAX_TOOL_LOOP,
         )
     except UsageLimitExceededError as exc:

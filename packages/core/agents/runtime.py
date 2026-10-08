@@ -333,6 +333,12 @@ async def run_agent_turn(
     extra_usage_points: list[UsagePoint] | None = None,
     # Who may read the reply (principal ids), from the phase's `audience:`. None = everyone.
     audience: list[uuid.UUID] | None = None,
+    phase_key: str | None = None,
+    # A tool this turn must call (a vote phase's ballot). A reply without it is answered
+    # once, inside the same turn, asking for the call; the words already said are kept.
+    # Still missing after that, the turn commits as it is -- the caller decides what an
+    # absent move means (a vote counts it as an abstention).
+    required_tool: str | None = None,
 ) -> TurnResult:
     with _tracer.start_as_current_span("runtime.run_agent_turn") as span:
         span.set_attribute("pyrrhula.persona_id", str(persona_id))
@@ -385,8 +391,9 @@ async def run_agent_turn(
         # What the model wrote in the same responses as its tool calls (merge_turn_text).
         earlier_text: list[str] = []
         tools = tool_registry.specs()
+        nudged = False
 
-        for _iteration in range(max_tool_loop):
+        for iteration in range(max_tool_loop):
             content, tool_calls, usage, reasoning = await _call_provider_with_retry(
                 profile,
                 fallback_profile,
@@ -404,6 +411,34 @@ async def run_agent_turn(
                 allow_empty=tool_calls_made > 0,
             )
             usage_points.append(usage)
+
+            if (
+                not tool_calls
+                and required_tool is not None
+                and required_tool not in tools_called
+                and not nudged
+                and iteration < max_tool_loop - 1
+            ):
+                nudged = True
+                if content.strip():
+                    earlier_text.append(content.strip())
+                conversation.append(
+                    {
+                        "role": "assistant",
+                        "content": content,
+                        **({"reasoning_content": reasoning} if reasoning else {}),
+                    }
+                )
+                conversation.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"You have not called the {required_tool} tool yet, and this "
+                            f"turn requires it. Call {required_tool} now."
+                        ),
+                    }
+                )
+                continue
 
             if not tool_calls:
                 content = merge_turn_text(earlier_text, content)
@@ -436,6 +471,7 @@ async def run_agent_turn(
                     context_manifest_id=context_manifest_id,
                     event_seq=event_seq,
                     audience=audience,
+                    phase_key=phase_key,
                 )
 
             # The assistant turn that REQUESTED the tools must carry tool_calls back in
@@ -552,6 +588,7 @@ async def run_agent_turn(
             context_manifest_id=context_manifest_id,
             event_seq=event_seq,
             audience=audience,
+            phase_key=phase_key,
         )
 
 
@@ -610,6 +647,7 @@ async def _commit_turn(
     context_manifest_id: uuid.UUID | None,
     event_seq: int | None = None,
     audience: list[uuid.UUID] | None = None,
+    phase_key: str | None = None,
 ) -> TurnResult:
     """One transaction: the message, every usage_record from the loop, the durable
     session_event, and -- when this turn's tool calls produced any ResolutionRecords
@@ -641,6 +679,7 @@ async def _commit_turn(
             context_manifest_id=context_manifest_id,
             event_seq=event_seq,
             audience=audience,
+            phase_key=phase_key,
         )
     except IntegrityError as exc:
         # The pre-check inside _commit_turn_once closes the common case; this catches
@@ -662,6 +701,7 @@ async def _commit_turn(
         context_manifest_id=context_manifest_id,
         event_seq=None,
         audience=audience,
+        phase_key=phase_key,
     )
 
 
@@ -680,6 +720,7 @@ async def _commit_turn_once(
     context_manifest_id: uuid.UUID | None,
     event_seq: int | None = None,
     audience: list[uuid.UUID] | None = None,
+    phase_key: str | None = None,
 ) -> TurnResult:
     async with tenant_scope(tenant_id) as session:
         session_row = await session.get(SessionRow, session_id)
@@ -785,6 +826,8 @@ async def _commit_turn_once(
                     "triggered_by": triggered_by,
                     # readers outside it never get this message (history, recaps)
                     "audience": [str(a) for a in audience] if audience is not None else None,
+                    # the phase it was spoken in, for transcripts and exports
+                    **({"phase": phase_key} if phase_key else {}),
                 },
                 actor_principal_id=author_principal_id,
             )
