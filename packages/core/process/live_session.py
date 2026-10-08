@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from core.agents.authoring import (
     HISTORY_CHAR_BUDGET_KEY,
@@ -48,6 +48,7 @@ from core.ports.model_provider import GenerationRequest, ModelProvider, ToolSpec
 from core.ports.moderation import ModerationProvider
 from core.ports.permission import PermissionService
 from core.ports.reranker import Reranker
+from core.process import participants as parts
 from core.process.awaits import make_await_hook
 from core.process.checkpoints import make_checkpoint_hook
 from core.process.dsl.schema import ProcessDefinitionDSL
@@ -60,6 +61,7 @@ from core.process.interpreter import (
     InterpreterFaultError,
     NextActorFn,
     OnEvent,
+    _phase_entry_seq,
     advance_session,
 )
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
@@ -176,7 +178,17 @@ async def _load_conversation_with_boundary(
                     Persona.principal_id == MessageRow.author_principal_id,
                     isouter=True,
                 )
-                .where(MessageRow.session_id == session_id)
+                .where(
+                    MessageRow.session_id == session_id,
+                    # A message with an audience reaches only its members; with no
+                    # viewer, only public messages. In the query, not after it.
+                    or_(
+                        MessageRow.audience.is_(None),
+                        MessageRow.audience.contains([viewer_principal_id]),
+                    )
+                    if viewer_principal_id is not None
+                    else MessageRow.audience.is_(None),
+                )
                 .order_by(MessageRow.event_seq)
             )
         ).all()
@@ -350,6 +362,8 @@ async def run_one_persona_turn(
         assert viewer_principal is not None
         session_row = await session.get(SessionRow, session_id)
         agenda_md = session_row.agenda_md if session_row is not None else None
+        session_state = dict(session_row.state or {}) if session_row is not None else {}
+        session_settings = dict(session_row.settings or {}) if session_row is not None else {}
     # Ephemeral "who is preparing a reply" cue for live viewers: event_seq -1 marks it
     # non-durable (never a session_event row, never replayed on reconnect) -- pure
     # stream furniture, mirroring how token chunks work.
@@ -582,6 +596,46 @@ async def run_one_persona_turn(
     # for everything a normal deployment offers.
     for spec, handler in extra_tools or ():
         tool_registry.register(spec, handler)
+    # Participants: the table as THIS viewer may know it, the vote tool when the phase
+    # is a vote, and who may read what is said here. Decided from the record; a hidden
+    # value the viewer may not know never enters the request at all.
+    participants_block = ""
+    audience: list[uuid.UUID] | None = None
+    definition = await parts.load_session_definition(tenant_id, session_id)
+    if definition is not None and definition.participants is not None:
+        views = await parts.participant_views(tenant_id, session_id)
+        participants_block = parts.render_participants_block(
+            definition.participants,
+            views,
+            principal_id,
+            viewer_is_supervisor=persona_type == "supervisor",
+            results=await parts.ballot_results(tenant_id, session_id),
+        )
+        voter = next((v for v in views if v.principal_id == principal_id), None)
+        if getattr(phase, "ballot", None) is not None and voter is not None:
+            async with tenant_scope(tenant_id) as session:
+                entry_seq = await _phase_entry_seq(session, session_id)
+            targets = parts.ballot_targets(
+                phase.ballot, views, voter, state=session_state, settings=session_settings
+            )
+            tool_registry.register(
+                *parts.make_ballot_tool(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    key=parts.poll_key(phase_key, entry_seq),
+                    voter=voter,
+                    targets=targets,
+                )
+            )
+        if getattr(phase, "audience", None) is not None:
+            audience = await parts.audience_for(
+                tenant_id,
+                session_id,
+                phase.audience.members,
+                principal_id,
+                state=session_state,
+                settings=session_settings,
+            )
     if "randomizer" in phase.tools:
         handler = make_randomizer_handler(
             rule_system=rule_system,
@@ -859,6 +913,8 @@ async def run_one_persona_turn(
     if persona_brief:
         system_blocks.append(persona_brief)
     system_blocks.append(manifest.rendered_context)
+    if participants_block:
+        system_blocks.append(participants_block)
     # The phase's own task instruction (DSL `prompt`): what this turn is FOR and what
     # shape its output should take -- without it the model only knows who it is, not
     # what the flow wants from it here.
@@ -1054,6 +1110,7 @@ async def run_one_persona_turn(
             finalize_reply=finalize_reply,
             triggered_by=triggered_by,
             extra_usage_points=regen_usage,
+            audience=audience,
             max_tool_loop=getattr(phase, "max_tool_calls", None) or _DEFAULT_MAX_TOOL_LOOP,
         )
     except UsageLimitExceededError as exc:
@@ -1084,6 +1141,7 @@ async def run_one_persona_turn(
                 "phase": phase_key,
                 "created_at": datetime.now(UTC).isoformat(),
                 "triggered_by": triggered_by,
+                "audience": [str(a) for a in audience] if audience is not None else None,
             },
         )
 

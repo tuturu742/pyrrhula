@@ -363,6 +363,7 @@ async def collect_prose_by_phase(
     *,
     from_event_seq: int,
     to_event_seq: int,
+    reader: uuid.UUID | None,
     with_author: bool = True,
 ) -> list[tuple[str, list[str]]]:
     """Walks the session log forward, tracking the current phase from ``phase_transition``
@@ -378,6 +379,11 @@ async def collect_prose_by_phase(
     knows the name. The log already carries the author on every ``message`` event.
     ``with_author=False`` is for the one reader that wants the text itself -- a composed
     document rendered as written -- where a speaker prefix would corrupt the first line.
+
+    ``reader`` is whose prose this is: a message with an audience (a private channel, a
+    sealed vote's reasoning) is included only when ``reader`` is in it. ``None`` is the
+    overseer's reading -- everything -- and only reports written for the overseer pass
+    it. Required, so no caller gets the overseer's view by forgetting an argument.
     """
     async with tenant_scope(tenant_id) as session:
         rows = list(
@@ -388,6 +394,16 @@ async def collect_prose_by_phase(
                         SessionEventRow.session_id == session_id,
                         SessionEventRow.event_seq >= from_event_seq,
                         SessionEventRow.event_seq <= to_event_seq,
+                        *(
+                            ()
+                            if reader is None
+                            else (
+                                or_(
+                                    SessionEventRow.payload["audience"].astext.is_(None),
+                                    SessionEventRow.payload["audience"].contains([str(reader)]),
+                                ),
+                            )
+                        ),
                     )
                     .order_by(SessionEventRow.event_seq)
                 )
@@ -534,7 +550,11 @@ async def summarise_history(
         between_sessions_since=between_sessions_since,
     )
     groups = await collect_prose_by_phase(
-        tenant_id, session_id, from_event_seq=from_event_seq, to_event_seq=to_event_seq
+        tenant_id,
+        session_id,
+        from_event_seq=from_event_seq,
+        to_event_seq=to_event_seq,
+        reader=viewer.id,
     )
 
     model_string = f"{agent.provider}/{agent.model}"

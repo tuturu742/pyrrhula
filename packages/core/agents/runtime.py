@@ -331,6 +331,8 @@ async def run_agent_turn(
     # regeneration). Read after finalize_reply runs and committed with the message, in the
     # same transaction (CLAUDE.md rule 11).
     extra_usage_points: list[UsagePoint] | None = None,
+    # Who may read the reply (principal ids), from the phase's `audience:`. None = everyone.
+    audience: list[uuid.UUID] | None = None,
 ) -> TurnResult:
     with _tracer.start_as_current_span("runtime.run_agent_turn") as span:
         span.set_attribute("pyrrhula.persona_id", str(persona_id))
@@ -433,6 +435,7 @@ async def run_agent_turn(
                     resolution_record_ids=resolution_record_ids,
                     context_manifest_id=context_manifest_id,
                     event_seq=event_seq,
+                    audience=audience,
                 )
 
             # The assistant turn that REQUESTED the tools must carry tool_calls back in
@@ -548,6 +551,7 @@ async def run_agent_turn(
             resolution_record_ids=resolution_record_ids,
             context_manifest_id=context_manifest_id,
             event_seq=event_seq,
+            audience=audience,
         )
 
 
@@ -605,6 +609,7 @@ async def _commit_turn(
     resolution_record_ids: list[str],
     context_manifest_id: uuid.UUID | None,
     event_seq: int | None = None,
+    audience: list[uuid.UUID] | None = None,
 ) -> TurnResult:
     """One transaction: the message, every usage_record from the loop, the durable
     session_event, and -- when this turn's tool calls produced any ResolutionRecords
@@ -635,6 +640,7 @@ async def _commit_turn(
             resolution_record_ids=resolution_record_ids,
             context_manifest_id=context_manifest_id,
             event_seq=event_seq,
+            audience=audience,
         )
     except IntegrityError as exc:
         # The pre-check inside _commit_turn_once closes the common case; this catches
@@ -655,6 +661,7 @@ async def _commit_turn(
         resolution_record_ids=resolution_record_ids,
         context_manifest_id=context_manifest_id,
         event_seq=None,
+        audience=audience,
     )
 
 
@@ -672,6 +679,7 @@ async def _commit_turn_once(
     resolution_record_ids: list[str],
     context_manifest_id: uuid.UUID | None,
     event_seq: int | None = None,
+    audience: list[uuid.UUID] | None = None,
 ) -> TurnResult:
     async with tenant_scope(tenant_id) as session:
         session_row = await session.get(SessionRow, session_id)
@@ -712,6 +720,7 @@ async def _commit_turn_once(
             content_md=content,
             context_manifest_id=context_manifest_id,
             resolution_record_ids=resolution_record_ids,
+            audience=audience,
         )
         session.add(message)
         await session.flush()
@@ -774,6 +783,8 @@ async def _commit_turn_once(
                     # so the transcript can show when each turn landed, on replay too
                     "created_at": datetime.now(UTC).isoformat(),
                     "triggered_by": triggered_by,
+                    # readers outside it never get this message (history, recaps)
+                    "audience": [str(a) for a in audience] if audience is not None else None,
                 },
                 actor_principal_id=author_principal_id,
             )

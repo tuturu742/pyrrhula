@@ -43,13 +43,23 @@ class CELValidationError(Exception):
     """A CEL expression failed to compile or referenced something undeclared."""
 
 
+def dummy_value(type_name: str) -> object:
+    return _DUMMY_VALUE_BY_TYPE[type_name]
+
+
 def _dummy_state(state_vars: dict[str, StateVarSpec]) -> dict[str, object]:
     return {name: _DUMMY_VALUE_BY_TYPE[spec.type] for name, spec in state_vars.items()}
 
 
-def compile_check(source: str, state_vars: dict[str, StateVarSpec]) -> None:
+def compile_check(
+    source: str,
+    state_vars: dict[str, StateVarSpec],
+    extra: dict[str, object] | None = None,
+) -> None:
     """Raises ``CELValidationError`` if ``source`` doesn't parse, or references anything
-    outside ``state.<declared var>`` plus CEL's built-in operators/literals."""
+    outside ``state.<declared var>`` (plus whatever ``extra`` binds -- the dummy
+    ``settings``/``participants``/``p`` a flow with participants may read) and CEL's
+    built-in operators/literals."""
     try:
         ast = _env.compile(source)
     except CELParseError as exc:
@@ -57,7 +67,7 @@ def compile_check(source: str, state_vars: dict[str, StateVarSpec]) -> None:
 
     try:
         program = _env.program(ast)
-        activation = json_to_cel({"state": _dummy_state(state_vars)})
+        activation = json_to_cel({**(extra or {}), "state": _dummy_state(state_vars)})
         # celpy's own stubs don't align json_to_cel's return type with what
         # Runner.evaluate() declares it wants, even though a dict input to json_to_cel
         # always produces a MapType (a dict subclass) at runtime, confirmed empirically

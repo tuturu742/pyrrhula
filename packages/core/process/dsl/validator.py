@@ -27,8 +27,8 @@ from dataclasses import dataclass
 
 import pydantic
 
-from core.process.dsl.cel import CELValidationError, compile_check
-from core.process.dsl.schema import PhaseSpec, ProcessDefinitionDSL
+from core.process.dsl.cel import CELValidationError, compile_check, dummy_value
+from core.process.dsl.schema import PhaseSpec, ProcessDefinitionDSL, SettingRef
 
 _BUDGET_RATIO_TOLERANCE = 0.02
 
@@ -73,6 +73,7 @@ def validate_definition(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
     issues.extend(_check_gate_else_is_last(dsl))
     issues.extend(_check_budget_ratios(dsl))
     issues.extend(_check_cel_expressions(dsl))
+    issues.extend(_check_participant_references(dsl))
     issues.extend(_check_phase_requirements(dsl))
     # Reachability assumes every referenced target is real -- run it last, and skip it
     # entirely if dangling targets already exist, so one bad edge doesn't also spam
@@ -208,20 +209,87 @@ def _check_budget_ratios(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
     return issues
 
 
+def _cel_bindings(dsl: ProcessDefinitionDSL) -> dict[str, dict[str, object]]:
+    """Dummy values for every name a flow's CEL may read besides ``state``: ``settings``
+    always; with ``participants:``, the roster list and one participant for each of the
+    per-participant names (``p``, ``voter``, ``author``)."""
+    settings = {name: dummy_value(spec.type) for name, spec in dsl.settings.items()}
+    base: dict[str, object] = {"settings": settings}
+    if dsl.participants is None:
+        return {"phase": base, "participant": base}
+    one: dict[str, object] = {"id": "x", "name": "x", "seat": 1}
+    one.update({name: dummy_value(spec.type) for name, spec in dsl.participants.vars.items()})
+    base = {**base, "participants": [one]}
+    return {"phase": base, "participant": {**base, "p": one, "voter": one, "author": one}}
+
+
 def _check_cel_expressions(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
+    bindings = _cel_bindings(dsl)
+
+    def check(path: str, source: str, kind: str) -> None:
+        try:
+            compile_check(source, dsl.state, bindings[kind])
+        except CELValidationError as exc:
+            issues.append(ValidationIssue(path, str(exc)))
+
     for phase_key, phase in dsl.phases.items():
+        where = f"phases.{phase_key}"
         for i, gate in enumerate(phase.gates):
             if gate.when is not None:
-                try:
-                    compile_check(gate.when, dsl.state)
-                except CELValidationError as exc:
-                    issues.append(ValidationIssue(f"phases.{phase_key}.gates[{i}].when", str(exc)))
+                check(f"{where}.gates[{i}].when", gate.when, "phase")
         for i, effect in enumerate(phase.effects):
-            try:
-                compile_check(effect.to, dsl.state)
-            except CELValidationError as exc:
-                issues.append(ValidationIssue(f"phases.{phase_key}.effects[{i}].to", str(exc)))
+            check(f"{where}.effects[{i}].to", effect.to, "phase")
+        for i, actor in enumerate(phase.actors):
+            if actor.where is not None:
+                check(f"{where}.actors[{i}].where", actor.where, "participant")
+            if actor.rotate_by is not None:
+                check(f"{where}.actors[{i}].rotate_by", actor.rotate_by, "phase")
+        if phase.audience is not None:
+            check(f"{where}.audience.members", phase.audience.members, "participant")
+        if phase.ballot is not None:
+            check(f"{where}.ballot.targets", phase.ballot.targets, "participant")
+            for i, chosen in enumerate(phase.ballot.on_chosen):
+                check(f"{where}.ballot.on_chosen[{i}].to", chosen.to, "participant")
+    return issues
+
+
+def _check_participant_references(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
+    """Every ``{setting: name}`` names a declared setting; per-participant features
+    (``where``, ``seated``, ``ballot``, ``audience``) need a ``participants:`` block; a
+    ballot's effects set declared participant vars."""
+    issues: list[ValidationIssue] = []
+
+    def ref(path: str, value: object) -> None:
+        if isinstance(value, SettingRef) and value.setting not in dsl.settings:
+            issues.append(ValidationIssue(path, f"unknown setting {value.setting!r}"))
+
+    if dsl.participants is not None:
+        for i, deal in enumerate(dsl.participants.deal):
+            ref(f"participants.deal[{i}].count", deal.count)
+    for phase_key, phase in dsl.phases.items():
+        where = f"phases.{phase_key}"
+        for i, actor in enumerate(phase.actors):
+            ref(f"{where}.actors[{i}].max_turns", actor.max_turns)
+            ref(f"{where}.actors[{i}].laps", actor.laps)
+            needs = actor.where is not None or actor.order == "seated"
+            if needs and dsl.participants is None:
+                issues.append(
+                    ValidationIssue(
+                        f"{where}.actors[{i}]", "where/seated need a participants: block"
+                    )
+                )
+        if (phase.ballot is not None or phase.audience is not None) and dsl.participants is None:
+            issues.append(ValidationIssue(where, "ballot/audience need a participants: block"))
+        if phase.ballot is not None and dsl.participants is not None:
+            for i, effect in enumerate(phase.ballot.on_chosen):
+                if effect.set not in dsl.participants.vars:
+                    issues.append(
+                        ValidationIssue(
+                            f"{where}.ballot.on_chosen[{i}].set",
+                            f"undeclared participant var {effect.set!r}",
+                        )
+                    )
     return issues
 
 

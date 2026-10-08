@@ -34,6 +34,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -44,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.actions.idempotency import idempotent
 from core.observability.otel import get_tracer
+from core.process import participants as parts
 from core.process.dsl.schema import PhaseSpec, ProcessDefinitionDSL, StateVarSpec
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionEventRow, SessionRow
@@ -120,6 +122,9 @@ class InterpreterContext:
     # other ctx construction in this module (next_actor_fn/checkpoint_hook/on_await) has
     # no turn in flight yet, so it's left at the default.
     event_seq: int = 0
+    # the flow settings this session runs with (session.settings) -- read by actor
+    # caps that point at a setting and by CEL in `where`/gates/effects.
+    settings: dict[str, Any] = dc_field(default_factory=dict)
 
 
 NextActorFn = Callable[[InterpreterContext], Awaitable[ActorRef | None]]
@@ -150,11 +155,13 @@ async def start_session(
     definition: ProcessDefinitionDSL,
     process_definition_id: uuid.UUID,
     process_definition_version: int,
+    settings_overrides: dict[str, object] | None = None,
 ) -> None:
     """Pins a session to a specific, immutable definition version and applies the DSL's
     declared ``state:`` defaults -- once, at start, matching 's "defaults applied at
     session start" (the schema declares the defaults; this is where they're realised)."""
     defaults: dict[str, object] = {name: spec.default for name, spec in definition.state.items()}
+    settings = parts.resolve_settings(definition.settings, settings_overrides)
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SessionRow, session_id)
         if row is None:
@@ -163,19 +170,39 @@ async def start_session(
         row.process_definition_version = process_definition_version
         row.current_phase = definition.initial_phase
         row.state = defaults
+        row.settings = settings
+        if definition.participants is not None:
+            # Seats and the deal, in the same transaction that pins the definition: a
+            # session never exists half-dealt. The event says how many of each value
+            # were dealt and the seat order -- never who got what.
+            summary = await parts.setup_participants(
+                session, row, definition.participants, settings
+            )
+            event_seq = await _next_event_seq(session, session_id)
+            session.add(
+                SessionEventRow(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    event_seq=event_seq,
+                    kind="participants_seated",
+                    payload={**summary, "settings": settings},
+                )
+            )
 
 
-def _eval_cel(expression: str, state: dict[str, Any]) -> Any:
+def _eval_cel(expression: str, state: dict[str, Any], extra: dict[str, Any] | None = None) -> Any:
     try:
         ast = _cel_env.compile(expression)
         program = _cel_env.program(ast)
-        activation = json_to_cel({"state": state})
+        activation = json_to_cel({**(extra or {}), "state": state})
         return program.evaluate(activation)  # type: ignore[arg-type]
     except Exception as exc:  # noqa: BLE001 -- any CEL failure here is an interpreter fault
         raise InterpreterFaultError(f"CEL expression {expression!r} failed: {exc}") from exc
 
 
-def evaluate_gates(phase: PhaseSpec, state: dict[str, Any]) -> str | None:
+def evaluate_gates(
+    phase: PhaseSpec, state: dict[str, Any], extra: dict[str, Any] | None = None
+) -> str | None:
     """Declaration order, first match wins (the validator already guarantees an
     ``else`` gate, if any, is last). Returns the target phase key, or None if nothing
     matched -- ``on:`` event gates never match here (no event has occurred; the
@@ -184,17 +211,20 @@ def evaluate_gates(phase: PhaseSpec, state: dict[str, Any]) -> str | None:
     for gate in phase.gates:
         if gate.else_:
             return gate.to
-        if gate.when is not None and bool(_eval_cel(gate.when, state)):
+        if gate.when is not None and bool(_eval_cel(gate.when, state, extra)):
             return gate.to
     return phase.on_complete
 
 
 def apply_effects(
-    phase: PhaseSpec, state: dict[str, Any], state_vars: dict[str, StateVarSpec]
+    phase: PhaseSpec,
+    state: dict[str, Any],
+    state_vars: dict[str, StateVarSpec],
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     new_state = dict(state)
     for effect in phase.effects:
-        raw = _eval_cel(effect.to, new_state)
+        raw = _eval_cel(effect.to, new_state, extra)
         var_spec = state_vars.get(effect.set)
         if var_spec is None:
             raise InterpreterFaultError(f"effect sets undeclared state variable {effect.set!r}")
@@ -462,6 +492,67 @@ async def _enforce_phase_requirements(
     return {"repeat": "repeat", "hold": "hold"}.get(decision, "pass")
 
 
+async def _close_ballot(
+    session: AsyncSession,
+    row: SessionRow,
+    definition: ProcessDefinitionDSL,
+    phase_key: str,
+    phase: PhaseSpec,
+    state: dict[str, Any],
+    settings: dict[str, Any],
+) -> dict[str, Any]:
+    """Count the phase's ballots and apply ``on_chosen`` to the winner, in the caller's
+    transaction. Returns the public result: who voted for whom, the counts, the
+    outcome and the tie rule applied -- sealed until now, public from now on."""
+    assert phase.ballot is not None and definition.participants is not None
+    entry_seq = await _phase_entry_seq(session, row.id)
+    key = parts.poll_key(phase_key, entry_seq)
+    views = await parts.load_views(session, row.id)
+    eligible = _eligible_voters(phase, views, state, settings)
+    result = await parts.tally(session, row, key, phase.ballot, views, eligible)
+    changes: list[dict[str, Any]] = []
+    if result.chosen is not None and phase.ballot.on_chosen:
+        bindings = parts.activation(state=state, settings=settings, views=views)
+        changes = await parts.apply_participant_effects(
+            session,
+            tenant_id=row.tenant_id,
+            session_id=row.id,
+            spec=definition.participants,
+            targets=[result.chosen],
+            effects=phase.ballot.on_chosen,
+            bindings=bindings,
+            cause="ballot",
+            cause_ref=key,
+        )
+    return {
+        "phase": phase_key,
+        "poll": key,
+        "votes": result.voters,
+        "counts": result.counts,
+        "abstained": result.abstained,
+        "tied": result.tied,
+        "tie_rule": phase.ballot.tie,
+        "reveal": phase.ballot.reveal,
+        "chosen": result.chosen.name if result.chosen is not None else None,
+        "changes": changes,
+    }
+
+
+def _eligible_voters(
+    phase: PhaseSpec,
+    views: list[parts.ParticipantView],
+    state: dict[str, Any],
+    settings: dict[str, Any],
+) -> list[parts.ParticipantView]:
+    """The participants this vote expected a ballot from: those the phase's actor
+    entries' ``where`` admits. Only used to name abstentions."""
+    wheres = [a.where for a in phase.actors]
+    if not wheres:
+        return []
+    base = parts.activation(state=state, settings=settings, views=views)
+    return [v for v in views if any(parts.matches(w, {**base, "p": v.cel()}) for w in wheres)]
+
+
 async def _transition(
     tenant_id: uuid.UUID,
     session_id: uuid.UUID,
@@ -476,11 +567,36 @@ async def _transition(
     target is missing -- the validator should make that impossible for a definition
     that ever passed validation, but this is the backstop, not a trust exercise."""
     payload: dict[str, Any] = {}
+    extra_events: list[tuple[int, str, dict[str, Any]]] = []
     async with tenant_scope(tenant_id) as session:
         row = await session.get(SessionRow, session_id)
         assert row is not None
-        new_state = apply_effects(phase, row.state, definition.state)
-        target = evaluate_gates(phase, new_state)
+        settings = dict(row.settings or {})
+        extra: dict[str, Any] = {"settings": settings}
+        if definition.participants is not None:
+            views = await parts.load_views(session, session_id)
+            extra["participants"] = [v.cel() for v in views]
+        new_state = apply_effects(phase, row.state, definition.state, extra)
+        if phase.ballot is not None and definition.participants is not None:
+            # The vote closes with the phase: count, record, apply on_chosen -- all in
+            # this transaction, so the gates below already see who is out.
+            tally_payload = await _close_ballot(
+                session, row, definition, phase_key, phase, new_state, settings
+            )
+            seq = await _next_event_seq(session, session_id)
+            session.add(
+                SessionEventRow(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    event_seq=seq,
+                    kind="ballot_result",
+                    payload=tally_payload,
+                )
+            )
+            extra_events.append((seq, "ballot_result", tally_payload))
+            views = await parts.load_views(session, session_id)
+            extra["participants"] = [v.cel() for v in views]
+        target = evaluate_gates(phase, new_state, extra)
         event_seq = await _next_event_seq(session, session_id)
 
         row.state = new_state
@@ -501,17 +617,46 @@ async def _transition(
                 payload=payload,
             )
         )
+        if target is None and definition.participants is not None:
+            # The flow is over: every participant's variables become public, from the
+            # record, so the result can be read without trusting anyone's prose.
+            final_views = await parts.load_views(session, session_id)
+            final_payload: dict[str, Any] = {
+                "state": new_state,
+                "settings": settings,
+                "participants": [
+                    {"name": v.name, "seat": v.seat, "vars": v.vars} for v in final_views
+                ],
+            }
+            final_seq = await _next_event_seq(session, session_id)
+            session.add(
+                SessionEventRow(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    event_seq=final_seq,
+                    kind="outcome",
+                    payload=final_payload,
+                )
+            )
+            extra_events.append((final_seq, "outcome", final_payload))
         await session.flush()
 
     if on_event is not None:
-        await on_event(event_seq, "phase_transition", payload)
+        published = [*extra_events, (event_seq, "phase_transition", payload)]
+        for seq, kind, event_payload in sorted(published, key=lambda e: e[0]):
+            await on_event(seq, kind, event_payload)
 
     if target is None:
         return _TransitionOutcome(phase_key, terminal=True)
 
     if checkpoint_hook is not None:
         ctx = InterpreterContext(
-            tenant_id, session_id, target, definition.phases[target], new_state
+            tenant_id,
+            session_id,
+            target,
+            definition.phases[target],
+            new_state,
+            settings=settings,
         )
         await checkpoint_hook(ctx)
 
@@ -578,8 +723,11 @@ async def _run_actor_turn(
         assert row is not None
         event_seq = row.next_event_seq  # peek, not claim
         state = dict(row.state)
+        settings = dict(row.settings or {})
 
-    ctx = InterpreterContext(tenant_id, session_id, phase_key, phase, state, event_seq=event_seq)
+    ctx = InterpreterContext(
+        tenant_id, session_id, phase_key, phase, state, event_seq=event_seq, settings=settings
+    )
     result = await _run_turn_idempotent(
         tenant_id=tenant_id,
         session_id=session_id,
@@ -776,6 +924,7 @@ async def advance_session(
                         return AdvanceResult("paused", steps, row.current_phase, ())
                     phase_key = row.current_phase
                     state = dict(row.state)
+                    settings = dict(row.settings or {})
                     # The scheduler persists the advanced cursor as a side effect of
                     # choosing the actor, before the turn runs. Kept so a turn that
                     # never happened can put it back.
@@ -784,7 +933,9 @@ async def advance_session(
                 if phase_key not in definition.phases:
                     raise InterpreterFaultError(f"session is in undeclared phase {phase_key!r}")
                 phase = definition.phases[phase_key]
-                ctx = InterpreterContext(tenant_id, session_id, phase_key, phase, state)
+                ctx = InterpreterContext(
+                    tenant_id, session_id, phase_key, phase, state, settings=settings
+                )
 
                 actor = await next_actor_fn(ctx)
                 if actor is None:
@@ -872,6 +1023,8 @@ async def advance_session(
             # ('active'), nothing to pause or clean up.
             flags = tuple(phase.flags) if phase is not None else ()
             return AdvanceResult("awaiting_human", steps, phase_key, flags)
-        except InterpreterFaultError as exc:
+        except (InterpreterFaultError, parts.ParticipantError) as exc:
+            # A participants failure (a CEL error in `where`, a deal that cannot be
+            # dealt) is a fault like any other: pause cleanly, never a stuck advance.
             await _pause_with_fault(tenant_id, session_id, str(exc))
             return AdvanceResult("paused", steps, phase_key, ())

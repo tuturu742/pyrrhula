@@ -52,6 +52,30 @@ interface MessagePayload {
   /** What caused this turn: the autonomous scheduler, a human conducting, or an
    * automated driver (benchmark/script). Makes the transcript self-describing. */
   triggered_by?: "scheduler" | "conducted" | "driver" | "unknown" | string;
+  /** Principal ids allowed to read this message; absent/null = everyone. */
+  audience?: string[] | null;
+}
+
+interface BallotResultPayload {
+  phase: string;
+  votes: Record<string, string | null>;
+  counts: Record<string, number>;
+  abstained: string[];
+  tied: string[];
+  tie_rule: string;
+  chosen: string | null;
+  changes: Array<{ name: string; var: string; old: unknown; new: unknown }>;
+}
+
+interface ParticipantsSeatedPayload {
+  seats: Array<{ seat: number; name: string }>;
+  dealt: Array<{ var: string; value: unknown; count: number }>;
+  settings: Record<string, unknown>;
+}
+
+interface OutcomePayload {
+  participants: Array<{ name: string; seat: number | null; vars: Record<string, unknown> }>;
+  settings: Record<string, unknown>;
 }
 
 /** a `human_override` event carries the same fields a `message` does, plus who/how. */
@@ -1012,6 +1036,14 @@ function TimelineEvent({
                 {TRIGGER_LABELS[m.triggered_by] ?? m.triggered_by}
               </span>
             )}
+            {m.audience && (
+              <span
+                className="ml-2 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-600"
+                title="Only some participants (and the host) can read this message"
+              >
+                private
+              </span>
+            )}
             {typeof m.tool_calls_made === "number" && m.tool_calls_made > 0 && (
               <span> · {m.tool_calls_made} tool call(s)</span>
             )}
@@ -1148,6 +1180,71 @@ function TimelineEvent({
             </pre>
           ) : null}
         </details>
+      );
+    }
+    case "participants_seated": {
+      const p = event.payload as ParticipantsSeatedPayload;
+      return (
+        <div className="text-center text-xs text-muted-foreground">
+          — seats: {p.seats.map((s) => `${s.seat}. ${s.name}`).join(", ")}
+          {p.dealt.length > 0 && (
+            <> · dealt: {p.dealt.map((d) => `${d.count}× ${d.var}=${String(d.value)}`).join(", ")}</>
+          )}{" "}
+          —
+        </div>
+      );
+    }
+    case "ballot_result": {
+      const b = event.payload as BallotResultPayload;
+      const counts = Object.entries(b.counts)
+        .sort((x, y) => y[1] - x[1])
+        .map(([name, n]) => `${name} ${n}`)
+        .join(", ");
+      return (
+        <details className="rounded-md border border-border px-3 py-2 text-xs">
+          <summary className="cursor-pointer">
+            <span className="font-medium">Vote ({t(`phase.${b.phase}`)}):</span>{" "}
+            {b.chosen
+              ? `${b.chosen} chosen`
+              : b.tied.length
+                ? `tie (${b.tied.join(", ")}) — nobody chosen`
+                : "no votes — nobody chosen"}
+            {counts && <span className="text-muted-foreground"> · {counts}</span>}
+          </summary>
+          <ul className="mt-1 text-muted-foreground">
+            {Object.entries(b.votes).map(([voter, choice]) => (
+              <li key={voter}>
+                {voter} → {choice ?? "abstained"}
+              </li>
+            ))}
+            {b.abstained.map((name) => (
+              <li key={`a-${name}`}>{name} → no ballot</li>
+            ))}
+            {b.changes.map((c) => (
+              <li key={`c-${c.name}-${c.var}`}>
+                {c.name}: {c.var} {String(c.old)} → {String(c.new)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      );
+    }
+    case "outcome": {
+      const o = event.payload as OutcomePayload;
+      return (
+        <div className="rounded-md border border-border px-3 py-2 text-xs">
+          <div className="font-medium">Final record</div>
+          <ul className="mt-1 text-muted-foreground">
+            {o.participants.map((p) => (
+              <li key={p.name}>
+                {p.seat ?? "–"}. {p.name}:{" "}
+                {Object.entries(p.vars)
+                  .map(([k, v]) => `${k} ${String(v)}`)
+                  .join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
       );
     }
     case "await": {

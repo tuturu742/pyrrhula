@@ -225,6 +225,9 @@ async def generate_report(
             session_id,
             from_event_seq=from_event_seq,
             to_event_seq=to_event_seq,
+            # reports are written for the overseer (participant-mode filtering of
+            # private messages is the export's job)
+            reader=None,
             with_author=False,
         )
         if verbatim:
@@ -285,7 +288,7 @@ async def _prose_and_counts(
     facts and nothing else. The difference between the two counts is what the redaction
     stub reports, so the stub is arithmetic rather than an estimate."""
     groups = await collect_prose_by_phase(
-        tenant_id, session_id, from_event_seq=from_seq, to_event_seq=to_seq
+        tenant_id, session_id, from_event_seq=from_seq, to_event_seq=to_seq, reader=None
     )
     total = sum(len(msgs) for _, msgs in groups)
     if audience_mode == "sanitised":
