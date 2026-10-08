@@ -55,6 +55,10 @@ dependencies = [
   # whose PYRRHULA_EXEC_ENGINES declares kind "aws-ecs" ever loads it -- but shipped in
   # the default image so the stock container works on ECS without a custom build.
   "boto3>=1.35",
+  # Tool-call arguments are validated against each tool's JSON Schema before the handler
+  # runs (core.agents.tools). It used to arrive only through litellm; declared because
+  # the core imports it directly.
+  "jsonschema>=4.23",
 ]
 
 [project.optional-dependencies]
@@ -76,6 +80,7 @@ dev = [
   # the parser is proven against pypdf's actual extraction rather than hand-rolled bytes.
   "fpdf2>=2.8",
   "types-regex",
+  "types-jsonschema",
   # The compose files are test fixtures: tests/architecture reads them to keep the
   # release stack and the source stack the same deployment. It arrives transitively
   # today, and a test that skips when its parser is missing proves nothing.
