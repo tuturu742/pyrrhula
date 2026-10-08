@@ -816,6 +816,50 @@ async def test_a_bundle_carries_the_mechanics_its_flow_resolves_against(
     assert await get_rule_system(tenant_b, f"{system_key}-imported") is None
 
 
+async def test_every_version_of_a_flow_lands_as_a_version_of_one_flow(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    """A flow edited three times exported three versions, and the import forked each
+    into a flow of its own -- `key`, `key-imported`, `key-imported-2`, in file-name order,
+    so even which one kept the plain key was chance."""
+    import copy
+
+    from core.process.authoring import create_definition, list_definitions
+    from core.process.dsl.fixtures import MINIMAL_MVP_FLOW
+
+    tenant_a, tenant_b = two_tenants
+    workspace_a = await _workspace_of(tenant_a)
+    await seed_default_scopes(tenant_a, workspace_a)
+    exporter = await _facilitator(tenant_a, workspace_a)
+    key = f"flow{uuid.uuid4().hex[:6]}"
+    for n in (1, 2, 3):
+        flow = copy.deepcopy(MINIMAL_MVP_FLOW)
+        flow["name"] = f"Edit {n}"
+        await create_definition(tenant_a, key, f"Edit {n}", flow, workspace_id=workspace_a)
+
+    bundle = await export_workspace(
+        exporter, tenant_a, workspace_a, encryptor=_ENCRYPTOR, permission_service=_PERMISSIONS
+    )
+    workspace_b = await _workspace_of(tenant_b)
+    await seed_default_scopes(tenant_b, workspace_b)
+    report = await import_bundle(bundle.data, tenant_b, workspace_b, bundle_ref="versions")
+
+    landed = [d for d in await list_definitions(tenant_b, workspace_id=workspace_b) if key in d.key]
+    assert {d.key for d in landed} == {key}
+    assert [(d.version, d.name) for d in landed] == [(1, "Edit 1"), (2, "Edit 2"), (3, "Edit 3")]
+    assert report.forked_keys == []
+
+    # Imported again, the whole flow forks once and keeps its versions together.
+    again = await import_bundle(bundle.data, tenant_b, workspace_b, bundle_ref="versions-2")
+    assert again.forked_keys == [(key, f"{key}-imported")]
+    forked = [
+        d
+        for d in await list_definitions(tenant_b, workspace_id=workspace_b)
+        if d.key == f"{key}-imported"
+    ]
+    assert [d.version for d in forked] == [1, 2, 3]
+
+
 def _with_app_version(data: bytes, app_version: str | None) -> bytes:
     """The same bundle, claiming to come from a different platform version -- or from
     none at all, which is every bundle written before the stamp existed."""
