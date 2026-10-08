@@ -70,7 +70,16 @@ async def test_every_write_tool_is_a_proposal(monkeypatch: pytest.MonkeyPatch) -
     writes = [s for s in specs if s.name != "deployment_status" and s.name not in DOCS_READ_TOOLS]
     assert writes, "no write tools registered"
     for spec in writes:
-        args = {"embedding_model": "x", "embedding_dimension": 1, "url": "u", "ref": "r"}
+        # Every argument any of the write tools requires: dispatch validates arguments
+        # against each tool's schema, so a call missing a required one is answered with
+        # an error instead of reaching the tool.
+        args = {
+            "embedding_model": "x",
+            "embedding_dimension": 1,
+            "name": "n",
+            "url": "u",
+            "ref": "r",
+        }
         await registry.dispatch(ToolCall(id="t", name=spec.name, arguments=args), _ctx())
 
     assert len(state.proposals) == len(writes)

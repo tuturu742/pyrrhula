@@ -28,6 +28,7 @@ from core.agents.runtime import (
     _DEFAULT_MAX_TOOL_LOOP,
     AllRetriesExhaustedError,
     ToolLoopExceededError,
+    UsagePoint,
     run_agent_turn,
 )
 from core.agents.scheduling import make_persona_candidate_resolver
@@ -929,6 +930,9 @@ async def run_one_persona_turn(
     # deflection + overseer alert. No concealed secrets -> passthrough closure -> the
     # common path costs nothing.
     _base_finalize = None
+    # Usage of the regeneration below, handed to run_agent_turn so it is committed with the
+    # turn's message (rule 11). It used to be metered nowhere.
+    regen_usage: list[UsagePoint] = []
     if (concealed_secrets or moderation_provider is not None) and persona_agent is not None:
         from core.moderation.hooks import scan_generated
         from core.secrets.leak_check import run_post_generation_check
@@ -956,19 +960,50 @@ async def run_one_persona_turn(
             provider = model_provider_factory(persona_agent.provider)
             from core.tenancy.egress import load_egress_policy
 
+            model_string = f"{persona_agent.provider}/{persona_agent.model}"
+            # The connection's own key: without it the regeneration only worked against
+            # providers whose key happened to sit in the process environment, and failed
+            # for every connection whose key is stored sealed (OpenRouter among them).
+            api_key = (
+                await resolve_connection_api_key(
+                    tenant_id, str(persona_agent.credential_ref), encryptor=encryptor
+                )
+                if persona_agent.credential_ref and encryptor is not None
+                else None
+            )
             request = GenerationRequest(
-                model=f"{persona_agent.provider}/{persona_agent.model}",
+                model=model_string,
                 messages=nudged,
                 purpose="generation",
                 api_base=persona_agent.api_base,
+                api_key=api_key,
                 params=dict(persona_agent.params or {}),
                 egress_policy=await load_egress_policy(tenant_id),
             )
+            started = time.monotonic()
             parts: list[str] = []
+            cached = 0
             async for chunk in provider.generate(request):
                 if chunk.text:
                     parts.append(chunk.text)
-            return "".join(parts)
+                if chunk.cached_tokens:
+                    cached = chunk.cached_tokens
+            text = "".join(parts)
+            regen_usage.append(
+                UsagePoint(
+                    persona_agent.id,
+                    persona_agent.provider,
+                    persona_agent.model,
+                    sum(
+                        provider.count_tokens(str(m.get("content") or ""), model_string)
+                        for m in nudged
+                    ),
+                    provider.count_tokens(text, model_string),
+                    cached,
+                    int((time.monotonic() - started) * 1000),
+                )
+            )
+            return text
 
         async def _base_finalize(reply_text: str) -> str:
             checked = reply_text
@@ -1018,6 +1053,7 @@ async def run_one_persona_turn(
             event_seq=event_seq,
             finalize_reply=finalize_reply,
             triggered_by=triggered_by,
+            extra_usage_points=regen_usage,
             max_tool_loop=getattr(phase, "max_tool_calls", None) or _DEFAULT_MAX_TOOL_LOOP,
         )
     except UsageLimitExceededError as exc:

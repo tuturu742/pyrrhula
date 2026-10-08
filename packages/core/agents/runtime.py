@@ -104,6 +104,25 @@ class _UsagePoint:
     latency_ms: int
 
 
+# Public name for callers that make a model call on a turn's behalf (the leak-check
+# regeneration) and hand its usage back, so it is committed with the turn's message.
+UsagePoint = _UsagePoint
+
+
+def merge_turn_text(earlier: list[str], final: str) -> str:
+    """The text a turn leaves in the transcript: what the model wrote alongside its tool
+    calls, then its final reply.
+
+    Only the final iteration's text used to be kept, so anything said in the same response
+    as a tool call -- "I'll check the lab result" before the call, or table talk sent with a
+    move -- vanished from the transcript although the model had said it. An earlier piece
+    the final reply already repeats is dropped, so a model that restates itself is not
+    shown twice."""
+    final = final.strip()
+    kept = [piece for piece in earlier if piece and piece not in final]
+    return "\n\n".join([*kept, final] if final else kept)
+
+
 @dataclass(frozen=True)
 class TurnResult:
     content_md: str
@@ -308,6 +327,10 @@ async def run_agent_turn(
     # is derived from that same peeked value). None (the older call sites) preserves
     # the original self-claim-from-session_row behaviour exactly.
     event_seq: int | None = None,
+    # Usage of model calls made for this turn outside the loop below (the leak-check
+    # regeneration). Read after finalize_reply runs and committed with the message, in the
+    # same transaction (CLAUDE.md rule 11).
+    extra_usage_points: list[UsagePoint] | None = None,
 ) -> TurnResult:
     with _tracer.start_as_current_span("runtime.run_agent_turn") as span:
         span.set_attribute("pyrrhula.persona_id", str(persona_id))
@@ -357,6 +380,8 @@ async def run_agent_turn(
         tool_calls_made = 0
         tools_called: list[str] = []
         resolution_record_ids: list[str] = []
+        # What the model wrote in the same responses as its tool calls (merge_turn_text).
+        earlier_text: list[str] = []
         tools = tool_registry.specs()
 
         for _iteration in range(max_tool_loop):
@@ -379,6 +404,7 @@ async def run_agent_turn(
             usage_points.append(usage)
 
             if not tool_calls:
+                content = merge_turn_text(earlier_text, content)
                 if not content.strip() and tools_called:
                     # The turn acted and then said nothing. An empty message hides the
                     # turn from the transcript (a plan phase with no visible plan); say
@@ -393,6 +419,7 @@ async def run_agent_turn(
                     )
                 if finalize_reply is not None:
                     content = await finalize_reply(content)
+                usage_points.extend(extra_usage_points or ())
                 return await _commit_turn(
                     triggered_by=triggered_by,
                     tenant_id=tenant_id,
@@ -412,6 +439,8 @@ async def run_agent_turn(
             # the transcript, in the OpenAI shape. OpenAI and ollama tolerate its
             # absence; DeepSeek strictly rejects a following role:"tool" message whose
             # preceding assistant message has no tool_calls.
+            if content.strip():
+                earlier_text.append(content.strip())
             conversation.append(
                 {
                     "role": "assistant",
@@ -502,8 +531,10 @@ async def run_agent_turn(
             limits=generation_limits,
         )
         usage_points.append(usage)
+        content = merge_turn_text(earlier_text, content)
         if finalize_reply is not None:
             content = await finalize_reply(content)
+        usage_points.extend(extra_usage_points or ())
         return await _commit_turn(
             triggered_by=triggered_by,
             tenant_id=tenant_id,
