@@ -35,6 +35,7 @@ Anthropic-style) -- both are checked, defaulting to 0 if neither is present.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -239,6 +240,14 @@ def _dispatch_model(model: str, has_tools: bool) -> str:
 _MANAGED_KEYS = frozenset(
     {"model", "messages", "tools", "api_key", "api_base", "stream", "response_format", "n"}
 )
+
+
+class ProviderTimeoutError(Exception):
+    """A generation that produced nothing within its time budget."""
+
+
+def _remaining(deadline: float) -> float:
+    return max(0.001, deadline - time.monotonic())
 
 
 def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, Any]:
@@ -525,10 +534,22 @@ class LiteLLMModelProvider:
             # inside the other's handler left that second refusal uncaught, which paused
             # a live RPG session on every player turn. Keep applying repairs until the
             # call goes through or nothing else applies.
+            # One budget for the whole generation, request included. It used to be read
+            # only when a chunk arrived, so a stream that stalled -- or a request that
+            # never answered -- waited forever: a turn neither finished nor failed, and its
+            # session stayed "active" with nothing running (Mafia A/B, 2026-10-09).
+            deadline = time.monotonic() + req.max_generation_seconds
             response = None
             while response is None:
                 try:
-                    response = await litellm.acompletion(**this_call)
+                    response = await asyncio.wait_for(
+                        litellm.acompletion(**this_call), _remaining(deadline)
+                    )
+                except TimeoutError as exc:
+                    raise ProviderTimeoutError(
+                        f"{this_call.get('model')}: no response within "
+                        f"{req.max_generation_seconds:.0f}s"
+                    ) from exc
                 except Exception as exc:
                     repaired = _repair_call(this_call, exc, req)
                     if repaired is None:
@@ -539,17 +560,24 @@ class LiteLLMModelProvider:
             pending_calls: dict[int, dict[str, Any]] = {}
             reasoning_parts: list[str] = []
             streamed_chars = 0
-            deadline = time.monotonic() + req.max_generation_seconds
-            async for part in response:
-                if time.monotonic() > deadline:
+            parts = response.__aiter__()
+            while True:
+                try:
+                    part = await asyncio.wait_for(parts.__anext__(), _remaining(deadline))
+                except StopAsyncIteration:
+                    break
+                except TimeoutError:
+                    part = None
+                if part is None or time.monotonic() > deadline:
                     structlog.get_logger().warning(
                         "provider.generation_timed_out",
                         model=this_call.get("model"),
                         seconds=req.max_generation_seconds,
                         chars=streamed_chars,
+                        stalled=part is None,
                     )
                     # Whatever it has said so far, which may be nothing -- an empty
-                    # return is handled below, and handled better than a turn that never
+                    # return is retried by the runtime, which beats a turn that never
                     # comes back at all.
                     return
                 cached_tokens = _extract_cached_tokens(getattr(part, "usage", None))

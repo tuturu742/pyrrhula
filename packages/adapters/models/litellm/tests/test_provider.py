@@ -1349,3 +1349,63 @@ async def test_an_ollama_request_gets_an_output_ceiling(monkeypatch: pytest.Monk
     )
     assert "".join([c.text async for c in provider.generate(hosted)]) == "fine"
     assert calls[-1].get("max_tokens") is None
+
+
+async def test_a_stream_that_stalls_is_cut_off_on_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The clock was only read when a chunk arrived, so a stream that went silent
+    waited forever: the turn neither finished nor failed, and its session sat "active"
+    with nothing running (Mafia A/B, 2026-10-09)."""
+    import asyncio
+
+    import litellm
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock(delta=MagicMock(content="Half a", tool_calls=None))
+            choice.finish_reason = None
+            part.choices = [choice]
+            part.usage = None
+            yield part
+            await asyncio.sleep(3600)  # silence, never another chunk
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="deepseek/deepseek-v4-pro",
+        messages=[{"role": "user", "content": "talk"}],
+        purpose="generation",
+        max_generation_seconds=0.1,
+    )
+    chunks = await asyncio.wait_for(_collect(LiteLLMModelProvider(), req), timeout=5)
+    assert "".join(c.text for c in chunks) == "Half a"
+
+
+async def test_a_request_that_never_answers_raises_on_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    import litellm
+
+    from adapters.models.litellm.provider import ProviderTimeoutError
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="deepseek/deepseek-v4-pro",
+        messages=[{"role": "user", "content": "talk"}],
+        purpose="generation",
+        max_generation_seconds=0.1,
+    )
+    with pytest.raises(ProviderTimeoutError):
+        await asyncio.wait_for(_collect(LiteLLMModelProvider(), req), timeout=5)
+
+
+async def _collect(provider: LiteLLMModelProvider, req: GenerationRequest) -> list[object]:
+    return [c async for c in provider.generate(req)]
