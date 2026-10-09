@@ -231,6 +231,40 @@ async def test_a_required_tool_left_uncalled_is_asked_for_once(db_available: Non
     assert result.content_md == "I think seat 2 is lying.\n\nDone."
 
 
+async def test_a_failed_call_does_not_count_as_the_required_move(db_available: None) -> None:
+    """A night vote for a player already out came back as an error, and the turn ended
+    there: the call counted as the move, so the nudge never came and the vote was lost."""
+    tenant_id, session_id, persona_id = await _setup("hygiene-required-failed")
+    seen: list[dict[str, object]] = []
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="",
+                tool_calls=(ToolCall(id="c1", name="claim", arguments={"seat": "two"}),),
+            ),
+            _ScriptedTurn(text="My vote is locked."),
+            _ScriptedTurn(
+                text="",
+                tool_calls=(
+                    ToolCall(id="c2", name="claim", arguments={"seat": 2, "item": "Peru"}),
+                ),
+            ),
+            _ScriptedTurn(text="Done."),
+        ]
+    )
+    await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Vote now."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=_registry(_CLAIM, seen),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+        required_tool="claim",
+    )
+    assert seen == [{"seat": 2, "item": "Peru"}]
+
+
 async def test_a_required_tool_is_asked_for_only_once(db_available: None) -> None:
     tenant_id, session_id, persona_id = await _setup("hygiene-required-once")
     provider = _ScriptedProvider(turns=[_ScriptedTurn(text="No."), _ScriptedTurn(text="Still no.")])

@@ -392,6 +392,9 @@ async def run_agent_turn(
         earlier_text: list[str] = []
         tools = tool_registry.specs()
         nudged = False
+        # Met only by a call that SUCCEEDED: a ballot for someone already out comes back
+        # as an error result, and counting it as the move left a night vote abstained.
+        required_done = False
 
         for iteration in range(max_tool_loop):
             content, tool_calls, usage, reasoning = await _call_provider_with_retry(
@@ -415,7 +418,7 @@ async def run_agent_turn(
             if (
                 not tool_calls
                 and required_tool is not None
-                and required_tool not in tools_called
+                and not required_done
                 and not nudged
                 and iteration < max_tool_loop - 1
             ):
@@ -520,6 +523,8 @@ async def run_agent_turn(
                 # a handler that returns the bare record. The resolution preset returns
                 # an envelope, so the parse found nothing and every roll made through it
                 # was recorded but never linked to its message (karsh-vale sweep).
+                if tool_call.name == required_tool and not _is_error_result(tool_result["content"]):
+                    required_done = True
                 resolution_id = tool_result.get("resolution_id") or _extract_resolution_id(
                     tool_result["content"]
                 )
@@ -590,6 +595,16 @@ async def run_agent_turn(
             audience=audience,
             phase_key=phase_key,
         )
+
+
+def _is_error_result(content: str) -> bool:
+    """A tool result that reports a failure: the registry's own refusals and handlers
+    alike answer with a JSON object carrying an ``error`` key."""
+    try:
+        body = json.loads(content)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(body, dict) and "error" in body
 
 
 _SELF_ATTRIBUTION_LIMIT = 120
