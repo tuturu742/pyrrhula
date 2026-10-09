@@ -115,6 +115,33 @@ class SettingSpec(BaseModel):
         return self
 
 
+RecapSection = Literal[
+    "votes", "rolls", "changes", "disclosures", "conversation", "knowledge", "tools"
+]
+RECAP_SECTIONS: tuple[RecapSection, ...] = (
+    "votes",
+    "rolls",
+    "changes",
+    "disclosures",
+    "conversation",
+    "knowledge",
+    "tools",
+)
+
+
+class RecapSpec(BaseModel):
+    """A recap of each phase as it ends, written from records only -- votes, rolls, state
+    changes, what the viewer was told, who spoke with whom, what knowledge the viewer was
+    shown, the viewer's own tool calls. Each viewer gets its own,
+    built under the same visibility as its context; a section with nothing in it is left
+    out, so one flow's recap is votes and another's is rolls and hints, from the same
+    mechanism."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sections: list[RecapSection] = Field(default_factory=lambda: list(RECAP_SECTIONS))
+
+
 class SettingRef(BaseModel):
     """A number read from one of the flow's ``settings`` instead of written in place:
     ``{"setting": "day_laps"}``."""
@@ -625,6 +652,9 @@ class ProcessDefinitionDSL(BaseModel):
     # things were said. "current": only the phase now running, as a line of context.
     # "none" (the default) shows none, which is what every flow did before markers.
     phase_markers: Literal["none", "transcript", "current"] = "none"
+    # Recap each phase when it ends, from the record, per viewer (core.sessions.recap).
+    # Absent = no recaps, which is what every flow did before them.
+    recap: RecapSpec | None = None
 
     def reminder_duration_for(self, phase: PhaseSpec) -> str | None:
         """The reminder duration in effect for one phase's await: its own, else the

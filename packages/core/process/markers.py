@@ -22,12 +22,3 @@ def render_marker(template: str, state: Mapping[str, Any]) -> str:
         return str(state[name]) if name in state else match.group(0)
 
     return _PLACEHOLDER.sub(fill, template)
-
-
-def transcript_markers(definition: Any) -> dict[str, str] | None:
-    """Phase key -> marker template when the flow puts markers in the transcript; None
-    otherwise (and for a flow with no markers at all)."""
-    if definition is None or getattr(definition, "phase_markers", "none") != "transcript":
-        return None
-    markers = {key: phase.marker for key, phase in definition.phases.items() if phase.marker}
-    return markers or None

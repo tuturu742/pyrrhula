@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
@@ -135,6 +135,10 @@ class CreateSessionRequest(BaseModel):
     # Overrides of the flow's declared `settings:` (a seat count, a discussion length);
     # checked against each setting's type and range, recorded on the session.
     settings: dict[str, object] | None = None
+    # Engine options, the same in every flow: where phase markers go
+    # (none|transcript|current) and whether phases are recapped (on|off). Absent keeps
+    # the flow's own choice.
+    options: dict[str, object] | None = None
 
 
 class SessionResponse(BaseModel):
@@ -298,8 +302,9 @@ async def create_session_endpoint(
                 definition_row.id,
                 definition_row.version,
                 settings_overrides=body.settings,
+                options=body.options,
             )
-        except ParticipantError as exc:
+        except (ParticipantError, ValidationError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         refreshed = await get_session(ctx.tenant_id, sess.id)
         assert refreshed is not None

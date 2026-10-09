@@ -23,13 +23,10 @@ merely convenient:
    ``secret:inspect``. A participant's recap therefore cannot contain a fact they could
    not have seen live.
 
-   **Scope boundary, stated plainly:** *prose* (``message`` rows) is not viewer-filtered,
-   because the schema has no per-message visibility to filter on -- a session transcript
-   is shared by construction, and every principal in the session saw every message live.
-   Inventing a per-message scope here to make the filter look symmetrical would be
-   fabricating a distinction the rest of the system does not make. The per-viewer
-   difference lives entirely in the fact frame, which is where the per-viewer data
-   actually is.
+   *Prose* (``message`` rows) is filtered by ``message.audience``: a message said in a
+   phase with an audience (a private channel, a sealed vote's reasoning) reaches only its
+   members, in the summary as everywhere else; a message with no audience was heard by
+   everyone in the session live.
 
 3. **The budget is a reservation, not a truncation.** ``BudgetSpec.history_ratio``
    (in the DSL) carves the history slice out of the phase budget *before* retrieval

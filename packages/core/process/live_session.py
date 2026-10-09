@@ -64,7 +64,8 @@ from core.process.interpreter import (
     _phase_entry_seq,
     advance_session,
 )
-from core.process.markers import render_marker, transcript_markers
+from core.process.markers import render_marker
+from core.process.options import EffectiveOptions, resolve_options
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
 from core.process.session_container_tools import (
     CONTAINER_ACTIVITY_DESCRIPTION,
@@ -93,6 +94,7 @@ from core.resolution.rule_system import RuleSystemDefinition, get_or_create_defa
 from core.resolution.service import ActorFieldsResolver, make_randomizer_handler
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionEventRow, SessionPersonaRow, SessionRow
+from core.sessions.recap import PhaseSpan, build_recaps
 from core.tenancy.models import Principal, Workspace
 from core.tenancy.scope import tenant_scope
 from core.usage_limits import UsageLimitExceededError
@@ -154,8 +156,7 @@ async def _load_conversation_with_boundary(
     session_id: uuid.UUID,
     viewer_principal_id: uuid.UUID | None = None,
     history_char_budget: int | None = None,
-    markers: Mapping[str, str] | None = None,
-    initial_phase: str | None = None,
+    annotations: Sequence[tuple[int, str]] | None = None,
 ) -> tuple[list[dict[str, str]], int]:
     """The transcript as chat messages, and the event_seq of the first replayed message
     when the tail trim dropped anything before it -- 0 when nothing was dropped, so the
@@ -229,36 +230,11 @@ async def _load_conversation_with_boundary(
                         f"{json.dumps(payload.get('arguments') or {})}: {result}]"
                     )
                     timeline.append((event.event_seq, {"role": "user", "content": note}))
-        if markers:
-            # Where each marked phase began, as a line in the conversation: without it a
-            # replayed history is one undivided stream, and a player at night argued
-            # about "today's vote" for someone already out (Mafia, 2026-10-09).
-            if initial_phase is not None and initial_phase in markers:
-                timeline.append(
-                    (
-                        -1,
-                        {
-                            "role": "user",
-                            "content": f"[{render_marker(markers[initial_phase], {})}]",
-                        },
-                    )
-                )
-            transitions = (
-                await session.execute(
-                    select(SessionEventRow.event_seq, SessionEventRow.payload)
-                    .where(
-                        SessionEventRow.session_id == session_id,
-                        SessionEventRow.kind == "phase_transition",
-                    )
-                    .order_by(SessionEventRow.event_seq)
-                )
-            ).all()
-            for seq, payload in transitions:
-                to = payload.get("to")
-                if isinstance(to, str) and to in markers:
-                    state = payload.get("state") or {}
-                    line = render_marker(markers[to], state)
-                    timeline.append((seq, {"role": "user", "content": f"[{line}]"}))
+        # Lines the engine adds at a point in the history -- phase markers and phase
+        # recaps (`_history_annotations`). Appended after the messages so a line placed
+        # at a transition sorts after nothing it should precede (seqs are unique).
+        for seq, line in annotations or ():
+            timeline.append((seq, {"role": "user", "content": f"[{line}]"}))
         timeline.sort(key=lambda item: item[0])
         kept = _tail_trim_pairs(timeline, history_char_budget)
         # The boundary comes from the seq that actually survived, not from counting
@@ -338,6 +314,85 @@ def _phase_remote_allowlist(phase: Any) -> list[str] | None:
     return [str(t) for t in allowed]
 
 
+async def _history_annotations(
+    *,
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    session_id: uuid.UUID,
+    viewer: Principal,
+    viewer_name: str,
+    viewer_is_supervisor: bool,
+    phase: Any,
+    definition: ProcessDefinitionDSL | None,
+    options: EffectiveOptions,
+    permission_service: PermissionService | None,
+) -> list[tuple[int, str]]:
+    """The lines this viewer's replayed history gets at phase boundaries: the recap of the
+    phase that just ended, then the marker of the one that began. Both are the engine's
+    own words from the record; neither exists unless the flow or the session asks."""
+    if definition is None:
+        return []
+    markers = (
+        {key: spec.marker for key, spec in definition.phases.items() if spec.marker}
+        if options.phase_markers == "transcript"
+        else {}
+    )
+    if not markers and options.recap is None:
+        return []
+    async with tenant_scope(tenant_id) as session:
+        transitions = (
+            await session.execute(
+                select(SessionEventRow.event_seq, SessionEventRow.payload)
+                .where(
+                    SessionEventRow.session_id == session_id,
+                    SessionEventRow.kind == "phase_transition",
+                )
+                .order_by(SessionEventRow.event_seq)
+            )
+        ).all()
+
+    recaps: dict[int, str] = {}
+    if options.recap is not None and transitions:
+        spans: list[PhaseSpan] = []
+        start, current = -1, definition.initial_phase
+        entered_state: dict[str, Any] = {}
+        for seq, payload in transitions:
+            spec = definition.phases.get(current)
+            label = (
+                render_marker(spec.marker, entered_state).rstrip(".")
+                if spec is not None and spec.marker
+                else current.replace("_", " ")
+            )
+            spans.append(PhaseSpan(current, label, start, seq))
+            start, entered_state = seq, payload.get("state") or {}
+            to = payload.get("to")
+            current = to if isinstance(to, str) else current
+        recaps = await build_recaps(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            session_id=session_id,
+            viewer=viewer,
+            viewer_name=viewer_name,
+            viewer_is_supervisor=viewer_is_supervisor,
+            phase=phase,
+            definition=definition,
+            spec=options.recap,
+            spans=spans,
+            permission_service=permission_service,
+        )
+
+    lines: list[tuple[int, str]] = []
+    if definition.initial_phase in markers:
+        lines.append((-1, render_marker(markers[definition.initial_phase], {})))
+    for seq, payload in transitions:
+        if seq in recaps:
+            lines.append((seq, recaps[seq]))
+        to = payload.get("to")
+        if isinstance(to, str) and to in markers:
+            lines.append((seq, render_marker(markers[to], payload.get("state") or {})))
+    return lines
+
+
 async def run_one_persona_turn(
     *,
     tenant_id: uuid.UUID,
@@ -397,6 +452,7 @@ async def run_one_persona_turn(
         agenda_md = session_row.agenda_md if session_row is not None else None
         session_state = dict(session_row.state or {}) if session_row is not None else {}
         session_settings = dict(session_row.settings or {}) if session_row is not None else {}
+        session_options = dict(session_row.options or {}) if session_row is not None else {}
     # Ephemeral "who is preparing a reply" cue for live viewers: event_seq -1 marks it
     # non-durable (never a session_event row, never replayed on reconnect) -- pure
     # stream furniture, mirroring how token chunks work.
@@ -411,13 +467,25 @@ async def run_one_persona_turn(
     except (TypeError, ValueError):
         history_budget_chars = None
     definition = await parts.load_session_definition(tenant_id, session_id)
+    options = resolve_options(definition, session_options)
+    annotations = await _history_annotations(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        viewer=viewer_principal,
+        viewer_name=persona_name,
+        viewer_is_supervisor=persona_type == "supervisor",
+        phase=phase,
+        definition=definition,
+        options=options,
+        permission_service=permission_service,
+    )
     conversation, replayed_from = await _load_conversation_with_boundary(
         tenant_id,
         session_id,
         principal_id,
         history_budget_chars,
-        markers=transcript_markers(definition),
-        initial_phase=definition.initial_phase if definition is not None else None,
+        annotations=annotations,
     )
     query_text = conversation[-1]["content"] if conversation else ""
 
@@ -958,7 +1026,7 @@ async def run_one_persona_turn(
     current_marker = getattr(phase, "marker", None)
     if (
         definition is not None
-        and definition.phase_markers == "current"
+        and options.phase_markers == "current"
         and isinstance(current_marker, str)
         and current_marker
     ):

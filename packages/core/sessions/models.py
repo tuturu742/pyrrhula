@@ -121,6 +121,11 @@ class SessionRow(Base):
     settings: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
+    # Engine-option overrides chosen at creation (phase markers, recaps) -- the same
+    # meaning in every flow, unlike `settings` (core.process.options).
+    options: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

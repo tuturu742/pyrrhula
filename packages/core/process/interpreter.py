@@ -47,6 +47,7 @@ from core.actions.idempotency import idempotent
 from core.observability.otel import get_tracer
 from core.process import participants as parts
 from core.process.dsl.schema import PhaseSpec, ProcessDefinitionDSL, StateVarSpec
+from core.process.options import SessionOptions
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionEventRow, SessionRow
 from core.tenancy.scope import tenant_scope
@@ -156,6 +157,7 @@ async def start_session(
     process_definition_id: uuid.UUID,
     process_definition_version: int,
     settings_overrides: dict[str, object] | None = None,
+    options: dict[str, object] | None = None,
 ) -> None:
     """Pins a session to a specific, immutable definition version and applies the DSL's
     declared ``state:`` defaults -- once, at start, matching 's "defaults applied at
@@ -171,6 +173,11 @@ async def start_session(
         row.current_phase = definition.initial_phase
         row.state = defaults
         row.settings = settings
+        # Engine options for this session (core.process.options), checked here so a
+        # typo is refused at creation rather than silently meaning the flow default.
+        row.options = SessionOptions.model_validate(dict(options or {})).model_dump(
+            exclude_none=True
+        )
         if definition.participants is not None:
             # Seats and the deal, in the same transaction that pins the definition: a
             # session never exists half-dealt. The event says how many of each value

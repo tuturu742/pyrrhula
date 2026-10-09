@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 
+from adapters.permission.role_permission import RolePermissionService
 from core.agents.authoring import get_persona
 from core.agents.scheduling import make_persona_candidate_resolver
 from core.agents.seed import seed_dev_agent
@@ -28,7 +29,12 @@ from core.process.interpreter import (
     advance_session,
     start_session,
 )
-from core.process.live_session import _load_conversation, _load_conversation_with_boundary
+from core.process.live_session import (
+    _history_annotations,
+    _load_conversation,
+    _load_conversation_with_boundary,
+)
+from core.process.options import resolve_options
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
 from core.process.skeleton import create_session
 from core.sessions.lifecycle import set_session_roster
@@ -40,6 +46,7 @@ from core.sessions.models import (
     SessionPersonaRow,
     SessionRow,
 )
+from core.tenancy.models import Principal
 from core.tenancy.scope import tenant_scope
 from core.tenancy.seed import seed_dev_tenant
 
@@ -311,19 +318,56 @@ async def test_a_full_game_votes_reveals_and_ends(db_available: None) -> None:
     )
     assert f"{covert.name} — side: covert" in block
 
-    # Phase markers in the transcript sit exactly where each marked phase began.
+    # Markers and recaps sit exactly where each phase began and ended.
+    marked = dsl.model_copy(deep=True)
+    marked.phases["talk"].marker = "Talk opens"
+    marked.phases["vote"].marker = "The vote opens"
+    async with tenant_scope(tenant_id) as session:
+        viewer = await session.get(Principal, open_viewer.principal_id)
+    assert viewer is not None
+    annotations = await _history_annotations(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        viewer=viewer,
+        viewer_name=open_viewer.name,
+        viewer_is_supervisor=False,
+        phase=marked.phases["vote"],
+        definition=marked,
+        options=resolve_options(marked, {"phase_markers": "transcript", "recap": "on"}),
+        permission_service=RolePermissionService(),
+    )
     history, _ = await _load_conversation_with_boundary(
-        tenant_id,
-        session_id,
-        open_viewer.principal_id,
-        markers={"talk": "Talk opens", "vote": "The vote opens"},
-        initial_phase="talk",
+        tenant_id, session_id, open_viewer.principal_id, annotations=annotations
     )
     lines = [m["content"] for m in history]
     assert lines[0] == "[Talk opens]"
     vote_at = lines.index("[The vote opens]")
-    assert all("speaks" in line for line in lines[1:vote_at])
-    assert len(lines[1:vote_at]) == 4
+    assert all("speaks" in line for line in lines[1 : vote_at - 1])
+    talk_recap = lines[vote_at - 1]
+    assert talk_recap.startswith("[Recap of Talk opens, from the record:")
+    assert "Who spoke:" in talk_recap
+    vote_recap = next(line for line in lines if line.startswith("[Recap of The vote opens"))
+    # the vote reveals every ballot, so the recap names who voted for whom
+    assert f"{covert.name} was chosen" in vote_recap and "Ballots:" in vote_recap
+    # sealed vote messages are private: the open viewer's recap counts only its own
+    assert vote_recap.count("Who spoke:") == 1
+    assert "you 1×" in vote_recap
+
+    # Off for the session, nothing is added, whatever the flow says.
+    off = await _history_annotations(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        viewer=viewer,
+        viewer_name=open_viewer.name,
+        viewer_is_supervisor=False,
+        phase=marked.phases["vote"],
+        definition=marked,
+        options=resolve_options(marked, {"phase_markers": "none", "recap": "off"}),
+        permission_service=RolePermissionService(),
+    )
+    assert off == []
 
 
 def test_a_marker_reads_state_and_nothing_else() -> None:
