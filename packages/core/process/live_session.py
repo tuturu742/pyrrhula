@@ -156,7 +156,7 @@ async def _load_conversation_with_boundary(
     session_id: uuid.UUID,
     viewer_principal_id: uuid.UUID | None = None,
     history_char_budget: int | None = None,
-    annotations: Sequence[tuple[int, str]] | None = None,
+    annotations: Sequence[tuple[int, str, bool]] | None = None,
 ) -> tuple[list[dict[str, str]], int]:
     """The transcript as chat messages, and the event_seq of the first replayed message
     when the tail trim dropped anything before it -- 0 when nothing was dropped, so the
@@ -233,7 +233,7 @@ async def _load_conversation_with_boundary(
         # Lines the engine adds at a point in the history -- phase markers and phase
         # recaps (`_history_annotations`). Appended after the messages so a line placed
         # at a transition sorts after nothing it should precede (seqs are unique).
-        for seq, line in annotations or ():
+        for seq, line, _pinned in annotations or ():
             timeline.append((seq, {"role": "user", "content": f"[{line}]"}))
         timeline.sort(key=lambda item: item[0])
         kept = _tail_trim_pairs(timeline, history_char_budget)
@@ -244,7 +244,33 @@ async def _load_conversation_with_boundary(
         # times on one 50-minute session in which nothing had been trimmed, at ~55% of
         # the session's own prompt tokens (Hägnaryd sweep, 2026-10-04).
         first_seq = kept[0][0] if kept and len(kept) < len(timeline) else 0
+        if first_seq:
+            kept = _keep_pinned(kept, annotations or (), first_seq, history_char_budget)
         return [message for _seq, message in kept], first_seq
+
+
+def _keep_pinned(
+    kept: list[tuple[int, dict[str, str]]],
+    annotations: Sequence[tuple[int, str, bool]],
+    first_seq: int,
+    budget: int | None,
+) -> list[tuple[int, dict[str, str]]]:
+    """Pinned lines (phase recaps) of the span the trim dropped, put back in front of the
+    tail. The trim drops the oldest history whole; a phase without a reserved history
+    budget then had nothing in its place, and a long game simply forgot its first days.
+    A recap is the record's own account of a dropped phase, so it costs no model call and
+    cannot be wrong about it. Newest first, within a third of the history budget."""
+    room = int(budget or _DEFAULT_HISTORY_CHAR_BUDGET) // 3
+    chosen: list[tuple[int, str]] = []
+    for seq, line, pinned in sorted(annotations, key=lambda a: a[0], reverse=True):
+        if not pinned or seq >= first_seq:
+            continue
+        if len(line) > room:
+            break
+        chosen.append((seq, line))
+        room -= len(line)
+    restored = [(seq, {"role": "user", "content": f"[{line}]"}) for seq, line in reversed(chosen)]
+    return restored + kept
 
 
 # The transcript budget when nothing more specific is configured. It is a property of
@@ -326,7 +352,7 @@ async def _history_annotations(
     definition: ProcessDefinitionDSL | None,
     options: EffectiveOptions,
     permission_service: PermissionService | None,
-) -> list[tuple[int, str]]:
+) -> list[tuple[int, str, bool]]:
     """The lines this viewer's replayed history gets at phase boundaries: the recap of the
     phase that just ended, then the marker of the one that began. Both are the engine's
     own words from the record; neither exists unless the flow or the session asks."""
@@ -381,15 +407,15 @@ async def _history_annotations(
             permission_service=permission_service,
         )
 
-    lines: list[tuple[int, str]] = []
+    lines: list[tuple[int, str, bool]] = []
     if definition.initial_phase in markers:
-        lines.append((-1, render_marker(markers[definition.initial_phase], {})))
+        lines.append((-1, render_marker(markers[definition.initial_phase], {}), False))
     for seq, payload in transitions:
         if seq in recaps:
-            lines.append((seq, recaps[seq]))
+            lines.append((seq, recaps[seq], True))
         to = payload.get("to")
         if isinstance(to, str) and to in markers:
-            lines.append((seq, render_marker(markers[to], payload.get("state") or {})))
+            lines.append((seq, render_marker(markers[to], payload.get("state") or {}), False))
     return lines
 
 
