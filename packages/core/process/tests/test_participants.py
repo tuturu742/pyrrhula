@@ -28,7 +28,7 @@ from core.process.interpreter import (
     advance_session,
     start_session,
 )
-from core.process.live_session import _load_conversation
+from core.process.live_session import _load_conversation, _load_conversation_with_boundary
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
 from core.process.skeleton import create_session
 from core.sessions.lifecycle import set_session_roster
@@ -310,6 +310,27 @@ async def test_a_full_game_votes_reveals_and_ends(db_available: None) -> None:
         dsl.participants, after, open_viewer.principal_id, viewer_is_supervisor=False
     )
     assert f"{covert.name} — side: covert" in block
+
+    # Phase markers in the transcript sit exactly where each marked phase began.
+    history, _ = await _load_conversation_with_boundary(
+        tenant_id,
+        session_id,
+        open_viewer.principal_id,
+        markers={"talk": "Talk opens", "vote": "The vote opens"},
+        initial_phase="talk",
+    )
+    lines = [m["content"] for m in history]
+    assert lines[0] == "[Talk opens]"
+    vote_at = lines.index("[The vote opens]")
+    assert all("speaks" in line for line in lines[1:vote_at])
+    assert len(lines[1:vote_at]) == 4
+
+
+def test_a_marker_reads_state_and_nothing_else() -> None:
+    from core.process.markers import render_marker
+
+    assert render_marker("Night {day} falls.", {"day": 2}) == "Night 2 falls."
+    assert render_marker("{missing} {day.__class__}", {"day": 2}) == "{missing} {day.__class__}"
 
 
 async def test_a_private_message_never_reaches_a_non_member(db_available: None) -> None:

@@ -592,6 +592,10 @@ class PhaseSpec(BaseModel):
     audience: AudienceSpec | None = None
     # This phase is a sealed vote, counted when its actors are done.
     ballot: BallotSpec | None = None
+    # A short line naming the moment this phase is ("Night 2 falls."), shown to models
+    # where the flow's `phase_markers` says. `{name}` placeholders read state variables,
+    # so a counter can appear in it. Absent = this phase is never marked.
+    marker: str | None = None
 
     def history_slice_tokens(self) -> int:
         """The phase budget's declared history reservation, in tokens. ``0`` for a
@@ -616,6 +620,11 @@ class ProcessDefinitionDSL(BaseModel):
     initial_phase: str
     phases: dict[str, PhaseSpec]
     pacing: PacingSpec | None = None
+    # Where phase markers reach a model. "transcript": a marker line at every point in
+    # the replayed conversation where a marked phase began, so the history says when
+    # things were said. "current": only the phase now running, as a line of context.
+    # "none" (the default) shows none, which is what every flow did before markers.
+    phase_markers: Literal["none", "transcript", "current"] = "none"
 
     def reminder_duration_for(self, phase: PhaseSpec) -> str | None:
         """The reminder duration in effect for one phase's await: its own, else the

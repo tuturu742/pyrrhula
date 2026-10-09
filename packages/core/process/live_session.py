@@ -64,6 +64,7 @@ from core.process.interpreter import (
     _phase_entry_seq,
     advance_session,
 )
+from core.process.markers import render_marker, transcript_markers
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
 from core.process.session_container_tools import (
     CONTAINER_ACTIVITY_DESCRIPTION,
@@ -153,6 +154,8 @@ async def _load_conversation_with_boundary(
     session_id: uuid.UUID,
     viewer_principal_id: uuid.UUID | None = None,
     history_char_budget: int | None = None,
+    markers: Mapping[str, str] | None = None,
+    initial_phase: str | None = None,
 ) -> tuple[list[dict[str, str]], int]:
     """The transcript as chat messages, and the event_seq of the first replayed message
     when the tail trim dropped anything before it -- 0 when nothing was dropped, so the
@@ -226,6 +229,36 @@ async def _load_conversation_with_boundary(
                         f"{json.dumps(payload.get('arguments') or {})}: {result}]"
                     )
                     timeline.append((event.event_seq, {"role": "user", "content": note}))
+        if markers:
+            # Where each marked phase began, as a line in the conversation: without it a
+            # replayed history is one undivided stream, and a player at night argued
+            # about "today's vote" for someone already out (Mafia, 2026-10-09).
+            if initial_phase is not None and initial_phase in markers:
+                timeline.append(
+                    (
+                        -1,
+                        {
+                            "role": "user",
+                            "content": f"[{render_marker(markers[initial_phase], {})}]",
+                        },
+                    )
+                )
+            transitions = (
+                await session.execute(
+                    select(SessionEventRow.event_seq, SessionEventRow.payload)
+                    .where(
+                        SessionEventRow.session_id == session_id,
+                        SessionEventRow.kind == "phase_transition",
+                    )
+                    .order_by(SessionEventRow.event_seq)
+                )
+            ).all()
+            for seq, payload in transitions:
+                to = payload.get("to")
+                if isinstance(to, str) and to in markers:
+                    state = payload.get("state") or {}
+                    line = render_marker(markers[to], state)
+                    timeline.append((seq, {"role": "user", "content": f"[{line}]"}))
         timeline.sort(key=lambda item: item[0])
         kept = _tail_trim_pairs(timeline, history_char_budget)
         # The boundary comes from the seq that actually survived, not from counting
@@ -377,8 +410,14 @@ async def run_one_persona_turn(
         history_budget_chars = int(str(raw_budget)) if raw_budget is not None else None
     except (TypeError, ValueError):
         history_budget_chars = None
+    definition = await parts.load_session_definition(tenant_id, session_id)
     conversation, replayed_from = await _load_conversation_with_boundary(
-        tenant_id, session_id, principal_id, history_budget_chars
+        tenant_id,
+        session_id,
+        principal_id,
+        history_budget_chars,
+        markers=transcript_markers(definition),
+        initial_phase=definition.initial_phase if definition is not None else None,
     )
     query_text = conversation[-1]["content"] if conversation else ""
 
@@ -602,7 +641,6 @@ async def run_one_persona_turn(
     participants_block = ""
     audience: list[uuid.UUID] | None = None
     required_tool: str | None = None
-    definition = await parts.load_session_definition(tenant_id, session_id)
     if definition is not None and definition.participants is not None:
         views = await parts.participant_views(tenant_id, session_id)
         participants_block = parts.render_participants_block(
@@ -917,6 +955,14 @@ async def run_one_persona_turn(
     system_blocks.append(manifest.rendered_context)
     if participants_block:
         system_blocks.append(participants_block)
+    current_marker = getattr(phase, "marker", None)
+    if (
+        definition is not None
+        and definition.phase_markers == "current"
+        and isinstance(current_marker, str)
+        and current_marker
+    ):
+        system_blocks.append(f"Now: {render_marker(current_marker, session_state)}")
     # The phase's own task instruction (DSL `prompt`): what this turn is FOR and what
     # shape its output should take -- without it the model only knows who it is, not
     # what the flow wants from it here.
