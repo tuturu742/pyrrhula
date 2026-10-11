@@ -39,7 +39,7 @@ from core.agents.tools import ToolContext, ToolRegistry
 from core.audit.models import PriceTableRow, UsageRecordRow
 from core.observability.otel import get_tracer
 from core.ports.encryptor import Encryptor
-from core.ports.model_provider import GenerationRequest, ModelProvider, ToolCall
+from core.ports.model_provider import GenerationRequest, ModelProvider, TokenUsage, ToolCall
 from core.resolution.contradiction import scan_for_contradictions
 from core.resolution.records import ResolutionRecordRow
 from core.sessions.lifecycle import resolve_author_name
@@ -105,6 +105,10 @@ class _UsagePoint:
     latency_ms: int
     # Settings the provider refused and dropped for this call (``Chunk.warnings``).
     warnings: tuple[str, ...] = ()
+    # The provider's own reasoning count, when it breaks one out; and whether the token
+    # counts above are the provider's (True) or the runtime's estimate from visible text.
+    reasoning_tokens: int | None = None
+    tokens_reported: bool = False
 
 
 # Public name for callers that make a model call on a turn's behalf (the leak-check
@@ -221,7 +225,10 @@ async def _call_provider_with_retry(
                 reasoning = ""
                 cached_tokens = 0
                 warnings: list[str] = []
+                reported: TokenUsage | None = None
                 async for chunk in provider.generate(req):
+                    if chunk.usage is not None:
+                        reported = chunk.usage
                     warnings.extend(w for w in chunk.warnings if w not in warnings)
                     if chunk.text:
                         full_text.append(chunk.text)
@@ -254,11 +261,18 @@ async def _call_provider_with_retry(
                 if not content.strip() and not tool_calls and not allow_empty:
                     structlog.get_logger().info("runtime.empty_content", raw=repr(content[:200]))
                     raise EmptyGenerationError(f"{model_string} returned an empty generation")
-                prompt_tokens = sum(
-                    provider.count_tokens(str(m.get("content") or ""), model_string)
-                    for m in messages
-                )
-                completion_tokens = provider.count_tokens(content, model_string)
+                # The provider's own counts when it gave them: they are what it bills,
+                # hidden reasoning included. Counting the visible text instead recorded
+                # a reasoning model's 900-token answer as the 60 words it showed.
+                if reported is not None:
+                    prompt_tokens = reported.prompt_tokens
+                    completion_tokens = reported.completion_tokens
+                else:
+                    prompt_tokens = sum(
+                        provider.count_tokens(str(m.get("content") or ""), model_string)
+                        for m in messages
+                    )
+                    completion_tokens = provider.count_tokens(content, model_string)
                 usage = _UsagePoint(
                     candidate.id,
                     candidate.provider,
@@ -268,6 +282,8 @@ async def _call_provider_with_retry(
                     cached_tokens,
                     latency_ms,
                     tuple(warnings),
+                    reasoning_tokens=reported.reasoning_tokens if reported else None,
+                    tokens_reported=reported is not None,
                 )
                 span.set_attribute("pyrrhula.runtime.used_fallback", is_fallback)
                 span.set_attribute("pyrrhula.runtime.attempts", attempt_index + 1)
@@ -839,6 +855,8 @@ async def _commit_turn_once(
                 prompt_tokens=point.prompt_tokens,
                 completion_tokens=point.completion_tokens,
                 cached_tokens=point.cached_tokens,
+                reasoning_tokens=point.reasoning_tokens,
+                tokens_reported=point.tokens_reported,
                 estimated_cost=estimated_cost,
                 latency_ms=point.latency_ms,
             )

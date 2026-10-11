@@ -50,6 +50,7 @@ from core.ports.model_provider import (
     Capabilities,
     Chunk,
     GenerationRequest,
+    TokenUsage,
     ToolCall,
     check_egress,
 )
@@ -116,6 +117,28 @@ def _extract_cached_tokens(usage: Any) -> int:
             return int(cached)
     cache_read = getattr(usage, "cache_read_input_tokens", None)
     return int(cache_read) if cache_read is not None else 0
+
+
+def _token_usage(usage: Any) -> TokenUsage | None:
+    """The provider's own counts from a stream's usage block, or None when it gave none.
+
+    Only real integers count: a provider that reports nothing must read as "unknown", not
+    as zero -- the runtime then counts the visible text instead. ``completion_tokens``
+    already includes hidden reasoning (it is billed as output); the reasoning share is
+    kept separately when the provider breaks it out."""
+    if usage is None:
+        return None
+
+    def _int(value: Any) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    prompt = _int(getattr(usage, "prompt_tokens", None))
+    completion = _int(getattr(usage, "completion_tokens", None))
+    if prompt is None or completion is None:
+        return None
+    details = getattr(usage, "completion_tokens_details", None)
+    reasoning = _int(getattr(details, "reasoning_tokens", None)) if details is not None else None
+    return TokenUsage(prompt, completion, reasoning)
 
 
 def _rejects_schema_constrained_output(exc: Exception) -> bool:
@@ -591,12 +614,26 @@ class LiteLLMModelProvider:
 
             pending_calls: dict[int, dict[str, Any]] = {}
             reasoning_parts: list[str] = []
+            # The usage block arrives on the stream's last part, which carries no choices
+            # -- so it was skipped with them, and every count on record was the runtime's
+            # own estimate from the visible text, blind to hidden reasoning.
+            reported: Any = None
             streamed_chars = 0
             parts = response.__aiter__()
             while True:
                 try:
                     part = await asyncio.wait_for(parts.__anext__(), _remaining(deadline))
                 except StopAsyncIteration:
+                    usage = _token_usage(reported)
+                    if usage is not None:
+                        yield (
+                            Chunk(
+                                text="",
+                                usage=usage,
+                                cached_tokens=_extract_cached_tokens(reported),
+                            ),
+                            False,
+                        )
                     break
                 except TimeoutError:
                     part = None
@@ -613,6 +650,8 @@ class LiteLLMModelProvider:
                     # comes back at all.
                     return
                 cached_tokens = _extract_cached_tokens(getattr(part, "usage", None))
+                if _token_usage(getattr(part, "usage", None)) is not None:
+                    reported = part.usage
                 if not part.choices:
                     continue
                 delta = part.choices[0].delta

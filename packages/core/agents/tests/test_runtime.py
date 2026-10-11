@@ -14,7 +14,14 @@ from core.agents.runtime import AllRetriesExhaustedError, run_agent_turn
 from core.agents.seed import seed_dev_agent
 from core.agents.tools import ToolContext, ToolRegistry, ToolResult
 from core.audit.models import UsageRecordRow
-from core.ports.model_provider import Capabilities, Chunk, GenerationRequest, ToolCall, ToolSpec
+from core.ports.model_provider import (
+    Capabilities,
+    Chunk,
+    GenerationRequest,
+    TokenUsage,
+    ToolCall,
+    ToolSpec,
+)
 from core.process.skeleton import create_session
 from core.sessions.models import MessageRow, SessionEventRow
 from core.tenancy.scope import tenant_scope
@@ -350,6 +357,54 @@ async def test_cached_tokens_reach_the_usage_record(db_available: None) -> None:
         usage_row = await session.get(UsageRecordRow, result.usage_record_ids[0])
     assert usage_row is not None
     assert usage_row.cached_tokens == 123
+
+
+async def test_the_providers_reported_tokens_are_what_is_recorded(db_available: None) -> None:
+    """When the provider reports its own counts, those are recorded -- hidden reasoning
+    included -- and the row says so. Counting the visible reply instead recorded a
+    reasoning model's 900-token answer as the handful of words it showed."""
+    tenant_id, session_id, persona_id = await _setup("runtime-reported-tokens")
+    scripted = _ScriptedProvider(turns=[_ScriptedTurn(text="Only B.")])
+
+    class _Reporting(_ScriptedProvider):
+        async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
+            async for chunk in scripted.generate(req):
+                yield chunk
+            yield Chunk(text="", usage=TokenUsage(150, 900, reasoning_tokens=880))
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "who tells the truth?"}],
+        model_provider_factory=lambda _name: _Reporting(turns=[]),
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(UsageRecordRow, result.usage_record_ids[0])
+    assert row is not None
+    assert (row.prompt_tokens, row.completion_tokens, row.reasoning_tokens) == (150, 900, 880)
+    assert row.tokens_reported is True
+
+
+async def test_an_estimate_says_it_is_one(db_available: None) -> None:
+    tenant_id, session_id, persona_id = await _setup("runtime-estimated-tokens")
+    provider = _ScriptedProvider(turns=[_ScriptedTurn(text="four words in this reply")])
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "hi"}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(UsageRecordRow, result.usage_record_ids[0])
+    assert row is not None
+    assert row.tokens_reported is False and row.reasoning_tokens is None
 
 
 async def test_persona_params_ride_over_the_connections(db_available: None) -> None:

@@ -1472,3 +1472,60 @@ async def test_a_request_that_never_answers_raises_on_the_clock(
 
 async def _collect(provider: LiteLLMModelProvider, req: GenerationRequest) -> list[object]:
     return [c async for c in provider.generate(req)]
+
+
+async def test_the_providers_own_token_counts_come_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (Mafia rating prep, 2026-10-11): the usage block arrives on the stream's
+    last part, which has no choices, and the loop skipped it with them -- so a reasoning
+    model's 867-token answer went on record as the 60 visible words. Hidden reasoning is
+    billed as output; the counts that reach the record must be the provider's."""
+    import litellm
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        async def gen():  # noqa: ANN202
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="Only B is telling the truth.", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+            tail = MagicMock()
+            tail.choices = []
+            tail.usage = MagicMock(
+                prompt_tokens=120,
+                completion_tokens=867,
+                completion_tokens_details=MagicMock(reasoning_tokens=800),
+                prompt_tokens_details=MagicMock(cached_tokens=64),
+            )
+            yield tail
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="anthropic/claude-opus-5-5",
+        messages=[{"role": "user", "content": "who tells the truth?"}],
+        purpose="generation",
+    )
+    chunks = [c async for c in LiteLLMModelProvider().generate(req)]
+
+    assert "".join(c.text for c in chunks) == "Only B is telling the truth."
+    reported = [c.usage for c in chunks if c.usage is not None]
+    assert len(reported) == 1
+    assert (reported[0].prompt_tokens, reported[0].completion_tokens) == (120, 867)
+    assert reported[0].reasoning_tokens == 800
+    assert any(c.cached_tokens == 64 for c in chunks), "cached tokens ride the same block"
+
+
+def test_a_provider_that_reports_nothing_reads_as_unknown_not_zero() -> None:
+    from adapters.models.litellm.provider import _token_usage
+
+    assert _token_usage(None) is None
+    assert _token_usage(MagicMock()) is None, "a usage object without integers is no report"
+    usage = _token_usage(
+        MagicMock(prompt_tokens=10, completion_tokens=3, completion_tokens_details=None)
+    )
+    assert usage is not None and usage.reasoning_tokens is None
