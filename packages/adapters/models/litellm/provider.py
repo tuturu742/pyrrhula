@@ -36,6 +36,7 @@ Anthropic-style) -- both are checked, defaulting to 0 if neither is present.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import re
 import time
@@ -264,6 +265,37 @@ def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, A
         if kwargs.get(key) is None:
             kwargs[key] = value
     return kwargs
+
+
+def _dropped_settings(params: Any, sent: dict[str, Any], accepted: dict[str, Any]) -> list[str]:
+    """The connection or persona settings that were in the call as first sent and are not
+    in the call the endpoint finally accepted -- what a repair below threw away.
+
+    A setting moved under the name the endpoint asked for is still applied and is not
+    reported; one whose value had to change is. Platform-chosen values (temperature,
+    the completion budget) are the adapter's business and are not reported either: only
+    what an operator configured, because only that is a promise the run did not keep.
+    """
+    model = sent.get("model")
+    moved_values = [value for key, value in accepted.items() if key not in sent]
+    warnings: list[str] = []
+    for key in dict(params or {}):
+        if key in _MANAGED_KEYS or key not in sent:
+            continue
+        if key in accepted:
+            if accepted[key] != sent[key]:
+                warnings.append(
+                    f"{model} refused the setting {key}={sent[key]!r}; "
+                    f"it ran with {key}={accepted[key]!r} instead"
+                )
+            continue
+        if sent[key] in moved_values:
+            continue
+        warnings.append(
+            f"{model} refused the setting {key}={sent[key]!r}; it was dropped, "
+            "so the call ran without it"
+        )
+    return warnings
 
 
 _UNSUPPORTED_PARAMS_RE = re.compile(r"does not support parameters:\s*\[([^\]]*)\]", re.I)
@@ -660,6 +692,23 @@ class LiteLLMModelProvider:
                         bool(text.strip()),
                     )
 
+        async def _announced(
+            attempt: AsyncIterator[tuple[Chunk, bool]],
+        ) -> AsyncIterator[tuple[Chunk, bool]]:
+            """The attempt's chunks, the first one carrying any settings the endpoint
+            refused (``accepted_call`` is final by the time anything is yielded)."""
+            first = True
+            async for chunk, had_output in attempt:
+                if first:
+                    first = False
+                    dropped = _dropped_settings(req.params, call, accepted_call)
+                    if dropped:
+                        structlog.get_logger().warning(
+                            "provider.settings_dropped", model=call.get("model"), dropped=dropped
+                        )
+                        chunk = dataclasses.replace(chunk, warnings=tuple(dropped))
+                yield chunk, had_output
+
         _log = structlog.get_logger()
         _log.info(
             "provider.call",
@@ -673,7 +722,7 @@ class LiteLLMModelProvider:
         )
         _t0 = time.monotonic()
         produced = False
-        async for chunk, had_output in _attempt(call):
+        async for chunk, had_output in _announced(_attempt(call)):
             produced = produced or had_output
             yield chunk
         _log.info(
@@ -703,7 +752,7 @@ class LiteLLMModelProvider:
                     budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
                 )
                 _t1 = time.monotonic()
-                async for chunk, _had in _attempt(retry):
+                async for chunk, _had in _announced(_attempt(retry)):
                     yield chunk
                 _log.info(
                     "provider.attempt_done",
@@ -717,7 +766,9 @@ class LiteLLMModelProvider:
                 # the empty generation, which the runtime reports rather than papering
                 # over a deliberate configuration.
                 _t1 = time.monotonic()
-                async for chunk, _had in _attempt({**retry, "reasoning_effort": "none"}):
+                async for chunk, _had in _announced(
+                    _attempt({**retry, "reasoning_effort": "none"})
+                ):
                     yield chunk
                 _log.info(
                     "provider.attempt_done",

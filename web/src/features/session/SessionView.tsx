@@ -98,6 +98,12 @@ interface ErrorPayload {
   message: string;
 }
 
+/** A setting a provider refused for a seat's turn; the turn ran without it. */
+interface WarningPayload {
+  message: string;
+  author?: string;
+}
+
 /** A call to a registered MCP server, recorded at the moment it happened. The model's
  * request and the server's answer (bounded), or why there was no answer -- so a reader
  * can check what a persona narrates against what its tool actually said. */
@@ -1258,6 +1264,15 @@ function TimelineEvent({
     case "error": {
       const e = event.payload as ErrorPayload;
       return <div className="text-center text-xs text-destructive">— {e.message} —</div>;
+    }
+    case "warning": {
+      const w = event.payload as WarningPayload;
+      return (
+        <div className="text-center text-xs text-amber-500">
+          — {w.author ? `${w.author}: ` : ""}
+          {w.message} —
+        </div>
+      );
     }
     default:
       return null;

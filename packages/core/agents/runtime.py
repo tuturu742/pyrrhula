@@ -103,6 +103,8 @@ class _UsagePoint:
     completion_tokens: int
     cached_tokens: int
     latency_ms: int
+    # Settings the provider refused and dropped for this call (``Chunk.warnings``).
+    warnings: tuple[str, ...] = ()
 
 
 # Public name for callers that make a model call on a turn's behalf (the leak-check
@@ -130,6 +132,9 @@ class TurnResult:
     message_id: uuid.UUID
     usage_record_ids: tuple[uuid.UUID, ...]
     tool_calls_made: int
+    # Every distinct setting a provider refused during the turn, for the caller to put
+    # on the record. Empty when everything configured was applied.
+    warnings: tuple[str, ...] = ()
 
 
 async def _estimate_cost(
@@ -215,7 +220,9 @@ async def _call_provider_with_retry(
                 tool_calls: tuple[ToolCall, ...] = ()
                 reasoning = ""
                 cached_tokens = 0
+                warnings: list[str] = []
                 async for chunk in provider.generate(req):
+                    warnings.extend(w for w in chunk.warnings if w not in warnings)
                     if chunk.text:
                         full_text.append(chunk.text)
                         if on_chunk is not None:
@@ -260,6 +267,7 @@ async def _call_provider_with_retry(
                     completion_tokens,
                     cached_tokens,
                     latency_ms,
+                    tuple(warnings),
                 )
                 span.set_attribute("pyrrhula.runtime.used_fallback", is_fallback)
                 span.set_attribute("pyrrhula.runtime.attempts", attempt_index + 1)
@@ -867,4 +875,5 @@ async def _commit_turn_once(
             message_id=message.id,
             usage_record_ids=tuple(usage_record_ids),
             tool_calls_made=tool_calls_made,
+            warnings=tuple(dict.fromkeys(w for point in usage_points for w in point.warnings)),
         )

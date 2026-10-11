@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import pytest
 from sqlalchemy import select
@@ -581,3 +581,26 @@ async def test_a_tool_call_id_carrying_a_thought_signature_still_runs(
         m for m in provider.requests[1] if m.get("role") == "assistant" and m.get("tool_calls")
     )
     assert assistant["tool_calls"][0]["id"] == long_id  # type: ignore[index]
+
+
+async def test_a_providers_warnings_come_back_with_the_turn(db_available: None) -> None:
+    """The adapter says when it dropped a configured setting (``Chunk.warnings``); the
+    turn hands those back so the session can put them on the record."""
+    tenant_id, session_id, persona_id = await _setup("runtime-warnings")
+    scripted = _ScriptedProvider(turns=[_ScriptedTurn(text="Hello.")])
+
+    class _Warning(_ScriptedProvider):
+        async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
+            async for chunk in scripted.generate(req):
+                yield replace(chunk, warnings=("x refused the setting reasoning_effort",))
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Speak."}],
+        model_provider_factory=lambda _name: _Warning(turns=[]),
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    assert result.warnings == ("x refused the setting reasoning_effort",)

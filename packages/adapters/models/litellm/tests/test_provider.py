@@ -788,12 +788,75 @@ async def test_a_parameter_the_endpoint_refuses_is_dropped_and_retried(
         purpose="generation",
         params={"presence_penalty": 0.4, "temperature": 0.9},
     )
-    text = "".join([c.text async for c in provider.generate(req)])
+    chunks = [c async for c in provider.generate(req)]
 
-    assert text == "in character"
+    assert "".join(c.text for c in chunks) == "in character"
     assert len(calls) == 2
     assert "presence_penalty" not in calls[1], "the refused parameter was not dropped"
     assert calls[1]["temperature"] == 0.9, "an unrelated parameter must survive the retry"
+    # ...and the drop is said, once, so it can reach the session's record.
+    warnings = [w for c in chunks for w in c.warnings]
+    assert len(warnings) == 1
+    assert "presence_penalty=0.4" in warnings[0] and "dropped" in warnings[0]
+
+
+async def test_a_refused_reasoning_effort_is_reported_not_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (Mafia rating prep, 2026-10-11): LiteLLM refuses `reasoning_effort` for
+    OpenRouter models, the repair dropped it, and nine seats configured for effort "high"
+    played on their defaults with nothing on record. The call still goes through; the
+    first chunk now carries what was dropped."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "reasoning_effort" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.UnsupportedParamsError: openrouter does not support parameters: "
+                "['reasoning_effort'], for model=x-ai/grok-4.7."
+            )
+
+        async def gen():  # noqa: ANN202
+            for piece in ("I suspect ", "Reese."):
+                part = MagicMock()
+                choice = MagicMock()
+                choice.delta = MagicMock(content=piece, tool_calls=None)
+                choice.finish_reason = "stop" if piece == "Reese." else None
+                part.choices = [choice]
+                part.usage = None
+                yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="openrouter/x-ai/grok-4.7",
+        messages=[{"role": "user", "content": "speak"}],
+        purpose="generation",
+        params={"reasoning_effort": "high"},
+    )
+    chunks = [c async for c in LiteLLMModelProvider().generate(req)]
+
+    assert "".join(c.text for c in chunks) == "I suspect Reese."
+    assert chunks[0].warnings and "reasoning_effort='high'" in chunks[0].warnings[0]
+    assert all(not c.warnings for c in chunks[1:]), "said once per generation, not per chunk"
+
+
+def test_a_setting_moved_to_the_name_the_endpoint_asked_for_is_not_reported() -> None:
+    """A rename keeps the value and its effect; only a setting that stopped applying, or
+    whose value changed, is a broken promise worth a warning."""
+    from adapters.models.litellm.provider import _dropped_settings
+
+    sent = {"model": "openai/x", "max_tokens": 4000, "presence_penalty": 0.4, "seed": 7}
+    accepted = {"model": "openai/x", "max_completion_tokens": 4000, "seed": 1}
+    params = {"max_tokens": 4000, "presence_penalty": 0.4, "seed": 7, "api_key": "k"}
+    warnings = _dropped_settings(params, sent, accepted)
+    assert len(warnings) == 2
+    assert any("presence_penalty" in w and "dropped" in w for w in warnings)
+    assert any("seed=7" in w and "seed=1" in w for w in warnings)
 
 
 async def test_an_unrelated_failure_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:

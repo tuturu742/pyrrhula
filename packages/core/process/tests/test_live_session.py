@@ -417,3 +417,53 @@ def test_resolution_tools_reach_only_the_phases_that_declare_them() -> None:
     ] == ["randomizer"]
     assert phase_resolution_tools(specs, SimpleNamespace(tools=[])) == []
     assert phase_resolution_tools(specs, SimpleNamespace()) == []
+
+
+async def test_a_refused_setting_reaches_the_record_once_per_session(
+    db_available: None,
+) -> None:
+    """A provider refused a configured setting and the adapter dropped it so the turn
+    could go through. That has to be on the record -- a seat set to reasoning effort
+    "high" played a whole game on its default with nothing showing it -- but only once
+    per session: the same refusal repeats on every turn that seat takes."""
+    from core.process.live_session import _record_settings_warnings
+
+    tenant_id, _owner, workspace_id = await seed_dev_tenant(slug=f"warn-{uuid.uuid4().hex[:8]}")
+    persona_id = await seed_dev_agent(tenant_id, workspace_id, key="seat")
+    session = await create_session(tenant_id, workspace_id, persona_id)
+    async with tenant_scope(tenant_id) as db:
+        persona = await db.get(Persona, persona_id)
+        assert persona is not None
+        principal_id = persona.principal_id
+    refused = "openrouter/x-ai/grok-4.7 refused the setting reasoning_effort='high'; ..."
+    published: list[tuple[int, str]] = []
+
+    async def on_event(seq: int, kind: str, payload: dict[str, object]) -> None:
+        published.append((seq, kind))
+
+    for turn_seq, warnings in ((5, [refused]), (9, [refused, "another refusal"])):
+        await _record_settings_warnings(
+            tenant_id,
+            session.id,
+            turn_event_seq=turn_seq,
+            principal_id=principal_id,
+            phase_key="day_talk",
+            warnings=warnings,
+            on_event=on_event,
+        )
+
+    async with tenant_scope(tenant_id) as db:
+        rows = (
+            await db.scalars(
+                select(SessionEventRow)
+                .where(
+                    SessionEventRow.session_id == session.id,
+                    SessionEventRow.kind == "warning",
+                )
+                .order_by(SessionEventRow.event_seq)
+            )
+        ).all()
+    assert [r.payload["message"] for r in rows] == [refused, "another refusal"]
+    assert rows[0].event_seq > 5 and rows[1].event_seq > 9, "never a turn's own slot"
+    assert rows[0].payload["phase"] == "day_talk" and rows[0].payload["author"]
+    assert published == [(r.event_seq, "warning") for r in rows]

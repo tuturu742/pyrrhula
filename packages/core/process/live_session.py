@@ -1273,6 +1273,17 @@ async def run_one_persona_turn(
         structlog.get_logger().exception("turn.failed", session_id=str(session_id))
         raise InterpreterFaultError(f"turn failed: {type(exc).__name__}: {exc}"[:500]) from exc
 
+    if result.warnings:
+        await _record_settings_warnings(
+            tenant_id,
+            session_id,
+            turn_event_seq=event_seq,
+            principal_id=principal_id,
+            phase_key=phase_key,
+            warnings=result.warnings,
+            on_event=on_event,
+        )
+
     if on_event is not None and result.message_id is not None:
         async with tenant_scope(tenant_id) as session:
             author_name = await resolve_author_name(session, tenant_id, principal_id)
@@ -1300,6 +1311,66 @@ async def run_one_persona_turn(
         already_persisted=True,
         message_id=result.message_id,
     )
+
+
+async def _record_settings_warnings(
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    *,
+    turn_event_seq: int,
+    principal_id: uuid.UUID,
+    phase_key: str,
+    warnings: Sequence[str],
+    on_event: OnEvent | None,
+) -> None:
+    """Put configuration a provider refused on the session's record, once per session for
+    each distinct refusal.
+
+    The turn itself went through -- the adapter dropped the refused setting so it could --
+    which is exactly why this has to be said somewhere a person reads: a seat configured
+    for reasoning effort "high" played a whole game on its default, and nothing showed it.
+    Once per session, because the same refusal repeats on every turn of that seat."""
+    async with tenant_scope(tenant_id) as session:
+        seen = set(
+            (
+                await session.scalars(
+                    select(SessionEventRow.payload["message"].astext).where(
+                        SessionEventRow.session_id == session_id,
+                        SessionEventRow.kind == "warning",
+                    )
+                )
+            ).all()
+        )
+        fresh = [w for w in dict.fromkeys(warnings) if w not in seen]
+        if not fresh:
+            return
+        author = await resolve_author_name(session, tenant_id, principal_id)
+        row = await session.get(SessionRow, session_id)
+        if row is None:
+            return
+        # Never the slot the turn's own message holds (uq_session_event_seq).
+        seq = max(row.next_event_seq, turn_event_seq + 1)
+        recorded: list[tuple[int, dict[str, Any]]] = []
+        for message in fresh:
+            payload: dict[str, Any] = {"message": message, "author": author, "phase": phase_key}
+            session.add(
+                SessionEventRow(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    event_seq=seq,
+                    kind="warning",
+                    payload=payload,
+                )
+            )
+            recorded.append((seq, payload))
+            seq += 1
+        row.next_event_seq = seq
+    structlog.get_logger().warning(
+        "turn.settings_refused", session_id=str(session_id), warnings=fresh
+    )
+    if on_event is not None:
+        for event_seq, payload in recorded:
+            await on_event(event_seq, "warning", payload)
 
 
 def _make_execute_turn(

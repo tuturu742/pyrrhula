@@ -64,6 +64,11 @@ class Chunk:
     # endpoints (DeepSeek in thinking mode) require it echoed back on the assistant
     # message that carries the tool_calls, and refuse the follow-up call without it.
     reasoning: str = ""
+    # Configuration the provider could not honour for this generation -- a connection or
+    # persona param the endpoint refused, which the adapter dropped to let the call
+    # through. Said out loud so it reaches the record: dropped silently, a seat set to
+    # reasoning effort "high" played a whole game on its default.
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
