@@ -537,3 +537,47 @@ async def test_no_reasoning_means_no_reasoning_field(db_available: None) -> None
         m for m in provider.requests[1] if m.get("role") == "assistant" and m.get("tool_calls")
     )
     assert "reasoning_content" not in assistant
+
+
+async def test_a_tool_call_id_carrying_a_thought_signature_still_runs(
+    db_available: None,
+) -> None:
+    """Gemini's direct API puts the call's thought signature inside its id -- kilobytes of
+    base64. The id goes into the tool's idempotency key, and a key that long overflowed
+    the key column: the insert failed and the turn died mid-game."""
+    tenant_id, session_id, persona_id = await _setup("runtime-long-call-id")
+    long_id = "call_883268__thought__" + "EpgaCpUaAWkUfRNCLz64Ih/Ham6pKEOIKcTWvZn+" * 120
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="", tool_calls=(ToolCall(id=long_id, name="cast_vote", arguments={}),)
+            ),
+            _ScriptedTurn(text="Voted."),
+        ]
+    )
+    dispatched: list[str] = []
+
+    async def handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
+        dispatched.append("cast_vote")
+        return ToolResult(content="recorded")
+
+    registry = ToolRegistry()
+    registry.register(ToolSpec(name="cast_vote", description="Vote", parameters={}), handler)
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Vote now."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=registry,
+        idempotency_key=f"turn:{session_id}:7:{persona_id}",
+    )
+
+    assert result.content_md == "Voted."
+    assert dispatched == ["cast_vote"]
+    # The id still goes back to the model untouched; only the key is shortened.
+    assistant = next(
+        m for m in provider.requests[1] if m.get("role") == "assistant" and m.get("tool_calls")
+    )
+    assert assistant["tool_calls"][0]["id"] == long_id  # type: ignore[index]

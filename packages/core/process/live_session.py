@@ -1266,6 +1266,12 @@ async def run_one_persona_turn(
         # for this case -- neither exception is an InterpreterFaultError on its own,
         # so without this translation they'd propagate unhandled past advance_session.
         raise InterpreterFaultError(str(exc)) from exc
+    except Exception as exc:
+        # Anything else a turn raises is a defect, but the session must still pause
+        # rather than sit "active" with no turn running: a database error inside a turn
+        # (an over-long idempotency key) left a 15-seat game waiting for an hour.
+        structlog.get_logger().exception("turn.failed", session_id=str(session_id))
+        raise InterpreterFaultError(f"turn failed: {type(exc).__name__}: {exc}"[:500]) from exc
 
     if on_event is not None and result.message_id is not None:
         async with tenant_scope(tenant_id) as session:

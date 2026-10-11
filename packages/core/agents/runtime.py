@@ -18,6 +18,7 @@ retryable infrastructure) one layer up.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 import uuid
@@ -279,6 +280,19 @@ async def _call_provider_with_retry(
         raise AllRetriesExhaustedError(str(last_exc)) from last_exc
 
 
+_MAX_CALL_ID_IN_KEY = 64
+
+
+def _call_id_for_key(call_id: str) -> str:
+    """A tool call's id as it goes into the idempotency key: as given when short, its
+    digest when long. Gemini's direct API carries the call's thought signature inside the
+    id -- kilobytes of base64 -- and a key built from it overflowed the key column, so the
+    insert failed and the turn died without pausing the session."""
+    if len(call_id) <= _MAX_CALL_ID_IN_KEY:
+        return call_id
+    return "sha256-" + hashlib.sha256(call_id.encode()).hexdigest()
+
+
 @idempotent(
     key_fn=lambda *_a, tenant_id, idempotency_key, **_k: idempotency_key  # noqa: ARG005
 )
@@ -509,7 +523,7 @@ async def run_agent_turn(
                 tools_called.append(tool_call.name)
                 tool_result = await _dispatch_tool_idempotent(
                     tenant_id=tenant_id,
-                    idempotency_key=f"{idempotency_key}:tool:{tool_call.id}",
+                    idempotency_key=f"{idempotency_key}:tool:{_call_id_for_key(tool_call.id)}",
                     tool_registry=tool_registry,
                     tool_call=tool_call,
                     ctx=ToolContext(
