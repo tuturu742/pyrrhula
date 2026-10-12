@@ -245,6 +245,22 @@ def _anthropic_turn_shim(model: str, messages: list[dict[str, Any]]) -> list[dic
     return messages
 
 
+def _without_empty_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop system/user/assistant messages that say nothing: an empty string, and no
+    tool calls. Most backends ignore one; Cohere refuses the whole request ("must have
+    non-empty content or tool calls"), so a turn whose context block happened to be empty
+    failed outright. Tool results keep their place whatever they hold -- a tool call
+    without its answer is a malformed conversation everywhere."""
+    out = []
+    for m in messages:
+        content = m.get("content")
+        empty = isinstance(content, str) and not content.strip()
+        if empty and m.get("role") in ("system", "user", "assistant") and not m.get("tool_calls"):
+            continue
+        out.append(m)
+    return out
+
+
 def _dispatch_model(model: str, has_tools: bool) -> str:
     """LiteLLM-internal endpoint choice (nothing outside this adapter knows LiteLLM has
     two Ollama routes): `ollama/` speaks /api/generate, which cannot do native tool
@@ -555,7 +571,7 @@ class LiteLLMModelProvider:
             # exceeds it, and Ollama then silently returns EMPTY generations. num_ctx is
             # the per-request window; a connection's own `num_ctx` param overrides this.
             extra["num_ctx"] = _OLLAMA_NUM_CTX
-        messages = _anthropic_turn_shim(req.model, messages)
+        messages = _anthropic_turn_shim(req.model, _without_empty_messages(messages))
         kwargs: dict[str, Any] = _merge_connection_params(
             {
                 "temperature": req.temperature,
@@ -792,6 +808,25 @@ class LiteLLMModelProvider:
             seconds=round(time.monotonic() - _t0, 1),
             produced=produced,
         )
+        messages_sent = list(accepted_call.get("messages") or ())
+        if not produced and messages_sent and messages_sent[-1].get("role") == "system":
+            # Some backends (Cohere, via OpenRouter) answer a request whose LAST message
+            # is a system one with nothing at all -- and the phase instruction is placed
+            # last on purpose (live_session). The same instruction as the user's line is
+            # read by every backend, so that is the first repair, before any budget.
+            moved = [*messages_sent[:-1], {**messages_sent[-1], "role": "user"}]
+            _t1 = time.monotonic()
+            async for chunk, had_output in _announced(
+                _attempt({**accepted_call, "messages": moved})
+            ):
+                produced = produced or had_output
+                yield chunk
+            _log.info(
+                "provider.attempt_done",
+                which="retry_instruction_as_user",
+                seconds=round(time.monotonic() - _t1, 1),
+                produced=produced,
+            )
         if not produced:
             # A reasoning model can spend its whole completion budget on hidden reasoning
             # and return nothing (seen live: gpt-5.6-terra mid-interrogation). Retrying
@@ -858,7 +893,7 @@ class LiteLLMModelProvider:
         if model.startswith("ollama_chat/"):
             # Same silent-empty-generation hazard as generate(): default num_ctx is 4096.
             extra["num_ctx"] = _OLLAMA_NUM_CTX
-        messages = _anthropic_turn_shim(model, list(req.messages))
+        messages = _anthropic_turn_shim(model, _without_empty_messages(list(req.messages)))
         common: dict[str, Any] = _merge_connection_params(
             {
                 "model": model,

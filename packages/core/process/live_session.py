@@ -1047,7 +1047,10 @@ async def run_one_persona_turn(
     system_blocks: list[str] = []
     if persona_brief:
         system_blocks.append(persona_brief)
-    system_blocks.append(manifest.rendered_context)
+    # Empty when the phase grants no knowledge at all -- and an empty system message is
+    # a request Cohere refuses outright.
+    if manifest.rendered_context.strip():
+        system_blocks.append(manifest.rendered_context)
     if participants_block:
         system_blocks.append(participants_block)
     current_marker = getattr(phase, "marker", None)

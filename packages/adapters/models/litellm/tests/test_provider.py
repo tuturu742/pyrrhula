@@ -1574,3 +1574,68 @@ async def test_openrouter_calls_name_pyrrhula_and_others_do_not(
     assert own["headers"] == {"X-Title": "Mine", "HTTP-Referer": "https://pyr.example"}
     other = await call("deepseek/deepseek-flash")
     assert "headers" not in other
+
+
+def _text_stream(text: str) -> object:
+    chunk = MagicMock()
+    chunk.choices = [MagicMock(delta=MagicMock(content=text, tool_calls=None), finish_reason=None)]
+    chunk.usage = None
+
+    async def _gen():  # type: ignore[no-untyped-def]
+        if text:
+            yield chunk
+
+    return _gen()
+
+
+async def test_empty_messages_never_reach_the_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cohere refuses a whole request over one empty message; a turn whose context block
+    was empty failed outright. Empty system/user/assistant lines are dropped; a tool
+    result keeps its place."""
+    import litellm
+
+    mock_acompletion = AsyncMock(side_effect=lambda **_: _text_stream("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    req = GenerationRequest(
+        model="openrouter/cohere/command-a-plus",
+        messages=[
+            {"role": "system", "content": "You are X."},
+            {"role": "system", "content": "  "},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "1"}]},
+            {"role": "tool", "content": "", "tool_call_id": "1"},
+            {"role": "user", "content": "hi"},
+        ],
+        purpose="generation",
+    )
+    async for _ in LiteLLMModelProvider().generate(req):
+        pass
+    sent = mock_acompletion.call_args.kwargs["messages"]
+    assert [m["role"] for m in sent] == ["system", "assistant", "tool", "user"]
+
+
+async def test_an_empty_reply_to_a_trailing_instruction_is_asked_again_as_the_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cohere answers nothing when the last message is a system one -- where the phase
+    instruction goes. The first repair re-asks with that instruction as the user's line,
+    before any budget or reasoning change."""
+    import litellm
+
+    replies = iter(["", "Hello, I am X."])
+    mock_acompletion = AsyncMock(side_effect=lambda **_: _text_stream(next(replies)))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    req = GenerationRequest(
+        model="openrouter/cohere/command-a-plus",
+        messages=[
+            {"role": "system", "content": "You are X."},
+            {"role": "user", "content": "Host: welcome"},
+            {"role": "system", "content": "Introduce yourself."},
+        ],
+        purpose="generation",
+    )
+    text = "".join([c.text async for c in LiteLLMModelProvider().generate(req)])
+    assert text == "Hello, I am X."
+    first, second = (c.kwargs["messages"] for c in mock_acompletion.call_args_list)
+    assert first[-1] == {"role": "system", "content": "Introduce yourself."}
+    assert second[-1] == {"role": "user", "content": "Introduce yourself."}
+    assert first[:-1] == second[:-1]
