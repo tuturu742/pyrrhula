@@ -1529,3 +1529,48 @@ def test_a_provider_that_reports_nothing_reads_as_unknown_not_zero() -> None:
         MagicMock(prompt_tokens=10, completion_tokens=3, completion_tokens_details=None)
     )
     assert usage is not None and usage.reasoning_tokens is None
+
+
+async def test_openrouter_calls_name_pyrrhula_and_others_do_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenRouter credits a call to the app its X-Title/HTTP-Referer headers name; unset,
+    LiteLLM sends its own and the tenant's OpenRouter console files every call under
+    LiteLLM. A connection's own headers still win; other providers get none."""
+    import litellm
+
+    from core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "public_base_url", "https://pyr.example")
+
+    def _stream() -> object:
+        chunk = MagicMock()
+        chunk.choices = [MagicMock(delta=MagicMock(content="hi"), finish_reason=None)]
+        chunk.usage = None
+
+        async def _gen():  # type: ignore[no-untyped-def]
+            yield chunk
+
+        return _gen()
+
+    mock_acompletion = AsyncMock(side_effect=lambda **_: _stream())
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    provider = LiteLLMModelProvider()
+
+    async def call(model: str, params: dict[str, object] | None = None) -> dict[str, object]:
+        req = GenerationRequest(
+            model=model,
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="generation",
+            params=params or {},
+        )
+        async for _ in provider.generate(req):
+            pass
+        return dict(mock_acompletion.call_args.kwargs)
+
+    sent = await call("openrouter/x-ai/grok-4.7")
+    assert sent["headers"] == {"X-Title": "Pyrrhula", "HTTP-Referer": "https://pyr.example"}
+    own = await call("openrouter/x-ai/grok-4.7", {"headers": {"X-Title": "Mine"}})
+    assert own["headers"] == {"X-Title": "Mine", "HTTP-Referer": "https://pyr.example"}
+    other = await call("deepseek/deepseek-flash")
+    assert "headers" not in other

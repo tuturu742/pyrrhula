@@ -274,6 +274,27 @@ def _remaining(deadline: float) -> float:
     return max(0.001, deadline - time.monotonic())
 
 
+_APP_NAME = "Pyrrhula"
+
+
+def _with_app_attribution(model: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Name the app on an OpenRouter call. OpenRouter credits a call to the app named by
+    its ``X-Title`` and ``HTTP-Referer`` headers; left unset, LiteLLM fills in its own
+    ("liteLLM", litellm.ai), and a tenant's OpenRouter console files every Pyrrhula call
+    under LiteLLM. The referer is where this deployment is reached
+    (``public_base_url``). Headers a connection sets itself still win."""
+    if not model.startswith("openrouter/"):
+        return kwargs
+    from core.config import get_settings
+
+    ours = {
+        "X-Title": _APP_NAME,
+        "HTTP-Referer": get_settings().public_base_url or "http://localhost",
+    }
+    kwargs["headers"] = {**ours, **dict(kwargs.get("headers") or {})}
+    return kwargs
+
+
 def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, Any]:
     """Connection passthrough knobs, under the platform's values.
 
@@ -549,6 +570,7 @@ class LiteLLMModelProvider:
         # whose hardware justified setting it.
         for key, value in extra.items():
             kwargs.setdefault(key, value)
+        _with_app_attribution(req.model, kwargs)
         # A platform ceiling, not a budget anyone chose: the empty-generation retry below
         # must not treat it as one and "raise" it instead of turning reasoning off.
         platform_budget = False
@@ -849,6 +871,7 @@ class LiteLLMModelProvider:
         # of colliding, so a connection's num_ctx was accepted and then ignored.
         for key, value in extra.items():
             common.setdefault(key, value)
+        _with_app_attribution(model, common)
         try:
             response = await litellm.acompletion(
                 messages=messages, response_format=schema, **common
