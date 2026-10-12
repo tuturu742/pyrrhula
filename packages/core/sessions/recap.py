@@ -144,8 +144,12 @@ async def build_recaps(
                     )
                 )
             ).all():
+                if not parts.result_readable(payload, viewer.id):
+                    continue
                 rendered = parts.render_ballot_result(
-                    payload, viewer_is_supervisor=viewer_is_supervisor
+                    payload,
+                    viewer_is_supervisor=viewer_is_supervisor,
+                    viewer_principal_id=viewer.id,
                 )
                 add(seq, "votes", rendered.removeprefix("- "))
 

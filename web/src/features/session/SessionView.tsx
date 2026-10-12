@@ -65,6 +65,10 @@ interface BallotResultPayload {
   tie_rule: string;
   chosen: string | null;
   changes: Array<{ name: string; var: string; old: unknown; new: unknown }>;
+  // "voters": a private check -- the players read it only if they cast a ballot in it.
+  reveal?: string;
+  // What the vote found out about the chosen, computed by the engine from the record.
+  disclosed?: Record<string, unknown>;
 }
 
 interface ParticipantsSeatedPayload {
@@ -1216,6 +1220,18 @@ function TimelineEvent({
                 ? `tie (${b.tied.join(", ")}) — nobody chosen`
                 : "no votes — nobody chosen"}
             {counts && <span className="text-muted-foreground"> · {counts}</span>}
+            {b.disclosed && Object.keys(b.disclosed).length > 0 && (
+              <span>
+                {" "}
+                · found:{" "}
+                {Object.entries(b.disclosed)
+                  .map(([k, v]) => `${k} = ${String(v)}`)
+                  .join(", ")}
+              </span>
+            )}
+            {b.reveal === "voters" && (
+              <span className="text-amber-500"> · private to its voters</span>
+            )}
           </summary>
           <ul className="mt-1 text-muted-foreground">
             {Object.entries(b.votes).map(([voter, choice]) => (

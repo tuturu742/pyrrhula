@@ -759,6 +759,7 @@ async def run_one_persona_turn(
                     key=parts.poll_key(phase_key, entry_seq),
                     voter=voter,
                     targets=targets,
+                    reveal=phase.ballot.reveal,
                 )
             )
         if getattr(phase, "audience", None) is not None:

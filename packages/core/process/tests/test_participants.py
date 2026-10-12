@@ -302,9 +302,24 @@ async def test_a_full_game_votes_reveals_and_ends(db_available: None) -> None:
     assert len(ballots) == 4
     tally = events["ballot_result"]
     assert tally["chosen"] == covert.name and tally["counts"][covert.name] == 3
+    principal = str(covert.principal_id)
     assert tally["changes"] == [
-        {"name": covert.name, "var": "status", "old": "in", "new": "out"},
-        {"name": covert.name, "var": "revealed", "old": False, "new": True},
+        {
+            "name": covert.name,
+            "principal": principal,
+            "var": "status",
+            "old": "in",
+            "new": "out",
+            "hidden": False,
+        },
+        {
+            "name": covert.name,
+            "principal": principal,
+            "var": "revealed",
+            "old": False,
+            "new": True,
+            "hidden": False,
+        },
     ]
     outcome = events["outcome"]
     final = {p["name"]: p["vars"] for p in outcome["participants"]}

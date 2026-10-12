@@ -276,17 +276,44 @@ async def setup_participants(
         v.session_persona_id
         for v in sorted(order, key=lambda v: sp_rows[v.session_persona_id].seat or 0)
     ]
+    seated = sorted(order, key=lambda v: sp_rows[v.session_persona_id].seat or 0)
+    dealt_vars: dict[uuid.UUID, set[str]] = {v.session_persona_id: set() for v in views}
     for index, deal in enumerate(spec.deal):
         count = setting_number(deal.count, settings) or 0
-        if count > len(undealt):
+        if deal.where is None:
+            pool = list(undealt)
+        else:
+            # A role inside a team: anyone ``where`` admits who has not been dealt this
+            # same var, judged on the values dealt so far.
+            now = [
+                ParticipantView(
+                    session_persona_id=v.session_persona_id,
+                    persona_id=v.persona_id,
+                    principal_id=v.principal_id,
+                    name=v.name,
+                    seat=sp_rows[v.session_persona_id].seat,
+                    vars=current[v.session_persona_id],
+                )
+                for v in seated
+            ]
+            base = activation(state=dict(row.state or {}), settings=settings, views=now)
+            pool = [
+                v.session_persona_id
+                for v in now
+                if deal.var not in dealt_vars[v.session_persona_id]
+                and matches(deal.where, {**base, "p": v.cel()})
+            ]
+        if count > len(pool):
             raise ParticipantError(
-                f"deal {deal.var}={deal.value!r} needs {count} participants; {len(undealt)} left"
+                f"deal {deal.var}={deal.value!r} needs {count} participants; {len(pool)} left"
             )
-        chosen = seeded_rng(row, f"deal:{index}").sample(undealt, count)
+        chosen = seeded_rng(row, f"deal:{index}").sample(pool, count)
         coerced = _COERCE[spec.vars[deal.var].type](deal.value)
         for sp_id in chosen:
             current[sp_id][deal.var] = coerced
-            undealt.remove(sp_id)
+            dealt_vars[sp_id].add(deal.var)
+            if sp_id in undealt:
+                undealt.remove(sp_id)
         dealt_summary.append({"var": deal.var, "value": coerced, "count": count})
 
     for sp_id, values in current.items():
@@ -373,30 +400,64 @@ def render_participants_block(
         )
     if viewer_is_supervisor and spec.hidden:
         lines.append("You see every participant's hidden values; the participants do not.")
-    if results:
+    readable = [r for r in results if result_readable(r, viewer_principal_id)]
+    if readable:
         lines.append("")
         lines.append("Vote results so far, oldest first:")
         lines.extend(
-            render_ballot_result(r, viewer_is_supervisor=viewer_is_supervisor) for r in results
+            render_ballot_result(
+                r,
+                viewer_is_supervisor=viewer_is_supervisor,
+                viewer_principal_id=viewer_principal_id,
+            )
+            for r in readable
         )
     return "\n".join(lines)
 
 
-def render_ballot_result(payload: Mapping[str, Any], *, viewer_is_supervisor: bool) -> str:
-    """One closed vote as a participant may read it: who was chosen and what changed;
-    each ballot too when the vote reveals votes (the supervisor always sees them)."""
+def result_readable(payload: Mapping[str, Any], viewer_principal_id: uuid.UUID | None) -> bool:
+    """Whether this viewer may read this closed vote at all. A ``reveal: voters`` result
+    reaches its voters only -- not the supervisor, whose model could only leak it."""
+    if payload.get("reveal") != "voters":
+        return True
+    return visible_to(payload.get("audience") or [], viewer_principal_id)
+
+
+def render_ballot_result(
+    payload: Mapping[str, Any],
+    *,
+    viewer_is_supervisor: bool,
+    viewer_principal_id: uuid.UUID | None = None,
+) -> str:
+    """One closed vote as this viewer may read it: who was chosen, what changed and what
+    the vote disclosed; each ballot too when the vote reveals votes (the supervisor
+    always sees them). A change to a hidden var is shown only to whoever may know it:
+    the supervisor, the participant changed, and the voters of a private vote. Callers
+    check ``result_readable`` first."""
     phase = payload.get("phase", "vote")
     chosen = payload.get("chosen")
+    private = payload.get("reveal") == "voters"
     if chosen:
-        changes = ", ".join(
-            f"{c['var']} {c['old']} -> {c['new']}" for c in payload.get("changes") or []
-        )
+        shown = [
+            c
+            for c in payload.get("changes") or []
+            if not c.get("hidden")
+            or viewer_is_supervisor
+            or private
+            or (viewer_principal_id is not None and c.get("principal") == str(viewer_principal_id))
+        ]
+        changes = ", ".join(f"{c['var']} {c['old']} -> {c['new']}" for c in shown)
         line = f"- {phase}: {chosen} was chosen" + (f" ({changes})" if changes else "")
+        facts = payload.get("disclosed") or {}
+        if facts:
+            line += ". Found: " + ", ".join(f"{k} = {_fact(v)}" for k, v in facts.items())
     elif payload.get("tied"):
         line = f"- {phase}: tie between {', '.join(payload['tied'])}; nobody was chosen"
     else:
         line = f"- {phase}: no votes were cast; nobody was chosen"
-    if payload.get("reveal", "votes") == "votes" or viewer_is_supervisor:
+    if private:
+        line += " (private: only the voters of this vote read this)"
+    if payload.get("reveal", "votes") in ("votes", "voters") or viewer_is_supervisor:
         votes = payload.get("votes") or {}
         cast = "; ".join(f"{voter} -> {choice or 'abstained'}" for voter, choice in votes.items())
         abstained = payload.get("abstained") or []
@@ -405,6 +466,12 @@ def render_ballot_result(payload: Mapping[str, Any], *, viewer_is_supervisor: bo
         if cast:
             line += f". Ballots: {cast}"
     return line
+
+
+def _fact(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(value)
 
 
 async def ballot_results(tenant_id: uuid.UUID, session_id: uuid.UUID) -> list[dict[str, Any]]:
@@ -468,7 +535,17 @@ async def apply_participant_effects(
                     cause_ref=cause_ref,
                 )
             )
-            changes.append({"name": target.name, "var": effect.set, "old": old, "new": new})
+            changes.append(
+                {
+                    "name": target.name,
+                    "principal": str(target.principal_id),
+                    "var": effect.set,
+                    "old": old,
+                    "new": new,
+                    # A hidden var's change is no more public than the var itself.
+                    "hidden": effect.set in spec.hidden,
+                }
+            )
         sp.vars = values
     await session.flush()
     return changes
@@ -616,6 +693,13 @@ def poll_key(phase_key: str, phase_entry_seq: int) -> str:
 BALLOT_TOOL_NAME = "ballot"
 
 
+_BALLOT_AFTER = {
+    "votes": "then all votes are shown together",
+    "outcome": "then only the result is shown, never who voted for whom",
+    "voters": "then the result is shown only to those who voted in it",
+}
+
+
 def make_ballot_tool(
     *,
     tenant_id: uuid.UUID,
@@ -623,6 +707,7 @@ def make_ballot_tool(
     key: str,
     voter: ParticipantView,
     targets: Sequence[ParticipantView],
+    reveal: str = "votes",
 ) -> tuple[ToolSpec, ToolHandler]:
     """The ``ballot`` tool for one voter's turn: its ``choice`` is an enum of the names
     this voter may vote for right now, rebuilt every turn. The first ballot counts; a
@@ -631,8 +716,9 @@ def make_ballot_tool(
     spec = ToolSpec(
         name=BALLOT_TOOL_NAME,
         description=(
-            "Cast your vote. It is sealed: nobody sees it until everyone has voted, then all "
-            "votes are shown together. You vote once; your first ballot counts."
+            "Cast your vote. It is sealed: nobody sees it until everyone has voted, "
+            f"{_BALLOT_AFTER.get(reveal, _BALLOT_AFTER['votes'])}. You vote once; your first "
+            "ballot counts."
         ),
         parameters={
             "type": "object",

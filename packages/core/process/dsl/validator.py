@@ -212,15 +212,21 @@ def _check_budget_ratios(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
 def _cel_bindings(dsl: ProcessDefinitionDSL) -> dict[str, dict[str, object]]:
     """Dummy values for every name a flow's CEL may read besides ``state``: ``settings``
     always; with ``participants:``, the roster list and one participant for each of the
-    per-participant names (``p``, ``voter``, ``author``)."""
+    per-participant names (``p``, ``voter``, ``author``). ``subject`` is what an effect,
+    a disclosure or a deal sees: ``p`` alone -- the engine binds no voter or author
+    there, so a flow reading one must fail validation, not the game."""
     settings = {name: dummy_value(spec.type) for name, spec in dsl.settings.items()}
     base: dict[str, object] = {"settings": settings}
     if dsl.participants is None:
-        return {"phase": base, "participant": base}
+        return {"phase": base, "participant": base, "subject": base}
     one: dict[str, object] = {"id": "x", "name": "x", "seat": 1}
     one.update({name: dummy_value(spec.type) for name, spec in dsl.participants.vars.items()})
     base = {**base, "participants": [one]}
-    return {"phase": base, "participant": {**base, "p": one, "voter": one, "author": one}}
+    return {
+        "phase": base,
+        "participant": {**base, "p": one, "voter": one, "author": one},
+        "subject": {**base, "p": one},
+    }
 
 
 def _check_cel_expressions(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
@@ -250,7 +256,19 @@ def _check_cel_expressions(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
         if phase.ballot is not None:
             check(f"{where}.ballot.targets", phase.ballot.targets, "participant")
             for i, chosen in enumerate(phase.ballot.on_chosen):
-                check(f"{where}.ballot.on_chosen[{i}].to", chosen.to, "participant")
+                check(f"{where}.ballot.on_chosen[{i}].to", chosen.to, "subject")
+            for i, tied in enumerate(phase.ballot.on_tied):
+                check(f"{where}.ballot.on_tied[{i}].to", tied.to, "subject")
+            for name, expression in phase.ballot.disclose.items():
+                check(f"{where}.ballot.disclose.{name}", expression, "subject")
+        for i, pe in enumerate(phase.participant_effects):
+            check(f"{where}.participant_effects[{i}].to", pe.to, "subject")
+            if pe.where is not None:
+                check(f"{where}.participant_effects[{i}].where", pe.where, "subject")
+    if dsl.participants is not None:
+        for i, deal in enumerate(dsl.participants.deal):
+            if deal.where is not None:
+                check(f"participants.deal[{i}].where", deal.where, "subject")
     return issues
 
 
@@ -281,13 +299,25 @@ def _check_participant_references(dsl: ProcessDefinitionDSL) -> list[ValidationI
                 )
         if (phase.ballot is not None or phase.audience is not None) and dsl.participants is None:
             issues.append(ValidationIssue(where, "ballot/audience need a participants: block"))
-        if phase.ballot is not None and dsl.participants is not None:
-            for i, effect in enumerate(phase.ballot.on_chosen):
-                if effect.set not in dsl.participants.vars:
+        if phase.participant_effects and dsl.participants is None:
+            issues.append(ValidationIssue(where, "participant_effects need a participants: block"))
+        if dsl.participants is not None:
+            sets = [
+                (f"participant_effects[{i}]", e.set)
+                for i, e in enumerate(phase.participant_effects)
+            ]
+            if phase.ballot is not None:
+                sets += [
+                    (f"ballot.on_chosen[{i}]", e.set) for i, e in enumerate(phase.ballot.on_chosen)
+                ]
+                sets += [
+                    (f"ballot.on_tied[{i}]", e.set) for i, e in enumerate(phase.ballot.on_tied)
+                ]
+            for path, var in sets:
+                if var not in dsl.participants.vars:
                     issues.append(
                         ValidationIssue(
-                            f"{where}.ballot.on_chosen[{i}].set",
-                            f"undeclared participant var {effect.set!r}",
+                            f"{where}.{path}.set", f"undeclared participant var {var!r}"
                         )
                     )
     return issues

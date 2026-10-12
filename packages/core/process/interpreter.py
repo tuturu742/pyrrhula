@@ -39,6 +39,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import celpy
+from celpy import celtypes
 from celpy.adapter import json_to_cel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -508,9 +509,12 @@ async def _close_ballot(
     state: dict[str, Any],
     settings: dict[str, Any],
 ) -> dict[str, Any]:
-    """Count the phase's ballots and apply ``on_chosen`` to the winner, in the caller's
-    transaction. Returns the public result: who voted for whom, the counts, the
-    outcome and the tie rule applied -- sealed until now, public from now on."""
+    """Count the phase's ballots and apply ``on_chosen`` to the winner (``on_tied`` to
+    each of a tie that elected nobody), in the caller's transaction. Returns the result:
+    who voted for whom, the counts, the outcome, the tie rule applied and what
+    ``disclose`` found about the chosen -- sealed until now, readable from now on by
+    whoever the ballot's ``reveal`` admits (``audience`` names the voters of a private
+    one)."""
     assert phase.ballot is not None and definition.participants is not None
     entry_seq = await _phase_entry_seq(session, row.id)
     key = parts.poll_key(phase_key, entry_seq)
@@ -518,8 +522,17 @@ async def _close_ballot(
     eligible = _eligible_voters(phase, views, state, settings)
     result = await parts.tally(session, row, key, phase.ballot, views, eligible)
     changes: list[dict[str, Any]] = []
+    disclosed: dict[str, Any] = {}
+    bindings = parts.activation(state=state, settings=settings, views=views)
+    if result.chosen is not None and phase.ballot.disclose:
+        # Read before on_chosen changes anything: what the voters learn is the chosen as
+        # they were when the vote closed.
+        subject = {**bindings, "p": result.chosen.cel()}
+        disclosed = {
+            name: _plain(parts.eval_cel(expression, subject))
+            for name, expression in phase.ballot.disclose.items()
+        }
     if result.chosen is not None and phase.ballot.on_chosen:
-        bindings = parts.activation(state=state, settings=settings, views=views)
         changes = await parts.apply_participant_effects(
             session,
             tenant_id=row.tenant_id,
@@ -531,7 +544,26 @@ async def _close_ballot(
             cause="ballot",
             cause_ref=key,
         )
+    if result.chosen is None and result.tied and phase.ballot.on_tied:
+        tied = [v for v in views if v.name in set(result.tied)]
+        changes = await parts.apply_participant_effects(
+            session,
+            tenant_id=row.tenant_id,
+            session_id=row.id,
+            spec=definition.participants,
+            targets=tied,
+            effects=phase.ballot.on_tied,
+            bindings=bindings,
+            cause="ballot",
+            cause_ref=key,
+        )
+    audience: list[str] | None = None
+    if phase.ballot.reveal == "voters":
+        voted = set(result.voters)
+        audience = sorted(str(v.principal_id) for v in views if v.name in voted or v in eligible)
     return {
+        **({"audience": audience} if audience is not None else {}),
+        "disclosed": disclosed,
         "phase": phase_key,
         "poll": key,
         "votes": result.voters,
@@ -543,6 +575,17 @@ async def _close_ballot(
         "chosen": result.chosen.name if result.chosen is not None else None,
         "changes": changes,
     }
+
+
+def _plain(value: Any) -> Any:
+    """A CEL result as JSON: celpy's bool/int/str wrappers become their Python kin (its
+    BoolType is an int subclass, so it is asked first)."""
+    if isinstance(value, (bool, celtypes.BoolType)):
+        return bool(value)
+    for kind in (int, float, str):
+        if isinstance(value, kind):
+            return kind(value)
+    return str(value)
 
 
 def _eligible_voters(
@@ -584,6 +627,26 @@ async def _transition(
             views = await parts.load_views(session, session_id)
             extra["participants"] = [v.cel() for v in views]
         new_state = apply_effects(phase, row.state, definition.state, extra)
+        if phase.participant_effects and definition.participants is not None:
+            # Before the vote closes, so a reset here never undoes the vote's own marks.
+            views = await parts.load_views(session, session_id)
+            base = parts.activation(state=new_state, settings=settings, views=views)
+            for effect in phase.participant_effects:
+                targets = [v for v in views if parts.matches(effect.where, {**base, "p": v.cel()})]
+                await parts.apply_participant_effects(
+                    session,
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    spec=definition.participants,
+                    targets=targets,
+                    effects=[effect],
+                    bindings=base,
+                    cause="phase",
+                    cause_ref=phase_key,
+                )
+                views = await parts.load_views(session, session_id)
+                base = parts.activation(state=new_state, settings=settings, views=views)
+            extra["participants"] = [v.cel() for v in views]
         if phase.ballot is not None and definition.participants is not None:
             # The vote closes with the phase: count, record, apply on_chosen -- all in
             # this transaction, so the gates below already see who is out.

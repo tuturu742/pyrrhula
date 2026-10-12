@@ -154,13 +154,19 @@ class SettingRef(BaseModel):
 class DealSpec(BaseModel):
     """Give ``count`` participants, chosen by a recorded draw, ``value`` for ``var``. The
     rest keep the var's default. Deals apply in declaration order, each drawing from the
-    participants an earlier deal did not already pick."""
+    participants an earlier deal did not already pick.
+
+    ``where`` (CEL over ``p``, with the values dealt so far) narrows the draw to the
+    participants it admits, and lets a deal reach participants an earlier deal of a
+    *different* var picked -- a role inside a team: deal the team first, then one of its
+    members a second var. Participants already dealt this same var stay out."""
 
     model_config = ConfigDict(extra="forbid")
 
     var: str
     value: int | str | bool | float
     count: int | SettingRef
+    where: str | None = None
 
 
 class ParticipantsSpec(BaseModel):
@@ -208,6 +214,17 @@ class ParticipantEffectSpec(BaseModel):
     to: str
 
 
+class PhaseParticipantEffectSpec(ParticipantEffectSpec):
+    """A phase's ``participant_effects:`` entry: when the phase ends, set ``set`` on every
+    participant ``where`` admits (all of them when absent) to ``to``. Both are CEL with
+    ``p`` bound to the participant being changed, plus ``state``, ``settings`` and
+    ``participants``. Applied before the phase's vote closes, so a reset here never undoes
+    what the vote's own effects set -- clear last round's marks, then let the vote mark
+    this round's."""
+
+    where: str | None = None
+
+
 class AudienceSpec(BaseModel):
     """Who may read what is said in a phase. ``members`` is CEL over ``p`` (each
     participant) and ``author`` (the speaker); the speaker and the supervisor always
@@ -233,9 +250,21 @@ class BallotSpec(BaseModel):
     tie: Literal["none", "draw"] = "none"
     # What becomes public when the vote closes: every ballot ("votes"), or only who was
     # chosen ("outcome") -- for a vote whose voters must stay unknown, since who voted
-    # would itself reveal a hidden team.
-    reveal: Literal["votes", "outcome"] = "votes"
+    # would itself reveal a hidden team. "voters": nothing becomes public; the result
+    # (ballots, who was chosen, what changed, what ``disclose`` found) reaches only the
+    # participants who cast a ballot in it -- a private check. Not the supervisor
+    # either: a facilitating model that knows a private result can only leak it.
+    reveal: Literal["votes", "outcome", "voters"] = "votes"
     on_chosen: list[ParticipantEffectSpec] = Field(default_factory=list)
+    # Applied to every participant in a tie that elects nobody (``tie: none``) -- marks a
+    # run-off's candidates, so a following phase can target only them.
+    on_tied: list[ParticipantEffectSpec] = Field(default_factory=list)
+    # Facts about the chosen participant, computed from the record when the vote closes
+    # and stored with its result: name -> CEL over ``p`` (the chosen, every var hidden or
+    # not), ``state``, ``settings``, ``participants``. Whoever may read the result reads
+    # them -- with ``reveal: voters``, only the voters: "is the one I checked on team
+    # X?" answered by the engine, never by a model's retelling.
+    disclose: dict[str, str] = Field(default_factory=dict)
 
 
 class ActorSpec(BaseModel):
@@ -619,6 +648,9 @@ class PhaseSpec(BaseModel):
     audience: AudienceSpec | None = None
     # This phase is a sealed vote, counted when its actors are done.
     ballot: BallotSpec | None = None
+    # Participant vars set when this phase ends (before its vote closes) -- e.g. clear a
+    # per-round mark on everyone.
+    participant_effects: list[PhaseParticipantEffectSpec] = Field(default_factory=list)
     # A short line naming the moment this phase is ("Night 2 falls."), shown to models
     # where the flow's `phase_markers` says. `{name}` placeholders read state variables,
     # so a counter can appear in it. Absent = this phase is never marked.
