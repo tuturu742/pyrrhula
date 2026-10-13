@@ -37,7 +37,7 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.2.1** ([what is in it](CHANGELOG.md)). New in 0.2: flows with participants,
+> Status: **0.2.2** ([what is in it](CHANGELOG.md)). New in 0.2: flows with participants,
 > where roles are dealt in secret, votes are sealed and counted by the engine, private
 > checks and private channels hold, and a discussion can run as an open floor with raised
 > hands ([how](docs/participants-and-ballots.md)). Fixes ship

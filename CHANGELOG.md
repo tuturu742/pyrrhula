@@ -6,6 +6,26 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-13
+
+A turn speaks only for its author. See
+[docs/models.md](docs/models.md#when-a-model-speaks-for-someone-else).
+
+### Fixed
+
+- **A model could write other participants' lines.** Shown a multi-party transcript, a
+  model sometimes went on past its own turn and wrote the next speakers' lines. They were
+  saved as its message, replayed to everyone, and taken by those participants as their
+  own words: a player defended "its opening", which another player's model had written.
+  A live turn is now cut before the first block that is another participant's speech.
+  That means first-person blocks for two or more others, or a block introducing itself
+  as someone else. Each cut is recorded as a warning on the session. Addressing someone
+  ("Reese: walk me through your case") and list items are left alone. Replayed over 6,382
+  replies from Mafia games, the rule cut 5, all of them scripts.
+- **Raising a hand made the model write again.** After the tool result, models repeated
+  their speech or drifted into the next speakers' lines. A tool result can now end the
+  turn (`ToolResult.end_turn`), and `raise_hand` does, once the turn has said something.
+
 ## [0.2.1] - 2026-10-13
 
 An open floor for discussions. See
@@ -230,7 +250,8 @@ domain-neutral core.
 - The AWS ECS execution engine is experimental and unverified; OIDC/SAML login is not
   there yet.
 
-[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.2
 [0.2.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.0
 [0.1.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.1
