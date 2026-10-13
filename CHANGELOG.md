@@ -6,6 +6,27 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-13
+
+An open floor for discussions. See
+[docs/participants-and-ballots.md](docs/participants-and-ballots.md#an-open-floor-raised-hands).
+
+### Added
+
+- **`order: hands`**, a turn order for discussions instead of speech rounds. Everyone
+  speaks once in seat order. Then the floor goes to whoever the last message named, so an
+  accused participant answers straight away. Otherwise it goes to the hand raised longest
+  ago, until nobody wants it. A speaker raises a hand with the `raise_hand` tool, which
+  says how many turns they have left; not raising it is how a speaker passes.
+  `max_turns_each` caps one participant's turns in the phase. `answer_named: false`
+  leaves the floor to raised hands alone.
+- Raised hands are recorded per turn in a new append-only table, `floor_request`, so who
+  spoke when is decided from the record, never parsed from a model's words.
+
+### Upgrading
+
+One migration: the `floor_request` table (append-only, with tenant RLS).
+
 ## [0.2.0] - 2026-10-13
 
 Flows with participants: per-persona values dealt in secret, sealed votes counted by the
@@ -209,7 +230,8 @@ domain-neutral core.
 - The AWS ECS execution engine is experimental and unverified; OIDC/SAML login is not
   there yet.
 
-[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.0
 [0.1.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.1
 [0.1.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.0

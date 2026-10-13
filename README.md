@@ -37,9 +37,10 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.2.0** ([what is in it](CHANGELOG.md)). New in it: flows with participants,
-> where roles are dealt in secret, votes are sealed and counted by the engine, and private
-> checks and private channels hold ([how](docs/participants-and-ballots.md)). Fixes ship
+> Status: **0.2.1** ([what is in it](CHANGELOG.md)). New in 0.2: flows with participants,
+> where roles are dealt in secret, votes are sealed and counted by the engine, private
+> checks and private channels hold, and a discussion can run as an open floor with raised
+> hands ([how](docs/participants-and-ballots.md)). Fixes ship
 > as patch releases ([how](docs/releasing.md)), and the [install](#install) one-liner
 > fetches the latest release. The full
 > stack described below is implemented and running: tenancy/RLS, knowledge & retrieval,
