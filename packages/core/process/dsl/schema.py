@@ -87,6 +87,186 @@ class StateVarSpec(BaseModel):
         return self
 
 
+class SettingSpec(BaseModel):
+    """One entry of the DSL's ``settings:`` block: a value a flow author fixes a default for
+    and a session may override at creation, within ``min``/``max``.
+
+    Different from ``state:``: state is what the flow computes as it runs; a setting is
+    what the person starting the session chooses -- a seat count, a discussion length, how
+    many of a role to deal. One flow then serves every experiment, and each session records
+    the settings it actually ran with."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["integer", "string", "boolean", "number"]
+    default: int | str | bool | float
+    min: float | None = None
+    max: float | None = None
+    description: str = ""
+
+    @model_validator(mode="after")
+    def _default_in_range(self) -> SettingSpec:
+        if self.type in ("integer", "number") and not isinstance(self.default, bool):
+            value = float(self.default)
+            if self.min is not None and value < self.min:
+                raise ValueError(f"default {self.default!r} is below min {self.min!r}")
+            if self.max is not None and value > self.max:
+                raise ValueError(f"default {self.default!r} is above max {self.max!r}")
+        return self
+
+
+RecapSection = Literal[
+    "votes", "rolls", "changes", "disclosures", "conversation", "knowledge", "tools"
+]
+RECAP_SECTIONS: tuple[RecapSection, ...] = (
+    "votes",
+    "rolls",
+    "changes",
+    "disclosures",
+    "conversation",
+    "knowledge",
+    "tools",
+)
+
+
+class RecapSpec(BaseModel):
+    """A recap of each phase as it ends, written from records only -- votes, rolls, state
+    changes, what the viewer was told, who spoke with whom, what knowledge the viewer was
+    shown, the viewer's own tool calls. Each viewer gets its own,
+    built under the same visibility as its context; a section with nothing in it is left
+    out, so one flow's recap is votes and another's is rolls and hints, from the same
+    mechanism."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sections: list[RecapSection] = Field(default_factory=lambda: list(RECAP_SECTIONS))
+
+
+class SettingRef(BaseModel):
+    """A number read from one of the flow's ``settings`` instead of written in place:
+    ``{"setting": "day_laps"}``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    setting: str
+
+
+class DealSpec(BaseModel):
+    """Give ``count`` participants, chosen by a recorded draw, ``value`` for ``var``. The
+    rest keep the var's default. Deals apply in declaration order, each drawing from the
+    participants an earlier deal did not already pick.
+
+    ``where`` (CEL over ``p``, with the values dealt so far) narrows the draw to the
+    participants it admits, and lets a deal reach participants an earlier deal of a
+    *different* var picked -- a role inside a team: deal the team first, then one of its
+    members a second var. Participants already dealt this same var stay out."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    var: str
+    value: int | str | bool | float
+    count: int | SettingRef
+    where: str | None = None
+
+
+class ParticipantsSpec(BaseModel):
+    """Per-participant variables for the session's non-supervisor roster.
+
+    ``vars`` are typed like ``state:``, but one set per participant -- a role, a status, a
+    score. ``deal`` assigns values by recorded draw at session start. ``hidden`` vars are
+    shown to the participant itself, to the supervisor, and to everyone once the
+    participant's ``reveal_var`` is true; ``team_var`` makes participants who share one of
+    ``team_values`` see each other's hidden vars (a team that knows its own members).
+    Every other participant sees a hidden var not at all -- it is excluded from context,
+    not described and then withheld."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    vars: dict[str, StateVarSpec]
+    deal: list[DealSpec] = Field(default_factory=list)
+    seat_order: Literal["drawn", "roster"] = "drawn"
+    hidden: list[str] = Field(default_factory=list)
+    team_var: str | None = None
+    team_values: list[int | str | bool | float] = Field(default_factory=list)
+    reveal_var: str | None = None
+
+    @model_validator(mode="after")
+    def _references_are_declared(self) -> ParticipantsSpec:
+        for name in [*self.hidden, *(d.var for d in self.deal)]:
+            if name not in self.vars:
+                raise ValueError(f"participants refers to undeclared var {name!r}")
+        if self.team_var is not None and self.team_var not in self.hidden:
+            raise ValueError("participants.team_var must be one of the hidden vars")
+        if self.reveal_var is not None:
+            spec = self.vars.get(self.reveal_var)
+            if spec is None or spec.type != "boolean":
+                raise ValueError("participants.reveal_var must be a declared boolean var")
+        return self
+
+
+class ParticipantEffectSpec(BaseModel):
+    """Set one participant var: ``to`` is CEL evaluated with ``p`` bound to the
+    participant being changed, plus ``state``, ``settings`` and ``participants``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    set: str
+    to: str
+
+
+class PhaseParticipantEffectSpec(ParticipantEffectSpec):
+    """A phase's ``participant_effects:`` entry: when the phase ends, set ``set`` on every
+    participant ``where`` admits (all of them when absent) to ``to``. Both are CEL with
+    ``p`` bound to the participant being changed, plus ``state``, ``settings`` and
+    ``participants``. Applied before the phase's vote closes, so a reset here never undoes
+    what the vote's own effects set -- clear last round's marks, then let the vote mark
+    this round's."""
+
+    where: str | None = None
+
+
+class AudienceSpec(BaseModel):
+    """Who may read what is said in a phase. ``members`` is CEL over ``p`` (each
+    participant) and ``author`` (the speaker); the speaker and the supervisor always
+    belong. A message outside a reader's audience is absent from that reader's history --
+    excluded, not hidden by instruction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    members: str
+
+
+class BallotSpec(BaseModel):
+    """The phase is a vote. Every actor casts one ballot through the ``ballot`` tool for a
+    participant matching ``targets`` (CEL over ``p`` and ``voter``). Ballots are sealed:
+    no context ever shows them until the phase ends, when the engine counts them, records
+    the result, and applies ``on_chosen`` to the participant with the most votes -- in the
+    same transaction as the phase transition. A tie elects nobody (``tie: none``) or is
+    settled by a recorded draw (``tie: draw``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    targets: str = "p.id != voter.id"
+    tie: Literal["none", "draw"] = "none"
+    # What becomes public when the vote closes: every ballot ("votes"), or only who was
+    # chosen ("outcome") -- for a vote whose voters must stay unknown, since who voted
+    # would itself reveal a hidden team. "voters": nothing becomes public; the result
+    # (ballots, who was chosen, what changed, what ``disclose`` found) reaches only the
+    # participants who cast a ballot in it -- a private check. Not the supervisor
+    # either: a facilitating model that knows a private result can only leak it.
+    reveal: Literal["votes", "outcome", "voters"] = "votes"
+    on_chosen: list[ParticipantEffectSpec] = Field(default_factory=list)
+    # Applied to every participant in a tie that elects nobody (``tie: none``) -- marks a
+    # run-off's candidates, so a following phase can target only them.
+    on_tied: list[ParticipantEffectSpec] = Field(default_factory=list)
+    # Facts about the chosen participant, computed from the record when the vote closes
+    # and stored with its result: name -> CEL over ``p`` (the chosen, every var hidden or
+    # not), ``state``, ``settings``, ``participants``. Whoever may read the result reads
+    # them -- with ``reveal: voters``, only the voters: "is the one I checked on team
+    # X?" answered by the engine, never by a model's retelling.
+    disclose: dict[str, str] = Field(default_factory=dict)
+
+
 class ActorSpec(BaseModel):
     """One entry of a phase's ``actors:`` list -- one "who may act" clause. Exactly one of
     ``persona_type``/``any_of``/``human_participant`` selects eligible actors; ``mode``
@@ -106,14 +286,24 @@ class ActorSpec(BaseModel):
     # deterministic pick weighted by each persona's chattiness axis; the previous
     # speaker never follows themselves. The floor follows the conversation instead of
     # a roster.
-    order: Literal["declared", "initiative", "free", "addressed", "reactive"] = "declared"
+    # "seated": the flow's participants in seat order, walked `laps` times; each lap
+    # starts one seat later than the last time the phase was entered (rotate_by).
+    order: Literal["declared", "initiative", "free", "addressed", "reactive", "seated"] = "declared"
     from_field: str | None = Field(default=None, alias="from")
     # A CAP on this entry, not a round count. "declared"/"initiative" resolve the
     # roster once and walk it once, so an entry in front of three actors gives three
     # turns whatever this says; "reactive"/"free" re-pick every turn, so there it is
     # the turn count. A phase that wants three rounds writes the entry three times --
     # which is also what lets a supervisor entry sit between them.
-    max_turns: int | None = None
+    max_turns: int | SettingRef | None = None
+    # CEL over `p` (the candidate participant), `state` and `settings`: who of the
+    # selected personas may act at all -- e.g. "p.status == 'alive'". Re-evaluated on
+    # every scheduling decision, so someone removed mid-phase loses their remaining turns.
+    where: str | None = None
+    # "seated" only: how many times the seat order is walked.
+    laps: int | SettingRef | None = None
+    # "seated" only: CEL integer; the starting seat moves this many places on.
+    rotate_by: str | None = None
 
     @model_validator(mode="after")
     def _selector_shape(self) -> ActorSpec:
@@ -454,6 +644,17 @@ class PhaseSpec(BaseModel):
     # the facilitator acts in, and [] on everyone else's.
     remote_tools: list[str] | None = None
     on_complete: str | None = None
+    # Who reads what is said in this phase (a private channel). None = everyone.
+    audience: AudienceSpec | None = None
+    # This phase is a sealed vote, counted when its actors are done.
+    ballot: BallotSpec | None = None
+    # Participant vars set when this phase ends (before its vote closes) -- e.g. clear a
+    # per-round mark on everyone.
+    participant_effects: list[PhaseParticipantEffectSpec] = Field(default_factory=list)
+    # A short line naming the moment this phase is ("Night 2 falls."), shown to models
+    # where the flow's `phase_markers` says. `{name}` placeholders read state variables,
+    # so a counter can appear in it. Absent = this phase is never marked.
+    marker: str | None = None
 
     def history_slice_tokens(self) -> int:
         """The phase budget's declared history reservation, in tokens. ``0`` for a
@@ -473,9 +674,19 @@ class ProcessDefinitionDSL(BaseModel):
     name: str
     vocabulary_overlay: str
     state: dict[str, StateVarSpec] = Field(default_factory=dict)
+    settings: dict[str, SettingSpec] = Field(default_factory=dict)
+    participants: ParticipantsSpec | None = None
     initial_phase: str
     phases: dict[str, PhaseSpec]
     pacing: PacingSpec | None = None
+    # Where phase markers reach a model. "transcript": a marker line at every point in
+    # the replayed conversation where a marked phase began, so the history says when
+    # things were said. "current": only the phase now running, as a line of context.
+    # "none" (the default) shows none, which is what every flow did before markers.
+    phase_markers: Literal["none", "transcript", "current"] = "none"
+    # Recap each phase when it ends, from the record, per viewer (core.sessions.recap).
+    # Absent = no recaps, which is what every flow did before them.
+    recap: RecapSpec | None = None
 
     def reminder_duration_for(self, phase: PhaseSpec) -> str | None:
         """The reminder duration in effect for one phase's await: its own, else the

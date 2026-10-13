@@ -55,6 +55,17 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class TokenUsage:
+    """What the provider itself says a generation cost. ``completion_tokens`` includes
+    hidden reasoning, which is billed as output; ``reasoning_tokens`` is the part of it
+    the provider breaks out, or None when it does not."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    reasoning_tokens: int | None = None
+
+
+@dataclass(frozen=True)
 class Chunk:
     text: str
     finish_reason: str | None = None
@@ -64,6 +75,15 @@ class Chunk:
     # endpoints (DeepSeek in thinking mode) require it echoed back on the assistant
     # message that carries the tool_calls, and refuse the follow-up call without it.
     reasoning: str = ""
+    # Configuration the provider could not honour for this generation -- a connection or
+    # persona param the endpoint refused, which the adapter dropped to let the call
+    # through. Said out loud so it reaches the record: dropped silently, a seat set to
+    # reasoning effort "high" played a whole game on its default.
+    warnings: tuple[str, ...] = ()
+    # The provider's own token counts, on the chunk that carries them (usually the last).
+    # None when the provider reported nothing; the runtime then counts the visible text,
+    # which misses hidden reasoning entirely.
+    usage: TokenUsage | None = None
 
 
 @dataclass(frozen=True)

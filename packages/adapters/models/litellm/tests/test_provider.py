@@ -788,12 +788,75 @@ async def test_a_parameter_the_endpoint_refuses_is_dropped_and_retried(
         purpose="generation",
         params={"presence_penalty": 0.4, "temperature": 0.9},
     )
-    text = "".join([c.text async for c in provider.generate(req)])
+    chunks = [c async for c in provider.generate(req)]
 
-    assert text == "in character"
+    assert "".join(c.text for c in chunks) == "in character"
     assert len(calls) == 2
     assert "presence_penalty" not in calls[1], "the refused parameter was not dropped"
     assert calls[1]["temperature"] == 0.9, "an unrelated parameter must survive the retry"
+    # ...and the drop is said, once, so it can reach the session's record.
+    warnings = [w for c in chunks for w in c.warnings]
+    assert len(warnings) == 1
+    assert "presence_penalty=0.4" in warnings[0] and "dropped" in warnings[0]
+
+
+async def test_a_refused_reasoning_effort_is_reported_not_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (Mafia rating prep, 2026-10-11): LiteLLM refuses `reasoning_effort` for
+    OpenRouter models, the repair dropped it, and nine seats configured for effort "high"
+    played on their defaults with nothing on record. The call still goes through; the
+    first chunk now carries what was dropped."""
+    import litellm
+
+    calls: list[dict] = []
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        calls.append(kwargs)
+        if "reasoning_effort" in kwargs:
+            raise Exception(  # noqa: TRY002
+                "litellm.UnsupportedParamsError: openrouter does not support parameters: "
+                "['reasoning_effort'], for model=x-ai/grok-4.7."
+            )
+
+        async def gen():  # noqa: ANN202
+            for piece in ("I suspect ", "Reese."):
+                part = MagicMock()
+                choice = MagicMock()
+                choice.delta = MagicMock(content=piece, tool_calls=None)
+                choice.finish_reason = "stop" if piece == "Reese." else None
+                part.choices = [choice]
+                part.usage = None
+                yield part
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="openrouter/x-ai/grok-4.7",
+        messages=[{"role": "user", "content": "speak"}],
+        purpose="generation",
+        params={"reasoning_effort": "high"},
+    )
+    chunks = [c async for c in LiteLLMModelProvider().generate(req)]
+
+    assert "".join(c.text for c in chunks) == "I suspect Reese."
+    assert chunks[0].warnings and "reasoning_effort='high'" in chunks[0].warnings[0]
+    assert all(not c.warnings for c in chunks[1:]), "said once per generation, not per chunk"
+
+
+def test_a_setting_moved_to_the_name_the_endpoint_asked_for_is_not_reported() -> None:
+    """A rename keeps the value and its effect; only a setting that stopped applying, or
+    whose value changed, is a broken promise worth a warning."""
+    from adapters.models.litellm.provider import _dropped_settings
+
+    sent = {"model": "openai/x", "max_tokens": 4000, "presence_penalty": 0.4, "seed": 7}
+    accepted = {"model": "openai/x", "max_completion_tokens": 4000, "seed": 1}
+    params = {"max_tokens": 4000, "presence_penalty": 0.4, "seed": 7, "api_key": "k"}
+    warnings = _dropped_settings(params, sent, accepted)
+    assert len(warnings) == 2
+    assert any("presence_penalty" in w and "dropped" in w for w in warnings)
+    assert any("seed=7" in w and "seed=1" in w for w in warnings)
 
 
 async def test_an_unrelated_failure_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1349,3 +1412,230 @@ async def test_an_ollama_request_gets_an_output_ceiling(monkeypatch: pytest.Monk
     )
     assert "".join([c.text async for c in provider.generate(hosted)]) == "fine"
     assert calls[-1].get("max_tokens") is None
+
+
+async def test_a_stream_that_stalls_is_cut_off_on_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The clock was only read when a chunk arrived, so a stream that went silent
+    waited forever: the turn neither finished nor failed, and its session sat "active"
+    with nothing running (Mafia A/B, 2026-10-09)."""
+    import asyncio
+
+    import litellm
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        async def gen():
+            part = MagicMock()
+            choice = MagicMock(delta=MagicMock(content="Half a", tool_calls=None))
+            choice.finish_reason = None
+            part.choices = [choice]
+            part.usage = None
+            yield part
+            await asyncio.sleep(3600)  # silence, never another chunk
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="deepseek/deepseek-v4-pro",
+        messages=[{"role": "user", "content": "talk"}],
+        purpose="generation",
+        max_generation_seconds=0.1,
+    )
+    chunks = await asyncio.wait_for(_collect(LiteLLMModelProvider(), req), timeout=5)
+    assert "".join(c.text for c in chunks) == "Half a"
+
+
+async def test_a_request_that_never_answers_raises_on_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    import litellm
+
+    from adapters.models.litellm.provider import ProviderTimeoutError
+
+    async def _acompletion(**_kwargs):  # noqa: ANN003, ANN202
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="deepseek/deepseek-v4-pro",
+        messages=[{"role": "user", "content": "talk"}],
+        purpose="generation",
+        max_generation_seconds=0.1,
+    )
+    with pytest.raises(ProviderTimeoutError):
+        await asyncio.wait_for(_collect(LiteLLMModelProvider(), req), timeout=5)
+
+
+async def _collect(provider: LiteLLMModelProvider, req: GenerationRequest) -> list[object]:
+    return [c async for c in provider.generate(req)]
+
+
+async def test_the_providers_own_token_counts_come_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (Mafia rating prep, 2026-10-11): the usage block arrives on the stream's
+    last part, which has no choices, and the loop skipped it with them -- so a reasoning
+    model's 867-token answer went on record as the 60 visible words. Hidden reasoning is
+    billed as output; the counts that reach the record must be the provider's."""
+    import litellm
+
+    async def _acompletion(**kwargs):  # noqa: ANN003, ANN202
+        async def gen():  # noqa: ANN202
+            part = MagicMock()
+            choice = MagicMock()
+            choice.delta = MagicMock(content="Only B is telling the truth.", tool_calls=None)
+            choice.finish_reason = "stop"
+            part.choices = [choice]
+            part.usage = None
+            yield part
+            tail = MagicMock()
+            tail.choices = []
+            tail.usage = MagicMock(
+                prompt_tokens=120,
+                completion_tokens=867,
+                completion_tokens_details=MagicMock(reasoning_tokens=800),
+                prompt_tokens_details=MagicMock(cached_tokens=64),
+            )
+            yield tail
+
+        return gen()
+
+    monkeypatch.setattr(litellm, "acompletion", _acompletion)
+    req = GenerationRequest(
+        model="anthropic/claude-opus-5-5",
+        messages=[{"role": "user", "content": "who tells the truth?"}],
+        purpose="generation",
+    )
+    chunks = [c async for c in LiteLLMModelProvider().generate(req)]
+
+    assert "".join(c.text for c in chunks) == "Only B is telling the truth."
+    reported = [c.usage for c in chunks if c.usage is not None]
+    assert len(reported) == 1
+    assert (reported[0].prompt_tokens, reported[0].completion_tokens) == (120, 867)
+    assert reported[0].reasoning_tokens == 800
+    assert any(c.cached_tokens == 64 for c in chunks), "cached tokens ride the same block"
+
+
+def test_a_provider_that_reports_nothing_reads_as_unknown_not_zero() -> None:
+    from adapters.models.litellm.provider import _token_usage
+
+    assert _token_usage(None) is None
+    assert _token_usage(MagicMock()) is None, "a usage object without integers is no report"
+    usage = _token_usage(
+        MagicMock(prompt_tokens=10, completion_tokens=3, completion_tokens_details=None)
+    )
+    assert usage is not None and usage.reasoning_tokens is None
+
+
+async def test_openrouter_calls_name_pyrrhula_and_others_do_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenRouter credits a call to the app its X-Title/HTTP-Referer headers name; unset,
+    LiteLLM sends its own and the tenant's OpenRouter console files every call under
+    LiteLLM. A connection's own headers still win; other providers get none."""
+    import litellm
+
+    from core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "public_base_url", "https://pyr.example")
+
+    def _stream() -> object:
+        chunk = MagicMock()
+        chunk.choices = [MagicMock(delta=MagicMock(content="hi"), finish_reason=None)]
+        chunk.usage = None
+
+        async def _gen():  # type: ignore[no-untyped-def]
+            yield chunk
+
+        return _gen()
+
+    mock_acompletion = AsyncMock(side_effect=lambda **_: _stream())
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    provider = LiteLLMModelProvider()
+
+    async def call(model: str, params: dict[str, object] | None = None) -> dict[str, object]:
+        req = GenerationRequest(
+            model=model,
+            messages=[{"role": "user", "content": "hi"}],
+            purpose="generation",
+            params=params or {},
+        )
+        async for _ in provider.generate(req):
+            pass
+        return dict(mock_acompletion.call_args.kwargs)
+
+    sent = await call("openrouter/x-ai/grok-4.7")
+    assert sent["headers"] == {"X-Title": "Pyrrhula", "HTTP-Referer": "https://pyr.example"}
+    own = await call("openrouter/x-ai/grok-4.7", {"headers": {"X-Title": "Mine"}})
+    assert own["headers"] == {"X-Title": "Mine", "HTTP-Referer": "https://pyr.example"}
+    other = await call("deepseek/deepseek-flash")
+    assert "headers" not in other
+
+
+def _text_stream(text: str) -> object:
+    chunk = MagicMock()
+    chunk.choices = [MagicMock(delta=MagicMock(content=text, tool_calls=None), finish_reason=None)]
+    chunk.usage = None
+
+    async def _gen():  # type: ignore[no-untyped-def]
+        if text:
+            yield chunk
+
+    return _gen()
+
+
+async def test_empty_messages_never_reach_the_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cohere refuses a whole request over one empty message; a turn whose context block
+    was empty failed outright. Empty system/user/assistant lines are dropped; a tool
+    result keeps its place."""
+    import litellm
+
+    mock_acompletion = AsyncMock(side_effect=lambda **_: _text_stream("ok"))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    req = GenerationRequest(
+        model="openrouter/cohere/command-a-plus",
+        messages=[
+            {"role": "system", "content": "You are X."},
+            {"role": "system", "content": "  "},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "1"}]},
+            {"role": "tool", "content": "", "tool_call_id": "1"},
+            {"role": "user", "content": "hi"},
+        ],
+        purpose="generation",
+    )
+    async for _ in LiteLLMModelProvider().generate(req):
+        pass
+    sent = mock_acompletion.call_args.kwargs["messages"]
+    assert [m["role"] for m in sent] == ["system", "assistant", "tool", "user"]
+
+
+async def test_an_empty_reply_to_a_trailing_instruction_is_asked_again_as_the_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cohere answers nothing when the last message is a system one -- where the phase
+    instruction goes. The first repair re-asks with that instruction as the user's line,
+    before any budget or reasoning change."""
+    import litellm
+
+    replies = iter(["", "Hello, I am X."])
+    mock_acompletion = AsyncMock(side_effect=lambda **_: _text_stream(next(replies)))
+    monkeypatch.setattr(litellm, "acompletion", mock_acompletion)
+    req = GenerationRequest(
+        model="openrouter/cohere/command-a-plus",
+        messages=[
+            {"role": "system", "content": "You are X."},
+            {"role": "user", "content": "Host: welcome"},
+            {"role": "system", "content": "Introduce yourself."},
+        ],
+        purpose="generation",
+    )
+    text = "".join([c.text async for c in LiteLLMModelProvider().generate(req)])
+    assert text == "Hello, I am X."
+    first, second = (c.kwargs["messages"] for c in mock_acompletion.call_args_list)
+    assert first[-1] == {"role": "system", "content": "Introduce yourself."}
+    assert second[-1] == {"role": "user", "content": "Introduce yourself."}
+    assert first[:-1] == second[:-1]

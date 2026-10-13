@@ -30,6 +30,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from core.process import participants as parts
 from core.process.dsl.schema import ActorSpec
 from core.process.interpreter import ActorRef, InterpreterContext, NextActorFn
 from core.sessions.models import SessionRow
@@ -137,8 +138,58 @@ class _EntryCursor:
         )
 
 
-def _cap(spec: ActorSpec) -> int:
-    return spec.max_turns or 1
+def _cap(spec: ActorSpec, settings: dict[str, object]) -> int | None:
+    """The most turns this entry gives. ``seated`` is bounded by its own walk (seats x
+    laps), so it has no cap unless one is written; every other order defaults to 1."""
+    cap = parts.setting_number(spec.max_turns, settings)
+    if spec.order == "seated":
+        return cap
+    return cap or 1
+
+
+async def _participant_filter(
+    spec: ActorSpec, ctx: InterpreterContext, fresh: list[Candidate]
+) -> tuple[list[Candidate], dict[str, parts.ParticipantView]]:
+    """Apply ``where`` to the candidates and return the participant views by principal
+    id (seat order needs them). A no-op, with no query, for entries that use neither."""
+    if spec.where is None and spec.order != "seated":
+        return fresh, {}
+    views = await parts.participant_views(ctx.tenant_id, ctx.session_id)
+    by_id = {str(v.principal_id): v for v in views}
+    if spec.where is None:
+        return fresh, by_id
+    base = parts.activation(state=ctx.state, settings=ctx.settings, views=views)
+    kept = [
+        c
+        for c in fresh
+        if (view := by_id.get(str(c.principal_id))) is not None
+        and parts.matches(spec.where, {**base, "p": view.cel()})
+    ]
+    return kept, by_id
+
+
+def _seated_order(
+    spec: ActorSpec,
+    ctx: InterpreterContext,
+    fresh: list[Candidate],
+    by_id: dict[str, parts.ParticipantView],
+) -> list[str]:
+    """Seat order, starting ``rotate_by`` seats on, walked ``laps`` times. Resolved once
+    at phase entry from everyone selected -- a participant removed mid-phase is
+    skipped at its turn by the eligibility check, like declared order."""
+    seated = sorted(
+        (c for c in fresh if str(c.principal_id) in by_id),
+        key=lambda c: by_id[str(c.principal_id)].seat or 0,
+    )
+    order = [str(c.principal_id) for c in seated]
+    if order and spec.rotate_by is not None:
+        bindings = parts.activation(
+            state=ctx.state, settings=ctx.settings, views=list(by_id.values())
+        )
+        shift = int(parts.eval_cel(spec.rotate_by, bindings)) % len(order)
+        order = order[shift:] + order[:shift]
+    laps = parts.setting_number(spec.laps, ctx.settings) or 1
+    return order * laps
 
 
 async def _last_assistant_text(tenant_id: uuid.UUID, session_id: uuid.UUID) -> str:
@@ -259,10 +310,12 @@ async def _next_from_entry(
     resolve_candidates: CandidateResolver,
 ) -> tuple[ActorRef | None, _EntryCursor]:
     """Returns (actor or None if this entry is exhausted, updated cursor)."""
-    if cursor.turns_taken >= _cap(spec):
+    cap = _cap(spec, ctx.settings)
+    if cap is not None and cursor.turns_taken >= cap:
         return None, cursor
 
-    fresh = await resolve_candidates(spec, ctx)
+    selected = await resolve_candidates(spec, ctx)
+    fresh, by_id = await _participant_filter(spec, ctx, selected)
     eligible_ids = {str(c.principal_id) for c in fresh}
 
     if spec.order == "reactive":
@@ -302,9 +355,15 @@ async def _next_from_entry(
             ordered_candidates = _addressed_first(
                 fresh, await _last_assistant_text(ctx.tenant_id, ctx.session_id)
             )
+        elif spec.order == "seated":
+            ordered_candidates = []
         else:
             ordered_candidates = fresh
-        resolved_order = [str(c.principal_id) for c in ordered_candidates]
+        resolved_order = (
+            _seated_order(spec, ctx, fresh, by_id)
+            if spec.order == "seated"
+            else [str(c.principal_id) for c in ordered_candidates]
+        )
     else:
         resolved_order = cursor.resolved_order
 

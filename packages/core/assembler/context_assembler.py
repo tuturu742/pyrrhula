@@ -69,7 +69,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from core.assembler.layout import LayoutSections
 from core.assembler.visibility import scopes_for
@@ -280,7 +280,12 @@ async def _speaker_names(
 
 
 async def _render_history(
-    tenant_id: uuid.UUID, session_id: uuid.UUID, max_tokens: int, *, after_event_seq: int | None
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    max_tokens: int,
+    *,
+    after_event_seq: int | None,
+    reader: uuid.UUID,
 ) -> tuple[str, int]:
     """Walks backward from the newest message, stopping at the token cap, then renders
     oldest-to-newest so the transcript reads naturally -- the most recent turns are kept,
@@ -294,7 +299,11 @@ async def _render_history(
     budget and hand the model the same turn twice. ``None`` = no summary, include
     everything."""
     async with tenant_scope(tenant_id) as session:
-        stmt = select(MessageRow).where(MessageRow.session_id == session_id)
+        # A message with an audience is history only for its members -- in the query.
+        stmt = select(MessageRow).where(
+            MessageRow.session_id == session_id,
+            or_(MessageRow.audience.is_(None), MessageRow.audience.contains([reader])),
+        )
         if after_event_seq is not None:
             stmt = stmt.where(MessageRow.event_seq > after_event_seq)
         rows = list((await session.execute(stmt.order_by(MessageRow.event_seq.desc()))).scalars())
@@ -685,6 +694,7 @@ async def assemble(
                 after_event_seq=(
                     history_summary.to_event_seq if history_summary is not None else None
                 ),
+                reader=viewer.id,
             )
             history_tokens = summary_tokens + raw_history_tokens
             history_span.set_attribute("pyrrhula.history_tokens", history_tokens)

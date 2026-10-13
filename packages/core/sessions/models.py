@@ -22,7 +22,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 # MessageRow.context_manifest_id FKs to context_manifest.id by string reference --
@@ -116,6 +116,16 @@ class SessionRow(Base):
     # deliberately revealed to players post-session for roll verification -- revealing it
     # is a UI/API decision outside this column's own concern.
     roll_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The flow settings this session runs with: the definition's defaults merged with
+    # the overrides given at creation (core.process.participants.resolve_settings).
+    settings: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    # Engine-option overrides chosen at creation (phase markers, recaps) -- the same
+    # meaning in every flow, unlike `settings` (core.process.options).
+    options: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
@@ -151,9 +161,76 @@ class SessionPersonaRow(Base):
     is_supervisor: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+    # A participant's seat (drawn or roster order) and its current per-participant
+    # variables, for flows that declare `participants:`. Every change to `vars` is
+    # recorded in participant_state_change; this column is only the current value.
+    seat: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vars: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (UniqueConstraint("session_id", "persona_id", name="uq_session_persona"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", "persona_id", name="uq_session_persona"),
+        UniqueConstraint("session_id", "seat", name="uq_session_persona_seat"),
+    )
+
+
+class ParticipantStateChangeRow(Base):
+    """Append-only history of a participant's variables: dealt, voted out, revealed."""
+
+    __tablename__ = "participant_state_change"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session.id", ondelete="CASCADE"), nullable=False
+    )
+    session_persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session_persona.id", ondelete="CASCADE"), nullable=False
+    )
+    var: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_value: Mapped[object | None] = mapped_column(JSONB, nullable=True)
+    new_value: Mapped[object | None] = mapped_column(JSONB, nullable=True)
+    cause: Mapped[str] = mapped_column(String(32), nullable=False)
+    cause_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BallotRow(Base):
+    """One voter's ballot in one vote (`poll_key` = phase key + the event_seq that
+    entered it). Append-only; the unique key makes a resumed turn's second ballot a
+    no-op. `choice_session_persona_id` NULL is an abstention."""
+
+    __tablename__ = "ballot"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session.id", ondelete="CASCADE"), nullable=False
+    )
+    poll_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    voter_session_persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session_persona.id", ondelete="CASCADE"), nullable=False
+    )
+    choice_session_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session_persona.id", ondelete="CASCADE"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "poll_key", "voter_session_persona_id", name="uq_ballot_voter"
+        ),
+    )
 
 
 class SessionEventRow(Base):
@@ -231,6 +308,11 @@ class MessageRow(Base):
     # overseer reviewing an override must be able to see what was actually typed, not
     # only what the model polished it into.
     original_content_md: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Who may read this message (principal ids). NULL = everyone. Set from the phase's
+    # `audience:`; a reader outside it never gets the message in its history.
+    audience: Mapped[list[uuid.UUID] | None] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=True
+    )
     overridden_by_principal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("principal.id", ondelete="SET NULL"), nullable=True
     )

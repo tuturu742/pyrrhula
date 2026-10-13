@@ -18,6 +18,7 @@ retryable infrastructure) one layer up.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 import uuid
@@ -38,7 +39,7 @@ from core.agents.tools import ToolContext, ToolRegistry
 from core.audit.models import PriceTableRow, UsageRecordRow
 from core.observability.otel import get_tracer
 from core.ports.encryptor import Encryptor
-from core.ports.model_provider import GenerationRequest, ModelProvider, ToolCall
+from core.ports.model_provider import GenerationRequest, ModelProvider, TokenUsage, ToolCall
 from core.resolution.contradiction import scan_for_contradictions
 from core.resolution.records import ResolutionRecordRow
 from core.sessions.lifecycle import resolve_author_name
@@ -102,6 +103,31 @@ class _UsagePoint:
     completion_tokens: int
     cached_tokens: int
     latency_ms: int
+    # Settings the provider refused and dropped for this call (``Chunk.warnings``).
+    warnings: tuple[str, ...] = ()
+    # The provider's own reasoning count, when it breaks one out; and whether the token
+    # counts above are the provider's (True) or the runtime's estimate from visible text.
+    reasoning_tokens: int | None = None
+    tokens_reported: bool = False
+
+
+# Public name for callers that make a model call on a turn's behalf (the leak-check
+# regeneration) and hand its usage back, so it is committed with the turn's message.
+UsagePoint = _UsagePoint
+
+
+def merge_turn_text(earlier: list[str], final: str) -> str:
+    """The text a turn leaves in the transcript: what the model wrote alongside its tool
+    calls, then its final reply.
+
+    Only the final iteration's text used to be kept, so anything said in the same response
+    as a tool call -- "I'll check the lab result" before the call, or table talk sent with a
+    move -- vanished from the transcript although the model had said it. An earlier piece
+    the final reply already repeats is dropped, so a model that restates itself is not
+    shown twice."""
+    final = final.strip()
+    kept = [piece for piece in earlier if piece and piece not in final]
+    return "\n\n".join([*kept, final] if final else kept)
 
 
 @dataclass(frozen=True)
@@ -110,6 +136,9 @@ class TurnResult:
     message_id: uuid.UUID
     usage_record_ids: tuple[uuid.UUID, ...]
     tool_calls_made: int
+    # Every distinct setting a provider refused during the turn, for the caller to put
+    # on the record. Empty when everything configured was applied.
+    warnings: tuple[str, ...] = ()
 
 
 async def _estimate_cost(
@@ -195,7 +224,12 @@ async def _call_provider_with_retry(
                 tool_calls: tuple[ToolCall, ...] = ()
                 reasoning = ""
                 cached_tokens = 0
+                warnings: list[str] = []
+                reported: TokenUsage | None = None
                 async for chunk in provider.generate(req):
+                    if chunk.usage is not None:
+                        reported = chunk.usage
+                    warnings.extend(w for w in chunk.warnings if w not in warnings)
                     if chunk.text:
                         full_text.append(chunk.text)
                         if on_chunk is not None:
@@ -227,11 +261,18 @@ async def _call_provider_with_retry(
                 if not content.strip() and not tool_calls and not allow_empty:
                     structlog.get_logger().info("runtime.empty_content", raw=repr(content[:200]))
                     raise EmptyGenerationError(f"{model_string} returned an empty generation")
-                prompt_tokens = sum(
-                    provider.count_tokens(str(m.get("content") or ""), model_string)
-                    for m in messages
-                )
-                completion_tokens = provider.count_tokens(content, model_string)
+                # The provider's own counts when it gave them: they are what it bills,
+                # hidden reasoning included. Counting the visible text instead recorded
+                # a reasoning model's 900-token answer as the 60 words it showed.
+                if reported is not None:
+                    prompt_tokens = reported.prompt_tokens
+                    completion_tokens = reported.completion_tokens
+                else:
+                    prompt_tokens = sum(
+                        provider.count_tokens(str(m.get("content") or ""), model_string)
+                        for m in messages
+                    )
+                    completion_tokens = provider.count_tokens(content, model_string)
                 usage = _UsagePoint(
                     candidate.id,
                     candidate.provider,
@@ -240,6 +281,9 @@ async def _call_provider_with_retry(
                     completion_tokens,
                     cached_tokens,
                     latency_ms,
+                    tuple(warnings),
+                    reasoning_tokens=reported.reasoning_tokens if reported else None,
+                    tokens_reported=reported is not None,
                 )
                 span.set_attribute("pyrrhula.runtime.used_fallback", is_fallback)
                 span.set_attribute("pyrrhula.runtime.attempts", attempt_index + 1)
@@ -258,6 +302,19 @@ async def _call_provider_with_retry(
                 continue
 
         raise AllRetriesExhaustedError(str(last_exc)) from last_exc
+
+
+_MAX_CALL_ID_IN_KEY = 64
+
+
+def _call_id_for_key(call_id: str) -> str:
+    """A tool call's id as it goes into the idempotency key: as given when short, its
+    digest when long. Gemini's direct API carries the call's thought signature inside the
+    id -- kilobytes of base64 -- and a key built from it overflowed the key column, so the
+    insert failed and the turn died without pausing the session."""
+    if len(call_id) <= _MAX_CALL_ID_IN_KEY:
+        return call_id
+    return "sha256-" + hashlib.sha256(call_id.encode()).hexdigest()
 
 
 @idempotent(
@@ -308,6 +365,18 @@ async def run_agent_turn(
     # is derived from that same peeked value). None (the older call sites) preserves
     # the original self-claim-from-session_row behaviour exactly.
     event_seq: int | None = None,
+    # Usage of model calls made for this turn outside the loop below (the leak-check
+    # regeneration). Read after finalize_reply runs and committed with the message, in the
+    # same transaction (CLAUDE.md rule 11).
+    extra_usage_points: list[UsagePoint] | None = None,
+    # Who may read the reply (principal ids), from the phase's `audience:`. None = everyone.
+    audience: list[uuid.UUID] | None = None,
+    phase_key: str | None = None,
+    # A tool this turn must call (a vote phase's ballot). A reply without it is answered
+    # once, inside the same turn, asking for the call; the words already said are kept.
+    # Still missing after that, the turn commits as it is -- the caller decides what an
+    # absent move means (a vote counts it as an abstention).
+    required_tool: str | None = None,
 ) -> TurnResult:
     with _tracer.start_as_current_span("runtime.run_agent_turn") as span:
         span.set_attribute("pyrrhula.persona_id", str(persona_id))
@@ -357,9 +426,15 @@ async def run_agent_turn(
         tool_calls_made = 0
         tools_called: list[str] = []
         resolution_record_ids: list[str] = []
+        # What the model wrote in the same responses as its tool calls (merge_turn_text).
+        earlier_text: list[str] = []
         tools = tool_registry.specs()
+        nudged = False
+        # Met only by a call that SUCCEEDED: a ballot for someone already out comes back
+        # as an error result, and counting it as the move left a night vote abstained.
+        required_done = False
 
-        for _iteration in range(max_tool_loop):
+        for iteration in range(max_tool_loop):
             content, tool_calls, usage, reasoning = await _call_provider_with_retry(
                 profile,
                 fallback_profile,
@@ -378,7 +453,36 @@ async def run_agent_turn(
             )
             usage_points.append(usage)
 
+            if (
+                not tool_calls
+                and required_tool is not None
+                and not required_done
+                and not nudged
+                and iteration < max_tool_loop - 1
+            ):
+                nudged = True
+                if content.strip():
+                    earlier_text.append(content.strip())
+                conversation.append(
+                    {
+                        "role": "assistant",
+                        "content": content,
+                        **({"reasoning_content": reasoning} if reasoning else {}),
+                    }
+                )
+                conversation.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"You have not called the {required_tool} tool yet, and this "
+                            f"turn requires it. Call {required_tool} now."
+                        ),
+                    }
+                )
+                continue
+
             if not tool_calls:
+                content = merge_turn_text(earlier_text, content)
                 if not content.strip() and tools_called:
                     # The turn acted and then said nothing. An empty message hides the
                     # turn from the transcript (a plan phase with no visible plan); say
@@ -393,6 +497,7 @@ async def run_agent_turn(
                     )
                 if finalize_reply is not None:
                     content = await finalize_reply(content)
+                usage_points.extend(extra_usage_points or ())
                 return await _commit_turn(
                     triggered_by=triggered_by,
                     tenant_id=tenant_id,
@@ -406,12 +511,16 @@ async def run_agent_turn(
                     resolution_record_ids=resolution_record_ids,
                     context_manifest_id=context_manifest_id,
                     event_seq=event_seq,
+                    audience=audience,
+                    phase_key=phase_key,
                 )
 
             # The assistant turn that REQUESTED the tools must carry tool_calls back in
             # the transcript, in the OpenAI shape. OpenAI and ollama tolerate its
             # absence; DeepSeek strictly rejects a following role:"tool" message whose
             # preceding assistant message has no tool_calls.
+            if content.strip():
+                earlier_text.append(content.strip())
             conversation.append(
                 {
                     "role": "assistant",
@@ -438,7 +547,7 @@ async def run_agent_turn(
                 tools_called.append(tool_call.name)
                 tool_result = await _dispatch_tool_idempotent(
                     tenant_id=tenant_id,
-                    idempotency_key=f"{idempotency_key}:tool:{tool_call.id}",
+                    idempotency_key=f"{idempotency_key}:tool:{_call_id_for_key(tool_call.id)}",
                     tool_registry=tool_registry,
                     tool_call=tool_call,
                     ctx=ToolContext(
@@ -452,6 +561,8 @@ async def run_agent_turn(
                 # a handler that returns the bare record. The resolution preset returns
                 # an envelope, so the parse found nothing and every roll made through it
                 # was recorded but never linked to its message (karsh-vale sweep).
+                if tool_call.name == required_tool and not _is_error_result(tool_result["content"]):
+                    required_done = True
                 resolution_id = tool_result.get("resolution_id") or _extract_resolution_id(
                     tool_result["content"]
                 )
@@ -502,8 +613,10 @@ async def run_agent_turn(
             limits=generation_limits,
         )
         usage_points.append(usage)
+        content = merge_turn_text(earlier_text, content)
         if finalize_reply is not None:
             content = await finalize_reply(content)
+        usage_points.extend(extra_usage_points or ())
         return await _commit_turn(
             triggered_by=triggered_by,
             tenant_id=tenant_id,
@@ -517,7 +630,19 @@ async def run_agent_turn(
             resolution_record_ids=resolution_record_ids,
             context_manifest_id=context_manifest_id,
             event_seq=event_seq,
+            audience=audience,
+            phase_key=phase_key,
         )
+
+
+def _is_error_result(content: str) -> bool:
+    """A tool result that reports a failure: the registry's own refusals and handlers
+    alike answer with a JSON object carrying an ``error`` key."""
+    try:
+        body = json.loads(content)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(body, dict) and "error" in body
 
 
 _SELF_ATTRIBUTION_LIMIT = 120
@@ -574,6 +699,8 @@ async def _commit_turn(
     resolution_record_ids: list[str],
     context_manifest_id: uuid.UUID | None,
     event_seq: int | None = None,
+    audience: list[uuid.UUID] | None = None,
+    phase_key: str | None = None,
 ) -> TurnResult:
     """One transaction: the message, every usage_record from the loop, the durable
     session_event, and -- when this turn's tool calls produced any ResolutionRecords
@@ -604,6 +731,8 @@ async def _commit_turn(
             resolution_record_ids=resolution_record_ids,
             context_manifest_id=context_manifest_id,
             event_seq=event_seq,
+            audience=audience,
+            phase_key=phase_key,
         )
     except IntegrityError as exc:
         # The pre-check inside _commit_turn_once closes the common case; this catches
@@ -624,6 +753,8 @@ async def _commit_turn(
         resolution_record_ids=resolution_record_ids,
         context_manifest_id=context_manifest_id,
         event_seq=None,
+        audience=audience,
+        phase_key=phase_key,
     )
 
 
@@ -641,6 +772,8 @@ async def _commit_turn_once(
     resolution_record_ids: list[str],
     context_manifest_id: uuid.UUID | None,
     event_seq: int | None = None,
+    audience: list[uuid.UUID] | None = None,
+    phase_key: str | None = None,
 ) -> TurnResult:
     async with tenant_scope(tenant_id) as session:
         session_row = await session.get(SessionRow, session_id)
@@ -681,6 +814,7 @@ async def _commit_turn_once(
             content_md=content,
             context_manifest_id=context_manifest_id,
             resolution_record_ids=resolution_record_ids,
+            audience=audience,
         )
         session.add(message)
         await session.flush()
@@ -721,6 +855,8 @@ async def _commit_turn_once(
                 prompt_tokens=point.prompt_tokens,
                 completion_tokens=point.completion_tokens,
                 cached_tokens=point.cached_tokens,
+                reasoning_tokens=point.reasoning_tokens,
+                tokens_reported=point.tokens_reported,
                 estimated_cost=estimated_cost,
                 latency_ms=point.latency_ms,
             )
@@ -743,6 +879,10 @@ async def _commit_turn_once(
                     # so the transcript can show when each turn landed, on replay too
                     "created_at": datetime.now(UTC).isoformat(),
                     "triggered_by": triggered_by,
+                    # readers outside it never get this message (history, recaps)
+                    "audience": [str(a) for a in audience] if audience is not None else None,
+                    # the phase it was spoken in, for transcripts and exports
+                    **({"phase": phase_key} if phase_key else {}),
                 },
                 actor_principal_id=author_principal_id,
             )
@@ -753,4 +893,5 @@ async def _commit_turn_once(
             message_id=message.id,
             usage_record_ids=tuple(usage_record_ids),
             tool_calls_made=tool_calls_made,
+            warnings=tuple(dict.fromkeys(w for point in usage_points for w in point.warnings)),
         )

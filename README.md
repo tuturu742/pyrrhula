@@ -37,19 +37,22 @@ packs:
 The stated end state is dogfooding: Pyrrhula's own backlog worked by a team of agents
 managed by Pyrrhula. One product, one codebase.
 
-> Status: **0.1.1** ([what is in it](CHANGELOG.md)). `main` is development toward 0.2.0
-> (`0.2.0.dev0`); fixes ship as 0.1.x from `release/0.1` ([how](docs/releasing.md)), and
-> the [install](#install) one-liner fetches the latest release, not this code. The full
+> Status: **0.2.0** ([what is in it](CHANGELOG.md)). New in it: flows with participants,
+> where roles are dealt in secret, votes are sealed and counted by the engine, and private
+> checks and private channels hold ([how](docs/participants-and-ballots.md)). Fixes ship
+> as patch releases ([how](docs/releasing.md)), and the [install](#install) one-liner
+> fetches the latest release. The full
 > stack described below is implemented and running: tenancy/RLS, knowledge & retrieval,
 > the process engine, the context assembler, deterministic resolution, the secrets layer
 > (disclosure gate, structural exclusion, post-generation leak check, per-workspace trust
 > modes), the overseer's view, behavioral axes with engine-enforced high-stakes dials,
 > delegated coding work with image builds, the workspace assistant, portable `.pyr`
 > workspace bundles, and three verified install paths (published images, compose, k8s,
-> plus a Portainer stack). Nine runnable sample workspaces live in
+> plus a Portainer stack). Ten runnable sample workspaces live in
 > [pyrrhula-samples](https://github.com/tuturu742/pyrrhula-samples), seven of them run end
-> to end on fresh installs before this release — start with the murder mystery, or with
-> Mice Invaders if you want to watch a pull request get built.
+> to end on fresh installs before 0.1.0 — start with the murder mystery, with Mice Invaders
+> if you want to watch a pull request get built, or with Mafia to watch seven models lie
+> to each other under rules the engine enforces.
 
 ![A session on the software bench: the work item approved, the pull request reviewed, the build served as a preview](docs/images/session-coding-bench.png)
 
@@ -241,6 +244,7 @@ Running one:
 | [`docs/models.md`](docs/models.md) | Model connections, per-persona sampling, and what happens when a provider refuses something |
 | [`docs/knowledge-classes.md`](docs/knowledge-classes.md) | Knowledge classes, scopes, and retrieval budgets |
 | [`docs/entities-and-state-machines.md`](docs/entities-and-state-machines.md) | Entity schemas, the optional state machines on them, and attaching one to a persona |
+| [`docs/participants-and-ballots.md`](docs/participants-and-ballots.md) | Per-participant variables dealt in secret, sealed votes, private checks and private audiences in a flow |
 | [`docs/mcp.md`](docs/mcp.md) | Attaching external tools, and the per-server limits |
 | [`docs/exec-engines.md`](docs/exec-engines.md) | Where delegated coding work builds and tests |
 | [`docs/previews.md`](docs/previews.md) | Running a build where a human can open it |

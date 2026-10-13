@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from core.agents.authoring import (
     HISTORY_CHAR_BUDGET_KEY,
@@ -28,6 +28,7 @@ from core.agents.runtime import (
     _DEFAULT_MAX_TOOL_LOOP,
     AllRetriesExhaustedError,
     ToolLoopExceededError,
+    UsagePoint,
     run_agent_turn,
 )
 from core.agents.scheduling import make_persona_candidate_resolver
@@ -47,6 +48,7 @@ from core.ports.model_provider import GenerationRequest, ModelProvider, ToolSpec
 from core.ports.moderation import ModerationProvider
 from core.ports.permission import PermissionService
 from core.ports.reranker import Reranker
+from core.process import participants as parts
 from core.process.awaits import make_await_hook
 from core.process.checkpoints import make_checkpoint_hook
 from core.process.dsl.schema import ProcessDefinitionDSL
@@ -59,8 +61,11 @@ from core.process.interpreter import (
     InterpreterFaultError,
     NextActorFn,
     OnEvent,
+    _phase_entry_seq,
     advance_session,
 )
+from core.process.markers import render_marker
+from core.process.options import EffectiveOptions, resolve_options
 from core.process.scheduler import make_default_candidate_resolver, make_scheduler
 from core.process.session_container_tools import (
     CONTAINER_ACTIVITY_DESCRIPTION,
@@ -89,6 +94,7 @@ from core.resolution.rule_system import RuleSystemDefinition, get_or_create_defa
 from core.resolution.service import ActorFieldsResolver, make_randomizer_handler
 from core.sessions.lifecycle import resolve_author_name
 from core.sessions.models import MessageRow, SessionEventRow, SessionPersonaRow, SessionRow
+from core.sessions.recap import PhaseSpan, build_recaps
 from core.tenancy.models import Principal, Workspace
 from core.tenancy.scope import tenant_scope
 from core.usage_limits import UsageLimitExceededError
@@ -150,6 +156,7 @@ async def _load_conversation_with_boundary(
     session_id: uuid.UUID,
     viewer_principal_id: uuid.UUID | None = None,
     history_char_budget: int | None = None,
+    annotations: Sequence[tuple[int, str, bool]] | None = None,
 ) -> tuple[list[dict[str, str]], int]:
     """The transcript as chat messages, and the event_seq of the first replayed message
     when the tail trim dropped anything before it -- 0 when nothing was dropped, so the
@@ -175,7 +182,17 @@ async def _load_conversation_with_boundary(
                     Persona.principal_id == MessageRow.author_principal_id,
                     isouter=True,
                 )
-                .where(MessageRow.session_id == session_id)
+                .where(
+                    MessageRow.session_id == session_id,
+                    # A message with an audience reaches only its members; with no
+                    # viewer, only public messages. In the query, not after it.
+                    or_(
+                        MessageRow.audience.is_(None),
+                        MessageRow.audience.contains([viewer_principal_id]),
+                    )
+                    if viewer_principal_id is not None
+                    else MessageRow.audience.is_(None),
+                )
                 .order_by(MessageRow.event_seq)
             )
         ).all()
@@ -213,6 +230,11 @@ async def _load_conversation_with_boundary(
                         f"{json.dumps(payload.get('arguments') or {})}: {result}]"
                     )
                     timeline.append((event.event_seq, {"role": "user", "content": note}))
+        # Lines the engine adds at a point in the history -- phase markers and phase
+        # recaps (`_history_annotations`). Appended after the messages so a line placed
+        # at a transition sorts after nothing it should precede (seqs are unique).
+        for seq, line, _pinned in annotations or ():
+            timeline.append((seq, {"role": "user", "content": f"[{line}]"}))
         timeline.sort(key=lambda item: item[0])
         kept = _tail_trim_pairs(timeline, history_char_budget)
         # The boundary comes from the seq that actually survived, not from counting
@@ -222,7 +244,33 @@ async def _load_conversation_with_boundary(
         # times on one 50-minute session in which nothing had been trimmed, at ~55% of
         # the session's own prompt tokens (Hägnaryd sweep, 2026-10-04).
         first_seq = kept[0][0] if kept and len(kept) < len(timeline) else 0
+        if first_seq:
+            kept = _keep_pinned(kept, annotations or (), first_seq, history_char_budget)
         return [message for _seq, message in kept], first_seq
+
+
+def _keep_pinned(
+    kept: list[tuple[int, dict[str, str]]],
+    annotations: Sequence[tuple[int, str, bool]],
+    first_seq: int,
+    budget: int | None,
+) -> list[tuple[int, dict[str, str]]]:
+    """Pinned lines (phase recaps) of the span the trim dropped, put back in front of the
+    tail. The trim drops the oldest history whole; a phase without a reserved history
+    budget then had nothing in its place, and a long game simply forgot its first days.
+    A recap is the record's own account of a dropped phase, so it costs no model call and
+    cannot be wrong about it. Newest first, within a third of the history budget."""
+    room = int(budget or _DEFAULT_HISTORY_CHAR_BUDGET) // 3
+    chosen: list[tuple[int, str]] = []
+    for seq, line, pinned in sorted(annotations, key=lambda a: a[0], reverse=True):
+        if not pinned or seq >= first_seq:
+            continue
+        if len(line) > room:
+            break
+        chosen.append((seq, line))
+        room -= len(line)
+    restored = [(seq, {"role": "user", "content": f"[{line}]"}) for seq, line in reversed(chosen)]
+    return restored + kept
 
 
 # The transcript budget when nothing more specific is configured. It is a property of
@@ -292,6 +340,85 @@ def _phase_remote_allowlist(phase: Any) -> list[str] | None:
     return [str(t) for t in allowed]
 
 
+async def _history_annotations(
+    *,
+    tenant_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    session_id: uuid.UUID,
+    viewer: Principal,
+    viewer_name: str,
+    viewer_is_supervisor: bool,
+    phase: Any,
+    definition: ProcessDefinitionDSL | None,
+    options: EffectiveOptions,
+    permission_service: PermissionService | None,
+) -> list[tuple[int, str, bool]]:
+    """The lines this viewer's replayed history gets at phase boundaries: the recap of the
+    phase that just ended, then the marker of the one that began. Both are the engine's
+    own words from the record; neither exists unless the flow or the session asks."""
+    if definition is None:
+        return []
+    markers = (
+        {key: spec.marker for key, spec in definition.phases.items() if spec.marker}
+        if options.phase_markers == "transcript"
+        else {}
+    )
+    if not markers and options.recap is None:
+        return []
+    async with tenant_scope(tenant_id) as session:
+        transitions = (
+            await session.execute(
+                select(SessionEventRow.event_seq, SessionEventRow.payload)
+                .where(
+                    SessionEventRow.session_id == session_id,
+                    SessionEventRow.kind == "phase_transition",
+                )
+                .order_by(SessionEventRow.event_seq)
+            )
+        ).all()
+
+    recaps: dict[int, str] = {}
+    if options.recap is not None and transitions:
+        spans: list[PhaseSpan] = []
+        start, current = -1, definition.initial_phase
+        entered_state: dict[str, Any] = {}
+        for seq, payload in transitions:
+            spec = definition.phases.get(current)
+            label = (
+                render_marker(spec.marker, entered_state).rstrip(".")
+                if spec is not None and spec.marker
+                else current.replace("_", " ")
+            )
+            spans.append(PhaseSpan(current, label, start, seq))
+            start, entered_state = seq, payload.get("state") or {}
+            to = payload.get("to")
+            current = to if isinstance(to, str) else current
+        recaps = await build_recaps(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            session_id=session_id,
+            viewer=viewer,
+            viewer_name=viewer_name,
+            viewer_is_supervisor=viewer_is_supervisor,
+            phase=phase,
+            definition=definition,
+            spec=options.recap,
+            spans=spans,
+            permission_service=permission_service,
+        )
+
+    lines: list[tuple[int, str, bool]] = []
+    if definition.initial_phase in markers:
+        lines.append((-1, render_marker(markers[definition.initial_phase], {}), False))
+    for seq, payload in transitions:
+        if seq in recaps:
+            lines.append((seq, recaps[seq], True))
+        to = payload.get("to")
+        if isinstance(to, str) and to in markers:
+            lines.append((seq, render_marker(markers[to], payload.get("state") or {}), False))
+    return lines
+
+
 async def run_one_persona_turn(
     *,
     tenant_id: uuid.UUID,
@@ -349,6 +476,9 @@ async def run_one_persona_turn(
         assert viewer_principal is not None
         session_row = await session.get(SessionRow, session_id)
         agenda_md = session_row.agenda_md if session_row is not None else None
+        session_state = dict(session_row.state or {}) if session_row is not None else {}
+        session_settings = dict(session_row.settings or {}) if session_row is not None else {}
+        session_options = dict(session_row.options or {}) if session_row is not None else {}
     # Ephemeral "who is preparing a reply" cue for live viewers: event_seq -1 marks it
     # non-durable (never a session_event row, never replayed on reconnect) -- pure
     # stream furniture, mirroring how token chunks work.
@@ -362,8 +492,26 @@ async def run_one_persona_turn(
         history_budget_chars = int(str(raw_budget)) if raw_budget is not None else None
     except (TypeError, ValueError):
         history_budget_chars = None
+    definition = await parts.load_session_definition(tenant_id, session_id)
+    options = resolve_options(definition, session_options)
+    annotations = await _history_annotations(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        viewer=viewer_principal,
+        viewer_name=persona_name,
+        viewer_is_supervisor=persona_type == "supervisor",
+        phase=phase,
+        definition=definition,
+        options=options,
+        permission_service=permission_service,
+    )
     conversation, replayed_from = await _load_conversation_with_boundary(
-        tenant_id, session_id, principal_id, history_budget_chars
+        tenant_id,
+        session_id,
+        principal_id,
+        history_budget_chars,
+        annotations=annotations,
     )
     query_text = conversation[-1]["content"] if conversation else ""
 
@@ -581,6 +729,48 @@ async def run_one_persona_turn(
     # for everything a normal deployment offers.
     for spec, handler in extra_tools or ():
         tool_registry.register(spec, handler)
+    # Participants: the table as THIS viewer may know it, the vote tool when the phase
+    # is a vote, and who may read what is said here. Decided from the record; a hidden
+    # value the viewer may not know never enters the request at all.
+    participants_block = ""
+    audience: list[uuid.UUID] | None = None
+    required_tool: str | None = None
+    if definition is not None and definition.participants is not None:
+        views = await parts.participant_views(tenant_id, session_id)
+        participants_block = parts.render_participants_block(
+            definition.participants,
+            views,
+            principal_id,
+            viewer_is_supervisor=persona_type == "supervisor",
+            results=await parts.ballot_results(tenant_id, session_id),
+        )
+        voter = next((v for v in views if v.principal_id == principal_id), None)
+        if getattr(phase, "ballot", None) is not None and voter is not None:
+            async with tenant_scope(tenant_id) as session:
+                entry_seq = await _phase_entry_seq(session, session_id)
+            targets = parts.ballot_targets(
+                phase.ballot, views, voter, state=session_state, settings=session_settings
+            )
+            required_tool = parts.BALLOT_TOOL_NAME
+            tool_registry.register(
+                *parts.make_ballot_tool(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    key=parts.poll_key(phase_key, entry_seq),
+                    voter=voter,
+                    targets=targets,
+                    reveal=phase.ballot.reveal,
+                )
+            )
+        if getattr(phase, "audience", None) is not None:
+            audience = await parts.audience_for(
+                tenant_id,
+                session_id,
+                phase.audience.members,
+                principal_id,
+                state=session_state,
+                settings=session_settings,
+            )
     if "randomizer" in phase.tools:
         handler = make_randomizer_handler(
             rule_system=rule_system,
@@ -857,7 +1047,20 @@ async def run_one_persona_turn(
     system_blocks: list[str] = []
     if persona_brief:
         system_blocks.append(persona_brief)
-    system_blocks.append(manifest.rendered_context)
+    # Empty when the phase grants no knowledge at all -- and an empty system message is
+    # a request Cohere refuses outright.
+    if manifest.rendered_context.strip():
+        system_blocks.append(manifest.rendered_context)
+    if participants_block:
+        system_blocks.append(participants_block)
+    current_marker = getattr(phase, "marker", None)
+    if (
+        definition is not None
+        and options.phase_markers == "current"
+        and isinstance(current_marker, str)
+        and current_marker
+    ):
+        system_blocks.append(f"Now: {render_marker(current_marker, session_state)}")
     # The phase's own task instruction (DSL `prompt`): what this turn is FOR and what
     # shape its output should take -- without it the model only knows who it is, not
     # what the flow wants from it here.
@@ -929,6 +1132,9 @@ async def run_one_persona_turn(
     # deflection + overseer alert. No concealed secrets -> passthrough closure -> the
     # common path costs nothing.
     _base_finalize = None
+    # Usage of the regeneration below, handed to run_agent_turn so it is committed with the
+    # turn's message (rule 11). It used to be metered nowhere.
+    regen_usage: list[UsagePoint] = []
     if (concealed_secrets or moderation_provider is not None) and persona_agent is not None:
         from core.moderation.hooks import scan_generated
         from core.secrets.leak_check import run_post_generation_check
@@ -956,19 +1162,50 @@ async def run_one_persona_turn(
             provider = model_provider_factory(persona_agent.provider)
             from core.tenancy.egress import load_egress_policy
 
+            model_string = f"{persona_agent.provider}/{persona_agent.model}"
+            # The connection's own key: without it the regeneration only worked against
+            # providers whose key happened to sit in the process environment, and failed
+            # for every connection whose key is stored sealed (OpenRouter among them).
+            api_key = (
+                await resolve_connection_api_key(
+                    tenant_id, str(persona_agent.credential_ref), encryptor=encryptor
+                )
+                if persona_agent.credential_ref and encryptor is not None
+                else None
+            )
             request = GenerationRequest(
-                model=f"{persona_agent.provider}/{persona_agent.model}",
+                model=model_string,
                 messages=nudged,
                 purpose="generation",
                 api_base=persona_agent.api_base,
+                api_key=api_key,
                 params=dict(persona_agent.params or {}),
                 egress_policy=await load_egress_policy(tenant_id),
             )
+            started = time.monotonic()
             parts: list[str] = []
+            cached = 0
             async for chunk in provider.generate(request):
                 if chunk.text:
                     parts.append(chunk.text)
-            return "".join(parts)
+                if chunk.cached_tokens:
+                    cached = chunk.cached_tokens
+            text = "".join(parts)
+            regen_usage.append(
+                UsagePoint(
+                    persona_agent.id,
+                    persona_agent.provider,
+                    persona_agent.model,
+                    sum(
+                        provider.count_tokens(str(m.get("content") or ""), model_string)
+                        for m in nudged
+                    ),
+                    provider.count_tokens(text, model_string),
+                    cached,
+                    int((time.monotonic() - started) * 1000),
+                )
+            )
+            return text
 
         async def _base_finalize(reply_text: str) -> str:
             checked = reply_text
@@ -1018,6 +1255,10 @@ async def run_one_persona_turn(
             event_seq=event_seq,
             finalize_reply=finalize_reply,
             triggered_by=triggered_by,
+            extra_usage_points=regen_usage,
+            audience=audience,
+            phase_key=phase_key,
+            required_tool=required_tool,
             max_tool_loop=getattr(phase, "max_tool_calls", None) or _DEFAULT_MAX_TOOL_LOOP,
         )
     except UsageLimitExceededError as exc:
@@ -1029,6 +1270,23 @@ async def run_one_persona_turn(
         # for this case -- neither exception is an InterpreterFaultError on its own,
         # so without this translation they'd propagate unhandled past advance_session.
         raise InterpreterFaultError(str(exc)) from exc
+    except Exception as exc:
+        # Anything else a turn raises is a defect, but the session must still pause
+        # rather than sit "active" with no turn running: a database error inside a turn
+        # (an over-long idempotency key) left a 15-seat game waiting for an hour.
+        structlog.get_logger().exception("turn.failed", session_id=str(session_id))
+        raise InterpreterFaultError(f"turn failed: {type(exc).__name__}: {exc}"[:500]) from exc
+
+    if result.warnings:
+        await _record_settings_warnings(
+            tenant_id,
+            session_id,
+            turn_event_seq=event_seq,
+            principal_id=principal_id,
+            phase_key=phase_key,
+            warnings=result.warnings,
+            on_event=on_event,
+        )
 
     if on_event is not None and result.message_id is not None:
         async with tenant_scope(tenant_id) as session:
@@ -1048,6 +1306,7 @@ async def run_one_persona_turn(
                 "phase": phase_key,
                 "created_at": datetime.now(UTC).isoformat(),
                 "triggered_by": triggered_by,
+                "audience": [str(a) for a in audience] if audience is not None else None,
             },
         )
 
@@ -1056,6 +1315,66 @@ async def run_one_persona_turn(
         already_persisted=True,
         message_id=result.message_id,
     )
+
+
+async def _record_settings_warnings(
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    *,
+    turn_event_seq: int,
+    principal_id: uuid.UUID,
+    phase_key: str,
+    warnings: Sequence[str],
+    on_event: OnEvent | None,
+) -> None:
+    """Put configuration a provider refused on the session's record, once per session for
+    each distinct refusal.
+
+    The turn itself went through -- the adapter dropped the refused setting so it could --
+    which is exactly why this has to be said somewhere a person reads: a seat configured
+    for reasoning effort "high" played a whole game on its default, and nothing showed it.
+    Once per session, because the same refusal repeats on every turn of that seat."""
+    async with tenant_scope(tenant_id) as session:
+        seen = set(
+            (
+                await session.scalars(
+                    select(SessionEventRow.payload["message"].astext).where(
+                        SessionEventRow.session_id == session_id,
+                        SessionEventRow.kind == "warning",
+                    )
+                )
+            ).all()
+        )
+        fresh = [w for w in dict.fromkeys(warnings) if w not in seen]
+        if not fresh:
+            return
+        author = await resolve_author_name(session, tenant_id, principal_id)
+        row = await session.get(SessionRow, session_id)
+        if row is None:
+            return
+        # Never the slot the turn's own message holds (uq_session_event_seq).
+        seq = max(row.next_event_seq, turn_event_seq + 1)
+        recorded: list[tuple[int, dict[str, Any]]] = []
+        for message in fresh:
+            payload: dict[str, Any] = {"message": message, "author": author, "phase": phase_key}
+            session.add(
+                SessionEventRow(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    event_seq=seq,
+                    kind="warning",
+                    payload=payload,
+                )
+            )
+            recorded.append((seq, payload))
+            seq += 1
+        row.next_event_seq = seq
+    structlog.get_logger().warning(
+        "turn.settings_refused", session_id=str(session_id), warnings=fresh
+    )
+    if on_event is not None:
+        for event_seq, payload in recorded:
+            await on_event(event_seq, "warning", payload)
 
 
 def _make_execute_turn(

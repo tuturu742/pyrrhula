@@ -35,3 +35,28 @@ def test_tail_trim_keeps_the_same_messages_as_before() -> None:
     messages = [m for _seq, m in _timeline()]
     assert _tail_trim(messages, budget=250) == messages[-2:]
     assert _tail_trim(messages, budget=10_000) == messages
+
+
+def test_a_trim_keeps_the_recaps_of_what_it_dropped() -> None:
+    """A trimmed history loses its oldest phases whole. Their recaps -- the record's own
+    account -- come back in front of the tail; markers do not, and nothing past the
+    surviving tail is duplicated."""
+    from core.process.live_session import _keep_pinned
+
+    kept = _tail_trim_pairs(_timeline(), budget=250)  # seqs 16, 18 survive
+    annotations = [
+        (3, "Recap of day 1: Ada was voted out", True),
+        (9, "Recap of night 1: Bo was taken out", True),
+        (9, "Night 1 falls.", False),
+        (17, "Recap of day 2: nobody", True),
+    ]
+    restored = _keep_pinned(kept, annotations, first_seq=16, budget=3000)
+    contents = [m["content"] for _seq, m in restored]
+    assert contents[:2] == [
+        "[Recap of day 1: Ada was voted out]",
+        "[Recap of night 1: Bo was taken out]",
+    ]
+    assert [seq for seq, _m in restored[2:]] == [16, 18]
+    # within a third of the budget, the newest dropped recap wins
+    tight = _keep_pinned(kept, annotations, first_seq=16, budget=120)
+    assert [m["content"] for _s, m in tight][0] == "[Recap of night 1: Bo was taken out]"

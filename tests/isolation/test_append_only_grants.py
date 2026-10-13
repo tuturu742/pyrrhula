@@ -42,6 +42,10 @@ _APPEND_ONLY_TABLES_TODAY = {
     # thing max_calls_per_session counts -- a session that could amend it could uncap
     # itself.
     "mcp_call_record",
+    # Participant variable history and sealed ballots: a row that could be amended is a
+    # deal or a vote that could be rewritten after the fact.
+    "participant_state_change",
+    "ballot",
 }
 
 # Every rule-5 append-only table, whether or not it exists yet. A table from this set

@@ -635,3 +635,54 @@ async def test_persona_git_credential_filter_omission(
         rows = (await session.execute(text("SELECT tenant_id FROM persona_git_credential"))).all()
 
     assert tenant_b not in {row[0] for row in rows}
+
+
+async def test_participant_state_change_and_ballot_filter_omission(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    from core.sessions.models import BallotRow, ParticipantStateChangeRow
+
+    tenant_a, tenant_b = two_tenants
+
+    for tenant_id in (tenant_a, tenant_b):
+        async with tenant_scope(tenant_id) as session:
+            workspace_id = (
+                await session.execute(select(Workspace.id).where(Workspace.tenant_id == tenant_id))
+            ).scalar_one()
+        persona_id = await seed_dev_agent(tenant_id, workspace_id)
+        sess = await create_session(tenant_id, workspace_id, persona_id)
+        async with tenant_scope(tenant_id) as session:
+            seat = SessionPersonaRow(
+                tenant_id=tenant_id, session_id=sess.id, persona_id=persona_id, seat=1
+            )
+            session.add(seat)
+            await session.flush()
+            session.add(
+                ParticipantStateChangeRow(
+                    tenant_id=tenant_id,
+                    session_id=sess.id,
+                    session_persona_id=seat.id,
+                    var="status",
+                    old_value=None,
+                    new_value="in",
+                    cause="setup",
+                )
+            )
+            session.add(
+                BallotRow(
+                    tenant_id=tenant_id,
+                    session_id=sess.id,
+                    poll_key="vote:1",
+                    voter_session_persona_id=seat.id,
+                    choice_session_persona_id=None,
+                )
+            )
+
+    async with tenant_scope(tenant_a) as session:
+        changes = (
+            await session.execute(text("SELECT tenant_id FROM participant_state_change"))
+        ).all()
+        ballots = (await session.execute(text("SELECT tenant_id FROM ballot"))).all()
+
+    assert {row[0] for row in changes} == {tenant_a}
+    assert {row[0] for row in ballots} == {tenant_a}

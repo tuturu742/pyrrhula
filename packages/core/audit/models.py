@@ -16,7 +16,18 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, DateTime, ForeignKey, Index, Integer, Numeric, String, func
+from sqlalchemy import (
+    ARRAY,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -111,6 +122,14 @@ class UsageRecordRow(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cached_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The part of completion_tokens the provider says was hidden reasoning; NULL when it
+    # does not break one out.
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # True when the token counts are the provider's own report; False when they are the
+    # runtime's estimate from the visible text, which cannot see hidden reasoning.
+    tokens_reported: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     estimated_cost: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=0)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

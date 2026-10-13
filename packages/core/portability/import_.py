@@ -1272,14 +1272,25 @@ async def _import_process(
             tenant_id, workspace_id=workspace_id, include_archived=True
         )
     }
-    for path in paths:
-        record = json.loads(files[path].decode())
-        key = str(record["key"])
-        if key in taken:
-            forked = _fork_key(key, taken)
-            report.forked_keys.append((key, forked))
-            key = forked
-        taken.add(key)
+    # A bundle carries every version of a flow. They land as versions of ONE key, in
+    # version order -- walking the files in name order forked each version into a flow of
+    # its own (`mafia`, `mafia-imported`, `mafia-imported-2`), with no telling which was
+    # the latest. Only a key already here forks, and all its versions follow it.
+    records = sorted(
+        (json.loads(files[path].decode()) for path in paths),
+        key=lambda r: (str(r["key"]), int(r.get("version") or 0)),
+    )
+    target_keys: dict[str, str] = {}
+    for record in records:
+        incoming = str(record["key"])
+        key = target_keys.get(incoming, incoming)
+        if incoming not in target_keys:
+            if key in taken:
+                forked = _fork_key(key, taken)
+                report.forked_keys.append((key, forked))
+                key = forked
+            taken.add(key)
+            target_keys[incoming] = key
         try:
             row = await create_definition(
                 tenant_id,
@@ -1292,7 +1303,8 @@ async def _import_process(
             report.skipped.append(f"process:{key} (does not validate here: {exc})")
             continue
         report.id_map[str(record["id"])] = str(row.id)
-        report.imported.append(f"process:{key}")
+        if f"process:{key}" not in report.imported:
+            report.imported.append(f"process:{key}")
 
 
 async def _import_vocabulary(

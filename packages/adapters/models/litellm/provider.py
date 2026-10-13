@@ -35,6 +35,8 @@ Anthropic-style) -- both are checked, defaulting to 0 if neither is present.
 
 from __future__ import annotations
 
+import asyncio
+import dataclasses
 import json
 import re
 import time
@@ -48,6 +50,7 @@ from core.ports.model_provider import (
     Capabilities,
     Chunk,
     GenerationRequest,
+    TokenUsage,
     ToolCall,
     check_egress,
 )
@@ -114,6 +117,28 @@ def _extract_cached_tokens(usage: Any) -> int:
             return int(cached)
     cache_read = getattr(usage, "cache_read_input_tokens", None)
     return int(cache_read) if cache_read is not None else 0
+
+
+def _token_usage(usage: Any) -> TokenUsage | None:
+    """The provider's own counts from a stream's usage block, or None when it gave none.
+
+    Only real integers count: a provider that reports nothing must read as "unknown", not
+    as zero -- the runtime then counts the visible text instead. ``completion_tokens``
+    already includes hidden reasoning (it is billed as output); the reasoning share is
+    kept separately when the provider breaks it out."""
+    if usage is None:
+        return None
+
+    def _int(value: Any) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    prompt = _int(getattr(usage, "prompt_tokens", None))
+    completion = _int(getattr(usage, "completion_tokens", None))
+    if prompt is None or completion is None:
+        return None
+    details = getattr(usage, "completion_tokens_details", None)
+    reasoning = _int(getattr(details, "reasoning_tokens", None)) if details is not None else None
+    return TokenUsage(prompt, completion, reasoning)
 
 
 def _rejects_schema_constrained_output(exc: Exception) -> bool:
@@ -220,6 +245,22 @@ def _anthropic_turn_shim(model: str, messages: list[dict[str, Any]]) -> list[dic
     return messages
 
 
+def _without_empty_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop system/user/assistant messages that say nothing: an empty string, and no
+    tool calls. Most backends ignore one; Cohere refuses the whole request ("must have
+    non-empty content or tool calls"), so a turn whose context block happened to be empty
+    failed outright. Tool results keep their place whatever they hold -- a tool call
+    without its answer is a malformed conversation everywhere."""
+    out = []
+    for m in messages:
+        content = m.get("content")
+        empty = isinstance(content, str) and not content.strip()
+        if empty and m.get("role") in ("system", "user", "assistant") and not m.get("tool_calls"):
+            continue
+        out.append(m)
+    return out
+
+
 def _dispatch_model(model: str, has_tools: bool) -> str:
     """LiteLLM-internal endpoint choice (nothing outside this adapter knows LiteLLM has
     two Ollama routes): `ollama/` speaks /api/generate, which cannot do native tool
@@ -241,6 +282,35 @@ _MANAGED_KEYS = frozenset(
 )
 
 
+class ProviderTimeoutError(Exception):
+    """A generation that produced nothing within its time budget."""
+
+
+def _remaining(deadline: float) -> float:
+    return max(0.001, deadline - time.monotonic())
+
+
+_APP_NAME = "Pyrrhula"
+
+
+def _with_app_attribution(model: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Name the app on an OpenRouter call. OpenRouter credits a call to the app named by
+    its ``X-Title`` and ``HTTP-Referer`` headers; left unset, LiteLLM fills in its own
+    ("liteLLM", litellm.ai), and a tenant's OpenRouter console files every Pyrrhula call
+    under LiteLLM. The referer is where this deployment is reached
+    (``public_base_url``). Headers a connection sets itself still win."""
+    if not model.startswith("openrouter/"):
+        return kwargs
+    from core.config import get_settings
+
+    ours = {
+        "X-Title": _APP_NAME,
+        "HTTP-Referer": get_settings().public_base_url or "http://localhost",
+    }
+    kwargs["headers"] = {**ours, **dict(kwargs.get("headers") or {})}
+    return kwargs
+
+
 def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, Any]:
     """Connection passthrough knobs, under the platform's values.
 
@@ -255,6 +325,37 @@ def _merge_connection_params(kwargs: dict[str, Any], params: Any) -> dict[str, A
         if kwargs.get(key) is None:
             kwargs[key] = value
     return kwargs
+
+
+def _dropped_settings(params: Any, sent: dict[str, Any], accepted: dict[str, Any]) -> list[str]:
+    """The connection or persona settings that were in the call as first sent and are not
+    in the call the endpoint finally accepted -- what a repair below threw away.
+
+    A setting moved under the name the endpoint asked for is still applied and is not
+    reported; one whose value had to change is. Platform-chosen values (temperature,
+    the completion budget) are the adapter's business and are not reported either: only
+    what an operator configured, because only that is a promise the run did not keep.
+    """
+    model = sent.get("model")
+    moved_values = [value for key, value in accepted.items() if key not in sent]
+    warnings: list[str] = []
+    for key in dict(params or {}):
+        if key in _MANAGED_KEYS or key not in sent:
+            continue
+        if key in accepted:
+            if accepted[key] != sent[key]:
+                warnings.append(
+                    f"{model} refused the setting {key}={sent[key]!r}; "
+                    f"it ran with {key}={accepted[key]!r} instead"
+                )
+            continue
+        if sent[key] in moved_values:
+            continue
+        warnings.append(
+            f"{model} refused the setting {key}={sent[key]!r}; it was dropped, "
+            "so the call ran without it"
+        )
+    return warnings
 
 
 _UNSUPPORTED_PARAMS_RE = re.compile(r"does not support parameters:\s*\[([^\]]*)\]", re.I)
@@ -470,7 +571,7 @@ class LiteLLMModelProvider:
             # exceeds it, and Ollama then silently returns EMPTY generations. num_ctx is
             # the per-request window; a connection's own `num_ctx` param overrides this.
             extra["num_ctx"] = _OLLAMA_NUM_CTX
-        messages = _anthropic_turn_shim(req.model, messages)
+        messages = _anthropic_turn_shim(req.model, _without_empty_messages(messages))
         kwargs: dict[str, Any] = _merge_connection_params(
             {
                 "temperature": req.temperature,
@@ -485,6 +586,7 @@ class LiteLLMModelProvider:
         # whose hardware justified setting it.
         for key, value in extra.items():
             kwargs.setdefault(key, value)
+        _with_app_attribution(req.model, kwargs)
         # A platform ceiling, not a budget anyone chose: the empty-generation retry below
         # must not treat it as one and "raise" it instead of turning reasoning off.
         platform_budget = False
@@ -525,10 +627,22 @@ class LiteLLMModelProvider:
             # inside the other's handler left that second refusal uncaught, which paused
             # a live RPG session on every player turn. Keep applying repairs until the
             # call goes through or nothing else applies.
+            # One budget for the whole generation, request included. It used to be read
+            # only when a chunk arrived, so a stream that stalled -- or a request that
+            # never answered -- waited forever: a turn neither finished nor failed, and its
+            # session stayed "active" with nothing running (Mafia A/B, 2026-10-09).
+            deadline = time.monotonic() + req.max_generation_seconds
             response = None
             while response is None:
                 try:
-                    response = await litellm.acompletion(**this_call)
+                    response = await asyncio.wait_for(
+                        litellm.acompletion(**this_call), _remaining(deadline)
+                    )
+                except TimeoutError as exc:
+                    raise ProviderTimeoutError(
+                        f"{this_call.get('model')}: no response within "
+                        f"{req.max_generation_seconds:.0f}s"
+                    ) from exc
                 except Exception as exc:
                     repaired = _repair_call(this_call, exc, req)
                     if repaired is None:
@@ -538,21 +652,44 @@ class LiteLLMModelProvider:
 
             pending_calls: dict[int, dict[str, Any]] = {}
             reasoning_parts: list[str] = []
+            # The usage block arrives on the stream's last part, which carries no choices
+            # -- so it was skipped with them, and every count on record was the runtime's
+            # own estimate from the visible text, blind to hidden reasoning.
+            reported: Any = None
             streamed_chars = 0
-            deadline = time.monotonic() + req.max_generation_seconds
-            async for part in response:
-                if time.monotonic() > deadline:
+            parts = response.__aiter__()
+            while True:
+                try:
+                    part = await asyncio.wait_for(parts.__anext__(), _remaining(deadline))
+                except StopAsyncIteration:
+                    usage = _token_usage(reported)
+                    if usage is not None:
+                        yield (
+                            Chunk(
+                                text="",
+                                usage=usage,
+                                cached_tokens=_extract_cached_tokens(reported),
+                            ),
+                            False,
+                        )
+                    break
+                except TimeoutError:
+                    part = None
+                if part is None or time.monotonic() > deadline:
                     structlog.get_logger().warning(
                         "provider.generation_timed_out",
                         model=this_call.get("model"),
                         seconds=req.max_generation_seconds,
                         chars=streamed_chars,
+                        stalled=part is None,
                     )
                     # Whatever it has said so far, which may be nothing -- an empty
-                    # return is handled below, and handled better than a turn that never
+                    # return is retried by the runtime, which beats a turn that never
                     # comes back at all.
                     return
                 cached_tokens = _extract_cached_tokens(getattr(part, "usage", None))
+                if _token_usage(getattr(part, "usage", None)) is not None:
+                    reported = part.usage
                 if not part.choices:
                     continue
                 delta = part.choices[0].delta
@@ -632,6 +769,23 @@ class LiteLLMModelProvider:
                         bool(text.strip()),
                     )
 
+        async def _announced(
+            attempt: AsyncIterator[tuple[Chunk, bool]],
+        ) -> AsyncIterator[tuple[Chunk, bool]]:
+            """The attempt's chunks, the first one carrying any settings the endpoint
+            refused (``accepted_call`` is final by the time anything is yielded)."""
+            first = True
+            async for chunk, had_output in attempt:
+                if first:
+                    first = False
+                    dropped = _dropped_settings(req.params, call, accepted_call)
+                    if dropped:
+                        structlog.get_logger().warning(
+                            "provider.settings_dropped", model=call.get("model"), dropped=dropped
+                        )
+                        chunk = dataclasses.replace(chunk, warnings=tuple(dropped))
+                yield chunk, had_output
+
         _log = structlog.get_logger()
         _log.info(
             "provider.call",
@@ -645,7 +799,7 @@ class LiteLLMModelProvider:
         )
         _t0 = time.monotonic()
         produced = False
-        async for chunk, had_output in _attempt(call):
+        async for chunk, had_output in _announced(_attempt(call)):
             produced = produced or had_output
             yield chunk
         _log.info(
@@ -654,6 +808,25 @@ class LiteLLMModelProvider:
             seconds=round(time.monotonic() - _t0, 1),
             produced=produced,
         )
+        messages_sent = list(accepted_call.get("messages") or ())
+        if not produced and messages_sent and messages_sent[-1].get("role") == "system":
+            # Some backends (Cohere, via OpenRouter) answer a request whose LAST message
+            # is a system one with nothing at all -- and the phase instruction is placed
+            # last on purpose (live_session). The same instruction as the user's line is
+            # read by every backend, so that is the first repair, before any budget.
+            moved = [*messages_sent[:-1], {**messages_sent[-1], "role": "user"}]
+            _t1 = time.monotonic()
+            async for chunk, had_output in _announced(
+                _attempt({**accepted_call, "messages": moved})
+            ):
+                produced = produced or had_output
+                yield chunk
+            _log.info(
+                "provider.attempt_done",
+                which="retry_instruction_as_user",
+                seconds=round(time.monotonic() - _t1, 1),
+                produced=produced,
+            )
         if not produced:
             # A reasoning model can spend its whole completion budget on hidden reasoning
             # and return nothing (seen live: gpt-5.6-terra mid-interrogation). Retrying
@@ -675,7 +848,7 @@ class LiteLLMModelProvider:
                     budget * _EMPTY_RETRY_TOKEN_FACTOR, _REASONING_MIN_COMPLETION_TOKENS
                 )
                 _t1 = time.monotonic()
-                async for chunk, _had in _attempt(retry):
+                async for chunk, _had in _announced(_attempt(retry)):
                     yield chunk
                 _log.info(
                     "provider.attempt_done",
@@ -689,7 +862,9 @@ class LiteLLMModelProvider:
                 # the empty generation, which the runtime reports rather than papering
                 # over a deliberate configuration.
                 _t1 = time.monotonic()
-                async for chunk, _had in _attempt({**retry, "reasoning_effort": "none"}):
+                async for chunk, _had in _announced(
+                    _attempt({**retry, "reasoning_effort": "none"})
+                ):
                     yield chunk
                 _log.info(
                     "provider.attempt_done",
@@ -718,7 +893,7 @@ class LiteLLMModelProvider:
         if model.startswith("ollama_chat/"):
             # Same silent-empty-generation hazard as generate(): default num_ctx is 4096.
             extra["num_ctx"] = _OLLAMA_NUM_CTX
-        messages = _anthropic_turn_shim(model, list(req.messages))
+        messages = _anthropic_turn_shim(model, _without_empty_messages(list(req.messages)))
         common: dict[str, Any] = _merge_connection_params(
             {
                 "model": model,
@@ -731,6 +906,7 @@ class LiteLLMModelProvider:
         # of colliding, so a connection's num_ctx was accepted and then ignored.
         for key, value in extra.items():
             common.setdefault(key, value)
+        _with_app_attribution(model, common)
         try:
             response = await litellm.acompletion(
                 messages=messages, response_format=schema, **common

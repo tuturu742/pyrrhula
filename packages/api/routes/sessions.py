@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
@@ -60,6 +60,7 @@ from core.process.live_session import (
     run_directed_persona_turn,
     run_process_definition_session,
 )
+from core.process.participants import ParticipantError
 from core.process.skeleton import create_session, generate_agent_response, submit_user_message
 from core.repos.service import (
     RepoNotFoundError,
@@ -131,6 +132,13 @@ class CreateSessionRequest(BaseModel):
     # the tenant's workflow to grant repo access; each selected repo's git MCP server is
     # registered on the workspace allowlist at creation.
     repo_ids: list[uuid.UUID] = []
+    # Overrides of the flow's declared `settings:` (a seat count, a discussion length);
+    # checked against each setting's type and range, recorded on the session.
+    settings: dict[str, object] | None = None
+    # Engine options, the same in every flow: where phase markers go
+    # (none|transcript|current) and whether phases are recapped (on|off). Absent keeps
+    # the flow's own choice.
+    options: dict[str, object] | None = None
 
 
 class SessionResponse(BaseModel):
@@ -286,9 +294,18 @@ async def create_session_endpoint(
         if dsl is None or issues:
             issue_details = [{"field_path": i.field_path, "message": i.message} for i in issues]
             raise HTTPException(status_code=422, detail={"issues": issue_details})
-        await interpreter_start_session(
-            ctx.tenant_id, sess.id, dsl, definition_row.id, definition_row.version
-        )
+        try:
+            await interpreter_start_session(
+                ctx.tenant_id,
+                sess.id,
+                dsl,
+                definition_row.id,
+                definition_row.version,
+                settings_overrides=body.settings,
+                options=body.options,
+            )
+        except (ParticipantError, ValidationError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         refreshed = await get_session(ctx.tenant_id, sess.id)
         assert refreshed is not None
         sess = refreshed

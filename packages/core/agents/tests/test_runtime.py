@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +14,14 @@ from core.agents.runtime import AllRetriesExhaustedError, run_agent_turn
 from core.agents.seed import seed_dev_agent
 from core.agents.tools import ToolContext, ToolRegistry, ToolResult
 from core.audit.models import UsageRecordRow
-from core.ports.model_provider import Capabilities, Chunk, GenerationRequest, ToolCall, ToolSpec
+from core.ports.model_provider import (
+    Capabilities,
+    Chunk,
+    GenerationRequest,
+    TokenUsage,
+    ToolCall,
+    ToolSpec,
+)
 from core.process.skeleton import create_session
 from core.sessions.models import MessageRow, SessionEventRow
 from core.tenancy.scope import tenant_scope
@@ -352,6 +359,54 @@ async def test_cached_tokens_reach_the_usage_record(db_available: None) -> None:
     assert usage_row.cached_tokens == 123
 
 
+async def test_the_providers_reported_tokens_are_what_is_recorded(db_available: None) -> None:
+    """When the provider reports its own counts, those are recorded -- hidden reasoning
+    included -- and the row says so. Counting the visible reply instead recorded a
+    reasoning model's 900-token answer as the handful of words it showed."""
+    tenant_id, session_id, persona_id = await _setup("runtime-reported-tokens")
+    scripted = _ScriptedProvider(turns=[_ScriptedTurn(text="Only B.")])
+
+    class _Reporting(_ScriptedProvider):
+        async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
+            async for chunk in scripted.generate(req):
+                yield chunk
+            yield Chunk(text="", usage=TokenUsage(150, 900, reasoning_tokens=880))
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "who tells the truth?"}],
+        model_provider_factory=lambda _name: _Reporting(turns=[]),
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(UsageRecordRow, result.usage_record_ids[0])
+    assert row is not None
+    assert (row.prompt_tokens, row.completion_tokens, row.reasoning_tokens) == (150, 900, 880)
+    assert row.tokens_reported is True
+
+
+async def test_an_estimate_says_it_is_one(db_available: None) -> None:
+    tenant_id, session_id, persona_id = await _setup("runtime-estimated-tokens")
+    provider = _ScriptedProvider(turns=[_ScriptedTurn(text="four words in this reply")])
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "hi"}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    async with tenant_scope(tenant_id) as session:
+        row = await session.get(UsageRecordRow, result.usage_record_ids[0])
+    assert row is not None
+    assert row.tokens_reported is False and row.reasoning_tokens is None
+
+
 async def test_persona_params_ride_over_the_connections(db_available: None) -> None:
     """A persona's own generation overrides reach the provider merged OVER its
     connection's params -- the mechanism that keeps five suspects on one shared
@@ -537,3 +592,70 @@ async def test_no_reasoning_means_no_reasoning_field(db_available: None) -> None
         m for m in provider.requests[1] if m.get("role") == "assistant" and m.get("tool_calls")
     )
     assert "reasoning_content" not in assistant
+
+
+async def test_a_tool_call_id_carrying_a_thought_signature_still_runs(
+    db_available: None,
+) -> None:
+    """Gemini's direct API puts the call's thought signature inside its id -- kilobytes of
+    base64. The id goes into the tool's idempotency key, and a key that long overflowed
+    the key column: the insert failed and the turn died mid-game."""
+    tenant_id, session_id, persona_id = await _setup("runtime-long-call-id")
+    long_id = "call_883268__thought__" + "EpgaCpUaAWkUfRNCLz64Ih/Ham6pKEOIKcTWvZn+" * 120
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="", tool_calls=(ToolCall(id=long_id, name="cast_vote", arguments={}),)
+            ),
+            _ScriptedTurn(text="Voted."),
+        ]
+    )
+    dispatched: list[str] = []
+
+    async def handler(args: dict[str, object], ctx: ToolContext) -> ToolResult:
+        dispatched.append("cast_vote")
+        return ToolResult(content="recorded")
+
+    registry = ToolRegistry()
+    registry.register(ToolSpec(name="cast_vote", description="Vote", parameters={}), handler)
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Vote now."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=registry,
+        idempotency_key=f"turn:{session_id}:7:{persona_id}",
+    )
+
+    assert result.content_md == "Voted."
+    assert dispatched == ["cast_vote"]
+    # The id still goes back to the model untouched; only the key is shortened.
+    assistant = next(
+        m for m in provider.requests[1] if m.get("role") == "assistant" and m.get("tool_calls")
+    )
+    assert assistant["tool_calls"][0]["id"] == long_id  # type: ignore[index]
+
+
+async def test_a_providers_warnings_come_back_with_the_turn(db_available: None) -> None:
+    """The adapter says when it dropped a configured setting (``Chunk.warnings``); the
+    turn hands those back so the session can put them on the record."""
+    tenant_id, session_id, persona_id = await _setup("runtime-warnings")
+    scripted = _ScriptedProvider(turns=[_ScriptedTurn(text="Hello.")])
+
+    class _Warning(_ScriptedProvider):
+        async def generate(self, req: GenerationRequest) -> AsyncIterator[Chunk]:
+            async for chunk in scripted.generate(req):
+                yield replace(chunk, warnings=("x refused the setting reasoning_effort",))
+
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Speak."}],
+        model_provider_factory=lambda _name: _Warning(turns=[]),
+        tool_registry=ToolRegistry(),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    assert result.warnings == ("x refused the setting reasoning_effort",)
