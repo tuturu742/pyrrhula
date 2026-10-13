@@ -84,9 +84,9 @@ egress policy — and nothing else phones home.
 
 ## What state is the project in?
 
-`0.1.1` ([CHANGELOG](CHANGELOG.md)). `main` is development toward 0.2.0 (`0.2.0.dev0`);
-fixes ship as 0.1.x from the `release/0.1` branch ([docs/releasing.md](docs/releasing.md)),
-and the release installer always fetches the latest release. The full stack described in
+`0.2.0` ([CHANGELOG](CHANGELOG.md)). Fixes ship as patch releases from a `release/X.Y`
+branch ([docs/releasing.md](docs/releasing.md)), and the release installer always fetches
+the latest release. The full stack described in
 the README is implemented, tested — isolation, leak, replay, pack and architecture suites
 gate CI — and verified on published images, compose, k8s and a Portainer host. An ECS
 execution engine exists as an experimental, unverified adapter, not an install path. It is

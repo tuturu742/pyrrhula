@@ -6,6 +6,82 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-13
+
+Flows with participants: per-persona values dealt in secret, sealed votes counted by the
+engine, private checks and private channels. Built for hidden-role games (the Mafia sample
+in `pyrrhula-samples`) from parts that know nothing about games. Also, the
+usage records now carry what providers really count. See
+[docs/participants-and-ballots.md](docs/participants-and-ballots.md).
+
+### Added
+
+- **Flow settings.** A flow declares typed, ranged values (a seat count, a discussion
+  length) that a session overrides at creation; any count in the flow can read one.
+- **Participants.** Per-participant variables, dealt by a recorded draw at session start.
+  A deal can be narrowed by CEL to deal a role inside a team. Hidden variables reach only
+  their holder, the supervisor and, with a team variable, their team. They are excluded
+  from everyone else's context, history and recaps, not withheld by instruction.
+- **Seat-order turns.** `order: seated` walks the participants in seat order for a number
+  of laps, rotating the first seat each time, filtered by a CEL `where` re-checked at
+  every turn.
+- **Audiences.** A phase's messages reach only the participants its `members` expression
+  admits: a private channel.
+- **Sealed ballots.** A phase can be a vote: one ballot per actor through a `ballot` tool,
+  counted when the phase ends, with effects on the chosen participant in the same
+  transaction. Ties choose nobody or are drawn. Ties can mark their candidates for a
+  run-off. Results become public as every vote, as the outcome only, or not at all.
+- **Private checks.** `reveal: voters` with `disclose`: the engine computes facts about the
+  chosen participant from the record, and only the voters read them. The supervisor does
+  not see them either.
+- **Phase effects on participants.** Set a variable on every participant a CEL filter
+  admits when a phase ends, before its vote closes.
+- **Phase markers and recaps.** A phase can name its moment ("Night 2"), and markers can be
+  placed in the replayed history. A phase can also be recapped per viewer from the record.
+  When history is trimmed, the recaps of dropped phases stay. Sessions switch both with
+  `options`. In the Mafia runs, markers cut phase and alive-status confusion from 6.2% to
+  0.8%. Recaps are off by default: they showed no measurable gain.
+- **Provider-reported usage.** Token counts come from the provider when it reports them,
+  hidden reasoning included. A usage row says whether its counts are reported or
+  estimated.
+- **Refused settings are recorded.** A connection or persona setting that a provider
+  refuses is still dropped so the turn goes through, and the session now records a
+  warning, shown beside the seat.
+
+### Changed
+
+- OpenRouter calls name Pyrrhula (`X-Title`, and the deployment's public URL as referer),
+  so they are credited to Pyrrhula in the OpenRouter console instead of to LiteLLM.
+- A required vote that a model answers in words is asked for once more within the same
+  turn, and only a successful call counts as the move.
+- Importing a bundle keeps a flow's versions under one flow instead of forking each.
+- Tool-call arguments are validated against the tool's JSON Schema before it runs;
+  `jsonschema` is now a declared dependency.
+
+### Fixed
+
+- **A turn that failed in an unexpected way left its session "active" with nothing
+  running.** Any turn failure now pauses the session with the error, so a resume
+  retries it.
+- **Gemini's direct API broke turns with tool calls.** Its thought signature in the call
+  id overflowed the idempotency key. Long ids are now digested.
+- **A silent stream or an unanswered request waited forever.** The turn's time budget now
+  covers every wait.
+- **An unknown tool name killed the turn.** It is now answered with an error result the
+  model can act on. Words said alongside a tool call are kept in the transcript.
+- **Leak-check regenerations failed on sealed connections** (OpenRouter among them) and
+  were not metered. They now use the connection's key and record their usage.
+- **Empty messages broke Cohere** (and any endpoint that refuses them). They no longer
+  reach a request. An empty reply to an instruction placed last is asked again as the user.
+- **A vote result showed hidden changes to everyone.** A change to a hidden variable now
+  reaches only the supervisor, the participant changed and the voters of a private vote.
+
+### Upgrading
+
+Three migrations: usage rows gain reported/reasoning token columns, sessions gain
+`options`, and participants, ballots and audiences get their tables (append-only, with
+tenant RLS). They apply the same way as every upgrade's migrations.
+
 ## [0.1.1] - 2026-10-06
 
 Fixes found while preparing the launch material, and a release process that lets a fix ship
@@ -133,6 +209,7 @@ domain-neutral core.
 - The AWS ECS execution engine is experimental and unverified; OIDC/SAML login is not
   there yet.
 
-[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.0
 [0.1.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.1
 [0.1.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.1.0
