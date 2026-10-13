@@ -189,17 +189,12 @@ async def test_raise_hand_records_once_per_turn_and_says_what_is_left(
     hands = await floor.raised_hands(tenant_id, session_id, "talk", since_seq=0)
     assert [(h.principal_id, h.turn_seq) for h in hands] == [(ada, 7)]
     assert await floor.raised_hands(tenant_id, session_id, "talk", since_seq=8) == []
-    none_left, _ = floor.make_raise_hand_tool(
-        tenant_id=tenant_id,
-        session_id=session_id,
-        phase_key="talk",
-        principal_id=ada,
-        turns_left=0,
-    )
-    assert "no turns left" in none_left.description
 
     entry = dsl.phases["talk"].actors[0]
     cursor = {"phase_key": "talk", "entry_index": 0, "entry": {"spoken": {str(ada): 2}}}
     assert floor.floor_entry(dsl.phases["talk"], cursor, "talk") is entry
     assert floor.floor_entry(dsl.phases["talk"], cursor, "done") is None
     assert floor.turns_left(entry, cursor, ada, {"each": 3}) == 1
+    # The last allowed turn: 0 left, and the live turn then does not offer the tool.
+    last = {"phase_key": "talk", "entry_index": 0, "entry": {"spoken": {str(ada): 3}}}
+    assert floor.turns_left(entry, last, ada, {"each": 3}) == 0

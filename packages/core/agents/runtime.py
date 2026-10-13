@@ -329,7 +329,11 @@ async def _dispatch_tool_idempotent(
     ctx: ToolContext,
 ) -> dict[str, Any]:
     result = await tool_registry.dispatch(tool_call, ctx)
-    return {"content": result.content, "resolution_id": result.resolution_id}
+    return {
+        "content": result.content,
+        "resolution_id": result.resolution_id,
+        "end_turn": result.end_turn,
+    }
 
 
 async def run_agent_turn(
@@ -433,6 +437,27 @@ async def run_agent_turn(
         # Met only by a call that SUCCEEDED: a ballot for someone already out comes back
         # as an error result, and counting it as the move left a night vote abstained.
         required_done = False
+
+        async def _finish(content: str) -> TurnResult:
+            if finalize_reply is not None:
+                content = await finalize_reply(content)
+            usage_points.extend(extra_usage_points or ())
+            return await _commit_turn(
+                triggered_by=triggered_by,
+                tenant_id=tenant_id,
+                session_id=session_id,
+                author_principal_id=agent_principal_id,
+                workspace_id=workspace_id,
+                persona_id=persona_id,
+                content=content,
+                usage_points=usage_points,
+                tool_calls_made=tool_calls_made,
+                resolution_record_ids=resolution_record_ids,
+                context_manifest_id=context_manifest_id,
+                event_seq=event_seq,
+                audience=audience,
+                phase_key=phase_key,
+            )
 
         for iteration in range(max_tool_loop):
             content, tool_calls, usage, reasoning = await _call_provider_with_retry(
@@ -542,6 +567,7 @@ async def run_agent_turn(
                     ],
                 }
             )
+            ends_turn = False
             for tool_call in tool_calls:
                 tool_calls_made += 1
                 tools_called.append(tool_call.name)
@@ -563,6 +589,8 @@ async def run_agent_turn(
                 # was recorded but never linked to its message (karsh-vale sweep).
                 if tool_call.name == required_tool and not _is_error_result(tool_result["content"]):
                     required_done = True
+                if tool_result.get("end_turn") and not _is_error_result(tool_result["content"]):
+                    ends_turn = True
                 resolution_id = tool_result.get("resolution_id") or _extract_resolution_id(
                     tool_result["content"]
                 )
@@ -575,6 +603,11 @@ async def run_agent_turn(
                         "tool_call_id": tool_call.id,
                     }
                 )
+            # A turn-ending call after the turn has said something: done, without asking
+            # the model again (ToolResult.end_turn). A required move still outstanding
+            # keeps the turn going, so the nudge can ask for it.
+            if ends_turn and earlier_text and (required_tool is None or required_done):
+                return await _finish(merge_turn_text(earlier_text[:-1], earlier_text[-1]))
 
         # Out of tool iterations. Faulting here threw away a turn's real work and paused
         # the whole session: a newsroom desk that searched six times and had not yet

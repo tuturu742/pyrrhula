@@ -377,6 +377,57 @@ async def test_a_personas_own_brief_reaches_its_turn(db_available: None) -> None
     assert "Nadia Brekke" in system_text
 
 
+async def test_lines_written_for_other_participants_are_cut_and_recorded(
+    db_available: None,
+) -> None:
+    """A model wrote its turn and then the next two speakers' lines, which were saved as
+    its message and taken by those players as things they had said. A live turn keeps
+    only the author's own words and puts the cut on the record."""
+    from core.sessions.lifecycle import set_session_roster
+
+    tenant_id, _owner_id, workspace_id = await seed_dev_tenant(slug=f"own-{uuid.uuid4().hex[:8]}")
+    host = await seed_dev_agent(
+        tenant_id, workspace_id, key="facilitator", name="Marit", persona_type="supervisor"
+    )
+    players = [
+        await seed_dev_agent(
+            tenant_id, workspace_id, key=n.lower(), name=n, persona_type="participant"
+        )
+        for n in ("Bram", "Cyra")
+    ]
+    sess = await create_session(tenant_id, workspace_id, host)
+    await set_session_roster(tenant_id, sess.id, host, players)
+    flow = _flow_with_randomizer_on_resolve()
+    definition_row = await create_definition(tenant_id, "own-words", "Own words", flow)
+    dsl, issues = validate_raw(flow)
+    assert dsl is not None and not issues, issues
+    await start_session(tenant_id, sess.id, dsl, definition_row.id, definition_row.version)
+
+    script = "Beats assigned.\n\nBram: Thanks, I'll take the docks.\n\nCyra: And I the courts."
+    provider = _ScriptedProvider(turns=[_ScriptedTurn(text=script)])
+    await run_process_definition_session(
+        tenant_id,
+        sess.id,
+        dsl,
+        model_provider_factory=lambda _p: provider,
+        embedding_provider=_stub_embedding_provider(),
+    )
+
+    async with tenant_scope(tenant_id) as db:
+        message = await db.scalar(select(MessageRow).where(MessageRow.session_id == sess.id))
+        warnings = (
+            await db.scalars(
+                select(SessionEventRow).where(
+                    SessionEventRow.session_id == sess.id, SessionEventRow.kind == "warning"
+                )
+            )
+        ).all()
+    assert message is not None and message.content_md == "Beats assigned."
+    assert [w.payload["message"].split(": ", 1)[1] for w in warnings] == [
+        "wrote lines for Bram, Cyra; they were cut from the message"
+    ]
+
+
 def test_a_closing_user_turn_is_added_whenever_the_transcript_does_not_end_on_one() -> None:
     """Three shapes: an empty transcript, a persona whose history is only its own turns,
     and a persona speaking twice in a row (a supervisor resolving a check, then opening the
@@ -426,7 +477,7 @@ async def test_a_refused_setting_reaches_the_record_once_per_session(
     could go through. That has to be on the record -- a seat set to reasoning effort
     "high" played a whole game on its default with nothing showing it -- but only once
     per session: the same refusal repeats on every turn that seat takes."""
-    from core.process.live_session import _record_settings_warnings
+    from core.process.live_session import _record_turn_warnings
 
     tenant_id, _owner, workspace_id = await seed_dev_tenant(slug=f"warn-{uuid.uuid4().hex[:8]}")
     persona_id = await seed_dev_agent(tenant_id, workspace_id, key="seat")
@@ -442,7 +493,7 @@ async def test_a_refused_setting_reaches_the_record_once_per_session(
         published.append((seq, kind))
 
     for turn_seq, warnings in ((5, [refused]), (9, [refused, "another refusal"])):
-        await _record_settings_warnings(
+        await _record_turn_warnings(
             tenant_id,
             session.id,
             turn_event_seq=turn_seq,

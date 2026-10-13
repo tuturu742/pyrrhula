@@ -279,3 +279,67 @@ async def test_a_required_tool_is_asked_for_only_once(db_available: None) -> Non
         required_tool="claim",
     )
     assert result.content_md == "No.\n\nStill no."
+
+
+def _ending_registry(calls: list[str]) -> ToolRegistry:
+    async def handler(_args: dict[str, object], _ctx: ToolContext) -> ToolResult:
+        calls.append("raise")
+        return ToolResult(content='{"raised": true}', end_turn=True)
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(name="raise_hand", description="raise", parameters={"type": "object"}), handler
+    )
+    return registry
+
+
+async def test_a_turn_ending_call_after_words_ends_the_turn(db_available: None) -> None:
+    """Asked again after raising a hand, models said their piece a second time or wrote
+    the next speakers' lines. A turn-ending call after words is the end of the turn."""
+    tenant_id, session_id, persona_id = await _setup("hygiene-end-turn")
+    calls: list[str] = []
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="My read is Reese.",
+                tool_calls=(ToolCall(id="h1", name="raise_hand", arguments={}),),
+            ),
+            _ScriptedTurn(text="My read is Reese, again.\n\nSkyler: I lean logic."),
+        ]
+    )
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Your turn."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=_ending_registry(calls),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    assert calls == ["raise"]
+    assert result.content_md == "My read is Reese."
+    assert result.tool_calls_made == 1
+
+
+async def test_a_turn_ending_call_before_any_words_lets_the_turn_speak(
+    db_available: None,
+) -> None:
+    tenant_id, session_id, persona_id = await _setup("hygiene-end-turn-first")
+    provider = _ScriptedProvider(
+        turns=[
+            _ScriptedTurn(
+                text="", tool_calls=(ToolCall(id="h1", name="raise_hand", arguments={}),)
+            ),
+            _ScriptedTurn(text="My read is Reese."),
+        ]
+    )
+    result = await run_agent_turn(
+        tenant_id,
+        persona_id,
+        session_id,
+        [{"role": "user", "content": "Your turn."}],
+        model_provider_factory=lambda _name: provider,
+        tool_registry=_ending_registry([]),
+        idempotency_key=f"turn:{uuid.uuid4()}",
+    )
+    assert result.content_md == "My read is Reese."

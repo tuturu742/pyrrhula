@@ -113,12 +113,9 @@ def make_raise_hand_tool(
     turns_left: int | None,
 ) -> tuple[ToolSpec, ToolHandler]:
     """The ``raise_hand`` tool for one speaker's turn. ``turns_left`` (after this one) is
-    said in the description, so a speaker with none left is told a raise will not be
-    called on."""
+    said in the description; a speaker with none left is not offered the tool at all."""
     if turns_left is None:
         left = ""
-    elif turns_left <= 0:
-        left = " You have no turns left in this discussion, so a raised hand will not be called."
     else:
         left = f" You have {turns_left} more turn{'s' if turns_left != 1 else ''} at most."
     spec = ToolSpec(
@@ -127,7 +124,8 @@ def make_raise_hand_tool(
             "Raise your hand to speak again later in this discussion. Your hand stays up "
             "until your next turn; people are called in the order they raised their hands, "
             "after anyone just named. Raise it only when you have something new to say or "
-            "must answer someone; the discussion ends when no hand is up." + left
+            "must answer someone; the discussion ends when no hand is up. Say your piece "
+            "first: raising your hand ends your turn." + left
         ),
         parameters={"type": "object", "properties": {}},
     )
@@ -136,6 +134,8 @@ def make_raise_hand_tool(
         if ctx.turn_event_seq is None:
             return ToolResult(json.dumps({"error": "no turn to raise a hand in"}))
         await raise_hand(tenant_id, session_id, phase_key, principal_id, ctx.turn_event_seq)
-        return ToolResult(json.dumps({"raised": True}))
+        # Ends the turn once it has been spoken: a second generation after the raise was
+        # where models repeated their speech or wrote the next speakers' lines.
+        return ToolResult(json.dumps({"raised": True}), end_turn=True)
 
     return spec, handler
