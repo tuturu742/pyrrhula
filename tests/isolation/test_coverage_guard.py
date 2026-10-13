@@ -27,6 +27,8 @@ _COVERED_TABLES = {
     # test_participant_state_change_and_ballot_filter_omission
     "participant_state_change",
     "ballot",
+    # test_floor_request_filter_omission
+    "floor_request",
     # Has test_persona_git_credential_filter_omission in the matrix but was never
     # registered here, so the guard has been failing for it.
     "persona_git_credential",

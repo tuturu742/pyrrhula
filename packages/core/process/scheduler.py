@@ -24,12 +24,14 @@ through on the returned ``ActorRef``. Do not confuse the two fields; the DSL sch
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from core.process import floor
 from core.process import participants as parts
 from core.process.dsl.schema import ActorSpec
 from core.process.interpreter import ActorRef, InterpreterContext, NextActorFn
@@ -119,13 +121,22 @@ class _EntryCursor:
     resolved_order: list[str] | None  # principal_id strings, fixed for declared/initiative
     turn_index: int
     turns_taken: int
+    # "hands" only: the event clock when the floor opened (raised hands before it belong
+    # to an earlier visit of the phase), turns given per actor, and the clock when each
+    # actor's latest turn was issued -- a hand raised at or after it is still up.
+    since_seq: int | None = None
+    spoken: dict[str, int] | None = None
+    granted: dict[str, int] | None = None
 
     def to_json(self) -> dict[str, object]:
-        return {
+        data: dict[str, object] = {
             "resolved_order": self.resolved_order,
             "turn_index": self.turn_index,
             "turns_taken": self.turns_taken,
         }
+        if self.since_seq is not None:
+            data.update(since_seq=self.since_seq, spoken=self.spoken, granted=self.granted)
+        return data
 
     @staticmethod
     def from_json(data: dict[str, object] | None) -> _EntryCursor:
@@ -135,14 +146,18 @@ class _EntryCursor:
             resolved_order=data.get("resolved_order"),  # type: ignore[arg-type]
             turn_index=data.get("turn_index", 0),  # type: ignore[arg-type]
             turns_taken=data.get("turns_taken", 0),  # type: ignore[arg-type]
+            since_seq=data.get("since_seq"),  # type: ignore[arg-type]
+            spoken=data.get("spoken"),  # type: ignore[arg-type]
+            granted=data.get("granted"),  # type: ignore[arg-type]
         )
 
 
 def _cap(spec: ActorSpec, settings: dict[str, object]) -> int | None:
     """The most turns this entry gives. ``seated`` is bounded by its own walk (seats x
-    laps), so it has no cap unless one is written; every other order defaults to 1."""
+    laps) and ``hands`` by its per-actor cap, so neither has one unless it is written;
+    every other order defaults to 1."""
     cap = parts.setting_number(spec.max_turns, settings)
-    if spec.order == "seated":
+    if spec.order in ("seated", "hands"):
         return cap
     return cap or 1
 
@@ -152,7 +167,7 @@ async def _participant_filter(
 ) -> tuple[list[Candidate], dict[str, parts.ParticipantView]]:
     """Apply ``where`` to the candidates and return the participant views by principal
     id (seat order needs them). A no-op, with no query, for entries that use neither."""
-    if spec.where is None and spec.order != "seated":
+    if spec.where is None and spec.order not in ("seated", "hands"):
         return fresh, {}
     views = await parts.participant_views(ctx.tenant_id, ctx.session_id)
     by_id = {str(v.principal_id): v for v in views}
@@ -241,6 +256,18 @@ def _mention_score(name: str | None, lowered_text: str) -> int:
     return score
 
 
+def _word_mention_score(name: str | None, lowered_text: str) -> int:
+    """Like _mention_score, ranked by the last whole-word mention: "Sage" is not named
+    by "message". -1 when not named."""
+    score = -1
+    for word in (name or "").strip().lower().split():
+        if len(word) < 3:
+            continue
+        for match in re.finditer(rf"\b{re.escape(word)}\b", lowered_text):
+            score = max(score, match.end() * 2)
+    return score
+
+
 def _reactive_pick(
     candidates: list[Candidate],
     text: str,
@@ -303,13 +330,89 @@ def _addressed_first(candidates: list[Candidate], text: str) -> list[Candidate]:
     return [chosen, *(c for i, c in enumerate(candidates) if i != best_index)]
 
 
+async def _next_on_floor(
+    spec: ActorSpec,
+    cursor: _EntryCursor,
+    ctx: InterpreterContext,
+    fresh: list[Candidate],
+    by_id: dict[str, parts.ParticipantView],
+    seq_now: int,
+) -> tuple[ActorRef | None, _EntryCursor]:
+    """One "hands" turn. First everyone once, in seat order (declared order when the flow
+    has no participants); then whoever the last message names, else the hand raised
+    longest ago; nobody named and no hand up ends the entry. The previous speaker never
+    follows themselves while anyone else wants the floor, and an actor who has had
+    ``max_turns_each`` turns is never offered another."""
+    each = parts.setting_number(spec.max_turns_each, ctx.settings)
+    since = cursor.since_seq if cursor.since_seq is not None else seq_now
+    spoken = dict(cursor.spoken or {})
+    granted = dict(cursor.granted or {})
+    eligible = {str(c.principal_id): c for c in fresh}
+
+    def has_turns(pid: str) -> bool:
+        return each is None or spoken.get(pid, 0) < each
+
+    def give(pid: str, resolved: list[str], index: int) -> tuple[ActorRef, _EntryCursor]:
+        spoken[pid] = spoken.get(pid, 0) + 1
+        granted[pid] = seq_now
+        return ActorRef(principal_id=uuid.UUID(pid), mode=spec.mode), _EntryCursor(
+            resolved, index, cursor.turns_taken + 1, since, spoken, granted
+        )
+
+    resolved = cursor.resolved_order
+    if resolved is None:
+        if by_id:
+            resolved = _seated_order(spec, ctx, fresh, by_id)
+        else:
+            resolved = [str(c.principal_id) for c in fresh]
+    index = cursor.turn_index
+    while index < len(resolved):
+        pid = resolved[index]
+        index += 1
+        if pid in eligible and has_turns(pid):
+            return give(pid, resolved, index)
+
+    # The opening round is over: the floor follows the conversation.
+    text, previous_author = await _last_assistant_turn(ctx.tenant_id, ctx.session_id)
+    previous = str(previous_author) if previous_author is not None else None
+    lowered = text.lower()
+    named: str | None = None
+    best = -1
+    for pid, candidate in eligible.items() if spec.answer_named else ():
+        if pid == previous or not has_turns(pid):
+            continue
+        score = _word_mention_score(candidate.name, lowered)
+        if score > best:
+            best, named = score, pid
+    if named is not None and best >= 0:
+        return give(named, resolved, index)
+
+    waiting: dict[str, int] = {}
+    for hand in await floor.raised_hands(ctx.tenant_id, ctx.session_id, ctx.phase_key, since):
+        pid = str(hand.principal_id)
+        if hand.turn_seq >= granted.get(pid, since) and pid not in waiting:
+            waiting[pid] = hand.turn_seq
+    queue = [
+        pid
+        for pid, _seq in sorted(waiting.items(), key=lambda item: item[1])
+        if pid in eligible and has_turns(pid)
+    ]
+    others = [pid for pid in queue if pid != previous]
+    if others or queue:
+        return give((others or queue)[0], resolved, index)
+    return None, _EntryCursor(resolved, index, cursor.turns_taken, since, spoken, granted)
+
+
 async def _next_from_entry(
     spec: ActorSpec,
     cursor: _EntryCursor,
     ctx: InterpreterContext,
     resolve_candidates: CandidateResolver,
+    seq_now: int = 0,
 ) -> tuple[ActorRef | None, _EntryCursor]:
-    """Returns (actor or None if this entry is exhausted, updated cursor)."""
+    """Returns (actor or None if this entry is exhausted, updated cursor). ``seq_now`` is
+    the session's event clock at this decision -- the "hands" floor ties raised hands to
+    the turns they were raised in by it."""
     cap = _cap(spec, ctx.settings)
     if cap is not None and cursor.turns_taken >= cap:
         return None, cursor
@@ -317,6 +420,9 @@ async def _next_from_entry(
     selected = await resolve_candidates(spec, ctx)
     fresh, by_id = await _participant_filter(spec, ctx, selected)
     eligible_ids = {str(c.principal_id) for c in fresh}
+
+    if spec.order == "hands":
+        return await _next_on_floor(spec, cursor, ctx, fresh, by_id, seq_now)
 
     if spec.order == "reactive":
         text, previous_author = await _last_assistant_turn(ctx.tenant_id, ctx.session_id)
@@ -417,7 +523,7 @@ def make_scheduler(resolve_candidates: CandidateResolver) -> NextActorFn:
         while entry_index < len(actors):
             spec = actors[entry_index]
             actor, entry_cursor = await _next_from_entry(
-                spec, entry_cursor, ctx, resolve_candidates
+                spec, entry_cursor, ctx, resolve_candidates, seq_now
             )
             if actor is not None:
                 break

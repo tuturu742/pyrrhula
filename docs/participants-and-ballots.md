@@ -72,6 +72,34 @@ seats further on each time the phase is entered. `where` (CEL over `p`, `state`,
 `settings`) decides who may act at all. It is re-checked at every turn, so someone removed
 mid-phase loses their remaining turns.
 
+## An open floor: raised hands
+
+```json
+"actors": [{"persona_type": "participant", "mode": "generate",
+            "order": "hands", "max_turns_each": {"setting": "turns_each"},
+            "where": "p.status == 'alive'"}]
+```
+
+`order: hands` runs a discussion instead of a speech round:
+
+1. Everyone `where` admits speaks once, in seat order. Flows without participants use declared order.
+2. Then the floor goes to whoever the last message named, by whole word, so "Sage" is
+   not named by "message". An accused participant answers straight away.
+3. Nobody named: the floor goes to the hand raised longest ago. A speaker raises a hand
+   by calling the `raise_hand` tool during a turn. The hand stays up until their next
+   turn. Not calling it is how a speaker passes.
+4. Nobody named and no hand up ends the entry.
+
+`answer_named: false` turns step 2 off, so the floor moves on raised hands alone. Use it
+for a small private group whose members name each other in every line, where answering
+every name becomes a loop of agreement.
+
+`max_turns_each` caps one participant's turns in the phase, the opening one included. The
+`raise_hand` tool tells each speaker how many turns they have left. `max_turns` caps the
+entry's total. The previous speaker never follows themselves while anyone else wants the
+floor. Raised hands are recorded per turn (`floor_request`, append-only), so the order of
+a discussion is decided from the record, never from a model's words.
+
 ## Who hears it: audiences
 
 ```json
