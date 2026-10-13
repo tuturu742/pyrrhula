@@ -304,7 +304,7 @@ async def test_retried_tool_dispatch_with_the_same_idempotency_key_does_not_reex
     )
 
     assert call_count == 1
-    assert first == second == {"content": "call-1", "resolution_id": None}
+    assert first == second == {"content": "call-1", "resolution_id": None, "end_turn": False}
 
 
 # ── token counts in usage_record match provider-reported usage ─────────────────────

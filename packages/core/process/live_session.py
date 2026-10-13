@@ -18,6 +18,7 @@ from typing import Any
 import structlog
 from sqlalchemy import or_, select
 
+from core.agents.attribution import keep_own_words
 from core.agents.authoring import (
     HISTORY_CHAR_BUDGET_KEY,
     merged_persona_params,
@@ -1249,7 +1250,28 @@ async def run_one_persona_turn(
                 )
             return checked
 
-    finalize_reply = _base_finalize
+    # A turn speaks only for its author: a reply that goes on to write other participants'
+    # lines is cut there, before any other check reads it (core.agents.attribution).
+    async with tenant_scope(tenant_id) as session:
+        roster_names = list(
+            (
+                await session.scalars(
+                    select(Persona.name)
+                    .join(SessionPersonaRow, SessionPersonaRow.persona_id == Persona.id)
+                    .where(SessionPersonaRow.session_id == session_id)
+                )
+            ).all()
+        )
+    spoken_for: list[str] = []
+
+    async def _own_words_then_checks(reply_text: str) -> str:
+        kept = keep_own_words(reply_text, persona_name, roster_names)
+        if kept.spoken_for:
+            spoken_for.extend(kept.spoken_for)
+            reply_text = kept.text or "(says nothing more)"
+        return await _base_finalize(reply_text) if _base_finalize is not None else reply_text
+
+    finalize_reply = _own_words_then_checks
 
     structlog.get_logger().info(
         "turn.stage", stage="tools", seconds=round(time.monotonic() - _t_stage, 1)
@@ -1294,14 +1316,22 @@ async def run_one_persona_turn(
         structlog.get_logger().exception("turn.failed", session_id=str(session_id))
         raise InterpreterFaultError(f"turn failed: {type(exc).__name__}: {exc}"[:500]) from exc
 
-    if result.warnings:
-        await _record_settings_warnings(
+    warnings = list(result.warnings)
+    if spoken_for:
+        # Per turn (the seq makes each one distinct): how often a seat does this is a
+        # property of its model worth reading off the record.
+        warnings.append(
+            f"turn {event_seq}: wrote lines for {', '.join(dict.fromkeys(spoken_for))}; "
+            "they were cut from the message"
+        )
+    if warnings:
+        await _record_turn_warnings(
             tenant_id,
             session_id,
             turn_event_seq=event_seq,
             principal_id=principal_id,
             phase_key=phase_key,
-            warnings=result.warnings,
+            warnings=warnings,
             on_event=on_event,
         )
 
@@ -1334,7 +1364,7 @@ async def run_one_persona_turn(
     )
 
 
-async def _record_settings_warnings(
+async def _record_turn_warnings(
     tenant_id: uuid.UUID,
     session_id: uuid.UUID,
     *,
@@ -1344,12 +1374,14 @@ async def _record_settings_warnings(
     warnings: Sequence[str],
     on_event: OnEvent | None,
 ) -> None:
-    """Put configuration a provider refused on the session's record, once per session for
-    each distinct refusal.
+    """Put what a turn could not do as configured on the session's record, once per
+    session for each distinct warning: a setting a provider refused, or words the turn
+    wrote for other participants and had cut.
 
-    The turn itself went through -- the adapter dropped the refused setting so it could --
-    which is exactly why this has to be said somewhere a person reads: a seat configured
-    for reasoning effort "high" played a whole game on its default, and nothing showed it.
+    For a refusal, the turn itself went through -- the adapter dropped the refused setting
+    so it could -- which is exactly why this has to be said somewhere a person reads: a
+    seat configured for reasoning effort "high" played a whole game on its default, and
+    nothing showed it.
     Once per session, because the same refusal repeats on every turn of that seat."""
     async with tenant_scope(tenant_id) as session:
         seen = set(
@@ -1386,9 +1418,7 @@ async def _record_settings_warnings(
             recorded.append((seq, payload))
             seq += 1
         row.next_event_seq = seq
-    structlog.get_logger().warning(
-        "turn.settings_refused", session_id=str(session_id), warnings=fresh
-    )
+    structlog.get_logger().warning("turn.warnings", session_id=str(session_id), warnings=fresh)
     if on_event is not None:
         for event_seq, payload in recorded:
             await on_event(event_seq, "warning", payload)

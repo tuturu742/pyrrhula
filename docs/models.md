@@ -84,6 +84,35 @@ A repair costs one rejected request the first time a connection is used in a pro
 the adapter learns from the endpoint rather than from a list of model names, which is
 what lets a model released after this version still work.
 
+## When a model speaks for someone else
+
+In a session with several participants, a model's history shows the others' turns as
+`Name: what they said`. Some models continue that pattern past their own turn and write
+the next speakers' lines too. Those words would be saved as the author's message, replayed
+to everyone, and taken by the participants they were attributed to as their own; in a
+Mafia game, a player went on to defend "its opening", which another player's model had
+written for it.
+
+A live turn therefore keeps only its author's words. A block that opens with exactly a
+participant's name and a colon (`Skyler:` or `**Skyler:**`) counts as that participant's
+speech when it is in the first person ("I lean logic"). The reply is cut before the first
+such block when there are:
+
+- first-person blocks for two or more different other participants (a script); or
+- a block in which the writer introduces themselves as that participant
+  ("Rowan: Hey everyone, I'm Rowan").
+
+Addressing someone is left alone ("Reese: walk me through your case", "Kendall: don't
+re-claim Sheriff"), and so are list items ("- Riley: Mafia Don"). Replayed over 6,382
+replies from model-vs-model Mafia games, the rule cut 5, every one of them a script.
+Each cut is recorded on the session as a warning naming the seat and who it wrote for,
+shown in amber beside the seat's name.
+
+A tool can also end the turn: `raise_hand` on an
+open floor does, so a model that has said its piece is not asked to write again after
+the tool result. That follow-up was where models repeated their speech or drifted into
+the next speakers' lines.
+
 ## Which model runs what
 
 Not everything uses a persona's connection:

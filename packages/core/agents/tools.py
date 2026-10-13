@@ -40,6 +40,11 @@ class ToolResult:
     # wraps it in an envelope) must set this, or the record never reaches
     # message.resolution_record_ids and the result widget has nothing to render.
     resolution_id: str | None = None
+    # The call completes the turn: once the model has written its reply, it is not asked
+    # again after this result. Without it every tool call costs a second generation,
+    # which a model that already said its piece fills by saying it again -- or by writing
+    # the next speakers' lines. A call made before any reply leaves the turn running.
+    end_turn: bool = False
 
 
 ToolHandler = Callable[[dict[str, object], ToolContext], Awaitable[ToolResult]]
