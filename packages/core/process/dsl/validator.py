@@ -290,6 +290,19 @@ def _check_participant_references(dsl: ProcessDefinitionDSL) -> list[ValidationI
         for i, actor in enumerate(phase.actors):
             ref(f"{where}.actors[{i}].max_turns", actor.max_turns)
             ref(f"{where}.actors[{i}].laps", actor.laps)
+            ref(f"{where}.actors[{i}].max_turns_each", actor.max_turns_each)
+            if not actor.answer_named and actor.order != "hands":
+                issues.append(
+                    ValidationIssue(
+                        f"{where}.actors[{i}].answer_named", "answer_named needs order: hands"
+                    )
+                )
+            if actor.max_turns_each is not None and actor.order != "hands":
+                issues.append(
+                    ValidationIssue(
+                        f"{where}.actors[{i}].max_turns_each", "max_turns_each needs order: hands"
+                    )
+                )
             needs = actor.where is not None or actor.order == "seated"
             if needs and dsl.participants is None:
                 issues.append(

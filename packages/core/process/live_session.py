@@ -48,6 +48,7 @@ from core.ports.model_provider import GenerationRequest, ModelProvider, ToolSpec
 from core.ports.moderation import ModerationProvider
 from core.ports.permission import PermissionService
 from core.ports.reranker import Reranker
+from core.process import floor
 from core.process import participants as parts
 from core.process.awaits import make_await_hook
 from core.process.checkpoints import make_checkpoint_hook
@@ -479,6 +480,7 @@ async def run_one_persona_turn(
         session_state = dict(session_row.state or {}) if session_row is not None else {}
         session_settings = dict(session_row.settings or {}) if session_row is not None else {}
         session_options = dict(session_row.options or {}) if session_row is not None else {}
+        actor_cursor = dict(session_row.actor_cursor or {}) if session_row is not None else {}
     # Ephemeral "who is preparing a reply" cue for live viewers: event_seq -1 marks it
     # non-durable (never a session_event row, never replayed on reconnect) -- pure
     # stream furniture, mirroring how token chunks work.
@@ -771,6 +773,21 @@ async def run_one_persona_turn(
                 state=session_state,
                 settings=session_settings,
             )
+    # An open floor: a speaker may ask for it again. Offered to whoever takes a turn in a
+    # "hands" entry, never as a required move -- not raising it is how a speaker passes.
+    floor_spec = floor.floor_entry(phase, actor_cursor, phase_key)
+    if floor_spec is not None and persona_type != "supervisor":
+        tool_registry.register(
+            *floor.make_raise_hand_tool(
+                tenant_id=tenant_id,
+                session_id=session_id,
+                phase_key=phase_key,
+                principal_id=principal_id,
+                turns_left=floor.turns_left(
+                    floor_spec, actor_cursor, principal_id, session_settings
+                ),
+            )
+        )
     if "randomizer" in phase.tools:
         handler = make_randomizer_handler(
             rule_system=rule_system,

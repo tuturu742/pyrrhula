@@ -288,7 +288,15 @@ class ActorSpec(BaseModel):
     # a roster.
     # "seated": the flow's participants in seat order, walked `laps` times; each lap
     # starts one seat later than the last time the phase was entered (rotate_by).
-    order: Literal["declared", "initiative", "free", "addressed", "reactive", "seated"] = "declared"
+    # "hands": an open floor. Everyone selected speaks once (seat order when the flow has
+    # participants, declared order otherwise); then the floor goes to whoever the last
+    # speaker named, else to raised hands, longest raised first. A speaker raises a hand
+    # with the raise_hand tool during a turn, and it stays up until their next turn.
+    # Nobody named and no hand up ends the entry. `max_turns_each` caps one actor's turns
+    # in the phase (the opening turn included); `max_turns` caps the entry's total.
+    order: Literal["declared", "initiative", "free", "addressed", "reactive", "seated", "hands"] = (
+        "declared"
+    )
     from_field: str | None = Field(default=None, alias="from")
     # A CAP on this entry, not a round count. "declared"/"initiative" resolve the
     # roster once and walk it once, so an entry in front of three actors gives three
@@ -302,8 +310,15 @@ class ActorSpec(BaseModel):
     where: str | None = None
     # "seated" only: how many times the seat order is walked.
     laps: int | SettingRef | None = None
-    # "seated" only: CEL integer; the starting seat moves this many places on.
+    # "seated" and "hands" (its opening round): CEL integer; the starting seat moves this
+    # many places on.
     rotate_by: str | None = None
+    # "hands" only: the most turns one actor gets in this entry, its opening turn included.
+    max_turns_each: int | SettingRef | None = None
+    # "hands" only: whether being named in the last message gives a participant the floor.
+    # Off, the floor moves on raised hands alone -- for a small group that names each
+    # other in every line, where answering every name is a loop of agreement.
+    answer_named: bool = True
 
     @model_validator(mode="after")
     def _selector_shape(self) -> ActorSpec:

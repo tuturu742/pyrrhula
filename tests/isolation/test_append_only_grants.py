@@ -46,6 +46,9 @@ _APPEND_ONLY_TABLES_TODAY = {
     # deal or a vote that could be rewritten after the fact.
     "participant_state_change",
     "ballot",
+    # Raised hands: who asked for the floor decides who spoke next; an amendable row
+    # would let the record of a discussion's order be rewritten.
+    "floor_request",
 }
 
 # Every rule-5 append-only table, whether or not it exists yet. A table from this set

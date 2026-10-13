@@ -233,6 +233,35 @@ class BallotRow(Base):
     )
 
 
+class FloorRequestRow(Base):
+    """A raised hand: during the turn at `turn_seq` in phase `phase_key`, `principal_id`
+    asked to speak again. A "hands" floor reads these to pick the next speaker; a hand
+    counts as up until the asker's next turn. Append-only; the unique key makes a resumed
+    turn's second raise a no-op."""
+
+    __tablename__ = "floor_request"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenant.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session.id", ondelete="CASCADE"), nullable=False
+    )
+    phase_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    principal_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    turn_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "phase_key", "principal_id", "turn_seq", name="uq_floor_request_turn"
+        ),
+    )
+
+
 class SessionEventRow(Base):
     __tablename__ = "session_event"
 

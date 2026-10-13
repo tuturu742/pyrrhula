@@ -686,3 +686,25 @@ async def test_participant_state_change_and_ballot_filter_omission(
 
     assert {row[0] for row in changes} == {tenant_a}
     assert {row[0] for row in ballots} == {tenant_a}
+
+
+async def test_floor_request_filter_omission(
+    two_tenants: tuple[uuid.UUID, uuid.UUID],
+) -> None:
+    from core.process.floor import raise_hand
+
+    tenant_a, tenant_b = two_tenants
+
+    for tenant_id in (tenant_a, tenant_b):
+        async with tenant_scope(tenant_id) as session:
+            workspace_id = (
+                await session.execute(select(Workspace.id).where(Workspace.tenant_id == tenant_id))
+            ).scalar_one()
+        persona_id = await seed_dev_agent(tenant_id, workspace_id)
+        sess = await create_session(tenant_id, workspace_id, persona_id)
+        assert await raise_hand(tenant_id, sess.id, "talk", uuid.uuid4(), 1)
+
+    async with tenant_scope(tenant_a) as session:
+        rows = (await session.execute(text("SELECT tenant_id FROM floor_request"))).all()
+
+    assert {row[0] for row in rows} == {tenant_a}
