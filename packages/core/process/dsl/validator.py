@@ -214,11 +214,12 @@ def _cel_bindings(dsl: ProcessDefinitionDSL) -> dict[str, dict[str, object]]:
     always; with ``participants:``, the roster list and one participant for each of the
     per-participant names (``p``, ``voter``, ``author``). ``subject`` is what an effect,
     a disclosure or a deal sees: ``p`` alone -- the engine binds no voter or author
-    there, so a flow reading one must fail validation, not the game."""
+    there, so a flow reading one must fail validation, not the game. ``pick`` is what a
+    pick's expressions see: ``p`` and the picking ``actor``."""
     settings = {name: dummy_value(spec.type) for name, spec in dsl.settings.items()}
     base: dict[str, object] = {"settings": settings}
     if dsl.participants is None:
-        return {"phase": base, "participant": base, "subject": base}
+        return {"phase": base, "participant": base, "subject": base, "pick": base}
     one: dict[str, object] = {"id": "x", "name": "x", "seat": 1}
     one.update({name: dummy_value(spec.type) for name, spec in dsl.participants.vars.items()})
     base = {**base, "participants": [one]}
@@ -226,6 +227,7 @@ def _cel_bindings(dsl: ProcessDefinitionDSL) -> dict[str, dict[str, object]]:
         "phase": base,
         "participant": {**base, "p": one, "voter": one, "author": one},
         "subject": {**base, "p": one},
+        "pick": {**base, "p": one, "actor": one},
     }
 
 
@@ -261,6 +263,14 @@ def _check_cel_expressions(dsl: ProcessDefinitionDSL) -> list[ValidationIssue]:
                 check(f"{where}.ballot.on_tied[{i}].to", tied.to, "subject")
             for name, expression in phase.ballot.disclose.items():
                 check(f"{where}.ballot.disclose.{name}", expression, "subject")
+        for i, pick in enumerate(phase.picks):
+            check(f"{where}.picks[{i}].targets", pick.targets, "pick")
+            if pick.available is not None:
+                check(f"{where}.picks[{i}].available", pick.available, "pick")
+            for j, e in enumerate(pick.on_picked):
+                check(f"{where}.picks[{i}].on_picked[{j}].to", e.to, "pick")
+            for j, e in enumerate(pick.on_picker):
+                check(f"{where}.picks[{i}].on_picker[{j}].to", e.to, "pick")
         for i, pe in enumerate(phase.participant_effects):
             check(f"{where}.participant_effects[{i}].to", pe.to, "subject")
             if pe.where is not None:
@@ -314,6 +324,21 @@ def _check_participant_references(dsl: ProcessDefinitionDSL) -> list[ValidationI
             issues.append(ValidationIssue(where, "ballot/audience need a participants: block"))
         if phase.participant_effects and dsl.participants is None:
             issues.append(ValidationIssue(where, "participant_effects need a participants: block"))
+        if phase.picks and dsl.participants is None:
+            issues.append(ValidationIssue(where, "picks need a participants: block"))
+        tools = [p.tool for p in phase.picks]
+        if len(set(tools)) != len(tools):
+            issues.append(ValidationIssue(f"{where}.picks", "two picks share a tool name"))
+        if phase.ballot is not None and phase.ballot.record_as is not None:
+            recorded = dsl.state.get(phase.ballot.record_as)
+            if recorded is None or recorded.type != "string":
+                issues.append(
+                    ValidationIssue(
+                        f"{where}.ballot.record_as",
+                        f"record_as must name a declared string state var, "
+                        f"not {phase.ballot.record_as!r}",
+                    )
+                )
         if dsl.participants is not None:
             sets = [
                 (f"participant_effects[{i}]", e.set)
@@ -326,6 +351,9 @@ def _check_participant_references(dsl: ProcessDefinitionDSL) -> list[ValidationI
                 sets += [
                     (f"ballot.on_tied[{i}]", e.set) for i, e in enumerate(phase.ballot.on_tied)
                 ]
+            for i, pick in enumerate(phase.picks):
+                for side, effects in (("on_picked", pick.on_picked), ("on_picker", pick.on_picker)):
+                    sets += [(f"picks[{i}].{side}[{j}]", e.set) for j, e in enumerate(effects)]
             for path, var in sets:
                 if var not in dsl.participants.vars:
                     issues.append(

@@ -135,10 +135,78 @@ is asked once more within its turn; after that it counts as an abstention.
 | `reveal` | `votes`: every ballot becomes public. `outcome`: only who was chosen, for a vote whose voters must stay unknown. `voters`: the result reaches only those who voted (a private check, below) |
 | `on_chosen` | Effects on the chosen participant: `to` is CEL with `p` bound to them |
 | `on_tied` | Effects on each participant of a tie that chose nobody. Mark them, and let a following phase hold a run-off with `targets` limited to them |
+| `threshold` | How many votes the leader needs. `plurality` (default): the most. `majority`: more than half of the expected voters. `unanimous`: every expected voter. Short of it, nobody is chosen and the result says so. The expected voters are everyone the phase's actor `where` admits, so an abstention counts against the leader |
 
 Results render from the record (the vote, who was chosen, what changed), never from a
 model's retelling. A change to a hidden var is shown only to the supervisor, the participant
 changed, and the voters of a private vote.
+
+A night shot that misses unless every shooter names the same player is
+`"threshold": "unanimous"`. A jury that needs a clear majority is `"majority"`.
+
+## Votes between options
+
+```json
+"state": {"lift_all": {"type": "string", "default": ""}},
+...
+"ballot": {"options": ["yes", "no"], "record_as": "lift_all"},
+"gates": [
+  {"when": "state.lift_all == 'yes'", "to": "lift_all"},
+  {"else": true, "to": "night"}
+]
+```
+
+With `options`, the vote is between those words instead of between participants. The
+`ballot` tool offers them as its choices. When the vote closes, the winning option is
+written to the string state var `record_as` names: `""` when nothing won, after a tie or
+short of the `threshold`. The phase's gates and every later phase read it like any other
+state. `targets`, `on_chosen`, `on_tied` and `disclose` belong to votes on participants
+and are refused here. To act on participants, follow the vote with a phase whose
+`participant_effects` read what earlier phases marked, such as everyone `on_tied` set.
+
+## Picks: choosing someone during a turn
+
+```json
+"picks": [{
+  "tool": "nominate",
+  "description": "Nominate one player for today's vote.",
+  "targets": "p.id != actor.id && p.status == 'alive' && !p.nominated",
+  "available": "!actor.has_nominated",
+  "on_picked": [{"set": "nominated",    "to": "true"},
+                {"set": "nominated_by", "to": "actor.name"}],
+  "on_picker": [{"set": "has_nominated", "to": "true"}],
+  "end_turn": true
+}]
+```
+
+A pick is a tool a participant acting in the phase may call mid-turn to choose one other
+participant: a nomination, a challenge, a pairing, a hand-off. It takes effect at once:
+`on_picked` sets vars on the chosen participant and `on_picker` on the one who chose. Both
+are CEL with `p` bound to the participant being changed and `actor` to the one choosing.
+Each change is recorded with cause `pick`.
+
+| Key | What it does |
+|---|---|
+| `tool` | The tool's name, `lower_snake_case`. Not `ballot` or `raise_hand`, and unique in the phase |
+| `description` | What the tool means, as the model reads it |
+| `targets` | CEL over `p` and `actor`: who may be chosen. The tool's choices are exactly these, rebuilt every turn |
+| `available` | CEL over `actor`: whether the tool is offered at all this turn. Absent: always, while anyone is a target |
+| `on_picked` / `on_picker` | Effects, as above. At least one is required |
+| `end_turn` | The pick completes the turn once the speaker has spoken, as a raised hand does |
+
+The engine allows one call of each pick tool per turn and decides it again on the record
+as it is when the call arrives. Any other limit is the flow's to write. "Once per phase" is
+a var `on_picker` sets and `available` reads, cleared by the phase's `participant_effects`.
+What a pick changes is then read like every var: a public var appears in everyone's view of
+the table, a ballot's `targets` can admit only the nominated, and a gate can count them:
+
+```json
+"ballot": {"targets": "p.nominated && p.status == 'alive'"},
+"gates": [
+  {"when": "size(participants.filter(p, p.nominated)) == 0", "to": "night"},
+  {"else": true, "to": "day_vote"}
+]
+```
 
 ## Private checks
 
