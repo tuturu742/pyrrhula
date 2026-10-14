@@ -6,7 +6,7 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
-## [0.2.2] - 2026-10-13
+## [0.2.2] - 2026-10-14
 
 A turn speaks only for its author. See
 [docs/models.md](docs/models.md#when-a-model-speaks-for-someone-else).
@@ -25,6 +25,9 @@ A turn speaks only for its author. See
 - **Raising a hand made the model write again.** After the tool result, models repeated
   their speech or drifted into the next speakers' lines. A tool result can now end the
   turn (`ToolResult.end_turn`), and `raise_hand` does, once the turn has said something.
+- **`raise_hand` was offered with no turns left.** Told a raise would not be called, a
+  model deliberated over the tool in its message and gave its role away. A speaker who
+  has used up `max_turns_each` is no longer offered the tool.
 
 ## [0.2.1] - 2026-10-13
 

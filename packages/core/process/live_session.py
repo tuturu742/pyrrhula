@@ -776,19 +776,21 @@ async def run_one_persona_turn(
             )
     # An open floor: a speaker may ask for it again. Offered to whoever takes a turn in a
     # "hands" entry, never as a required move -- not raising it is how a speaker passes.
+    # Not offered once the speaker's turns are used up: offered a tool it could not use, a
+    # model deliberated over it in its message and gave its role away.
     floor_spec = floor.floor_entry(phase, actor_cursor, phase_key)
     if floor_spec is not None and persona_type != "supervisor":
-        tool_registry.register(
-            *floor.make_raise_hand_tool(
-                tenant_id=tenant_id,
-                session_id=session_id,
-                phase_key=phase_key,
-                principal_id=principal_id,
-                turns_left=floor.turns_left(
-                    floor_spec, actor_cursor, principal_id, session_settings
-                ),
+        left = floor.turns_left(floor_spec, actor_cursor, principal_id, session_settings)
+        if left is None or left > 0:
+            tool_registry.register(
+                *floor.make_raise_hand_tool(
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    phase_key=phase_key,
+                    principal_id=principal_id,
+                    turns_left=left,
+                )
             )
-        )
     if "randomizer" in phase.tools:
         handler = make_randomizer_handler(
             rule_system=rule_system,

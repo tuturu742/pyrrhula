@@ -113,12 +113,9 @@ def make_raise_hand_tool(
     turns_left: int | None,
 ) -> tuple[ToolSpec, ToolHandler]:
     """The ``raise_hand`` tool for one speaker's turn. ``turns_left`` (after this one) is
-    said in the description, so a speaker with none left is told a raise will not be
-    called on."""
+    said in the description; a speaker with none left is not offered the tool at all."""
     if turns_left is None:
         left = ""
-    elif turns_left <= 0:
-        left = " You have no turns left in this discussion, so a raised hand will not be called."
     else:
         left = f" You have {turns_left} more turn{'s' if turns_left != 1 else ''} at most."
     spec = ToolSpec(
