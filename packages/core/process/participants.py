@@ -2,7 +2,7 @@
 private audiences, for flows whose roster plays roles.
 
 Everything here is generic. A flow declares ``participants:`` (typed variables, which of
-them are hidden, which are dealt by draw) and phases declare ``ballot:`` and
+them are hidden, which are dealt by draw) and phases declare ``ballot:``, ``picks:`` and
 ``audience:``; this module knows nothing about what the values *mean* -- "mafia",
 "alive" and "town" are pack words a flow writes, never words this module writes.
 
@@ -43,6 +43,7 @@ from core.process.dsl.schema import (
     BallotSpec,
     ParticipantEffectSpec,
     ParticipantsSpec,
+    PickSpec,
     ProcessDefinitionDSL,
     SettingRef,
     SettingSpec,
@@ -437,7 +438,11 @@ def render_ballot_result(
     phase = payload.get("phase", "vote")
     chosen = payload.get("chosen")
     private = payload.get("reveal") == "voters"
-    if chosen:
+    if chosen and payload.get("options") is not None:
+        counts = payload.get("counts") or {}
+        tally_text = ", ".join(f"{o} {counts.get(o, 0)}" for o in payload["options"])
+        line = f"- {phase}: {chosen!r} won ({tally_text})"
+    elif chosen:
         shown = [
             c
             for c in payload.get("changes") or []
@@ -451,6 +456,11 @@ def render_ballot_result(
         facts = payload.get("disclosed") or {}
         if facts:
             line += ". Found: " + ", ".join(f"{k} = {_fact(v)}" for k, v in facts.items())
+    elif payload.get("short"):
+        need = {"majority": "more than half of the votes", "unanimous": "every vote"}.get(
+            payload.get("threshold", ""), "enough votes"
+        )
+        line = f"- {phase}: no choice won {need}; nothing was chosen"
     elif payload.get("tied"):
         line = f"- {phase}: tie between {', '.join(payload['tied'])}; nobody was chosen"
     else:
@@ -609,9 +619,11 @@ async def cast_ballot(
     poll_key: str,
     voter_sp_id: uuid.UUID,
     choice_sp_id: uuid.UUID | None,
+    choice_option: str | None = None,
 ) -> bool:
-    """Record one ballot. Returns False when this voter already voted in this poll --
-    the first ballot stands, so a resumed turn cannot vote twice."""
+    """Record one ballot -- for a participant, or for one of a vote's ``options``.
+    Returns False when this voter already voted in this poll -- the first ballot stands,
+    so a resumed turn cannot vote twice."""
     async with tenant_scope(tenant_id) as session:
         result = await session.execute(
             pg_insert(BallotRow)
@@ -621,6 +633,7 @@ async def cast_ballot(
                 poll_key=poll_key,
                 voter_session_persona_id=voter_sp_id,
                 choice_session_persona_id=choice_sp_id,
+                choice_option=choice_option,
             )
             .on_conflict_do_nothing(constraint="uq_ballot_voter")
         )
@@ -634,6 +647,19 @@ class Tally:
     tied: list[str]
     abstained: list[str]
     voters: dict[str, str | None]
+    # The winning option of a vote between ``options``.
+    chosen_option: str | None = None
+    # The leader fell short of the ballot's threshold, so nobody was chosen.
+    short: bool = False
+
+
+def _meets(threshold: str, top: int, expected: int) -> bool:
+    """Whether ``top`` votes carry a vote that expected ``expected`` ballots."""
+    if threshold == "majority":
+        return top * 2 > expected
+    if threshold == "unanimous":
+        return expected > 0 and top == expected
+    return True
 
 
 async def tally(
@@ -644,9 +670,10 @@ async def tally(
     views: Sequence[ParticipantView],
     eligible_voters: Sequence[ParticipantView],
 ) -> Tally:
-    """Count the poll's ballots, in the caller's transaction. Most votes wins; a tie
-    elects nobody, or is settled by a recorded draw (``tie: draw``). A voter with no
-    ballot abstained."""
+    """Count the poll's ballots, in the caller's transaction. Most votes wins, if they
+    reach the ballot's ``threshold`` of the expected voters (every voter the phase
+    admits; the ballots cast when it admits nobody by name); a tie elects nobody, or is
+    settled by a recorded draw (``tie: draw``). A voter with no ballot abstained."""
     by_sp = {v.session_persona_id: v for v in views}
     ballots = (
         await session.execute(
@@ -654,35 +681,51 @@ async def tally(
         )
     ).scalars()
     voters: dict[str, str | None] = {}
-    counts: dict[uuid.UUID, int] = {}
+    # Keyed by a participant's name, or by the option itself in a vote between options.
+    counts: dict[str, int] = {}
+    seats: dict[str, int] = {}
     for b in ballots:
         voter = by_sp.get(b.voter_session_persona_id)
         if voter is None:
             continue
-        choice = by_sp.get(b.choice_session_persona_id) if b.choice_session_persona_id else None
-        voters[voter.name] = choice.name if choice else None
-        if choice is not None:
-            counts[choice.session_persona_id] = counts.get(choice.session_persona_id, 0) + 1
+        if ballot.options is not None:
+            key = b.choice_option if b.choice_option in ballot.options else None
+            if key is not None:
+                seats[key] = ballot.options.index(key)
+        else:
+            choice = by_sp.get(b.choice_session_persona_id) if b.choice_session_persona_id else None
+            key = choice.name if choice is not None else None
+            if choice is not None:
+                seats[key] = choice.seat or 0  # type: ignore[index]
+        voters[voter.name] = key
+        if key is not None:
+            counts[key] = counts.get(key, 0) + 1
     abstained = [v.name for v in eligible_voters if voters.get(v.name) is None]
-    chosen: ParticipantView | None = None
+    expected = len(eligible_voters) or len(voters)
+    leader: str | None = None
     tied: list[str] = []
+    short = False
     if counts:
         top = max(counts.values())
-        leaders = sorted(
-            (by_sp[sp] for sp, n in counts.items() if n == top), key=lambda v: v.seat or 0
-        )
-        if len(leaders) == 1:
-            chosen = leaders[0]
+        leaders = sorted((k for k, n in counts.items() if n == top), key=lambda k: seats[k])
+        if not _meets(ballot.threshold, top, expected):
+            short = True
+        elif len(leaders) == 1:
+            leader = leaders[0]
         else:
-            tied = [v.name for v in leaders]
+            tied = leaders
             if ballot.tie == "draw":
-                chosen = seeded_rng(row, f"tie:{poll_key}").choice(leaders)
+                leader = seeded_rng(row, f"tie:{poll_key}").choice(leaders)
+    by_name = {v.name: v for v in views}
+    is_option = ballot.options is not None
     return Tally(
-        counts={by_sp[sp].name: n for sp, n in counts.items()},
-        chosen=chosen,
+        counts=counts,
+        chosen=None if is_option or leader is None else by_name[leader],
         tied=tied,
         abstained=abstained,
         voters=voters,
+        chosen_option=leader if is_option else None,
+        short=short,
     )
 
 
@@ -708,11 +751,19 @@ def make_ballot_tool(
     voter: ParticipantView,
     targets: Sequence[ParticipantView],
     reveal: str = "votes",
+    options: Sequence[str] | None = None,
 ) -> tuple[ToolSpec, ToolHandler]:
     """The ``ballot`` tool for one voter's turn: its ``choice`` is an enum of the names
-    this voter may vote for right now, rebuilt every turn. The first ballot counts; a
-    second call is answered, not recorded."""
-    by_name = {t.name: t for t in targets}
+    this voter may vote for right now, rebuilt every turn -- or of the vote's
+    ``options``. The first ballot counts; a second call is answered, not recorded."""
+    by_name: dict[str, ParticipantView | None] = (
+        {o: None for o in options} if options is not None else {t.name: t for t in targets}
+    )
+    what = (
+        "the option you vote for"
+        if options is not None
+        else ("the name of the participant you vote for")
+    )
     spec = ToolSpec(
         name=BALLOT_TOOL_NAME,
         description=(
@@ -726,7 +777,7 @@ def make_ballot_tool(
                 "choice": {
                     "type": "string",
                     "enum": sorted(by_name),
-                    "description": "the name of the participant you vote for",
+                    "description": what,
                 }
             },
             "required": ["choice"],
@@ -735,14 +786,145 @@ def make_ballot_tool(
 
     async def handler(arguments: dict[str, object], _ctx: ToolContext) -> ToolResult:
         name = str(arguments.get("choice") or "").strip()
-        target = by_name.get(name)
-        if target is None:
+        if name not in by_name:
             return ToolResult(json.dumps({"error": "not a valid choice", "valid": sorted(by_name)}))
+        target = by_name[name]
         recorded = await cast_ballot(
-            tenant_id, session_id, key, voter.session_persona_id, target.session_persona_id
+            tenant_id,
+            session_id,
+            key,
+            voter.session_persona_id,
+            target.session_persona_id if target is not None else None,
+            choice_option=name if target is None else None,
         )
         if not recorded:
             return ToolResult(json.dumps({"error": "you have already voted in this vote"}))
-        return ToolResult(json.dumps({"recorded": True, "choice": target.name}))
+        return ToolResult(json.dumps({"recorded": True, "choice": name}))
 
     return spec, handler
+
+
+# ── picks ───────────────────────────────────────────────────────────────────────────
+
+PICK_CAUSE = "pick"
+
+
+def pick_available(
+    pick: PickSpec,
+    views: Sequence[ParticipantView],
+    actor: ParticipantView,
+    *,
+    state: Mapping[str, Any],
+    settings: Mapping[str, Any],
+) -> bool:
+    base = activation(state=state, settings=settings, views=views, actor=actor.cel())
+    return matches(pick.available, {**base, "p": actor.cel()})
+
+
+def pick_targets(
+    pick: PickSpec,
+    views: Sequence[ParticipantView],
+    actor: ParticipantView,
+    *,
+    state: Mapping[str, Any],
+    settings: Mapping[str, Any],
+) -> list[ParticipantView]:
+    base = activation(state=state, settings=settings, views=views, actor=actor.cel())
+    return [v for v in views if matches(pick.targets, {**base, "p": v.cel()})]
+
+
+def make_pick_tool(
+    *,
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    spec: ParticipantsSpec,
+    pick: PickSpec,
+    actor: ParticipantView,
+    state: Mapping[str, Any],
+    settings: Mapping[str, Any],
+    targets: Sequence[ParticipantView],
+) -> tuple[ToolSpec, ToolHandler]:
+    """One pick's tool for one actor's turn: ``choice`` is an enum of who this actor may
+    pick right now. The pick applies its effects at once, in one transaction, each change
+    recorded with cause ``pick`` and a ``cause_ref`` naming the tool and the turn -- which
+    also makes it one pick per tool per turn: a second call in the same turn, or the same
+    call re-run by a resumed turn, is answered, not applied again."""
+    names = sorted(t.name for t in targets)
+    tool_spec = ToolSpec(
+        name=pick.tool,
+        description=pick.description + " Once per turn.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "choice": {
+                    "type": "string",
+                    "enum": names,
+                    "description": "the name of the participant you pick",
+                }
+            },
+            "required": ["choice"],
+        },
+    )
+
+    async def handler(arguments: dict[str, object], ctx: ToolContext) -> ToolResult:
+        name = str(arguments.get("choice") or "").strip()
+        if name not in names:
+            return ToolResult(json.dumps({"error": "not a valid choice", "valid": names}))
+        if ctx.turn_event_seq is None:
+            return ToolResult(json.dumps({"error": "no turn to pick in"}))
+        cause_ref = f"{pick.tool}:{ctx.turn_event_seq}"
+        async with tenant_scope(tenant_id) as session:
+            done = (
+                await session.execute(
+                    select(ParticipantStateChangeRow.id)
+                    .where(
+                        ParticipantStateChangeRow.session_id == session_id,
+                        ParticipantStateChangeRow.cause == PICK_CAUSE,
+                        ParticipantStateChangeRow.cause_ref == cause_ref,
+                    )
+                    .limit(1)
+                )
+            ).first()
+            if done is not None:
+                return ToolResult(json.dumps({"error": "you have already used this in your turn"}))
+            # Decided again on the record as it is now, not as the turn found it.
+            views = await load_views(session, session_id)
+            me = next((v for v in views if v.session_persona_id == actor.session_persona_id), None)
+            if me is None or not pick_available(pick, views, me, state=state, settings=settings):
+                return ToolResult(json.dumps({"error": "you cannot do this now"}))
+            now = pick_targets(pick, views, me, state=state, settings=settings)
+            target = next((v for v in now if v.name == name), None)
+            if target is None:
+                valid = sorted(v.name for v in now)
+                return ToolResult(json.dumps({"error": "not a valid choice", "valid": valid}))
+            bindings = activation(state=state, settings=settings, views=views, actor=me.cel())
+            await apply_participant_effects(
+                session,
+                tenant_id=tenant_id,
+                session_id=session_id,
+                spec=spec,
+                targets=[target],
+                effects=pick.on_picked,
+                bindings=bindings,
+                cause=PICK_CAUSE,
+                cause_ref=cause_ref,
+            )
+            if pick.on_picker:
+                views = await load_views(session, session_id)
+                me = next(v for v in views if v.session_persona_id == actor.session_persona_id)
+                await apply_participant_effects(
+                    session,
+                    tenant_id=tenant_id,
+                    session_id=session_id,
+                    spec=spec,
+                    targets=[me],
+                    effects=pick.on_picker,
+                    bindings=activation(
+                        state=state, settings=settings, views=views, actor=me.cel()
+                    ),
+                    cause=PICK_CAUSE,
+                    cause_ref=cause_ref,
+                )
+        return ToolResult(json.dumps({"picked": name}), end_turn=pick.end_turn)
+
+    return tool_spec, handler

@@ -22,9 +22,16 @@ KnowledgeSourceVersion split between identity/versioning and content.
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 # Agents ARE principals with one of these roles.
 KNOWN_PERSONA_TYPES = frozenset({"supervisor", "participant"})
@@ -242,12 +249,24 @@ class BallotSpec(BaseModel):
     no context ever shows them until the phase ends, when the engine counts them, records
     the result, and applies ``on_chosen`` to the participant with the most votes -- in the
     same transaction as the phase transition. A tie elects nobody (``tie: none``) or is
-    settled by a recorded draw (``tie: draw``)."""
+    settled by a recorded draw (``tie: draw``).
+
+    ``threshold`` says how many votes the leader needs: the most (``plurality``), more
+    than half of the expected voters (``majority``), or every expected voter
+    (``unanimous``). Short of it, nobody is chosen.
+
+    With ``options``, the vote is between those words instead of participants: the
+    winning option (``""`` when none won) is written to ``state.<record_as>`` when the
+    vote closes, for the phase's gates and every later phase to read. ``targets``,
+    ``on_chosen``, ``on_tied`` and ``disclose`` belong to a vote on participants only."""
 
     model_config = ConfigDict(extra="forbid")
 
     targets: str = "p.id != voter.id"
     tie: Literal["none", "draw"] = "none"
+    threshold: Literal["plurality", "majority", "unanimous"] = "plurality"
+    options: list[Annotated[str, StringConstraints(min_length=1, max_length=64)]] | None = None
+    record_as: str | None = None
     # What becomes public when the vote closes: every ballot ("votes"), or only who was
     # chosen ("outcome") -- for a vote whose voters must stay unknown, since who voted
     # would itself reveal a hidden team. "voters": nothing becomes public; the result
@@ -265,6 +284,73 @@ class BallotSpec(BaseModel):
     # them -- with ``reveal: voters``, only the voters: "is the one I checked on team
     # X?" answered by the engine, never by a model's retelling.
     disclose: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _options_shape(self) -> BallotSpec:
+        if self.options is None:
+            if self.record_as is not None:
+                raise ValueError("ballot.record_as needs ballot.options")
+            return self
+        if len(self.options) < 2 or len(set(self.options)) != len(self.options):
+            raise ValueError("ballot.options needs at least two distinct options")
+        if self.record_as is None:
+            raise ValueError("ballot.options needs ballot.record_as: the state var it sets")
+        if self.on_chosen or self.on_tied or self.disclose or self.targets != "p.id != voter.id":
+            raise ValueError(
+                "targets, on_chosen, on_tied and disclose belong to a vote on participants, "
+                "not a vote between options"
+            )
+        return self
+
+
+_TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+
+
+class PickSpec(BaseModel):
+    """A phase's ``picks:`` entry: a tool a participant acting in the phase may call
+    during a turn to pick one other participant -- a nomination, a challenge, a pairing,
+    a hand-off. ``targets`` (CEL over ``p`` and ``actor``) says who may be picked;
+    ``available`` (CEL over ``actor``) whether the tool is offered at all this turn.
+
+    The pick takes effect at once, from the record: ``on_picked`` sets vars on the picked
+    participant and ``on_picker`` on the one who picked (both CEL with ``p`` bound to the
+    participant being changed, ``actor`` to the picker), each change recorded with its
+    cause. Whatever a pick changes is then read the way every var is -- a public var in
+    everyone's view of the table, a ballot's ``targets``, a gate. A pick that should
+    happen once per turn or once per phase says so with a var it sets and ``available``
+    reads; the engine counts nothing on the flow's behalf.
+
+    ``end_turn``: the pick completes the turn once the speaker has spoken, the way a
+    raised hand does -- for a pick made at the end of a speech."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    description: Annotated[str, StringConstraints(min_length=1, max_length=600)]
+    targets: str = "p.id != actor.id"
+    available: str | None = None
+    on_picked: list[ParticipantEffectSpec] = Field(default_factory=list)
+    on_picker: list[ParticipantEffectSpec] = Field(default_factory=list)
+    end_turn: bool = False
+
+    @field_validator("tool")
+    @classmethod
+    def _tool_name(cls, value: str) -> str:
+        if not _TOOL_NAME_RE.match(value):
+            raise ValueError("a pick's tool is lower_snake_case, at most 40 characters")
+        if value in RESERVED_TOOL_NAMES:
+            raise ValueError(f"tool name {value!r} is the engine's own")
+        return value
+
+    @model_validator(mode="after")
+    def _does_something(self) -> PickSpec:
+        if not self.on_picked and not self.on_picker:
+            raise ValueError("a pick needs on_picked or on_picker -- it must change something")
+        return self
+
+
+# Tool names the engine registers itself; a pick may not shadow one.
+RESERVED_TOOL_NAMES = frozenset({"ballot", "raise_hand"})
 
 
 class ActorSpec(BaseModel):
@@ -663,6 +749,8 @@ class PhaseSpec(BaseModel):
     audience: AudienceSpec | None = None
     # This phase is a sealed vote, counted when its actors are done.
     ballot: BallotSpec | None = None
+    # Tools a participant acting here may call to pick another participant (PickSpec).
+    picks: list[PickSpec] = Field(default_factory=list)
     # Participant vars set when this phase ends (before its vote closes) -- e.g. clear a
     # per-round mark on everyone.
     participant_effects: list[PhaseParticipantEffectSpec] = Field(default_factory=list)

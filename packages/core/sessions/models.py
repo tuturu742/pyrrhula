@@ -204,7 +204,7 @@ class ParticipantStateChangeRow(Base):
 class BallotRow(Base):
     """One voter's ballot in one vote (`poll_key` = phase key + the event_seq that
     entered it). Append-only; the unique key makes a resumed turn's second ballot a
-    no-op. `choice_session_persona_id` NULL is an abstention."""
+    no-op. `choice_session_persona_id` and `choice_option` both NULL is an abstention."""
 
     __tablename__ = "ballot"
 
@@ -224,6 +224,8 @@ class BallotRow(Base):
     choice_session_persona_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("session_persona.id", ondelete="CASCADE"), nullable=True
     )
+    # The option voted for, in a vote between options instead of participants.
+    choice_option: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

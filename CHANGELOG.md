@@ -6,6 +6,27 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-15
+
+Picks, vote thresholds and votes between options: enough to write tournament
+("sport") Mafia, with nominations and a unanimous night shot, as data. See
+[docs/participants-and-ballots.md](docs/participants-and-ballots.md#picks-choosing-someone-during-a-turn).
+
+### Added
+
+- **Picks** (`picks:` on a phase). A participant acting in the phase can call a
+  flow-named tool mid-turn to choose another participant: a nomination, a challenge, a
+  pairing. `on_picked` and `on_picker` set vars at once, from the record. `targets` and
+  `available` (CEL) decide who may be chosen and whether the tool is offered. One call of
+  each pick tool per turn; any other limit is a var the flow sets and reads.
+- **Vote thresholds** (`ballot.threshold`): `plurality` (the default, as before),
+  `majority` (more than half of the expected voters) or `unanimous`. Short of it, nobody
+  is chosen and the result says so.
+- **Votes between options** (`ballot.options` + `ballot.record_as`). A vote between
+  words (`yes`/`no`) instead of participants. The winning option is written to a state
+  var for gates and later phases to read. Migration `d8f3b2a6c9e1` adds
+  `ballot.choice_option`.
+
 ## [0.2.2] - 2026-10-14
 
 A turn speaks only for its author. See
@@ -253,7 +274,8 @@ domain-neutral core.
 - The AWS ECS execution engine is experimental and unverified; OIDC/SAML login is not
   there yet.
 
-[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.3
 [0.2.2]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.2
 [0.2.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.0

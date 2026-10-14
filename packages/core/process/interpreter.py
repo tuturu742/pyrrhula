@@ -510,7 +510,8 @@ async def _close_ballot(
     settings: dict[str, Any],
 ) -> dict[str, Any]:
     """Count the phase's ballots and apply ``on_chosen`` to the winner (``on_tied`` to
-    each of a tie that elected nobody), in the caller's transaction. Returns the result:
+    each of a tie that elected nobody; a vote between options names its winning option
+    instead), in the caller's transaction. Returns the result:
     who voted for whom, the counts, the outcome, the tie rule applied and what
     ``disclose`` found about the chosen -- sealed until now, readable from now on by
     whoever the ballot's ``reveal`` admits (``audience`` names the voters of a private
@@ -572,8 +573,11 @@ async def _close_ballot(
         "tied": result.tied,
         "tie_rule": phase.ballot.tie,
         "reveal": phase.ballot.reveal,
-        "chosen": result.chosen.name if result.chosen is not None else None,
+        "chosen": result.chosen.name if result.chosen is not None else result.chosen_option,
         "changes": changes,
+        **({"threshold": phase.ballot.threshold} if phase.ballot.threshold != "plurality" else {}),
+        **({"short": True} if result.short else {}),
+        **({"options": list(phase.ballot.options)} if phase.ballot.options is not None else {}),
     }
 
 
@@ -664,6 +668,10 @@ async def _transition(
                 )
             )
             extra_events.append((seq, "ballot_result", tally_payload))
+            if phase.ballot.record_as is not None:
+                # A vote between options writes its outcome where gates and later phases
+                # read everything else: state.
+                new_state = {**new_state, phase.ballot.record_as: tally_payload["chosen"] or ""}
             views = await parts.load_views(session, session_id)
             extra["participants"] = [v.cel() for v in views]
         target = evaluate_gates(phase, new_state, extra)

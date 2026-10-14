@@ -751,8 +751,12 @@ async def run_one_persona_turn(
         if getattr(phase, "ballot", None) is not None and voter is not None:
             async with tenant_scope(tenant_id) as session:
                 entry_seq = await _phase_entry_seq(session, session_id)
-            targets = parts.ballot_targets(
-                phase.ballot, views, voter, state=session_state, settings=session_settings
+            targets = (
+                []
+                if phase.ballot.options is not None
+                else parts.ballot_targets(
+                    phase.ballot, views, voter, state=session_state, settings=session_settings
+                )
             )
             required_tool = parts.BALLOT_TOOL_NAME
             tool_registry.register(
@@ -763,8 +767,34 @@ async def run_one_persona_turn(
                     voter=voter,
                     targets=targets,
                     reveal=phase.ballot.reveal,
+                    options=phase.ballot.options,
                 )
             )
+        # Picks: offered to a participant acting here while `available` admits them, with
+        # whoever `targets` admits right now. Nobody to pick, no tool.
+        if voter is not None and persona_type != "supervisor":
+            for pick in getattr(phase, "picks", None) or ():
+                if not parts.pick_available(
+                    pick, views, voter, state=session_state, settings=session_settings
+                ):
+                    continue
+                pickable = parts.pick_targets(
+                    pick, views, voter, state=session_state, settings=session_settings
+                )
+                if not pickable:
+                    continue
+                tool_registry.register(
+                    *parts.make_pick_tool(
+                        tenant_id=tenant_id,
+                        session_id=session_id,
+                        spec=definition.participants,
+                        pick=pick,
+                        actor=voter,
+                        state=session_state,
+                        settings=session_settings,
+                        targets=pickable,
+                    )
+                )
         if getattr(phase, "audience", None) is not None:
             audience = await parts.audience_for(
                 tenant_id,

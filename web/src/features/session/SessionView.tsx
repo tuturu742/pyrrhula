@@ -69,6 +69,11 @@ interface BallotResultPayload {
   reveal?: string;
   // What the vote found out about the chosen, computed by the engine from the record.
   disclosed?: Record<string, unknown>;
+  // A vote between these words instead of participants; `chosen` is the winning one.
+  options?: string[];
+  // "majority" | "unanimous": what the leader needed; `short` when it fell short.
+  threshold?: string;
+  short?: boolean;
 }
 
 interface ParticipantsSeatedPayload {
@@ -1215,10 +1220,14 @@ function TimelineEvent({
           <summary className="cursor-pointer">
             <span className="font-medium">Vote ({t(`phase.${b.phase}`)}):</span>{" "}
             {b.chosen
-              ? `${b.chosen} chosen`
-              : b.tied.length
-                ? `tie (${b.tied.join(", ")}) — nobody chosen`
-                : "no votes — nobody chosen"}
+              ? b.options
+                ? `“${b.chosen}” won`
+                : `${b.chosen} chosen`
+              : b.short
+                ? `short of ${b.threshold ?? "the threshold"} — nobody chosen`
+                : b.tied.length
+                  ? `tie (${b.tied.join(", ")}) — nobody chosen`
+                  : "no votes — nobody chosen"}
             {counts && <span className="text-muted-foreground"> · {counts}</span>}
             {b.disclosed && Object.keys(b.disclosed).length > 0 && (
               <span>
