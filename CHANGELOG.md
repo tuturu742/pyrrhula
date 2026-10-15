@@ -6,7 +6,7 @@ break APIs, the database always migrates forward.
 
 ## [Unreleased]
 
-## [0.2.3] - 2026-10-14
+## [0.2.3] - 2026-10-15
 
 Picks, vote thresholds and votes between options: enough to write tournament
 ("sport") Mafia, with nominations and a unanimous night shot, as data. See
@@ -274,7 +274,8 @@ domain-neutral core.
 - The AWS ECS execution engine is experimental and unverified; OIDC/SAML login is not
   there yet.
 
-[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/tuturu742/pyrrhula/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.3
 [0.2.2]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.2
 [0.2.1]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tuturu742/pyrrhula/releases/tag/v0.2.0
